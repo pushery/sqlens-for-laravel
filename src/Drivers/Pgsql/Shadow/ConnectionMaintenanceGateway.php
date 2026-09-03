@@ -52,6 +52,9 @@ final readonly class ConnectionMaintenanceGateway implements MaintenanceGateway,
             }
         }
 
+        // The catalog view has no inherent order; the contract says this list has one.
+        sort($names);
+
         return $names;
     }
 

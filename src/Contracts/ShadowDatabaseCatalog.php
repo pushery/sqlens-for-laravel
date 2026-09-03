@@ -23,7 +23,15 @@ use Pushery\SQLens\Capture\Shadow\ShadowOrphanSweeper;
 interface ShadowDatabaseCatalog
 {
     /**
-     * The names of existing databases whose name starts with $prefix.
+     * The names of existing databases whose name starts with $prefix, sorted.
+     *
+     * The ORDER IS PART OF THE CONTRACT. Neither `pg_database` nor
+     * `information_schema.schemata` promises one, and the sweep report built from this
+     * list is something a user reads — a run that reports the same two databases in a
+     * different order every time contradicts the determinism this package is built on.
+     * It also fails intermittently in a way that reads as a real defect: measured on a
+     * live PostgreSQL, the same two leaked databases came back clone-then-template on
+     * one run and template-then-clone on the next.
      *
      * @return list<string>
      */
