@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "tool": "pgls",
+  "linter": "splinter",
+  "measured_against": "0.25.7",
+  "category_prefix": "splinter/security/",
+  "entries": [
+    {
+      "rule": "extensionInPublic",
+      "severity": "WARN",
+      "summary": "An extension is installed in `public`, where every role that can use the schema reaches its functions.",
+      "help_uri": "https://supabase.com/docs/guides/database/database-linter?lint=0014_extension_in_public"
+    },
+    {
+      "rule": "extensionVersionsOutdated",
+      "severity": "WARN",
+      "summary": "An installed extension is behind the version the server offers, so whatever the newer one fixed is not in effect.",
+      "help_uri": "https://supabase.com/docs/guides/database/database-linter?lint=0022_extension_versions_outdated"
+    },
+    {
+      "rule": "functionSearchPathMutable",
+      "severity": "WARN",
+      "summary": "A function runs with whatever `search_path` its caller has, so which objects it resolves depends on who calls it.",
+      "help_uri": "https://supabase.com/docs/guides/database/database-linter?lint=0011_function_search_path_mutable"
+    },
+    {
+      "rule": "policyExistsRlsDisabled",
+      "severity": "ERROR",
+      "summary": "A table carries row-level security policies while row-level security itself is off, so not one of them applies.",
+      "help_uri": "https://supabase.com/docs/guides/database/database-linter?lint=0007_policy_exists_rls_disabled"
+    },
+    {
+      "rule": "rlsEnabledNoPolicy",
+      "severity": "INFO",
+      "summary": "Row-level security is on and no policy grants anything, so the table answers empty for every role but its owner.",
+      "help_uri": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy"
+    },
+    {
+      "rule": "unsupportedRegTypes",
+      "severity": "WARN",
+      "summary": "A column uses a `reg*` type outside `pg_catalog`, which blocks a major upgrade performed with `pg_upgrade`.",
+      "help_uri": "https://supabase.com/docs/guides/database/database-linter?lint=unsupported_reg_types"
+    }
+  ]
+}

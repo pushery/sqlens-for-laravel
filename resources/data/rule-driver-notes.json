@@ -1,0 +1,12 @@
+{
+    "schema_version": 1,
+    "about": "The engine-specific sentence a driver-neutral rule appends to its finding. Some hazards are identical on both engines and land differently, and saying only the neutral half is not wrong — it is less than the reader needs. Kept as data rather than as a branch inside a rule: a rule that named an engine would be the coupling the architecture forbids, and the engine truth would then be spread across as many files as there are rules. A note NEVER changes a verdict, a level, a class or a reason; it only adds prose. An engine difference that changes what the tool concludes belongs in a rule of its own, not in a sentence. Keyed by rule id, then by driver key, and sorted by both.",
+    "entries": {
+        "GEN.L1.DOWN_MORE_DESTRUCTIVE": {
+            "mysql": "On MySQL the damage is not even transactional: every DDL statement causes an implicit commit, so a rollback that fails halfway through leaves what it already destroyed destroyed, and nothing undoes it."
+        },
+        "GEN.L4.DOWN_MISSING": {
+            "mysql": "On MySQL this weighs more, not less: every DDL statement causes an implicit commit, so a failed up() leaves a partially applied schema behind and no transaction rolls it back. down() is not a safety net here — it is the only teardown there is, and it has to be written by hand."
+        }
+    }
+}

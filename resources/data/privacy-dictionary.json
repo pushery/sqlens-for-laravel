@@ -1,0 +1,748 @@
+{
+    "schema_version": 1,
+    "about": "Column-name terms that suggest a column holds PERSONAL data, kept as data so the list reviews as a list and a diff shows exactly which term moved. Written for this package from the naming a real schema uses; no third-party dictionary, compliance catalog or linter rule set was copied. It is a NAME heuristic and nothing more: it never reads a value, so it cannot know whether a column called `notes` holds a diagnosis or whether one called `iban` holds a label. That limit is stated in the finding text as well as here. The seven languages are about the column names a database may CARRY, not about the language this package speaks -- SQLens reports in English only, and a German schema is still a German schema.",
+    "matching": {
+        "case": "the column name is lowercased before matching",
+        "diacritics": "folded before matching, so a column named `religiao` and one named `religiao` with a tilde are one name",
+        "camel_case": "split into segments, so `birthDate` matches the same term as `birth_date`",
+        "boundary": "a single-word term matches a whole segment of the name, never a substring, so `iban` is not found in `caribbean_id`",
+        "multi_word": "a term containing an underscore matches the whole name only, so `tax_id` does not fire on an unrelated `id` segment"
+    },
+    "groups": {
+        "financial": {
+            "signal": "strong"
+        },
+        "health": {
+            "signal": "strong"
+        },
+        "identifiers": {
+            "signal": "strong"
+        },
+        "sensitive": {
+            "signal": "weak"
+        }
+    },
+    "terms": [
+        {
+            "term": "account_number",
+            "languages": [
+                "en"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "ausweisnummer",
+            "languages": [
+                "de"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "bank_account",
+            "languages": [
+                "en"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "bankrekening",
+            "languages": [
+                "nl"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "bankverbindung",
+            "languages": [
+                "de"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "behinderung",
+            "languages": [
+                "de"
+            ],
+            "group": "health"
+        },
+        {
+            "term": "bic",
+            "languages": [
+                "de",
+                "en"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "birth_date",
+            "languages": [
+                "en"
+            ],
+            "group": "sensitive"
+        },
+        {
+            "term": "birthdate",
+            "languages": [
+                "en"
+            ],
+            "group": "sensitive"
+        },
+        {
+            "term": "bloedgroep",
+            "languages": [
+                "nl"
+            ],
+            "group": "health"
+        },
+        {
+            "term": "blood_group",
+            "languages": [
+                "en"
+            ],
+            "group": "health"
+        },
+        {
+            "term": "blood_type",
+            "languages": [
+                "en"
+            ],
+            "group": "health"
+        },
+        {
+            "term": "blutgruppe",
+            "languages": [
+                "de"
+            ],
+            "group": "health"
+        },
+        {
+            "term": "bsn",
+            "languages": [
+                "nl"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "burgerservicenummer",
+            "languages": [
+                "nl"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "card_number",
+            "languages": [
+                "en"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "cardholder",
+            "languages": [
+                "en"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "carta_credito",
+            "languages": [
+                "it"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "cartao_credito",
+            "languages": [
+                "pt"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "carte_bancaire",
+            "languages": [
+                "fr"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "codice_fiscale",
+            "languages": [
+                "it"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "compte_bancaire",
+            "languages": [
+                "fr"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "conta_bancaria",
+            "languages": [
+                "pt"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "conto_bancario",
+            "languages": [
+                "it"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "cpf",
+            "languages": [
+                "pt"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "credit_card",
+            "languages": [
+                "en"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "creditcard",
+            "languages": [
+                "nl"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "cuenta_bancaria",
+            "languages": [
+                "es"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "cvv",
+            "languages": [
+                "en"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "data_nascimento",
+            "languages": [
+                "pt"
+            ],
+            "group": "sensitive"
+        },
+        {
+            "term": "data_nascita",
+            "languages": [
+                "it"
+            ],
+            "group": "sensitive"
+        },
+        {
+            "term": "date_naissance",
+            "languages": [
+                "fr"
+            ],
+            "group": "sensitive"
+        },
+        {
+            "term": "date_of_birth",
+            "languages": [
+                "en"
+            ],
+            "group": "sensitive"
+        },
+        {
+            "term": "diagnose",
+            "languages": [
+                "de",
+                "nl"
+            ],
+            "group": "health"
+        },
+        {
+            "term": "diagnosi",
+            "languages": [
+                "it"
+            ],
+            "group": "health"
+        },
+        {
+            "term": "diagnosis",
+            "languages": [
+                "en"
+            ],
+            "group": "health"
+        },
+        {
+            "term": "diagnostic",
+            "languages": [
+                "fr"
+            ],
+            "group": "health"
+        },
+        {
+            "term": "diagnostico",
+            "languages": [
+                "es",
+                "pt"
+            ],
+            "group": "health"
+        },
+        {
+            "term": "disability",
+            "languages": [
+                "en"
+            ],
+            "group": "health"
+        },
+        {
+            "term": "dni",
+            "languages": [
+                "es"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "dob",
+            "languages": [
+                "en"
+            ],
+            "group": "sensitive"
+        },
+        {
+            "term": "ethnicity",
+            "languages": [
+                "en"
+            ],
+            "group": "sensitive"
+        },
+        {
+            "term": "fecha_nacimiento",
+            "languages": [
+                "es"
+            ],
+            "group": "sensitive"
+        },
+        {
+            "term": "gebdatum",
+            "languages": [
+                "de"
+            ],
+            "group": "sensitive"
+        },
+        {
+            "term": "geboortedatum",
+            "languages": [
+                "nl"
+            ],
+            "group": "sensitive"
+        },
+        {
+            "term": "geburtsdatum",
+            "languages": [
+                "de"
+            ],
+            "group": "sensitive"
+        },
+        {
+            "term": "geburtsort",
+            "languages": [
+                "de"
+            ],
+            "group": "sensitive"
+        },
+        {
+            "term": "gewerkschaft",
+            "languages": [
+                "de"
+            ],
+            "group": "sensitive"
+        },
+        {
+            "term": "groupe_sanguin",
+            "languages": [
+                "fr"
+            ],
+            "group": "health"
+        },
+        {
+            "term": "grupo_sanguineo",
+            "languages": [
+                "es",
+                "pt"
+            ],
+            "group": "health"
+        },
+        {
+            "term": "gruppo_sanguigno",
+            "languages": [
+                "it"
+            ],
+            "group": "health"
+        },
+        {
+            "term": "health_data",
+            "languages": [
+                "en"
+            ],
+            "group": "health"
+        },
+        {
+            "term": "health_record",
+            "languages": [
+                "en"
+            ],
+            "group": "health"
+        },
+        {
+            "term": "iban",
+            "languages": [
+                "de",
+                "en",
+                "es",
+                "fr",
+                "it",
+                "nl",
+                "pt"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "kaartnummer",
+            "languages": [
+                "nl"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "karteninhaber",
+            "languages": [
+                "de"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "kartennummer",
+            "languages": [
+                "de"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "konfession",
+            "languages": [
+                "de"
+            ],
+            "group": "sensitive"
+        },
+        {
+            "term": "kontonummer",
+            "languages": [
+                "de"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "krankenkasse",
+            "languages": [
+                "de"
+            ],
+            "group": "health"
+        },
+        {
+            "term": "kreditkarte",
+            "languages": [
+                "de"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "medical_record",
+            "languages": [
+                "en"
+            ],
+            "group": "health"
+        },
+        {
+            "term": "national_id",
+            "languages": [
+                "en"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "nif",
+            "languages": [
+                "es",
+                "pt"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "numero_carta",
+            "languages": [
+                "it"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "numero_cartao",
+            "languages": [
+                "pt"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "numero_carte",
+            "languages": [
+                "fr"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "numero_compte",
+            "languages": [
+                "fr"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "numero_conta",
+            "languages": [
+                "pt"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "numero_conto",
+            "languages": [
+                "it"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "numero_cuenta",
+            "languages": [
+                "es"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "numero_pasaporte",
+            "languages": [
+                "es"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "numero_passaporte",
+            "languages": [
+                "pt"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "numero_passaporto",
+            "languages": [
+                "it"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "numero_passeport",
+            "languages": [
+                "fr"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "numero_secu",
+            "languages": [
+                "fr"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "numero_seguridad_social",
+            "languages": [
+                "es"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "numero_tarjeta",
+            "languages": [
+                "es"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "paspoortnummer",
+            "languages": [
+                "nl"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "passnummer",
+            "languages": [
+                "de"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "passport_no",
+            "languages": [
+                "en"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "passport_number",
+            "languages": [
+                "en"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "personalausweis",
+            "languages": [
+                "de"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "rekeningnummer",
+            "languages": [
+                "nl"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "religiao",
+            "languages": [
+                "pt"
+            ],
+            "group": "sensitive"
+        },
+        {
+            "term": "religie",
+            "languages": [
+                "nl"
+            ],
+            "group": "sensitive"
+        },
+        {
+            "term": "religion",
+            "languages": [
+                "de",
+                "en",
+                "es",
+                "fr"
+            ],
+            "group": "sensitive"
+        },
+        {
+            "term": "religione",
+            "languages": [
+                "it"
+            ],
+            "group": "sensitive"
+        },
+        {
+            "term": "securite_sociale",
+            "languages": [
+                "fr"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "sexual_orientation",
+            "languages": [
+                "en"
+            ],
+            "group": "sensitive"
+        },
+        {
+            "term": "social_security",
+            "languages": [
+                "en"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "sort_code",
+            "languages": [
+                "en"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "sozialversicherung",
+            "languages": [
+                "de"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "ssn",
+            "languages": [
+                "en"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "steuer_id",
+            "languages": [
+                "de"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "steuernummer",
+            "languages": [
+                "de"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "swift_code",
+            "languages": [
+                "en"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "tarjeta_credito",
+            "languages": [
+                "es"
+            ],
+            "group": "financial"
+        },
+        {
+            "term": "tax_id",
+            "languages": [
+                "en"
+            ],
+            "group": "identifiers"
+        },
+        {
+            "term": "union_membership",
+            "languages": [
+                "en"
+            ],
+            "group": "sensitive"
+        },
+        {
+            "term": "vat_id",
+            "languages": [
+                "en"
+            ],
+            "group": "identifiers"
+        }
+    ]
+}

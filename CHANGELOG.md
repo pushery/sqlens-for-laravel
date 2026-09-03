@@ -1,0 +1,82 @@
+# Changelog
+
+All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.1.0] - 2026-09-03
+
+The first public release. Nothing before it ever shipped, so there is no earlier version for any of this to be a change *from* — read the sections below as a description of what the package **is**, not as a diff.
+
+### The shape of it
+
+SQLens is a database safety toolkit for Laravel applications on PostgreSQL 18+ and MySQL 8.4+. It reads the migrations you are about to run and the schema you already have, and it says what they will cost.
+
+Three principles govern every part of it, and they are worth stating first because they explain most of the design decisions further down.
+
+**No silent green.** Every result is one of three values — `pass`, `fail`, `undetermined` — never two. A check that cannot run is reported as `undetermined` with a named reason, never folded into the passing set. On a managed database, where a great deal of the catalog is simply not exposed to any role you can hold, that third value is the normal answer rather than an edge case, and a tool that hid it would be reporting a clean bill of health for questions it never asked.
+
+**Primum non nocere.** The tool must not harm the database it is pointed at. It takes no lock of its own, issues no write, and reads catalog and state views only. It sets its own session timeouts so it cannot become the thing that hangs. It keeps no state in your database at all — the migration debt account is a file in your repository, not a table. The two modes that do create a database create a throwaway one, and both sit behind a production guard that refuses by default.
+
+**Determinism.** The same state produces the same result on a developer's machine and in CI. That is held by the `assume_server_version` pin, strict tool mode, and a canonicalization layer every rule works on rather than raw SQL. There is deliberately no "fast" path that disagrees with a "correct" one.
+
+### Added
+
+**Eleven commands.**
+
+- **`sqlens:lint`** — reads the migrations that have not run yet and reports what they will do to a live database. It obtains their SQL through Laravel's own grammar rather than by parsing your migration source, so the advice is about the statement your app will really send: by default without executing it (`--pretend`), or by running it against a throwaway shadow database it creates and drops itself (`--shadow`). `--roundtrip` replays up, down and up again in that shadow database to test whether `down()` is a real inverse. A single-file fast path (`--file`) needs no database at all and is built for a pre-commit hook.
+- **`sqlens:audit`** — reads the catalog of a database that already exists and judges the schema as it stands. It will not guess which connection, which read host, or which tenant the report is about: where the configuration leaves a choice, the run stops and says so rather than describing one server under another one's name.
+- **`sqlens:security`** — roles, grants, transport, server configuration, row-level security, injection and unencrypted columns, across every suite. Gated by a severity axis of its own rather than by the strictness level, so lowering the level band cannot silence it.
+- **`sqlens:predeploy`** — reads the target database immediately before a deploy: read-only, fail-closed, and bounded by a time budget so it can never be the thing that hangs a release. It checks what the migration is about to walk into — a lock blocker, replication lag, disk headroom, a missing privilege, a read-only target, a version skew.
+- **`sqlens:postdeploy`** — reads what the deploy left behind: an index that ended up invalid, a constraint that was never validated, an orphaned transition object. Read-only, catalog-only, once.
+- **`sqlens:drift`** — compares what the database holds against what the migrations describe, with an exclude file for the differences a project has accepted, each needing a reason.
+- **`sqlens:baseline`** — writes the findings of today into a file you commit, so a project can adopt the tool on a schema it inherited without a red build on day one.
+- **`sqlens:format`** — one house style for the SQL in your migrations, with a `--check` mode a CI step can act on and a `--diff` mode that shows what a write would do without doing it. Three backends behind one seam; the built-in one needs nothing installed.
+- **`sqlens:doctor`** — what SQLens can actually see from here: each connection's real server version, and each optional tool's version or its absence. An absent tool's line names what you lose by not having it rather than merely reporting it missing.
+- **`sqlens:mcp`** — serves the same engine the commands use to an AI agent over stdio. Every tool is read-only unless named individually with `--enable-tool`; there is deliberately no option that enables them all.
+- **`sqlens:agent-rules`** — writes the project's active rule set into its coding agents' context files, so an agent knows a rule before it writes the migration rather than after the linter rejects it. Opens no database, and its `--check` mode treats a missing artifact as a deviation rather than creating it.
+
+**225 rules, every one of them documented.** The catalog ships as a data artifact with a published page per rule id, and the count is held rather than claimed: 225 entries, 225 pages, zero pending. Every finding carries the URL of its own page, derived from the rule id rather than written by hand, so a link a shipped finding already carries cannot drift.
+
+By category: 135 safety, 57 security, 17 idiom, 7 performance, 6 convention, 3 privacy. By maturity: 220 stable, 3 preview, 2 experimental.
+
+**Ten cumulative strictness levels, and the level is an appetite rather than a severity.** Level 4 runs everything up to 4. The distribution is deliberately front-loaded — 136 rules sit at level 0, and the bands above it add taste rather than danger. Level 6 tells you about choices a reasonable engineer might have made on purpose, and reading that band as a defect list is the commonest way to misread it.
+
+**A maturity axis that keeps a minor release from breaking your pipeline.** A new rule lands as `preview` and runs only on request. An unconfigured project gets stable rules only — the opposite default to categories, where unconfigured means all, and the difference is the point: an unset category axis means nobody expressed a preference, an unset maturity axis is the versioning promise doing its job.
+
+**A `downtime_class` on every finding that can change a statement's locking behavior** — `online`, `blocking` or `rewrite` — so a deploy script can ask whether this release needs a maintenance window without knowing which rules carry the answer. 58 entries carry one: 38 rules and 20 deploy checks, distributed 38 online, 18 blocking, 2 rewrite. The rest carry none because the question does not apply to them — a run notice describes the run, and a rule that only reads the catalog is not about a statement that takes a lock. The JSON envelope exposes the worst one in the run directly rather than making a consumer re-derive an ordering that is this package's judgment and is not alphabetical.
+
+**A severity axis of its own.** 78 of the 225 entries carry a severity: the 58 security and privacy rules, which answer to it instead of the level gate, plus 19 deploy checks and one debt notice, where a severity orders several failures rather than gating any of them. Across all of them: 7 critical, 32 high, 28 medium, 8 low, 3 info. The other 147 entries answer to the level gate. The two gates are never merged — a strictness choice and a security risk are different facts, and one number cannot carry both.
+
+**Five reporters over one result** — console, JSON, GitHub annotations, SARIF, and an agent format — plus registration for a custom one. The SARIF output is validated against the real schema rather than eyeballed, over a populated run, an empty one and a catalog-only one.
+
+**A four-value exit-code contract** a pipeline branches on: clean, findings above the gate, misconfiguration, and undetermined under strict mode. Misconfiguration beats everything, including a run with no findings at all, because a tool that cannot trust its own setup must never report green.
+
+**A pre-scan that refuses to execute a migration it cannot execute safely.** A migration that sends mail, calls an HTTP endpoint, guards on introspection, or reaches its effect through your own code is reported and never pretend-executed. Recognizing a side effect is not the same as preventing one, and the honest move is to decline rather than to run it and hope.
+
+**A migration debt account.** The two-step patterns this tool recommends — expand then contract, add then validate — leave a second step somebody has to actually take. The ledger is a file in your repository that records which ones are outstanding, how long they have been, and which have since been resolved. It is a repository file rather than a table on purpose: a safety tool that writes to the database it is auditing has given up the property that makes it safe.
+
+**A supported-version floor that qualifies the report instead of withholding it.** Below the floor the run still produces its findings and says unmistakably what they are worth — a named `undetermined`, a marker in the run header, and a failing exit under strict mode. The message states that findings may be wrong in both directions, because the one-sided reading misses the dangerous half: below the floor no rule was ever written for the hazards that only exist there, so a clean report is the least informative result the tool can produce rather than the best one.
+
+**A bundled Laravel Boost skill**, so an assistant working inside a consuming application has the adoption guidance without being told where to look.
+
+### Security
+
+The package connects to production databases and shells out to external binaries, so its own posture is part of what it ships rather than an implementation detail.
+
+- **It takes no lock of its own, and writes nothing to the database it is pointed at.** Every read goes to a catalog or state view. The two modes that need to execute a migration — `--shadow` and `--roundtrip` — do it in a throwaway database they create and drop themselves, never in yours, and both refuse to run against a production connection unless the guard is explicitly lifted. The one network call in the package is `sqlens:security --refresh-advisories`, which is never a side effect of a check and runs before anything connects.
+- **Credentials are redacted from every output** — reports, the JSON envelope, the agent artifacts and the debt ledger.
+- **The MCP server is read-only by default.** A mutating tool is exposed only by being named, one at a time.
+- **Database-creating modes sit behind a production guard** that refuses by default and reports which of its three checks held a blocked run, because the three need different fixes.
+- **A dedicated read-only audit connection is supported**, so the role that reads your catalog need not be the role your application runs as.
+
+### What 0.1.0 does not do
+
+- **The public API is not frozen.** It is documented, and it is what a 1.0 will commit to, but a field or a flag may still change in a minor release before then.
+- **PostgreSQL and MySQL only.** MariaDB is refused by name rather than half-supported: it answers Laravel's `mysql` driver and does not share its semantics, and the divergences are exactly what this tool reasons about — so advice about it would be confident, specific, and about another product. SQLite and SQL Server are declared non-goals for the same reason.
+- **One shipped locale.** Everything this package emits goes to a terminal, a CI annotation, a SARIF file or an agent artifact, and a translated `ALTER TABLE` warning still contains `ALTER TABLE`.
+- **Statistics-dependent rules are opt-in and honest about it.** The index-usage rules answer from counters that can be reset, so they ship `experimental` and report nothing until you ask for them. The source-reading pre-scan detectors ship `preview` for the same reason.
+- **Levels 8 and 9 are thin** — 4 and 6 rules. The convention band is defined and only lightly populated.
+- **The MCP server cannot shield standard output from what precedes it.** It takes the channel as early as a service provider can, diverts stray writes to the diagnostic stream and keeps `stdout` for protocol frames — but a message PHP emits while loading a file happens in the autoloader, before any provider boots. A host application whose dependencies emit a compile-time deprecation can therefore corrupt the frame stream, and no code inside the server can intercept it. The client reports a protocol error; the cause is on the other side of the boundary.
+
+### A note on this file
+
+Everything above is the first release, so there is nothing for it to be a change *from*. The development history that produced it — several hundred entries, each arguing a decision through — lives in the git log, where it belongs. From 0.2.0 on, this file records changes.

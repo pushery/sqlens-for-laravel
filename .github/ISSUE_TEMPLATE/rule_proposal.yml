@@ -1,0 +1,102 @@
+name: Rule proposal
+description: "Propose a new lint, audit, or safety rule. Evidence and a fixture pair are required."
+labels: ["rule-proposal"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A rule enters SQLens with evidence, a false-positive assessment, and a proposed
+        classification — never on taste alone. Fill in every required field below.
+
+        By proposing this rule you agree it is contributed under the MIT license and that
+        your commits will carry a DCO sign-off (`git commit -s`). Do not paste credentials
+        or production data. The bad/good examples must be **written from scratch** — do not
+        copy tables or wording from Squawk, MySQL, or PostgreSQL documentation.
+  - type: input
+    id: rule-id
+    attributes:
+      label: Candidate rule id
+      description: >-
+        A proposed id in the project's naming scheme — ENGINE.LEVEL.NAME, upper case, e.g.
+        PG.L2.INDEX_NOT_CONCURRENT or MY.L4.ENUM_CHANGE. The prefix is the engine (PG, MY, or GEN
+        when it applies to both), the middle is the strictness level the rule would run at, and the
+        name is upper snake case. Not binding — maintainers may adjust it.
+      placeholder: "PG.L2.EXAMPLE_RULE_NAME"
+    validations:
+      required: true
+  - type: dropdown
+    id: engine
+    attributes:
+      label: Affected engine
+      options:
+        - PostgreSQL
+        - MySQL
+        - Both
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What the rule should flag
+      description: The condition the rule detects, and the harm it prevents.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: A link to official documentation or a documented incident that establishes the behavior. A rule without evidence cannot be evaluated.
+      placeholder: "https://www.postgresql.org/docs/... or a post-mortem link"
+    validations:
+      required: true
+  - type: textarea
+    id: false-positives
+    attributes:
+      label: False-positive assessment
+      description: When would this rule fire on safe code? How would a user suppress or scope it? A rule with no FP assessment is not ready.
+    validations:
+      required: true
+  - type: dropdown
+    id: level
+    attributes:
+      label: Proposed strictness level
+      description: The cumulative level (0–9) at which this rule should become active by default.
+      options: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
+    validations:
+      required: true
+  - type: input
+    id: category-severity
+    attributes:
+      label: Proposed category and severity
+      description: The category axis, and — if it is a security rule — the security severity.
+      placeholder: "category: safety · security severity: n/a"
+    validations:
+      required: true
+  - type: dropdown
+    id: downtime-class
+    attributes:
+      label: Proposed downtime class
+      description: For a safety rule, the operational class of the change it flags.
+      options:
+        - "online (no blocking)"
+        - "blocking (brief lock)"
+        - "rewrite (table rewrite / long lock)"
+        - "not applicable (not a safety rule)"
+    validations:
+      required: true
+  - type: textarea
+    id: bad-example
+    attributes:
+      label: Bad example (should be flagged)
+      description: A minimal migration or statement the rule SHOULD flag. Write it yourself — do not copy from vendor documentation.
+      render: sql
+    validations:
+      required: true
+  - type: textarea
+    id: good-example
+    attributes:
+      label: Good example (should pass)
+      description: The safe rewrite the rule should NOT flag. Write it yourself.
+      render: sql
+    validations:
+      required: true

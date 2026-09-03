@@ -1,0 +1,65 @@
+{
+    "schema_version": 1,
+    "reference_server": "MySQL 8.4.10",
+    "about": "MySQL's schema-changing privileges — the ones that let an account decide what EXISTS rather than what a row contains. They need writing down because the canonical privilege vocabulary is PostgreSQL's, and almost none of these have a PostgreSQL equivalent: `ALTER`, `DROP`, `INDEX`, `CREATE ROUTINE` and `EVENT` all arrive as the unmapped case carrying their own engine name. A structural check built on the canonical cases alone therefore asks, on MySQL, only whether the account holds `CREATE` — `TRUNCATE` and `ALTER SYSTEM` do not exist there at all — so an account that may rebuild every table, drop every table and install code as a stored routine reads as holding nothing structural. This file is what the MySQL reader compares the unmapped names against, and a test asks a real 8.4 to accept every one of them.",
+    "entries": [
+        {
+            "privilege": "ALTER",
+            "grants": "Rebuild any table in scope: add, drop and retype columns, rename the table. The schema after an injection is not the schema the application was written against.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "DROP",
+            "grants": "Remove a table or a database outright — and it is also what MySQL requires for TRUNCATE TABLE, which is why this engine has no TRUNCATE privilege of its own.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "INDEX",
+            "grants": "Create and drop indexes. A schema change in its own right, and on a large table one that holds metadata locks long enough to be an outage.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "CREATE VIEW",
+            "grants": "Add a persistent view. A view carries a DEFINER, so one created this way can read through the account that defined it.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "CREATE ROUTINE",
+            "grants": "Install a stored procedure or function — code that persists in the database, runs later, and by default runs as its DEFINER. The strongest foothold in this list.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "ALTER ROUTINE",
+            "grants": "Change or drop an existing routine, including one the application depends on — the body an injection replaces keeps the name everything already calls.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "EVENT",
+            "grants": "Create scheduled events: code that runs on the server's own clock, with no request and no client. Persistence that does not need anybody to come back.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "CREATE TABLESPACE",
+            "grants": "Create, alter and drop tablespaces — server-level storage objects that outlive any schema in them.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        }
+    ],
+    "deliberately_absent": [
+        {
+            "privilege": "REFERENCES",
+            "why": "It cannot change anything on its own. MySQL requires it on the PARENT table to create a foreign key, but the statement that creates one also needs ALTER or CREATE on the child — so an account holding only REFERENCES can alter no schema at all. Reporting it would be a finding against the rule's own claim, and this file is read by rules that say an injection could leave something behind."
+        },
+        {
+            "privilege": "CREATE TEMPORARY TABLES",
+            "why": "A temporary table lives and dies with the session, so nothing it creates outlives the request. It maps to the canonical TEMPORARY case for exactly that reason, and the structural question is about persistence."
+        },
+        {
+            "privilege": "LOCK TABLES",
+            "why": "It changes concurrency, not the schema. Worth reporting in its own right one day, but not under a rule whose sentence is about what an injection can leave behind."
+        },
+        {
+            "privilege": "CREATE USER",
+            "why": "Account management rather than schema. It is administration of the SERVER and belongs to SEC.PRIV.GRANT_SERVER_ADMIN — two rules about one fact is the double report this catalog refuses."
+        }
+    ]
+}

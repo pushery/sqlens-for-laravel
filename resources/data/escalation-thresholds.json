@@ -1,0 +1,37 @@
+{
+    "schema_version": 1,
+    "about": "How large an object has to be before a deploy finding is worth more attention than the same finding on a small one. Written for this package from the shape of the operations themselves; no threshold table was copied from another linter or vendor document. These are HEURISTICS and the numbers say so: the same rewrite that is invisible at ten thousand rows is an outage at half a billion, and no single number separates those cleanly for every schema, disk and maintenance window. What the artefact buys is that the number is a reviewable line in a diff rather than a constant somebody once typed into a class. A threshold never creates a finding and never removes one — it only raises the severity of a finding that already exists, and every raise is reported as resting on an estimate.",
+    "operations": {
+        "rewrite": {
+            "about": "The table is rewritten in place: every row copied, the whole time under a lock nothing else can read through. Cost scales with SIZE rather than with row count, because what is copied is bytes.",
+            "source": "https://www.postgresql.org/docs/18/sql-altertable.html",
+            "thresholds": [
+                {"min_bytes": 1073741824, "raise_to": "high"},
+                {"min_bytes": 107374182400, "raise_to": "critical"}
+            ]
+        },
+        "index_build": {
+            "about": "An index is built over an existing table. Concurrent builds do not block writes but take longer and can fail part-way; the blocking form holds the table for the duration. Row count is the better predictor here — the work is per row, not per byte.",
+            "source": "https://www.postgresql.org/docs/18/sql-createindex.html",
+            "thresholds": [
+                {"min_rows": 10000000, "raise_to": "high"},
+                {"min_rows": 500000000, "raise_to": "critical"}
+            ]
+        },
+        "constraint_validation": {
+            "about": "An existing constraint is validated against existing rows. Cheaper than a rewrite because nothing is copied, and still a full scan — so it is the same shape of risk one step down.",
+            "source": "https://www.postgresql.org/docs/18/sql-altertable.html",
+            "thresholds": [
+                {"min_rows": 50000000, "raise_to": "high"}
+            ]
+        },
+        "backfill": {
+            "about": "Data is written by the migration itself. This is the operation the guidance is sharpest about: a backfill that belongs in a queued job looks identical to one that belongs in a migration until somebody knows how many rows it touches. That is why the recommendation is deliberately unarmed without statistics and armed by them.",
+            "source": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+            "thresholds": [
+                {"min_rows": 100000, "raise_to": "high"},
+                {"min_rows": 10000000, "raise_to": "critical"}
+            ]
+        }
+    }
+}

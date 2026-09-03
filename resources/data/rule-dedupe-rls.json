@@ -1,0 +1,67 @@
+{
+    "schema_version": 1,
+    "about": "How SQLens's own row-level-security rules relate to the findings a later PGLS `dblint` or Splinter adapter would produce, so the same fact never reaches a report twice. This is the CONTRACT, not the adapter: no adapter is built here, and this file is what one would match against when it is. Every foreign identifier is carried as a reference to a fact — the id and the source link — and no wording, rule text or table is taken from either project.",
+    "precedence": "Where the two cover the same ground, OURS wins. It carries the metadata a report is built from: a severity on our own axis, a downtime class where one applies, and a documentation URL that stays stable across releases. The foreign finding is then SUPPRESSED and shown as suppressed — never dropped. A deduplicated finding that vanished without trace would be indistinguishable from one nobody produced, which is the silent green this package refuses.",
+    "dedupe_key": "object_identity + pattern. The object identity is the qualified name the catalog reader produced (`schema.table`), so both sides name the same row of the same catalog rather than two spellings of it; the pattern is the entry key below. An adapter matches on the pair, because the same foreign rule firing on two different tables is two findings, not one.",
+    "entries": {
+        "SEC.RLS.CHECK_ALWAYS_TRUE": {
+            "pattern": "policy_with_check_is_constant_true",
+            "foreign": [],
+            "note": "No foreign counterpart known. The write half of a policy — a tenant that can insert a row carrying somebody else's id — is a narrower reading than either catalog publishes."
+        },
+        "SEC.RLS.DISABLED": {
+            "pattern": "rls_disabled_on_tenant_table",
+            "foreign": [
+                {
+                    "tool": "splinter",
+                    "id": "0013_rls_disabled_in_public",
+                    "url": "https://github.com/supabase/splinter"
+                },
+                {
+                    "tool": "pgls",
+                    "id": "dblint security/rls-disabled",
+                    "url": "https://github.com/supabase-community/postgres-language-server"
+                }
+            ],
+            "note": "Both sides answer 'this table holds tenant data and has no row-level security'. Ours stays authoritative because it also knows WHICH tables the project called tenant tables — configured, not guessed — and says so when it does not know rather than assuming."
+        },
+        "SEC.RLS.NOT_FORCED": {
+            "pattern": "rls_enabled_not_forced",
+            "foreign": [
+                {
+                    "tool": "splinter",
+                    "id": "0007_policy_exists_rls_disabled",
+                    "url": "https://github.com/supabase/splinter"
+                }
+            ],
+            "note": "Adjacent rather than identical, and kept ours for that reason: the foreign check reports a policy on a table with row-level security off, ours reports it ON but not FORCED — the owner exemption. The overlap is real enough to deduplicate and the sentences are not interchangeable, which is exactly when precedence has to be written down."
+        },
+        "SEC.RLS.NO_POLICY": {
+            "pattern": "rls_enabled_without_policy",
+            "foreign": [
+                {
+                    "tool": "splinter",
+                    "id": "0008_rls_enabled_no_policy",
+                    "url": "https://github.com/supabase/splinter"
+                }
+            ],
+            "note": "The state where the table denies every row. Ours distinguishes what the FORCE setting does to the owner, which decides whether the table is unreadable for everybody or for everybody except one role — two different debugging sessions, and only one of them starts in the application."
+        },
+        "SEC.RLS.OWNER_UNRESTRICTED": {
+            "pattern": "rls_owner_exempt_audit_not_owner",
+            "foreign": [],
+            "note": "No foreign counterpart known. Recorded with an empty list rather than omitted: 'nothing maps here' and 'nobody looked' are different statements, and only the first one is a contract."
+        },
+        "SEC.RLS.POLICY_ALWAYS_TRUE": {
+            "pattern": "policy_filter_is_constant_true",
+            "foreign": [
+                {
+                    "tool": "pgls",
+                    "id": "dblint security/policy-always-true",
+                    "url": "https://github.com/supabase-community/postgres-language-server"
+                }
+            ],
+            "note": "A policy whose USING expression admits every row. Ours reads the deparsed expression from the live catalog rather than the migration text, so it also sees a policy created outside the project's own migrations."
+        }
+    }
+}

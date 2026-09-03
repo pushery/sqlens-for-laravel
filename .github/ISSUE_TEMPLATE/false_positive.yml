@@ -1,0 +1,63 @@
+name: False-positive report
+description: "Report a rule that fired on safe code. A minimal reproducing snippet is required."
+labels: ["false-positive"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A false-positive report is only actionable with a snippet that reproduces it. A
+        report without one is incomplete and will be asked for the snippet before anything
+        can happen.
+
+        Any snippet you include is contributed under the MIT license; if a maintainer turns it
+        into a fixture, the change carries the usual DCO sign-off (`git commit -s`). Do not paste
+        credentials or production data — reduce the case to a minimal, synthetic snippet.
+  - type: input
+    id: rule-id
+    attributes:
+      label: Rule id that fired
+      description: The id of the finding you believe is wrong.
+    validations:
+      required: true
+  - type: textarea
+    id: snippet
+    attributes:
+      label: Minimal reproducing migration or statement
+      description: The smallest self-contained SQL or migration that triggers the finding. This is required — a false-positive cannot be investigated without it.
+      render: sql
+    validations:
+      required: true
+  - type: input
+    id: server-version
+    attributes:
+      label: Server version
+      description: The exact database server version (e.g. PostgreSQL 18.1, MySQL 8.4.2).
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options:
+        - pretend
+        - shadow
+        - other (describe below)
+    validations:
+      required: true
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: Expected vs actual findings
+      description: Which finding ids you expected, and which you actually got.
+      placeholder: |
+        Expected: (no finding)
+        Actual: pg.safety.<id>
+    validations:
+      required: true
+  - type: input
+    id: sqlens-version
+    attributes:
+      label: SQLens version
+      description: The installed version of pushery/sqlens-for-laravel.
+    validations:
+      required: true

@@ -1,0 +1,21 @@
+{
+    "schema_version": 1,
+    "about": "Two of this package's own rules that read the SAME server setting from different angles — a hardening view and a privacy view — and which of the pair a report shows when both fire. This is the CONTRACT, not the mechanism: the source that reads it hides the privacy view only when its hardening partner is actually VISIBLE in the same run, so a table entry can never make a finding disappear on its own.",
+    "precedence": "The HARDENING view wins and the privacy view is suppressed against it. Not because the concern matters less — it is a different concern, and for a data-protection question it is the one that matters — but because the pair describes ONE server value, and the remediation is identical: turn the setting off. Two findings on one value read as two problems and invite two tickets. The hardening view carries the higher severity of the pair, so keeping it is also the answer that does not quietly lower what the report says.",
+    "why_not_a_static_table": "The RLS table beside this one (`rule-dedupe-rls.json`) is unconditional: a foreign checker's finding is always superseded by ours, whether ours fired or not, because ours is the authoritative reading of that fact. This one CANNOT work that way. Both ids here belong to this package, and a privacy view that stepped aside for a hardening view which did not fire would vanish with nothing in its place — and a report missing a category looks exactly like a clean report. So presence in this table is a precondition, never a verdict.",
+    "dedupe_key": "driver + setting variable. Both rules of a pair read one variable on one engine, so the pair is identified by the value they disagree about how to describe. A third view of the same variable — a retention angle, say — joins as another entry and needs no code change.",
+    "entries": {
+        "SEC.CFG.GENERAL_LOG_PERSONAL_DATA": {
+            "superseded_by": "SEC.CFG.GENERAL_LOG",
+            "driver": "mysql",
+            "variable": "general_log",
+            "note": "MySQL's general query log. The hardening view is about credentials — `CREATE USER … IDENTIFIED BY` writes the password into the log — and the privacy view is about every row value in every statement. One switch, one fix, two reasons to care."
+        },
+        "SEC.CFG.STATEMENT_LOGGING": {
+            "superseded_by": "SEC.CFG.STATEMENT_LOGGING_SECRETS",
+            "driver": "pgsql",
+            "variable": "log_statement",
+            "note": "PostgreSQL's statement log, at `all` or `mod`. The same pair as `general_log` on the other engine, and the reason this table has two rows rather than one: until the PostgreSQL hardening view existed, this dedupe had nothing to do on PostgreSQL and its counter-proof was not constructible there."
+        }
+    }
+}

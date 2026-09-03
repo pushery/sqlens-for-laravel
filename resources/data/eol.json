@@ -1,0 +1,142 @@
+{
+    "schema_version": 1,
+    "about": "Release and end-of-life dates for the database engines this package reasons about, so the patch-currency check can answer offline. A run that had to reach the network to say whether a server is behind would be unusable in the places it matters most -- a CI runner without egress, an air-gapped estate -- and would make the same question answerable differently on two days. This file is the offline truth: it is versioned, diffable, and never fetched at run time. It carries the two dates a support window is made of. It deliberately does NOT carry a current patch level per cycle: that number moves every few weeks, so a bundled copy would be wrong within a month of any release, and a wrong \"latest\" produces either invented findings or invented confidence. `latest_patch` is therefore null in this build, and the rule that reads it reports an undetermined with a named reason rather than a pass -- \"this data does not record patch levels\" is a true statement, and \"you are up to date\" would not be. The explicit refresh is what fills it.",
+    "provenance": "Compiled by hand from each vendor's own versioning policy and release announcements, in this package's OWN shape and field names. It is deliberately not a copy of any third party's table: reusing a foreign structure would import both its license and its mistakes, and would tie a correction here to a release there.",
+    "sources": [
+        {
+            "product": "postgresql",
+            "title": "PostgreSQL Versioning Policy",
+            "url": "https://www.postgresql.org/support/versioning/"
+        },
+        {
+            "product": "postgresql",
+            "title": "PostgreSQL Roadmap",
+            "url": "https://www.postgresql.org/developer/roadmap/"
+        },
+        {
+            "product": "mysql",
+            "title": "Oracle Lifetime Support Policy: Oracle Technology Products",
+            "url": "https://www.oracle.com/us/support/library/lifetime-support-technology-069183.pdf"
+        },
+        {
+            "product": "mysql",
+            "title": "Introducing MySQL Innovation and Long-Term Support (LTS) Versions",
+            "url": "https://blogs.oracle.com/mysql/post/introducing-mysql-innovation-and-longterm-support-lts-versions"
+        }
+    ],
+    "compiled_on": "2026-08-03",
+    "products": {
+        "mysql": {
+            "cycles": [
+                {
+                    "cycle": "8.0",
+                    "latest_patch": null,
+                    "release_date": "2018-04-19",
+                    "eol_date": "2026-04-30",
+                    "lts": false,
+                    "note": "The last release before the innovation/LTS split. Extended support runs beyond the date above; this file records PREMIER support, because that is when security fixes stop being routine."
+                },
+                {
+                    "cycle": "8.4",
+                    "latest_patch": null,
+                    "release_date": "2024-04-30",
+                    "eol_date": "2032-04-30",
+                    "lts": true,
+                    "note": "The first LTS under the new model, and the floor this package supports."
+                },
+                {
+                    "cycle": "9.0",
+                    "latest_patch": null,
+                    "release_date": "2024-07-01",
+                    "eol_date": "2024-10-01",
+                    "lts": false,
+                    "note": "An innovation release: supported only until its successor ships, which is what makes running one in production a finding rather than a preference."
+                },
+                {
+                    "cycle": "9.1",
+                    "latest_patch": null,
+                    "release_date": "2024-10-15",
+                    "eol_date": "2025-01-21",
+                    "lts": false,
+                    "note": "Innovation release."
+                },
+                {
+                    "cycle": "9.2",
+                    "latest_patch": null,
+                    "release_date": "2025-01-21",
+                    "eol_date": "2025-04-15",
+                    "lts": false,
+                    "note": "Innovation release."
+                },
+                {
+                    "cycle": "9.3",
+                    "latest_patch": null,
+                    "release_date": "2025-04-15",
+                    "eol_date": "2025-07-22",
+                    "lts": false,
+                    "note": "Innovation release."
+                },
+                {
+                    "cycle": "9.4",
+                    "latest_patch": null,
+                    "release_date": "2025-07-22",
+                    "eol_date": "2025-10-21",
+                    "lts": false,
+                    "note": "Innovation release."
+                }
+            ]
+        },
+        "postgresql": {
+            "cycles": [
+                {
+                    "cycle": "13",
+                    "latest_patch": null,
+                    "release_date": "2020-09-24",
+                    "eol_date": "2025-11-13",
+                    "lts": false,
+                    "note": "Five years from its initial release, per the versioning policy."
+                },
+                {
+                    "cycle": "14",
+                    "latest_patch": null,
+                    "release_date": "2021-09-30",
+                    "eol_date": "2026-11-12",
+                    "lts": false,
+                    "note": "Five years from its initial release, per the versioning policy."
+                },
+                {
+                    "cycle": "15",
+                    "latest_patch": null,
+                    "release_date": "2022-10-13",
+                    "eol_date": "2027-11-11",
+                    "lts": false,
+                    "note": "Five years from its initial release, per the versioning policy."
+                },
+                {
+                    "cycle": "16",
+                    "latest_patch": null,
+                    "release_date": "2023-09-14",
+                    "eol_date": "2028-11-09",
+                    "lts": false,
+                    "note": "Five years from its initial release, per the versioning policy."
+                },
+                {
+                    "cycle": "17",
+                    "latest_patch": null,
+                    "release_date": "2024-09-26",
+                    "eol_date": "2029-11-08",
+                    "lts": false,
+                    "note": "Five years from its initial release, per the versioning policy."
+                },
+                {
+                    "cycle": "18",
+                    "latest_patch": null,
+                    "release_date": "2025-09-25",
+                    "eol_date": "2030-11-14",
+                    "lts": false,
+                    "note": "The floor this package supports. Five years from its initial release, per the versioning policy."
+                }
+            ]
+        }
+    }
+}

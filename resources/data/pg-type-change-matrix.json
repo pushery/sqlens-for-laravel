@@ -1,0 +1,45 @@
+{
+    "schema_version": 1,
+    "about": "How an ALTER COLUMN … TYPE <target> behaves on PostgreSQL 18, classified by the TARGET type. The source type is not in the migration SQL, so this is a heuristic keyed on the target and its dominant real case — the rule that reads it declares confidence=heuristic. A target listed under rewrite forces a full-table rewrite under ACCESS EXCLUSIVE from any type it is not binary-coercible from (the common case for these). A target under metadata_only is the dominant free change (varchar→text). A target under narrowing is one whose dominant real case is a narrowing of range or precision (integer from bigint, smallint, real from double precision) — read by the level-4 compatibility rule, which is a separate axis from rewrite. A target not listed under rewrite or metadata_only is an unknown transition and yields undetermined, never a silent pass. Parametrized narrowings (varchar(255)→varchar(50), smaller numeric precision) cannot be told from widenings by the target alone and are not classified here; that change already surfaces as an undetermined on the rewrite axis. A USING clause forces a rewrite regardless of the target and is handled by the rule, not this table. Aliases fold to their canonical PostgreSQL spelling before lookup.",
+    "rewrite": [
+        "bigint",
+        "integer",
+        "smallint",
+        "numeric",
+        "real",
+        "double precision",
+        "boolean",
+        "uuid",
+        "bytea",
+        "jsonb",
+        "inet",
+        "cidr",
+        "timestamp",
+        "timestamp with time zone",
+        "date",
+        "time",
+        "time with time zone"
+    ],
+    "metadata_only": [
+        "text"
+    ],
+    "narrowing": [
+        "integer",
+        "smallint",
+        "real"
+    ],
+    "aliases": {
+        "int": "integer",
+        "int4": "integer",
+        "int8": "bigint",
+        "int2": "smallint",
+        "bool": "boolean",
+        "decimal": "numeric",
+        "float8": "double precision",
+        "float4": "real",
+        "timestamptz": "timestamp with time zone",
+        "timetz": "time with time zone",
+        "character varying": "varchar",
+        "varchar": "varchar"
+    }
+}
