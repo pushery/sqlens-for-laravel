@@ -1,0 +1,1842 @@
+{
+    "schema_version": 1,
+    "about": "The evidence behind each safety rule: the official documentation that establishes the behavior a rule reasons about, and — where one is on record — the documented outage the rule would have prevented. A rule without an entry here is incomplete, because a rule that cannot say why it is right is an opinion. Entries are sorted by rule id, and every text is written for this package: only the link is borrowed, never the wording. Each anchor names the engine version it applies to, because behavior established on an older major does not justify a rule on this baseline.",
+    "entries": {
+        "GEN.L1.DML_WITHOUT_WHERE": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-update.html",
+                "applies_to": "PostgreSQL 18 and MySQL 8.4",
+                "note": "An UPDATE or DELETE applies to every row of the table unless a WHERE clause restricts which rows it touches. The documentation is explicit that WHERE is what limits the affected set; with no WHERE the statement is not a smaller operation but the largest one — every row rewritten or removed. This is SQL-standard behavior, identical on PostgreSQL and MySQL, which is why the rule is driver-neutral."
+            }
+        ],
+        "GEN.L1.DOWN_MORE_DESTRUCTIVE": [
+            {
+                "type": "doc",
+                "url": "https://laravel.com/docs/13.x/migrations",
+                "applies_to": "Laravel 13 (every engine — the rollback path is the framework's, not a database's)",
+                "note": "Laravel rolls a migration back by calling its down() method, and infers nothing from up(): whatever down() contains is what a rollback runs, symmetric or not. The framework offers no check that the two halves match, and no test in an application exercises down() unless one is written by hand — so a down() that drops a table up() only added a column to passes every gate a project has until the day `migrate:rollback` is run against production."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/implicit-commit.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Every DDL statement on MySQL causes an implicit commit, so a rollback that fails partway through cannot be rolled back itself: the statements that already ran are permanent. A down() that destroys more than up() built is therefore not merely wrong on MySQL, it is wrong irrecoverably — the destruction commits statement by statement as it goes. On PostgreSQL the same down() runs inside the migrator's transaction, where a failure at least undoes the part that ran."
+            }
+        ],
+        "GEN.L3.DML_ON_SCHEMA_CHANGED_TABLE": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-altertable.html",
+                "applies_to": "PostgreSQL 18 and MySQL 8.4",
+                "note": "ALTER TABLE takes a lock on the table that a transaction holds until it commits. A data write on the same table in the same transaction therefore runs while that lock is still held, so the lock covers the combined duration of the schema change and the data write, not the schema change alone. Running the two in separate transactions lets the schema change commit and release its lock before the data write begins. This is standard transactional locking, the same on PostgreSQL and MySQL, which is why the rule is driver-neutral."
+            }
+        ],
+        "GEN.L4.DOWN_MISSING": [
+            {
+                "type": "doc",
+                "url": "https://laravel.com/docs/13.x/migrations",
+                "applies_to": "Laravel 13 (every engine — the rollback path is the framework's, not a database's)",
+                "note": "Laravel rolls a migration back by calling its down() method; the framework offers no other reverse path and infers nothing from up(). A migration that declares no down(), or whose down() body runs nothing, therefore has no rollback: `migrate:rollback` reports success and leaves the schema exactly as it was. The fact is visible only in the PHP file — at runtime a missing down() and a deliberately empty one both emit no statements, so neither a pretend run nor a shadow roundtrip can tell them apart, or tell either from a down() that legitimately had nothing to undo."
+            }
+        ],
+        "MY.L1.DROP_COLUMN": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Dropping a column is INSTANT with no lock, but only while none of four conditions applies: a functional index over the column, a table out of instant row-version budget (where the statement is refused outright rather than falling back), ROW_FORMAT=COMPRESSED, or a FULLTEXT index on the table. A static reader cannot see which, so the class is undetermined rather than optimistic."
+            }
+        ],
+        "MY.L1.DROP_TABLE": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/implicit-commit.html",
+                "applies_to": "MySQL 8.4",
+                "note": "DROP TABLE is DDL and causes an implicit commit, so the statement cannot be rolled back with the transaction a migration would otherwise be wrapped in. The table and its rows are gone the instant it runs, whatever fails afterwards in the same migration."
+            }
+        ],
+        "MY.L1.TRUNCATE": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/truncate-table.html",
+                "applies_to": "MySQL 8.4",
+                "note": "MySQL documents TRUNCATE TABLE as a DDL statement that drops and recreates the table rather than deleting rows one by one, and states that it cannot be rolled back. That is the whole difference from the same statement on PostgreSQL: there is no transaction to take it back, so the rows are gone the instant it runs regardless of what fails later in the migration."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/implicit-commit.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The manual lists the statements that cause an implicit commit, TRUNCATE TABLE among them: any transaction open at the time is committed before the statement runs. It is why a migration cannot be treated as atomic on MySQL, and why down() is the only path back from a truncate here."
+            }
+        ],
+        "MY.L2.COPY_ALTER_CHARSET": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                "applies_to": "MySQL 8.4",
+                "note": "MySQL's table of online DDL operations lists converting a character set as ALGORITHM=COPY with concurrent DML blocked: every value in every string column is re-encoded, so the table is copied row by row under a shared lock and the cost grows with the table rather than with the size of the change. The same table distinguishes it from setting the table's default character set, which is in place and touches no existing row."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/charset-conversion.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The manual states the difference this rule turns on: ALTER TABLE ... CONVERT TO CHARACTER SET converts the existing column values, while ALTER TABLE ... DEFAULT CHARACTER SET changes only the table's default for columns added later. The two statements look alike and cost nothing alike, which is why the cheap one is deliberately not reported."
+            }
+        ],
+        "MY.L2.COPY_ALTER_TYPE": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                "applies_to": "MySQL 8.4",
+                "note": "MySQL's own table of online DDL operations lists a column data type change as ALGORITHM=COPY: the table is rebuilt row by row while a shared lock blocks concurrent writes, so the cost grows with the table rather than with the size of the change. The same table records the two exceptions the rule reasons about — extending a VARCHAR is in place only while the length prefix keeps its byte size, and a nullability change is in place but still rebuilds the table."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/alter-table.html",
+                "applies_to": "MySQL 8.4",
+                "note": "ALTER TABLE ... MODIFY takes the column's complete definition rather than a delta, which is why the statement alone cannot say which change it makes. The same page documents the ALGORITHM and LOCK clauses: a statement that names ALGORITHM=INPLACE fails outright when the server would have to copy the table, which is what turns this rule's warning into a certainty a deploy can rely on."
+            }
+        ],
+        "MY.L2.FK_TARGET_NON_UNIQUE": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/create-table-foreign-keys.html",
+                "applies_to": "MySQL 8.4",
+                "note": "MySQL requires the referenced columns of a foreign key to be covered by a unique key of the target table, and documents restrict_fk_on_non_standard_key — enabled by default in 8.4 — as the setting that enforces it. With it on, a foreign key onto a non-unique index or onto a prefix of a composite key is not accepted at all: the server answers ERROR 6125, so the migration fails rather than merely ageing badly."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/mysql-nutshell.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The 8.4 change summary records the deprecation of foreign keys on non-standard keys and the default flip of restrict_fk_on_non_standard_key. It is what turns this from a portability concern into a deploy that breaks on the version this package supports."
+            }
+        ],
+        "MY.L2.NO_PRIMARY_KEY": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/replication-options-source.html",
+                "applies_to": "MySQL 8.4",
+                "note": "MySQL documents that row-based replication of a table without a primary key or a unique NOT NULL index forces the replica to scan the table for every row it applies, which is why a keyless table degrades replication rather than merely offending schema taste. The same manual describes sql_require_primary_key, the server setting that rejects a CREATE TABLE or ALTER TABLE leaving a table without one — a managed provider that sets it turns a keyless migration into a failed deploy."
+            },
+            {
+                "type": "doc",
+                "url": "https://github.com/github/gh-ost/blob/master/doc/requirements-and-limitations.md",
+                "applies_to": "MySQL 8.4",
+                "note": "gh-ost states its requirement plainly: the table must have a PRIMARY KEY or another unique key it can chunk by, and it refuses to migrate one that has neither. Percona's pt-online-schema-change behaves the same way and exits with NO_PRIMARY_OR_UNIQUE_KEY. That is the operational consequence the rule reports — the table that most needs an online schema change is the one that cannot have one."
+            }
+        ],
+        "MY.L3.ALGORITHM_LOCK_UNEXPRESSIBLE": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/alter-table.html",
+                "applies_to": "MySQL 8.4",
+                "note": "ALTER TABLE accepts ALGORITHM and LOCK clauses, and the manual is explicit about what they do: naming an algorithm the server cannot use for the requested change makes the statement FAIL rather than fall back to a slower one. That is the guarantee the clause provides — not a faster operation, but a refusal instead of a silent table copy — and it is why a migration that cannot express the clause has no way to insist on staying online."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The online-DDL table records, per operation, whether InnoDB rebuilds the table and whether concurrent DML is permitted. It is what tells an operation that would benefit from an explicit ALGORITHM/LOCK apart from one the server already runs without blocking writes, so the rule fires from that data rather than from a list of operations written down somewhere."
+            }
+        ],
+        "MY.L3.EXCHANGE_PARTITION_CLAUSE_IGNORED": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The online-DDL partitioning section records that ALTER TABLE ... EXCHANGE PARTITION is not affected by the ALGORITHM and LOCK clauses in the way other partitioning operations are. Measured against 8.4.10 to establish what that means in practice: the contradictory pair ALGORITHM=COPY with LOCK=NONE is refused with error 1846 on ADD COLUMN, ADD INDEX and DROP PARTITION, and accepted on EXCHANGE PARTITION -- so the clause is parsed and discarded rather than checked."
+            }
+        ],
+        "MY.L3.MISSING_LOCK_WAIT_TIMEOUT": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/server-system-variables.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The server variable reference states what lock_wait_timeout bounds — the time a statement waits to acquire a metadata lock — its unit in seconds, and its default of 31536000. That default is the whole reason an unset value is a finding rather than a preference: a year is not a bound anybody chose."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/metadata-locking.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Metadata locks are granted in request order, so a blocked schema change also blocks the plain reads queued behind it. That ordering is why the damage of an unbounded wait is not confined to the migration."
+            }
+        ],
+        "MY.L3.MIXED_DDL_DML_NOT_ATOMIC": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/implicit-commit.html",
+                "applies_to": "MySQL 8.4",
+                "note": "MySQL lists the statements that cause an implicit commit, and it is every DDL statement: any transaction open at the time is committed before the statement runs, and the statement itself cannot be rolled back. A migration that changes the schema and then writes data therefore has no single point of failure — the schema change is already permanent when the write starts."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/atomic-ddl.html",
+                "applies_to": "MySQL 8.4",
+                "note": "MySQL 8 documents atomic DDL, and the scope is the boundary this rule turns on: a single DDL statement either completes or does not, but atomicity is per statement — it does not extend across a sequence, and it cannot be combined with data changes into one unit of work. The guarantee people assume from other engines is precisely the one MySQL does not give."
+            }
+        ],
+        "MY.L4.DROP_WITHOUT_DEPLOY_WINDOW": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The server documentation describes what a drop costs while it runs; it says nothing about who is still reading the object, because that is a property of the application in front of the database. That asymmetry is the rule's whole subject, and the reason it is heuristic rather than deterministic on MySQL 8.4 exactly as on PostgreSQL."
+            }
+        ],
+        "MY.L4.ENUM_CHANGE": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/enum.html",
+                "applies_to": "MySQL 8.4",
+                "note": "MySQL stores an ENUM value as its ORDINAL position in the member list, not as the string. That single fact is what makes a rename the cheapest and most dangerous change available here: the stored data does not move, so nothing is rewritten and no lock is taken, while every row that read the old name now reads the new one. It is also why inserting or removing a member in the middle shifts every later ordinal and forces a rewrite."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The online-DDL table lists modifying an ENUM definition as instant only when the new member is added at the END of the list and the storage size does not change — an ENUM of up to 255 members takes one byte, 256 or more take two. Both conditions turn on the CURRENT member list, which a migration does not contain, so the matrix declines to classify the cost and the finding carries no downtime class rather than a plausible one."
+            }
+        ],
+        "MY.L4.EXPAND_WITHOUT_CONTRACT": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/alter-table.html",
+                "applies_to": "MySQL 8.4",
+                "note": "ADD COLUMN and DROP COLUMN are the two forms that can leave an expand/contract sequence half finished, because they are the only ones that make a second column exist at all. CHANGE, MODIFY and RENAME COLUMN alter a column in place: there is never a moment when two columns hold one fact, so none of them can produce this debt. MySQL performs many of these operations with ALGORITHM=INPLACE, which is what makes the expand half cheap enough to leave standing while readers migrate — and is also why nothing forces the contract half to happen."
+            }
+        ],
+        "MY.L4.IDENTIFIER_LENGTH": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/identifier-length.html",
+                "applies_to": "MySQL 8.4 and newer",
+                "note": "The identifier-length table gives 64 CHARACTERS for databases, tables, columns, indexes and constraints. The unit is characters rather than bytes, which is the one place this rule and its PostgreSQL sibling genuinely cannot share a measurement."
+            }
+        ],
+        "MY.L5.COLLATION_MIXED": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/charset-collation-coercibility.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Coercibility decides which side of a comparison is converted when two collations meet; where the two sides have equal coercibility and different collations the server raises Illegal mix of collations instead of choosing."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/charset-collation-effect.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The documented effect of comparing across collations: one operand is converted, which is what removes it from the reach of its own index."
+            }
+        ],
+        "MY.L5.FK_NULLABLE_IN_UNIQUE": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/create-index.html",
+                "applies_to": "MySQL 8.4",
+                "note": "A UNIQUE index permits multiple NULLs in a column that can contain NULL, so the key does not constrain rows carrying one. MySQL offers no NULLS NOT DISTINCT counterpart."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/constraint-primary-key.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Measured against this documented behavior. Measured: three rows sharing every other column, each with a NULL in one member of a two-column UNIQUE KEY, all insert."
+            }
+        ],
+        "MY.L5.FLOAT_MONEY": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/fixed-point-types.html",
+                "applies_to": "MySQL 8.4",
+                "note": "DECIMAL is documented as the type for values where exactness is required, monetary data named outright; FLOAT and DOUBLE are approximate and comparisons against them can fail on values that look equal."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/problems-with-float.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The manual's own worked example of floating-point comparison failing on values that display identically — the shape this rule exists to prevent."
+            }
+        ],
+        "MY.L5.SQL_MODE_DIVISION_BY_ZERO_SILENT": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/sql-mode.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The SQL mode chapter documents ERROR_FOR_DIVISION_BY_ZERO and what the server does without it, and states that the modes are a comma-separated list applied together — which is why four independent guards live in one variable and why this package judges them as four findings rather than one."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/server-system-variables.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Where the variable's scope is documented: Global plus Session and settable at runtime. That is why only the global value is judged — a connection can be strict while the server hands something laxer to everything else that connects."
+            }
+        ],
+        "MY.L5.SQL_MODE_NOT_STRICT": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/sql-mode.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The SQL mode chapter documents STRICT_TRANS_TABLES and what the server does without it, and states that the modes are a comma-separated list applied together — which is why four independent guards live in one variable and why this package judges them as four findings rather than one."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/server-system-variables.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Where the variable's scope is documented: Global plus Session and settable at runtime. That is why only the global value is judged — a connection can be strict while the server hands something laxer to everything else that connects."
+            }
+        ],
+        "MY.L6.CHARACTER_SET_SERVER_NOT_UTF8MB4": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/charset-server.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The server character set chapter documents the inheritance chain this rule depends on — a database created without an explicit CHARACTER SET takes the server's, and a table without one takes its database's — and states that the two server variables are set together, which is why this is one finding rather than two."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/charset-unicode-utf8mb4.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Why utf8mb3 is called out by name rather than lumped in with latin1: it is three bytes per character and covers only the Basic Multilingual Plane, so it holds most of what anyone tests with and silently cannot store an emoji. The name is the trap — it says utf8 and it is not."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/charset-connection.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Where the connection-level character set is documented, and therefore why the SERVER value is the one judged: a client sets its own for the session, so the connection SQLens audits over says nothing about what a CREATE DATABASE run by somebody else will inherit."
+            }
+        ],
+        "MY.L6.CHARSET_NOT_UTF8MB4": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/charset-unicode-utf8mb3.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The utf8mb3 character set holds three bytes per character and therefore only the Basic Multilingual Plane; MySQL 8.4 marks it deprecated and names utf8mb4 as the replacement."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/charset-conversion.html",
+                "applies_to": "MySQL 8.4",
+                "note": "ALTER TABLE ... CONVERT TO CHARACTER SET rewrites both the column definitions and the stored values, which is why it is a table copy rather than a metadata change."
+            }
+        ],
+        "MY.L6.COLLATION_LEGACY": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/charset-unicode-sets.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The utf8mb4_0900_ai_ci collation implements UCA 9.0.0 and is the default for utf8mb4 since MySQL 8.0; utf8mb4_general_ci is documented as a legacy collation that does not follow the Unicode Collation Algorithm."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/charset-collation-names.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The naming scheme distinguishes the 0900 family from the older ones and marks _ai/_ci, _as/_cs and _bin, which is what separates a deliberate binary or case-sensitive choice from a pre-8.0 leftover."
+            }
+        ],
+        "MY.L6.DEFAULT_STORAGE_ENGINE_NOT_INNODB": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/storage-engine-setting.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Where the inheritance is documented: a CREATE TABLE without an ENGINE clause uses the default storage engine, and the variable can be set globally and per session. That is the whole mechanism this rule reads, and the reason the SERVER value is the one judged."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/server-system-variables.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Where disabled_storage_engines is documented — the list of engines the server refuses to load at all. It is what turns a wrong default into a harmless one, and it is why this rule has a reasoned pass rather than only a finding and silence."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/storage-engines.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The engine comparison, which is what makes the consequence concrete rather than a preference: InnoDB has transactions, foreign keys and crash recovery, and MyISAM has none of the three. A reader who knows only that the default is 'wrong' cannot tell whether it matters."
+            }
+        ],
+        "MY.L6.EXPLICIT_DEFAULTS_FOR_TIMESTAMP_OFF": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/server-system-variables.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The system-variable reference sets out what the flag switches off: the non-standard TIMESTAMP behaviors MySQL applied before it existed, and the fact that 8.4 enables it by default. Both halves matter — what the legacy behavior IS, and that a server carrying OFF today is either an explicit opt-out or a configuration inherited from a 5.x-era deployment."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/timestamp-initialization.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Where the two concrete consequences are documented: automatic initialization and updating for the first TIMESTAMP column, and the NULL-assignment behavior that stores the current timestamp. This is the page that shows why the schema a migration writes and the table the server creates can differ without either looking wrong."
+            }
+        ],
+        "MY.L6.INNODB_ROW_FORMAT_NOT_DYNAMIC": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-row-format.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The row-format chapter sets out what the formats are and that DYNAMIC is the default in current releases. It is also where the index key prefix ceiling is tied to the format rather than to the column definition, which is the connection a reader needs: the column did not change, the table's format did."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-limits.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Where the two numbers live: 3072 bytes for the index key prefix under DYNAMIC and COMPRESSED, 767 under COMPACT and REDUNDANT. Under utf8mb4's four bytes per character that is the difference between a 768-character index and a 191-character one, which is why a plain VARCHAR(255) unique index is the first thing to fail."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-parameters.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The variable's own entry: dynamic, GLOBAL-only scope, and the statement that it supplies the format for tables created without an explicit ROW_FORMAT clause. The GLOBAL-only scope is why this rule reads no session value at all — there is none to read."
+            }
+        ],
+        "MY.L6.LOWER_CASE_TABLE_NAMES_RISK": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/identifier-case-sensitivity.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The identifier case-sensitivity chapter sets out the three values and what each does to table names, and states that the setting must not be changed after the server is initialized. Both halves are the rule: what breaks, and why the remediation is naming rather than a switch."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/server-system-variables.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Where the variable is documented as read-only and set at initialization. That is what makes an in-place fix impossible and why this rule proposes work a project can actually do — a rule whose remedy cannot be executed gets dismissed along with its correct findings."
+            }
+        ],
+        "MY.L6.PK_NOT_BIGINT": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/integer-types.html",
+                "applies_to": "MySQL 8.4",
+                "note": "MySQL's integer type table gives the ranges: TINYINT to 127 signed, SMALLINT to 32767, MEDIUMINT to 8388607, INT to 2147483647, BIGINT to 9223372036854775807. Unsigned doubles each ceiling and postpones the problem rather than removing it."
+            }
+        ],
+        "MY.L6.SQL_MODE_ENGINE_SUBSTITUTION": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/sql-mode.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The SQL mode chapter documents NO_ENGINE_SUBSTITUTION and what the server does without it, and states that the modes are a comma-separated list applied together — which is why four independent guards live in one variable and why this package judges them as four findings rather than one."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/server-system-variables.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Where the variable's scope is documented: Global plus Session and settable at runtime. That is why only the global value is judged — a connection can be strict while the server hands something laxer to everything else that connects."
+            }
+        ],
+        "MY.L6.SQL_MODE_LOOSE_GROUP_BY": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/sql-mode.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The SQL mode chapter documents ONLY_FULL_GROUP_BY and what the server does without it, and states that the modes are a comma-separated list applied together — which is why four independent guards live in one variable and why this package judges them as four findings rather than one."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/server-system-variables.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Where the variable's scope is documented: Global plus Session and settable at runtime. That is why only the global value is judged — a connection can be strict while the server hands something laxer to everything else that connects."
+            }
+        ],
+        "MY.L6.TIME_ZONE_NOT_UTC": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/time-zone-support.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The time-zone support chapter states what SYSTEM means — the host's zone — and that named zones require the timezone tables in the mysql schema. Both halves are the rule: the default defers to the machine, and the obvious fix (a named zone) does not work until somebody loads the tables."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/mysql-tzinfo-to-sql.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Why the offset form is the recommendation rather than the named one: loading the timezone tables is a separate administrative step with its own tool, and a fresh install has not run it. A rule pushing projects toward a spelling their server cannot resolve would be advice that produces NULL."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/server-system-variables.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Where the variable's scope and dynamism are documented: Global plus Session and settable at runtime, which is what makes the server value and the connection value routinely differ — Laravel sets the session one from the connection config on every connection it opens."
+            }
+        ],
+        "MY.L6.TIME_ZONE_TABLES_EMPTY": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/time-zone-support.html",
+                "applies_to": "MySQL 8.4",
+                "note": "States that named time zones require the tables in the mysql schema and that they are not populated by installation. That single fact is the rule: the tables exist, they are empty, and nothing about a named zone works until somebody fills them."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/mysql-tzinfo-to-sql.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The tool that fills them, and therefore the remediation this finding names. It is an administrative step run against the host's own tzdata, not something a migration or an application can do — which is why this is a server finding rather than a schema one."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/server-system-variables.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Where time_zone's accepted forms are documented: a named zone, an offset, or SYSTEM. The three behave differently with respect to the tables, which is what lets this rule stay silent on the two that carry no dependency."
+            }
+        ],
+        "MY.L7.INDEX_REDUNDANT": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/multiple-column-indexes.html",
+                "applies_to": "MySQL 8.4",
+                "note": "A multiple-column index serves queries that test a leftmost prefix of its columns, which is what makes a separate index over that prefix redundant for reads."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/constraint-foreign-key.html",
+                "applies_to": "MySQL 8.4",
+                "note": "InnoDB requires an index on the referencing columns of a foreign key and refuses to drop the last one that satisfies it, which is why the remediation says to check before dropping rather than promising the statement will succeed."
+            }
+        ],
+        "MY.L7.INDEX_UNUSED": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/performance-schema-table-io-waits-summary-by-index-usage-table.html",
+                "applies_to": "MySQL 8.4",
+                "note": "COUNT_STAR per index in table_io_waits_summary_by_index_usage is the engine's index usage counter; the instrument belongs to performance_schema, which is a server setting and may be off, and MySQL records no reset point for it."
+            }
+        ],
+        "MY.L7.UNBATCHED_MASS_DML": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/update.html",
+                "applies_to": "MySQL 8.4",
+                "note": "MySQL accepts a LIMIT row_count clause on a single-table UPDATE (and on DELETE), which bounds the number of rows the statement changes. Laravel's MySQL grammar emits it verbatim from ->limit(n), so on this engine a chunked write is readable in the statement itself — measured against a real 8.4. PostgreSQL has no such clause and the framework emulates the same call with a ctid subselect, which is why the signal this rule reads is engine-specific even though the hazard is not."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-locking.html",
+                "applies_to": "MySQL 8.4",
+                "note": "InnoDB holds the row locks a write takes until the transaction ends, and a single unbounded UPDATE therefore holds locks on every row it matched for the whole of its runtime, while the undo log grows with it. Splitting the same work into bounded statements releases each batch's locks as it commits. The documentation describes the locking; it says nothing about how many rows any given table holds, which is exactly the part this rule declines to guess at."
+            }
+        ],
+        "MY.L8.FK_ID_SUFFIX": [
+            {
+                "type": "doc",
+                "url": "https://laravel.com/docs/13.x/eloquent-relationships",
+                "applies_to": "Laravel 13 and newer, on MySQL 8.4",
+                "note": "The relationships chapter states that Eloquent inspects the relationship method's name and suffixes it with `_id` to find the foreign key, and that a column not matching that must be passed to the relation as a second argument. Both halves are what this rule is about: the convention is what makes a relation work with nothing written down, and departing from it is legal at the price of writing the key at every call site."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/create-table-foreign-keys.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The foreign-key chapter states that a FOREIGN KEY clause declares the referencing columns and the table they point at, and that the constraint is what MySQL records and enforces. That is what this rule reads: the column's membership in a foreign key is a property of the constraint, and the name is never consulted — which is what lets the rule report `author` rather than only confirming `author_id`."
+            }
+        ],
+        "MY.L8.NAMING_SNAKE_CASE": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/identifier-case-sensitivity.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The identifier case-sensitivity page documents that table and database name comparison depends on `lower_case_table_names`, that the default differs by platform, and that the value must not be changed after the data directory is initialized. That is what makes a mixed-case table name a portability defect rather than a style choice: the same schema means different things on the machine it was written on and the machine it runs on, and the difference cannot be settled later."
+            }
+        ],
+        "MY.L9.DOC_MISSING_COMMENT": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/information-schema-tables-table.html",
+                "applies_to": "MySQL 8.4 and newer",
+                "note": "The INFORMATION_SCHEMA TABLES page documents TABLE_COMMENT and states that for a view the column contains the string VIEW. That is the trap this rule's reader normalizes away: it is not a comment anybody wrote, and reading it as one would report every view as documented."
+            }
+        ],
+        "MY.L9.TYPE_IMPLICIT_CAST": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/create-table-foreign-keys.html",
+                "applies_to": "MySQL 8.4 and newer",
+                "note": "The foreign-key page states that corresponding columns must have similar data types, that the size and sign of integer types must be the same, and that string types need not be identical in length. Both halves are this rule: the integer case is refused by the server and therefore cannot be reported from a catalog, while a differing string or temporal pair is accepted and converted."
+            }
+        ],
+        "MY.L9.VIEW_SELECT_STAR": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/create-view.html",
+                "applies_to": "MySQL 8.4 and newer",
+                "note": "The CREATE VIEW page states that a `SELECT *` in a view definition is expanded to the column list at definition time, and that changes to the underlying table afterwards are not reflected in the view. The stored definition read back from `information_schema.VIEWS` is the expanded one, which is why the audit suite cannot answer this question."
+            }
+        ],
+        "PG.L1.DROP_COLUMN": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-altertable.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "DROP COLUMN does not physically remove the data or rewrite the table — the column is only marked dropped in the catalog — but the access to its values is gone, and once the deploy is past there is no way to read them back. It also breaks any running application version that still selects the column."
+            }
+        ],
+        "PG.L1.DROP_SCHEMA": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-dropschema.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "CASCADE automatically drops all objects contained in the schema and, in turn, all objects that depend on those objects — so the reach of the statement is not bounded by the namespace it names. RESTRICT is the default and refuses while the schema still contains anything, which is why naming it turns the statement into a check rather than a waiver."
+            }
+        ],
+        "PG.L1.DROP_TABLE": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-droptable.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "DROP TABLE removes the table and all its data, and once the deploy is past there is no WHERE clause to undo it. With CASCADE it also drops every object that depends on the table — views, foreign keys, and more — which is the same loss widened to whatever else was built on it."
+            }
+        ],
+        "PG.L1.TRUNCATE": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-truncate.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "TRUNCATE empties a table without scanning it, and takes a lock that excludes every concurrent reader and writer for its duration. It is not a filtered delete and cannot be undone by a WHERE clause someone forgot."
+            }
+        ],
+        "PG.L2.CONSTRAINT_NOT_VALIDATED": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-altertable.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "Adding a constraint without NOT VALID makes the server verify every existing row before the statement returns, holding its lock for the whole scan. Adding it NOT VALID and validating afterwards splits that into a fast metadata change and a separate, weaker-locking pass."
+            },
+            {
+                "type": "incident",
+                "url": "https://gocardless.com/blog/zero-downtime-postgres-migrations-the-hard-parts",
+                "applies_to": "PostgreSQL 18",
+                "note": "GoCardless documented an outage from adding a foreign key: the server takes an AccessExclusive lock on both the referencing table and the one it references while it installs the enforcing triggers. A read query already running against the referenced table held that lock in a queue, and because AccessExclusive conflicts with every other lock, all traffic to the table stalled behind it for around fifteen seconds until the migration cleared. Adding the constraint NOT VALID first shrinks that window to a brief metadata lock, and a lock_timeout aborts the deploy rather than the application when the lock cannot be taken."
+            }
+        ],
+        "PG.L2.DROP_INDEX_NOT_CONCURRENT": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-dropindex.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "A plain DROP INDEX takes an ACCESS EXCLUSIVE lock on the index's table for the duration of the drop; CONCURRENTLY drops it without that lock, at the cost of running outside a transaction and dropping only one index per statement."
+            }
+        ],
+        "PG.L2.INDEX_NOT_CONCURRENT": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-createindex.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "A plain CREATE INDEX blocks writes to the table until the index is built; CONCURRENTLY builds it without that block, at the cost of running outside a transaction and of possibly leaving an invalid index behind if it is interrupted."
+            }
+        ],
+        "PG.L2.SET_NOT_NULL_SCAN": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-altertable.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "SET NOT NULL verifies that no existing row holds a null, and that verification is a scan of the table under a lock. Since PostgreSQL 12 a validated CHECK (col IS NOT NULL) lets the server skip that scan when the column is then set NOT NULL."
+            }
+        ],
+        "PG.L2.TYPE_CHANGE_REWRITE": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-altertable.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "Changing a column's type rewrites the whole table unless the new type is binary-coercible from the old one, and a USING clause forces the rewrite unconditionally. The duration therefore grows with the row count, which is why a change that is instant in development can be an outage in production."
+            }
+        ],
+        "PG.L3.CONCURRENTLY_IN_TRANSACTION": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-createindex.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "CREATE INDEX CONCURRENTLY cannot run inside a transaction block — PostgreSQL raises an error and does nothing. Laravel wraps a migration's up() in a transaction by default, so the concurrent build fails until the migration opts out with public $withinTransaction = false. The same restriction applies to DROP INDEX CONCURRENTLY and REINDEX CONCURRENTLY."
+            }
+        ],
+        "PG.L3.MISSING_LOCK_TIMEOUT": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/runtime-config-client.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "lock_timeout aborts a statement that waits longer than the set duration to acquire a lock. Without it, a strong-lock operation (ALTER TABLE, a non-concurrent CREATE INDEX, TRUNCATE, DROP) that cannot take its lock at once waits in the queue indefinitely — and because a pending ACCESS EXCLUSIVE request blocks every later lock request behind it, one stuck migration can stall an entire application. Setting a short lock_timeout before the operation makes a blocked migration fail fast instead of blocking everyone."
+            }
+        ],
+        "PG.L3.MISSING_STATEMENT_TIMEOUT": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/runtime-config-client.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "statement_timeout aborts a statement that runs longer than the set duration. It bounds a different failure than lock_timeout: once a strong-lock operation has acquired its ACCESS EXCLUSIVE lock, it holds that lock — and keeps the table unavailable — for as long as it runs, so an operation that rewrites a large table can hold the lock for hours. Setting a statement_timeout before the operation caps that runtime, so a migration that overshoots aborts and releases the lock instead of holding it indefinitely."
+            }
+        ],
+        "PG.L3.RISKY_OPS_SINGLE_TX": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/explicit-locking.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "A lock held by a transaction is kept until the transaction commits or rolls back. When several strong-lock operations run in one transaction — as they do when a migration alters several tables inside Laravel's default up() transaction — every lock is held for the whole transaction, so the total lock time is the sum of the operations and traffic to any locked table queues behind the slowest. Splitting the operations into separate migrations lets each take its lock, commit, and release it before the next begins."
+            }
+        ],
+        "PG.L4.CHECK_ENUM_CHANGE": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-altertable.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "A Laravel enum() column is a varchar with a CHECK (col IN (…)) constraint, not a PostgreSQL enum type. Changing the allowed values drops the old CHECK and adds a new one, and adding a CHECK without NOT VALID validates every existing row under a lock. Removing an allowed value also breaks any application version that still writes it."
+            }
+        ],
+        "PG.L4.CONSTRAINT_VALIDATION_PENDING": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-altertable.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "A constraint added NOT VALID is enforced for rows inserted or updated afterwards, but existing rows are not checked and the constraint is not assumed to hold: PostgreSQL records convalidated = false and the planner will not rely on it. VALIDATE CONSTRAINT performs the scan under a SHARE UPDATE EXCLUSIVE lock, which does not block reads or writes. The scan also becomes unavoidable later, as part of any table rewrite, which is where the deferred cost lands on a migration nobody expected it in."
+            }
+        ],
+        "PG.L4.DROP_WITHOUT_DEPLOY_WINDOW": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-altertable.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "Dropping a table or column takes effect immediately, so any application instance still running the previous release — which still selects or writes the object — starts failing the moment the migration commits, and stays broken until every old instance is replaced. The safe sequence is expand/contract: an earlier deploy ships code that no longer references the object, and only a later deploy drops it. SQLens reads only the SQL and cannot see whether the old code is gone, so this is a heuristic prompt, not a proof."
+            }
+        ],
+        "PG.L4.ENUM_ADD_VALUE": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-altertype.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "Adding a value to an enum type is a catalog change rather than a table rewrite, but it carries its own transaction restrictions — which is why it belongs on the compatibility level rather than among the blocking operations."
+            }
+        ],
+        "PG.L4.ENUM_VALUE_REMOVED": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-altertype.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "PostgreSQL can add an enum value but cannot remove one: there is no ALTER TYPE … DROP VALUE. Renaming a value with ALTER TYPE … RENAME VALUE, or rebuilding the type (new type, ALTER COLUMN … USING, DROP TYPE) to drop a value, breaks any running application version that still writes or compares the old value. The compatible path is to add first, deploy the code, and only clean up in a later deploy."
+            }
+        ],
+        "PG.L4.EXPAND_WITHOUT_CONTRACT": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-altertable.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "ADD COLUMN with no default, or with a non-volatile one, is a catalog change: PostgreSQL stores the default in pg_attribute and does not rewrite the table. That is what makes the expand half cheap, and it is why the pattern is recommended at all — both columns can be written for as long as it takes every deployed reader to move over. DROP COLUMN is also a catalog operation; the space is reclaimed on a later rewrite. Neither step is expensive, so what makes an unfinished expand/contract cost anything is that it stays unfinished."
+            }
+        ],
+        "PG.L4.IDENTIFIER_LENGTH": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-syntax-lexical.html",
+                "applies_to": "PostgreSQL 18 and newer",
+                "note": "The lexical-structure chapter gives the identifier limit as NAMEDATALEN-1 = 63 BYTES, and states that longer names are truncated rather than rejected. Both halves are the rule: the unit is bytes, which is why a character count is wrong for multi-byte names, and the truncation is silent, which is why nothing downstream ever notices."
+            }
+        ],
+        "PG.L4.TYPE_NARROWING": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/datatype.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "Narrowing a column's type — bigint to integer, double precision to real, a shorter varchar or smaller numeric precision — reduces the range or precision the column can hold. A value that no longer fits fails or is truncated, and any application instance still running the previous release keeps writing the wider range, so it breaks the moment the migration lands and stays broken until every old instance is replaced. The compatible path is expand/contract: add the narrower column alongside, backfill and move reads and writes across a deploy, then drop the old column. The migration SQL names only the target type, not the source, so a static check flags the target types whose dominant real case is a narrowing and leaves the source confirmation to the reader."
+            }
+        ],
+        "PG.L5.COLLATION_VERSION_MISMATCH": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-altercollation.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "States the hazard and the remedy in the server's own words: when a collation's underlying library changes, indexes built on it may be corrupted, and the fix is to rebuild them and then refresh the recorded version. The ORDER is the part a reader most needs, and it is why this rule states it rather than merely naming both commands."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/collation.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "Where the version tracking itself is documented, including that PostgreSQL records the version at creation so a mismatch can be detected at all, and that not every provider reports one. Both halves are this rule: the comparison it makes, and why it must answer undetermined where no version exists."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-reindex.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The first half of the remediation, and the reason the finding names it as work rather than a setting: rebuilding an index is an operation with a cost and a lock profile, not a configuration change somebody can make between two meetings."
+            }
+        ],
+        "PG.L5.FK_NO_INDEX": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/ddl-constraints.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "PostgreSQL's own constraint chapter states it: because a DELETE or an UPDATE of the referenced key requires a scan of the referencing table for rows matching the old value, it is often a good idea to index the referencing columns as well. The server creates no such index, and nothing in the migration that added the key says so."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/indexes-multicolumn.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "Why coverage is a LEFT PREFIX rather than a set membership: a multicolumn B-tree is usable for a query constraining its leading columns, and constraining only a later column makes the index no better than a scan. An index on (a, b) therefore covers a key on (a); an index on (b, a) does not."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/indexes-partial.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "Why a partial index is excluded from coverage: it indexes only the rows its predicate admits, so it cannot answer the lookup a referential action makes over all of them. The same reasoning excludes an expression index and one with a non-default operator class, and the exclusion is the cautious direction — counting such an index would leave the check silent about a table that really does scan."
+            }
+        ],
+        "PG.L5.FK_NULLABLE_IN_UNIQUE": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/indexes-unique.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "Unique indexes treat NULLs as distinct by default, so several rows carrying a NULL in a key column can coexist; NULLS NOT DISTINCT (added in 15) reverses that."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-createindex.html",
+                "applies_to": "PostgreSQL 18.4",
+                "note": "Measured against this documented behavior. Measured: three rows sharing every other column, each with a NULL in one member of a two-column unique index, all insert. The same index declared NULLS NOT DISTINCT refuses the second; pg_index.indnullsnotdistinct reports which mode is in force."
+            }
+        ],
+        "PG.L5.FLOAT_MONEY": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/datatype-numeric.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "numeric stores an exact decimal and is documented as the choice where exactness matters, notably monetary amounts; real and double precision are inexact binary floats whose stored value may differ from the one written."
+            }
+        ],
+        "PG.L5.MONEY_TYPE": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/datatype-money.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The money type's output depends on lc_monetary and input is interpreted under that same setting, so a value is locale-dependent; the documentation itself recommends numeric where that dependency is unwanted, and notes the fractional precision is determined by the locale."
+            }
+        ],
+        "PG.L5.NO_PRIMARY_KEY": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/logical-replication-publication.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "A published table must have a replica identity for UPDATE and DELETE to be replicated; with the default identity that means a primary key. Without one the server raises “cannot update table … because it does not have a replica identity” — and it raises it on the first write, not when the publication is created, so nothing about setting replication up reveals the problem."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-altertable.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "REPLICA IDENTITY USING INDEX names exactly what can stand in for a primary key: a unique index that is not partial, not deferrable, and covers only NOT NULL columns. That is the definition this rule applies, rather than a looser “there is some unique index” test that would call a table identifiable when the server does not."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/datatype-oid.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "Why “just use ctid” is not an answer for row-level tooling: a row's physical location is not stable — it changes on UPDATE and on VACUUM FULL — so it cannot serve as the identity an audit trail or a re-run-this-row recovery needs."
+            }
+        ],
+        "PG.L6.DEFAULT_TRANSACTION_ISOLATION_DRIFT": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/transaction-iso.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The transaction isolation chapter states that read committed is the default and that the repeatable read and serializable levels can abort a transaction with a serialization failure the application is expected to retry. Both halves matter here: the level a framework was written against, and the new failure mode that appears when it changes underneath."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/errcodes-appendix.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The error the finding names is a real, listed condition rather than a description: class 40 covers transaction rollback, with serialization_failure as 40001. Naming the SQLSTATE gives whoever reads the finding something to search their logs for, which a prose warning does not."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/runtime-config-client.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "Where the variable lives and what changing it costs: it is a client-connection default, settable per session and per role, so the server-wide value is what a connection gets when nothing else has spoken — and changing it is a configuration change plus a reload rather than a restart."
+            }
+        ],
+        "PG.L6.DEFAULT_TRANSACTION_READ_ONLY": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-set-transaction.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "SET TRANSACTION documents the read-only mode and the fact that the session default is what a transaction gets when it does not state a mode itself. That is the whole mechanism: the server-wide value decides what every unmarked transaction is, and an application that never writes READ WRITE never overrides it."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/errcodes-appendix.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The failure has a listed code rather than a description: read_only_sql_transaction is 25006, in the invalid-transaction-state class. Naming it is what lets somebody tell this apart from a privilege error in their logs, which is what it otherwise looks like."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/runtime-config-client.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "Where the variable lives and what changing it costs: a client-connection default, settable per session and per role, so the server value is what a connection gets when nothing else has spoken — and a configuration change plus a reload, not a restart."
+            }
+        ],
+        "PG.L6.JSON_NOT_JSONB": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/datatype-json.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "PostgreSQL's JSON chapter states the trade-off directly: json stores an exact copy of the input text which processing functions must reparse on each execution, while jsonb is stored in a decomposed binary format that is slower to input but significantly faster to process. The same page notes that jsonb does not preserve whitespace, key order, or duplicate keys, and that jsonb supports indexing — which json does not."
+            }
+        ],
+        "PG.L6.PK_NOT_BIGINT": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/datatype-numeric.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "PostgreSQL's numeric types table gives the ranges directly: smallint spans -32768 to +32767, integer -2147483648 to +2147483647, and bigint -9223372036854775808 to +9223372036854775807. The same chapter notes that the integer type is the usual choice as it offers the best balance, which is exactly why a key chosen without thought lands on it."
+            }
+        ],
+        "PG.L6.PK_UUID_V4": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/functions-uuid.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "PostgreSQL 18 documents uuidv7() beside uuidv4(): the v7 value embeds a Unix timestamp with millisecond precision, so generated values sort by creation time. The same page notes that this makes them better suited to use as a primary key than the random v4 form."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/release-18.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The release notes list uuidv7() as new in 18. That is why this rule declares a version window rather than checking the version in its message: on 17 the function does not exist, and advice that cannot be followed teaches people to skim the report."
+            }
+        ],
+        "PG.L6.SERIAL_NOT_IDENTITY": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/datatype-numeric.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The Serial Types section states that serial is not a true type but a notational convenience, that it expands into an integer column with a NOT NULL default drawn from a sequence generator, and that the sequence is marked as owned by the column. It also records the consequence this rule reports: a role needs USAGE or SELECT on the sequence in addition to its privileges on the table."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-createtable.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The identity-column definition documents GENERATED ALWAYS versus GENERATED BY DEFAULT: with ALWAYS an explicit user value is rejected unless OVERRIDING SYSTEM VALUE is given, while BY DEFAULT accepts it. That is the protection serial cannot offer, since its default is only applied when no value is supplied."
+            }
+        ],
+        "PG.L6.STANDARD_CONFORMING_STRINGS_OFF": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-syntax-lexical.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The lexical structure chapter sets out that an ordinary single-quoted string treats a backslash literally when the standard behavior is in force, and that the escape-string syntax with a leading E is the way to ask for C-style escapes explicitly. That explicit form is what makes the server-wide switch unnecessary: code that wants an escape can say so per literal."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/runtime-config-compatible.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The variable lives among the version-and-platform compatibility settings, which is its own statement about it: it exists to keep pre-standard code running, not as a choice a new deployment makes. A server still carrying it is carrying a compatibility shim for code that has most likely been gone for years."
+            }
+        ],
+        "PG.L6.TIMESTAMP_NO_TZ": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/datatype-datetime.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "PostgreSQL's date/time chapter states the difference plainly: for `timestamp with time zone`, the value is converted to UTC for storage using the session TimeZone and converted back on output, while `timestamp without time zone` stores no zone at all and is not converted. The type name says 'with time zone' but no zone is stored — the instant is."
+            }
+        ],
+        "PG.L6.TIMEZONE_NOT_UTC": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/runtime-config-client.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The client-connection defaults chapter documents TimeZone as the zone for displaying and interpreting time stamps, with a default that follows the server environment. That default is exactly the problem: it makes the database's behavior a property of the machine it was installed on rather than of a decision somebody made."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/datatype-datetime.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "Why the value is not merely cosmetic: the date/time chapter sets out that a timestamp with time zone is stored as an absolute instant and converted to the current TimeZone on output, and that an input literal without an offset is interpreted in it. Both conversions cross the boundary where a cast to date or a date_trunc picks a calendar day, which is where a non-UTC server silently shifts a daily aggregate."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-altersystem.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The remediation path, and why this rule reports no downtime: ALTER SYSTEM writes the value to a file the server reads, and a parameter of this class takes effect on a configuration reload rather than a restart. Sessions already open keep what they have, so the change reaches an application when its pool next reconnects."
+            }
+        ],
+        "PG.L7.DATA_CHECKSUMS_DISABLED": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/checksums.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The data checksums chapter sets out what they buy: pages are verified on read, so corruption originating below the database is detected and reported instead of being returned as data. It also notes the cost, which is what makes this a level-7 judgment rather than a hard rule — the protection is not free, it is merely worth it on almost every deployment."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/app-pgchecksums.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "Why the remediation cannot be online, stated by the tool's own documentation: pg_checksums operates on a cluster that has been shut down cleanly. That single requirement is the whole reason this finding describes a migration path rather than a setting to change, and the reason it carries no downtime class claiming otherwise."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/app-initdb.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "Where the default now sits: initdb enables checksums unless told not to, so on version 18 their absence is either a deliberate opt-out or, far more often, an older cluster carried forward. Knowing which of the two it is changes who needs to be in the conversation."
+            }
+        ],
+        "PG.L7.INDEX_REDUNDANT": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/indexes-multicolumn.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "A multicolumn b-tree index can be used for queries constraining a leading subset of its columns, which is what makes a separate index over that prefix redundant for reads."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-dropindex.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "DROP INDEX CONCURRENTLY takes no lock that blocks concurrent reads or writes on the table, which is why the remediation names it rather than a plain DROP INDEX."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/indexes-index-only-scans.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "INCLUDE columns are stored in the index but are not key columns, so they do not appear among the key columns a comparison sees — the reason an index carrying a payload is never reported as redundant."
+            }
+        ],
+        "PG.L7.INDEX_UNUSED": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/monitoring-stats.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "pg_stat_user_indexes.idx_scan counts index scans and pg_stat_database.stats_reset records when the counters were last reset; the documentation is explicit that the statistics are per instance and can be reset, which is what makes the window a precondition for reading the counter at all."
+            }
+        ],
+        "PG.L7.UNBATCHED_MASS_DML": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-update.html",
+                "applies_to": "PostgreSQL 18 and newer",
+                "note": "The UPDATE page's synopsis carries no LIMIT clause — the engine has none, which is why a chunked write on PostgreSQL is compiled by Laravel into a `ctid` subselect instead and why this rule's signal differs from its MySQL sibling's while the hazard does not."
+            }
+        ],
+        "PG.L8.FK_ID_SUFFIX": [
+            {
+                "type": "doc",
+                "url": "https://laravel.com/docs/13.x/eloquent-relationships",
+                "applies_to": "Laravel 13 and newer",
+                "note": "The relationships chapter states that Eloquent inspects the relationship method's name and suffixes it with `_id` to find the foreign key, and that a column not matching that must be passed to the relation as a second argument. Both halves are what this rule is about: the convention is what makes a relation work with nothing written down, and departing from it is legal at the price of writing the key at every call site."
+            }
+        ],
+        "PG.L8.NAMING_SNAKE_CASE": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-syntax-lexical.html",
+                "applies_to": "PostgreSQL 18 and newer",
+                "note": "The lexical-structure chapter states that unquoted identifiers are folded to lower case, and that a quoted identifier keeps the case it was written in. Both halves matter here: folding is what makes `Orders` and `orders` the same name when neither is quoted, and case preservation is what makes them two different names once one of them is. A schema holding both spellings therefore holds two objects that every unquoted reference resolves to the same one of."
+            }
+        ],
+        "PG.L9.DOC_MISSING_COMMENT": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-comment.html",
+                "applies_to": "PostgreSQL 18 and newer",
+                "note": "The COMMENT page states that a comment is stored per object and that setting it to NULL removes it — which is why an absent comment reads as NULL from `obj_description` and `col_description` rather than as an empty string, and why the two states do not need to be told apart on this engine."
+            }
+        ],
+        "PG.L9.TYPE_IMPLICIT_CAST": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/datatype-numeric.html",
+                "applies_to": "PostgreSQL 18 and newer",
+                "note": "The numeric-types table gives the ranges: `integer` is -2147483648 to +2147483647 and `bigint` is -9223372036854775808 to +9223372036854775807. That difference is the whole finding — a referencing column of the narrower type can address only a fraction of what the referenced key can hold, and nothing about the foreign key says so."
+            }
+        ],
+        "PG.L9.VIEW_SELECT_STAR": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-createview.html",
+                "applies_to": "PostgreSQL 18 and newer",
+                "note": "The CREATE VIEW page states that the columns of a view are determined when it is created and that columns added to the underlying tables afterwards are not part of the view. It also states that CREATE OR REPLACE VIEW cannot change the column list — which is why the remedy is a replacement rather than an alteration."
+            }
+        ],
+        "SEC.AUTH.HBA_CLEARTEXT": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/auth-password.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The password authentication page states that the password method sends the password in clear text and is therefore vulnerable to sniffing, and that scram-sha-256 is the preferred method. It also documents that whether the connection is encrypted is a property of the line's TYPE, which is why the finding says something different for hostssl than for hostnossl."
+            }
+        ],
+        "SEC.AUTH.HBA_MD5": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/auth-password.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The password authentication page documents md5 as deprecated, salted only with the user name, and notes that a stolen hash can be used to log in directly. It also documents the ordering the remediation depends on: the stored verifier is created when the password is SET, so the roles need new passwords under scram-sha-256 before the line is changed."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/runtime-config-connection.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "Where password_encryption is documented — the setting that decides which verifier a SET PASSWORD stores. It is the first step of the migration, and skipping it is what leaves roles unable to authenticate after the pg_hba.conf line is changed."
+            }
+        ],
+        "SEC.AUTH.HBA_OPEN_CIDR": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/auth-pg-hba-conf.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The pg_hba.conf chapter documents the address field, the CIDR forms, and the keywords all, samehost and samenet. It is the basis for what this rule treats as open — 0.0.0.0/0, ::/0 and all — and for what it does not: samehost and samenet are bounded by the server's own interfaces."
+            }
+        ],
+        "SEC.AUTH.HBA_PARSE_ERROR": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/view-pg-hba-file-rules.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The pg_hba_file_rules view is what this whole family reads, and its documentation states that a line the server could not parse is reported with an error message and is NOT applied. That is the finding: the file loads, the server runs, and the restriction the line was written to impose is silently absent."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/auth-pg-hba-conf.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The chapter documents that the configuration is re-read on reload rather than continuously, which is why the remediation names pg_reload_conf() explicitly: a corrected file that has not been reloaded changes nothing about who is connecting right now."
+            }
+        ],
+        "SEC.AUTH.HBA_TRUST": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/auth-trust.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The trust authentication page states that PostgreSQL assumes anyone who can connect is authorized as whatever database user they name, without a password. It also says trust is appropriate only where operating-system-level protection makes connections impossible for untrusted users — which a network line does not provide."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/auth-pg-hba-conf.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The pg_hba.conf chapter establishes that the FIRST matching record decides, and that no later record is consulted. So one open trust line above a correct one is not a weakening of the correct line — it replaces it entirely for every connection it matches."
+            }
+        ],
+        "SEC.AUTH.HBA_TRUST_LOCAL": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/auth-trust.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The same page names the narrower case this rule reports: for local connections, trust is reasonable only when the socket's file-system permissions restrict who can reach it, and it still equates operating-system access with database access. That difference in reach is why this is medium where the network line is critical."
+            }
+        ],
+        "SEC.AUTH.PASSWORD_LITERAL_IN_MIGRATION": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-createrole.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The CREATE ROLE page documents PASSWORD and ENCRYPTED PASSWORD as accepting a string literal, and notes that the password is always stored encrypted in the catalog — which is precisely why the exposure this rule reports is the FILE and the repository, not the server."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-alterrole.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "ALTER ROLE carries the same clause, which is why a migration that changes a password later is the same finding as the one that set it."
+            }
+        ],
+        "SEC.AUTH.ROLE_ANONYMOUS": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/default-privileges.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The default-account chapter documents that a modern installation creates only the named administrative accounts, and directs the reader to remove anonymous accounts where an older installation left them. That is the basis for treating a hit as inherited rather than configured — and for saying so in the finding instead of implying somebody chose it."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/connection-access.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Access verification documents that an account row with an empty User value matches ANY user name, and the sort order in which such a row is tried against a connection. That is the mechanism the finding describes, stated by the engine rather than inferred: the account is not merely unnamed, it is a catch-all."
+            }
+        ],
+        "SEC.AUTH.ROLE_ANONYMOUS_NO_PASSWORD": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/default-privileges.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The default-account chapter documents that a modern installation creates only the named administrative accounts, and directs the reader to remove anonymous accounts where an older installation left them. That is the basis for treating a hit as inherited rather than configured — and for saying so in the finding instead of implying somebody chose it."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/assigning-passwords.html",
+                "applies_to": "MySQL 8.4",
+                "note": "An account created without an IDENTIFIED BY clause has no password and can connect without supplying one. Combined with the catch-all matching an empty user name gets, that is a login requiring neither a name the server knows nor a credential — cited because each half is documented separately and the combination is what the finding is about."
+            }
+        ],
+        "SEC.AUTH.ROLE_DEPRECATED_PASSWORD_HASH": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/mysql-nutshell.html",
+                "applies_to": "MySQL 8.4 (and the 9.0 removal it announces)",
+                "note": "What's New in MySQL 8.4 states that mysql_native_password is disabled by default and that it is removed in a later release. That is the half of this finding that is not about cryptography at all: an account on this plugin stops working at the next major, and nothing in a connection string says so."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/native-pluggable-authentication.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The plugin's own page documents its deprecation and points at caching_sha2_password as the replacement. Cited for the migration path rather than for the weakness: what a reader needs here is the statement to run, and which client versions can still connect afterwards."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/auth-password.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The password authentication page states that md5 is deprecated, that the verifier is salted with the user name, and that a stolen hash can be used to log in directly. It also documents the ordering the fix depends on: the verifier is written when the password is SET, so changing password_encryption alone leaves an existing role exactly as it was."
+            }
+        ],
+        "SEC.AUTH.ROLE_DEPRECATED_PASSWORD_HASH_LOCKED": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/alter-user.html",
+                "applies_to": "MySQL 8.4",
+                "note": "ALTER USER documents ACCOUNT LOCK and ACCOUNT UNLOCK as a single statement each, and documents that locking affects connection attempts and nothing else. That is the basis for reporting a locked account at all: the stored verifier is untouched by the lock and survives the unlock."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-alterrole.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "ALTER ROLE documents NOLOGIN and VALID UNTIL as the two ways a PostgreSQL role reaches the same state, and both are reversible with one statement. The stored password is independent of either."
+            }
+        ],
+        "SEC.AUTH.ROLE_NO_PASSWORD": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/account-names.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Account names are user plus host, and the host part decides who may present the name at all. Cited because it is the other half of the exposure: an account with no password is reachable by exactly the hosts its name admits, so 'anyone who knows the name' is bounded by that pattern and by nothing else."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/assigning-passwords.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The manual documents that an account created without an IDENTIFIED BY clause has no password, and that such an account can connect without supplying one. That is the behavior this rule reports, stated by the engine rather than inferred from an empty column."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/socket-pluggable-authentication.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The socket plugin authenticates from the operating-system user and stores no credential, so its accounts carry an empty authentication_string legitimately. Cited as the boundary of this rule rather than as its subject: it is why the reading classifies by plugin, and why these accounts are not findings."
+            }
+        ],
+        "SEC.AUTH.ROLE_NO_PASSWORD_LOCKED": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/assigning-passwords.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The manual documents that an account created without an IDENTIFIED BY clause has no password, and that such an account can connect without supplying one. That is the behavior this rule reports, stated by the engine rather than inferred from an empty column."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/account-locking.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Locking is documented as a per-account flag that ALTER USER … ACCOUNT UNLOCK clears; it changes nothing about the stored credential. That is the whole basis for reporting this at all rather than treating a locked account as resolved — the lock is one statement away from being gone, and the missing password is not."
+            }
+        ],
+        "SEC.AUTH.ROLE_WILDCARD_HOST": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/account-names.html",
+                "applies_to": "MySQL 8.4",
+                "note": "An account is user PLUS host, and the manual documents the host part as a pattern in which `%` and `_` are wildcards matching any sequence and any single character. That is the basis for reading `10.0.0._` as a pattern rather than an address, and for treating the host half as an access control rather than a note about where the account usually connects from."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/connection-access.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Access verification matches the incoming connection against the account's host pattern before anything else happens, and the manual documents the sort order in which overlapping patterns are tried. Cited because it is what makes a narrower host a real control rather than documentation: the server refuses the connection at this stage, before a password is even considered."
+            }
+        ],
+        "SEC.AUTH.ROLE_WILDCARD_HOST_PRIVILEGED": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/account-names.html",
+                "applies_to": "MySQL 8.4",
+                "note": "An account is user PLUS host, and the manual documents the host part as a pattern in which `%` and `_` are wildcards matching any sequence and any single character. That is the basis for reading `10.0.0._` as a pattern rather than an address, and for treating the host half as an access control rather than a note about where the account usually connects from."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The privilege reference defines what `ALL PRIVILEGES ON *.*` actually grants, including the administrative privileges that have no per-database scope. Cited for the escalation's premise rather than for the host: it is why an account holding them has nothing above it to escalate to, so the host pattern is the only remaining control."
+            }
+        ],
+        "SEC.CFG.GENERAL_LOG": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/query-log.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The general query log chapter states that the server writes every statement it receives, and that passwords in statements are rewritten only in the ERROR log and the slow log — not here. Cited for the negative: the redaction a reader would assume exists is documented as applying elsewhere."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/password-logging.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Password logging documents which statements MySQL rewrites before logging and where. Cited because it is the exact boundary this finding rests on — a reader who has heard that MySQL redacts passwords has heard something true about a different log."
+            }
+        ],
+        "SEC.CFG.GENERAL_LOG_PERSONAL_DATA": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/query-log.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The general query log chapter states that the server writes every statement it receives. Cited here for the ROWS rather than for the credentials: the same sentence that makes this a secrets exposure makes it a personal-data one, because a statement carries its values. The erasure consequence -- a log file outliving the row a deletion request removed -- is reasoning about that fact and belongs in the finding text, not in an anchor: this register holds versioned product documentation, and a legal article carries no version to pin."
+            }
+        ],
+        "SEC.CFG.LOCAL_INFILE": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/load-data-local-security.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The security considerations page states the mechanism in the server's own words: the server sends the client a request naming a file, and a compliant client reads that path and transfers its contents. Cited because the DIRECTION is the whole finding — a reader who takes the statement name at face value concludes the opposite, that a file on the server is read."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/server-system-variables.html#sysvar_local_infile",
+                "applies_to": "MySQL 8.4",
+                "note": "Records that local_infile is OFF by default on current servers and is a GLOBAL-only dynamic variable. Both matter to the finding: the default is why this rule is silent on a correctly configured machine, and global-only is why its remediation does not offer a per-session fix that nobody could apply."
+            }
+        ],
+        "SEC.CFG.LOCAL_INFILE_FILE_GRANT": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/load-data-local-security.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Documents that LOAD DATA LOCAL has the SERVER name the path and the CLIENT read and upload it, so a hostile or hijacked server can ask an application for a file it never meant to send. Cited for the half of this finding that is about the capability rather than about the account."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html#priv_file",
+                "applies_to": "MySQL 8.4",
+                "note": "States that FILE lets an account read and write files as the SERVER's operating-system user, bounded only by secure_file_priv. Cited for the other half: what makes the pair a route rather than two settings is that one end can be induced to upload a file and the other can place one where the host reads it."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/grant-tables.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The grant tables are the authorization state on this engine. Cited because the escalation is only honest when that state was READABLE: information_schema.USER_PRIVILEGES narrows silently to what the caller may see, so reading it would answer -- with nothing raised -- that no account holds FILE on exactly the restricted connection where the question matters."
+            }
+        ],
+        "SEC.CFG.PASSWORD_ENCRYPTION": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/runtime-config-connection.html#GUC-PASSWORD-ENCRYPTION",
+                "applies_to": "PostgreSQL 18",
+                "note": "Documents that the parameter decides the algorithm used when a password is SET, that scram-sha-256 is the default, and that md5 is deprecated. The tense is the finding: it governs passwords written from now on, not the ones already stored."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/auth-password.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "States that the md5 verifier is derived from the password and the ROLE NAME. Cited for the sentence the finding rests on: the role name is the entire salt, so the same password under the same role name produces the same digest on every server, and a captured digest is usable as the password itself against all of them."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/view-pg-settings.html",
+                "applies_to": "PostgreSQL 18.4",
+                "note": "Defines the columns the two limits in this finding were read from, measured on 18.4: context is user, so an ordinary session changes the parameter with a plain SET, and with one in place pg_settings answers setting = md5 beside reset_val = scram-sha-256. Two things follow -- the server's value is a default rather than an enforcement, and a rule reading the session's value would report the audit's own connection as the server's configuration. The same reading shows enumvals holding exactly md5 and scram-sha-256, and a third value is refused outright, which is why the check compares against one acceptable answer rather than guessing about unknown ones."
+            }
+        ],
+        "SEC.CFG.PATCH_EOL": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/support/versioning/",
+                "applies_to": "PostgreSQL 18",
+                "note": "The versioning policy states that a major release is supported for five years from its initial release and that after that date no further minor releases are made for it. That is the whole basis of this rule: after the recorded date the series stops receiving the fix for whatever is found next, which is a statement about the future rather than about a defect present today."
+            },
+            {
+                "type": "doc",
+                "url": "https://blogs.oracle.com/mysql/post/introducing-mysql-innovation-and-longterm-support-lts-versions",
+                "applies_to": "MySQL 8.4",
+                "note": "Introduces the split between innovation releases, supported only until their successor ships, and LTS series with a multi-year window. Load-bearing here because it is why a MySQL 9.x server can be out of support within months of its release while an 8.4 server is not -- the same rule reaches opposite verdicts on two versions that look equally recent."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.oracle.com/us/support/library/lifetime-support-technology-069183.pdf",
+                "applies_to": "MySQL 8.4",
+                "note": "The lifetime support matrix, and the reason the bundled data records PREMIER support rather than extended. Extended support exists, is purchased separately, and is not what most projects are on; recording the later date would let a server that stopped receiving routine fixes read as supported."
+            }
+        ],
+        "SEC.CFG.REQUIRE_SECURE_TRANSPORT": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/server-system-variables.html#sysvar_require_secure_transport",
+                "applies_to": "MySQL 8.4",
+                "note": "Documents that the variable causes the server to REFUSE connections that use no secure transport, and that it is OFF by default. Both halves matter: the finding is about refusal rather than availability, and the vendor default is why the expectation here deliberately differs from it."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/encrypted-connection-protocols-ciphers.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Records that MySQL 8 attempts an encrypted connection by default where the server supports it. Cited because it is why a server with this OFF usually looks encrypted from the inside — the connections anybody checks are the ones that happened to negotiate it."
+            }
+        ],
+        "SEC.CFG.SECURE_FILE_PRIV": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/server-system-variables.html#sysvar_secure_file_priv",
+                "applies_to": "MySQL 8.4",
+                "note": "The variable reference states the three states in the server's own words: a directory confines LOAD_FILE() and SELECT … INTO OUTFILE to it, an EMPTY value places no limit, and NULL disables both operations. Cited for the spelling as much as the semantics — the documentation writes the disabled state as NULL, and the server reports it as the four-character STRING, which is what makes the naive reading of this variable inverted."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html",
+                "applies_to": "MySQL 8.4",
+                "note": "FILE is what this setting bounds. Cited because the finding's severity rests on the pairing: without an account holding FILE an unrestricted secure_file_priv grants nobody anything, which is why this is reported below the privilege itself rather than beside it."
+            }
+        ],
+        "SEC.CFG.STATEMENT_LOGGING": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/runtime-config-logging.html#GUC-LOG-STATEMENT",
+                "applies_to": "PostgreSQL 18",
+                "note": "Defines the four values the rule compares against — none, ddl, mod, all — and what each one logs. Cited for the line this rule draws: mod covers the statements that change data, all adds every query on top, and ddl is limited to schema statements. The page also states that a statement is logged after it is parsed, which is why parameter values appear in the log at all."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/view-pg-settings.html",
+                "applies_to": "PostgreSQL 18.4",
+                "note": "Defines the columns this rule's subject is built from, and the distinction it rests on. Measured on 18.4 rather than taken from the page: a stock server answers setting = none, reset_val = none, source = default; after ALTER ROLE ... SET log_statement = 'all' a session opened afterwards answers setting = all, reset_val = all, source = user; and ALTER ROLE ... RESET puts all three back. The rule judges reset_val, because a rule reading the session's effective value would report SQLens's own session hygiene as the server's configuration."
+            }
+        ],
+        "SEC.CFG.STATEMENT_LOGGING_SECRETS": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/runtime-config-logging.html#GUC-LOG-STATEMENT",
+                "applies_to": "PostgreSQL 18",
+                "note": "log_statement is documented as taking none, ddl, mod and all, and as logging the statement TEXT. Cited for which two of the four reach values: ddl and none carry no row data and are not reported."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-createrole.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "CREATE ROLE documents PASSWORD as part of the statement. That is the whole basis of the secrets half: PostgreSQL does not rewrite it before logging the way MySQL rewrites some statements for its error log, so at log_statement = all or mod the password is in the file verbatim."
+            }
+        ],
+        "SEC.CFG.TLS_DISABLED": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/runtime-config-connection.html#GUC-SSL",
+                "applies_to": "PostgreSQL 18",
+                "note": "Documents that the parameter enables SSL/TLS connections and is off by default, and that it can only be set at server start or by a configuration reload. Both halves are load-bearing: the vendor default is why this package's expectation deliberately differs from it, and sighup is why the remediation offers a reload rather than a restart."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/ssl-tcp.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The TLS setup chapter states that with ssl off the server does not accept encrypted connections at all. Cited for the distinction this finding rests on: an unenforced transport still encrypts most connections, an absent one encrypts none, and a client that insists on TLS against such a server fails to connect rather than connecting securely."
+            }
+        ],
+        "SEC.CFG.TLS_MIN_VERSION": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/runtime-config-connection.html#GUC-SSL-MIN-PROTOCOL-VERSION",
+                "applies_to": "PostgreSQL 18",
+                "note": "Documents the parameter, the version names it accepts and that it can be changed by a configuration reload. Cited for two halves this finding rests on: the accepted names are an enum whose declared order is the ordering the comparison uses, and sighup is why the remediation offers a reload rather than a restart."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.rfc-editor.org/rfc/rfc8996",
+                "applies_to": "PostgreSQL 18",
+                "note": "Formally deprecates both versions. Cited because it is what turns 'older' into 'withdrawn': the finding is not about preferring a newer version but about a server still offering ones the standards body has retired."
+            }
+        ],
+        "SEC.INJ.DYNAMIC_IDENTIFIER": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-syntax-lexical.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "An identifier belongs to a statement's lexical structure, which the parser resolves before any parameter is substituted. So no placeholder exists for a column name — and that, rather than a difference in severity, is why this rule cannot give the advice the raw-SQL rules give. There is nothing to bind to."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/identifiers.html",
+                "applies_to": "MySQL 8.4",
+                "note": "MySQL draws the line in the same place: a schema object name is resolved as part of the statement, and placeholder syntax applies to values only. The two engines differ in how identifiers are quoted and how case is handled; they do not differ in this, which is why the rule is driver-neutral."
+            }
+        ],
+        "SEC.INJ.RAW_INTERPOLATION": [
+            {
+                "type": "doc",
+                "url": "https://owasp.org/www-community/attacks/SQL_Injection",
+                "applies_to": "PostgreSQL 18 and MySQL 8.4",
+                "note": "A fragment concatenated into a statement is read by the server as grammar, not as data. That is why the defect is a change to what the statement DOES rather than a wrong result: the attacker is not supplying a value the query compares against, they are supplying part of the query. A bound value travels beside the statement text and can never join it, whatever it contains."
+            },
+            {
+                "type": "doc",
+                "url": "https://laravel.com/docs/13.x/queries#raw-expressions",
+                "applies_to": "Laravel 13",
+                "note": "Every raw method this rule looks at takes a bindings array beside the SQL fragment, and the framework documents the binding form for each of them. That is what keeps the fix to one line: the call site being reported already has a parameter for the value that was interpolated into it."
+            }
+        ],
+        "SEC.INJ.RAW_SQL_WITHOUT_REASON": [
+            {
+                "type": "doc",
+                "url": "https://laravel.com/docs/13.x/queries#raw-expressions",
+                "applies_to": "Laravel 13",
+                "note": "The framework presents raw expressions as the escape hatch for what the builder cannot express, and states that the string is injected into the query as-is. This rule does not argue with the escape hatch — it asks which expressive gap was being stepped over, because a considered raw call and a habitual one are indistinguishable in a diff."
+            },
+            {
+                "type": "doc",
+                "url": "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html",
+                "applies_to": "PostgreSQL 18 and MySQL 8.4",
+                "note": "The prevention guidance treats every raw statement as a place where the safe default was left behind, which is exactly the population this rule marks out. It reports a missing justification rather than a defect: the raw call may be entirely correct, and only the sentence explaining it is absent."
+            }
+        ],
+        "SEC.PII.UNENCRYPTED_COLUMN": [
+            {
+                "type": "doc",
+                "url": "https://laravel.com/docs/13.x/eloquent-mutators#encrypted-casting",
+                "applies_to": "Laravel 13",
+                "note": "The encrypted-cast chapter is what this rule checks for: it documents the cast family as the supported way to store an attribute encrypted at rest and decrypt it transparently on access. Cited for the DECLARATION rather than for the cipher -- the rule reads what a model declares and never a stored value, and the chapter is what makes that declaration mean encrypted at rest. It carries no claim about server-side encryption, which a catalog reading cannot detect at all: pgcrypto leaves a bytea behind and no record of what put it there."
+            }
+        ],
+        "SEC.PRIV.CONNECTIONS_UNSEPARATED": [
+            {
+                "type": "doc",
+                "url": "https://laravel.com/docs/13.x/database",
+                "applies_to": "Laravel 13 (every engine — the split is the framework's, not a database's)",
+                "note": "The database chapter documents multiple named connections and how a query or a model is pointed at one. That is what makes the separation a configuration change rather than a rewrite: a second connection whose role holds only DML costs one array entry, and the migration connection keeps the DDL rights."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/ddl-priv.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The privileges chapter establishes that DDL rights are attached to the ROLE a session connects as, not to the statement being run. So the runtime role holding CREATE is not a property of the deploy step — it holds for every request the same connection serves."
+            }
+        ],
+        "SEC.PRIV.GRANT_ADMIN_IN_MIGRATION": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The privileges reference separates administrative privileges from database privileges and states that FILE, PROCESS, RELOAD, SHUTDOWN and CREATE USER are global-only — they can be granted at no scope narrower than *.*, which is why a statement carrying one necessarily also carries a server-wide scope."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The same page documents FILE as permitting reads and writes of files on the server host with the privileges of the mysqld process, and PROCESS as permitting a view of the statements currently executing in all sessions."
+            }
+        ],
+        "SEC.PRIV.GRANT_ALL": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The privilege reference lists what ALL PRIVILEGES actually covers at each scope, and states that the global form includes the administrative privileges that have no per-database equivalent. Cited for the claim the finding makes rather than for the syntax: it is why a globally complete grant leaves nothing above it to escalate to."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/grant.html",
+                "applies_to": "MySQL 8.4",
+                "note": "GRANT documents that ALL PRIVILEGES is expanded at grant time rather than stored as a keyword — which is why this state has to be recognized by comparing what the account holds against what the engine has, instead of by looking for the word."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-grant.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "GRANT defines ALL PRIVILEGES per object type and notes that it grants every privilege available for the type. The per-type definition is what makes the same question answerable on both engines, and PostgreSQL states its own answer through acldefault() rather than leaving it to a list."
+            }
+        ],
+        "SEC.PRIV.GRANT_EXCESSIVE_IN_MIGRATION": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-grant.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The GRANT page documents ALL PRIVILEGES as the shorthand that grants every privilege available for the object type, so the grant covers privileges a later PostgreSQL version adds as well — it keeps widening after the migration ran."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/ddl-priv.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The privileges chapter documents WITH GRANT OPTION as the right to grant the privilege on to others, and that revoking it cascades to everything granted through it — so who holds the privilege is decided at runtime rather than in the repository. The same chapter sets out the enumerated vocabulary this rule's remedy uses."
+            }
+        ],
+        "SEC.PRIV.GRANT_FILE": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The privilege reference states that FILE lets an account read any file on the server host readable by the server, and write files anywhere the server can write. Cited for the exact wording — the reach is the SERVER's, not the connecting user's, which is the whole reason this is a host problem rather than a database one."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/server-system-variables.html#sysvar_secure_file_priv",
+                "applies_to": "MySQL 8.4",
+                "note": "secure_file_priv defines what FILE can actually reach: a directory confines both operations to it, the empty string confines nothing, and NULL disables them. Cited because the finding deliberately does NOT claim a reach — the setting is a separate fact and a separate check."
+            }
+        ],
+        "SEC.PRIV.GRANT_OPTION": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/grant.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The GRANT reference documents WITH GRANT OPTION as the clause that lets an account give its privileges to others, and REVOKE GRANT OPTION FOR as the way to take that back without touching the privileges themselves. Cited for the remedy as much as for the mechanism: the distinction between the two is what makes this finding cheap to act on."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-grant.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "PostgreSQL's GRANT page documents the same capability as WITH GRANT OPTION and records it in the ACL, which `aclexplode().is_grantable` reports. Cited because it is why this rule carries no engine check: the two spellings describe one decision, so a driver test here would be a test about wording."
+            }
+        ],
+        "SEC.PRIV.GRANT_OPTION_STRUCTURAL": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/grant.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The GRANT reference documents WITH GRANT OPTION as the clause that lets an account give its privileges to others, and REVOKE GRANT OPTION FOR as the way to take that back without touching the privileges themselves. Cited for the remedy as much as for the mechanism: the distinction between the two is what makes this finding cheap to act on."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/ddl-priv.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The privileges chapter separates the rights that act on data from those that act on the schema itself — CREATE among them. That separation is what this rule's split rests on, and it is the engine's own rather than a judgement this package invented."
+            }
+        ],
+        "SEC.PRIV.GRANT_PROCESS": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html",
+                "applies_to": "MySQL 8.4",
+                "note": "PROCESS is documented as showing the statements currently being executed by any session, including sessions of other accounts. The statement TEXT is what makes this a disclosure rather than a topology leak — any value interpolated rather than bound travels in it."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/information-schema-processlist-table.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The PROCESSLIST table documents that without PROCESS a session sees only its own rows, and with it sees every session's. That is the exact line this rule reports, and it is also why a monitoring account legitimately holds the privilege."
+            }
+        ],
+        "SEC.PRIV.GRANT_PUBLIC": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/ddl-priv.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The privileges chapter states that PUBLIC is a special implicitly-defined group meaning every role, and that privileges granted to it are held by roles created later as well. That is the whole basis of this rule: the grant cannot be reviewed by listing who has access, because nobody was given it."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-grant.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "GRANT documents which privileges PostgreSQL itself hands to PUBLIC by default — EXECUTE on functions, CONNECT and TEMPORARY on databases, USAGE on some schemas. Those defaults are excluded here, which is why an entry that reaches this rule was granted deliberately by somebody."
+            }
+        ],
+        "SEC.PRIV.GRANT_PUBLIC_IN_MIGRATION": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-grant.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The GRANT page states that PostgreSQL grants privileges on some object types to PUBLIC by default and that PUBLIC can be thought of as an implicitly defined group that always includes all roles — which is why a grant to it reaches roles created after the migration ran."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/ddl-priv.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The privileges chapter documents that a privilege granted to PUBLIC cannot be revoked from an individual role afterwards without revoking it from PUBLIC as a whole, which is what makes this hard to walk back once it is in the catalog."
+            }
+        ],
+        "SEC.PRIV.GRANT_SCOPE_BROAD_IN_MIGRATION": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/grant.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The GRANT page documents the privilege-level syntax: *.* is global, db.* is database level, and a database-level grant applies to every table in that database including ones created afterwards."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-grant.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The PostgreSQL GRANT page documents ALL TABLES IN SCHEMA as acting on tables that exist AT THAT MOMENT, with ALTER DEFAULT PRIVILEGES as the separate construct for future objects — which is why PostgreSQL has no equivalent of this finding."
+            }
+        ],
+        "SEC.PRIV.GRANT_SERVER_ADMIN": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The privilege reference defines each of the dynamic privileges this rule reads and states what it permits. Cited as the source of the LIST rather than of the judgement: the list is shipped as a data artifact and reconciled against a real server by a test that asks MySQL to accept every name, because a hand-kept list of engine vocabulary rots silently as the engine changes."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/dynamic-privileges.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The dynamic-privilege chapter documents the split itself: SUPER is deprecated, and the powers it carried are now granted individually. That is the premise of this rule — an account holding none of SUPER can still be an administrator — and it is why a check for the single old name is silent on a modern server."
+            }
+        ],
+        "SEC.PRIV.GRANT_WILDCARD_HOST_IN_MIGRATION": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/account-names.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Account names are documented as user@host pairs where the host part may contain the wildcards % and _, and where a host of % matches any host — so the host half is part of the account's identity and of its access control, not documentation."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/connection-access.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The access-control chapter documents that the server matches an incoming connection against the host pattern of each account, which is what makes a pattern such as %.example.com satisfiable by any host whose name resolves into it."
+            }
+        ],
+        "SEC.PRIV.ROLE_BYPASSRLS": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/role-attributes.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The role attributes chapter documents BYPASSRLS as skipping row-level security for the role. Nothing in a policy records that a role holds it, which is why an audit of the policies is correct and beside the point for such an account."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/ddl-rowsecurity.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The row security chapter is where the two ways around a policy are named together — the role attribute and the table owner's exemption. This package reports them as separate findings because the remediation differs: one is ALTER ROLE, the other ALTER TABLE."
+            }
+        ],
+        "SEC.PRIV.ROLE_CREATEROLE": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/role-attributes.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The role attributes chapter documents the PostgreSQL 16 change this rule's wording depends on: a CREATEROLE role can no longer alter or grant privileges it does not itself hold, and may only administer roles it created. That is why this is reported at medium as durable access outside the deployment process, not as the blanket escalation older write-ups describe."
+            }
+        ],
+        "SEC.PRIV.ROLE_SUPERUSER": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/role-attributes.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The role attributes chapter states that a superuser bypasses all permission checks except the right to log in. That is the basis for reporting it as making every other protection in the database advisory, and for this finding standing in for BYPASSRLS and CREATEROLE, which a superuser holds by definition."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-createrole.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "CREATE ROLE documents SUPERUSER as an attribute set at creation and changed with ALTER ROLE — which is what makes the remediation a one-statement change once nothing depends on it, rather than a migration."
+            }
+        ],
+        "SEC.PRIV.ROUTINE_DEFINER": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-createfunction.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "CREATE FUNCTION documents SECURITY DEFINER as executing with the privileges of the user that owns it. That is what makes EXECUTE on such a routine a bounded loan of the owner's rights rather than an ordinary privilege — the reason this rule reports the construction even when it is done correctly."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/stored-objects-security.html",
+                "applies_to": "MySQL 8.4",
+                "note": "MySQL's stored object access control chapter documents the same DEFINER semantics for routines, which is why this rule is served on both engines. What MySQL has no equivalent of is a per-routine search path, so the escalation rule SEC.PRIV.ROUTINE_DEFINER_MUTABLE_PATH does not apply there and is not reported."
+            }
+        ],
+        "SEC.PRIV.ROUTINE_DEFINER_MUTABLE_PATH": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-createfunction.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "CREATE FUNCTION's writing-security-definer-functions-safely section states the hazard directly and names the remedy: a SECURITY DEFINER function should have its search_path set with a SET clause attached to the function, because otherwise unqualified names resolve through the caller's path."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/support/security/CVE-2018-1058/",
+                "applies_to": "PostgreSQL 18 (the advisory predates it; the mechanism is unchanged)",
+                "note": "The project's own advisory on an uncontrolled search_path element. It is cited for the mechanism rather than for the version: a role able to create objects in a schema that comes earlier in the resolution order can have its own function called in place of the intended one, and the SET clause is what removes the caller's path from the decision."
+            }
+        ],
+        "SEC.PRIV.ROUTINE_DEFINER_NO_PATH_IN_MIGRATION": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-createfunction.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The CREATE FUNCTION page carries an explicit writing-SECURITY-DEFINER-safely section: it states that a SECURITY DEFINER function should have its search_path set to exclude any schemas writable by untrusted users, and shows SET search_path on the function as the way to do it."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/ddl-schemas.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The schemas chapter documents search_path as a session setting resolved at call time, which is what makes an unqualified name inside a definer routine depend on the caller rather than on the author."
+            }
+        ],
+        "SEC.PRIV.ROUTINE_DEFINER_UNSAFE_PATH": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-createfunction.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The writing-security-definer-functions-safely section does not stop at 'set a search_path'. It states which paths are safe to set: one whose schemas cannot be written to by untrusted users, with pg_temp placed last if it is included at all. That is the sentence this rule measures rather than repeats."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/ddl-schemas.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The schema chapter records the change that makes this rule worth having on an older database: before PostgreSQL 15 the public schema was created with CREATE granted to PUBLIC. A database that grew through those versions usually still carries that grant on 18, so a routine pinned to public is pinned to a schema anybody can write to."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/support/security/CVE-2018-1058/",
+                "applies_to": "PostgreSQL 18 (the advisory predates it; the mechanism is unchanged)",
+                "note": "The project's own advisory on an uncontrolled search_path element. It is cited here for the half the sibling rule does not cover: the hazard is not the absence of a path but the presence of a WRITABLE schema in whatever path resolves, which a pinned path can carry just as well as an inherited one."
+            }
+        ],
+        "SEC.PRIV.RUNTIME_DDL": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/ddl-priv.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The privileges chapter documents CREATE on a schema and on a database as what allows new objects to be made there. Reading that privilege is what this rule does — it establishes that one consequence of an injection is available, not that an injection exists."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html",
+                "applies_to": "MySQL 8.4",
+                "note": "MySQL's privileges reference documents CREATE, ALTER, DROP and the routine privileges as static privileges granted per database or globally, which is the same reading on that engine and why the rule is served by both drivers."
+            }
+        ],
+        "SEC.RLS.CHECK_ALWAYS_TRUE": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-createpolicy.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "CREATE POLICY documents that WITH CHECK governs rows being ADDED, that USING governs rows being read, and — the fact the advice turns on — that when WITH CHECK is omitted the USING expression is applied to new rows as well. So dropping the clause is a genuine fix rather than a workaround."
+            }
+        ],
+        "SEC.RLS.DISABLED": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/ddl-rowsecurity.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The row security chapter establishes the default this rule reasons about: with no row-level security on a table, every role that holds SELECT reads every row. Separation then exists only as far as each query remembers to filter, and the database refuses nothing."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-createpolicy.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "CREATE POLICY documents that a policy applies only once row-level security is enabled on the table, and that ENABLE without any policy denies everything. The two statements are separate for a reason, and that is why the good example carries both."
+            }
+        ],
+        "SEC.RLS.NOT_FORCED": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/ddl-rowsecurity.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The row security chapter states that a table's owner is exempt from row-level security unless FORCE ROW LEVEL SECURITY is set. That exemption is invisible in the policies themselves, which is why reviewing them comes back correct on a table with this defect."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-altertable.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "ALTER TABLE documents ENABLE and FORCE ROW LEVEL SECURITY as two independent settings. That they are independent is the reason this is a separate finding from SEC.RLS.DISABLED rather than part of it."
+            }
+        ],
+        "SEC.RLS.NO_POLICY": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/ddl-rowsecurity.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The row security chapter states that when no policy exists for a table with row-level security enabled, a default-deny policy is used and no rows are visible or modifiable. The finding is that default-deny, seen from an application that gets empty result sets with no error."
+            }
+        ],
+        "SEC.RLS.OWNER_UNRESTRICTED": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/ddl-rowsecurity.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The same owner exemption SEC.RLS.NOT_FORCED stands on, reported from the other side: the audit did not connect as the owner. The documentation makes no distinction between the two cases, so the split is this package's, and it exists because the two need different sentences to act on."
+            }
+        ],
+        "SEC.RLS.POLICY_ALWAYS_TRUE": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-createpolicy.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "CREATE POLICY documents the USING expression as the filter applied to existing rows: rows for which it returns true are visible. A constant true therefore admits every row, while the catalog still reports the table as having row-level security and a policy."
+            }
+        ]
+    }
+}

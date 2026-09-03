@@ -1,0 +1,100 @@
+# Notices
+
+SQLens for Laravel is distributed under the MIT license (see `LICENSE`). This file
+records third-party work bundled with it, and the provenance of any data the
+package ships.
+
+## Third-party notices
+
+Dependencies whose license requires attribution are listed here with their SPDX
+identifier. SQLens bundles no vendored third-party source: its dependencies are
+resolved by Composer and carry their own license files.
+
+_None at present._
+
+## Fact sources
+
+Some bundled data states facts about how a database engine behaves — which
+algorithm it runs a schema change under, whether that change rewrites the table,
+whether other sessions can keep writing. Those facts are established by the
+engine vendors' own reference manuals, and the manuals are named here because a
+fact worth shipping is worth attributing:
+
+- MySQL 8.4 online-DDL behavior — MySQL 8.4 Reference Manual (Oracle),
+  <https://dev.mysql.com/doc/refman/8.4/en/>
+- The rule IDENTIFIERS of two external PostgreSQL catalogs — Supabase Splinter,
+  <https://github.com/supabase/splinter>, and the PGLS `dblint` checks,
+  <https://github.com/supabase-community/postgres-language-server>. Only the ids and
+  the links are carried, in `rule-dedupe-rls.json`, so that the same fact is not
+  reported twice once an adapter exists. That a catalog HAS a check under a given
+  id is a fact; the wording of those checks is theirs and none of it appears here
+- Squawk rule names and what each rule flags — Squawk's own rule documentation,
+  <https://squawkhq.com/docs/rules>, and the binary itself: every name in
+  `squawk-map.json` was verified against `squawk 2.61.0` rather than copied from
+  the page, because a list read from documentation is a list of what the docs say,
+  not of what the installed tool accepts
+- PGLS `dblint` security rule names, their severities and their help links — the
+  `postgrestools` binary itself, at 0.25.7. The tool runs its catalog as one SQL
+  statement in which each rule carries a metadata header, so `pgls-map.json` was
+  read out of a run rather than off a page. It was read twice, against differently
+  shaped databases, because one reading cannot tell a fixed catalog from a
+  coincidence. What the tool CALLS each rule and how it DESCRIBES it are its
+  authors' prose and are not carried: every explanation in that file was written
+  here
+
+No text, wording, or table from those manuals is reproduced. Facts themselves
+carry no license: the structure, the prose, and every explanation in the shipped
+data files were written for this package, and a guard test holds each cited
+source to its versioned manual page and each explanation to its own words.
+
+## Bundled data
+
+Every data artifact the package ships is recorded here before it is used, in this
+shape:
+
+    artifact · source URL · license (SPDX) · retrieved (ISO date)
+
+The structure is mandatory rather than customary. A data file whose origin nobody
+wrote down cannot be re-verified when the upstream facts change, and cannot be
+defended if its license turns out to disallow redistribution. "We copied it from
+somewhere" is not a provenance.
+
+One artifact needs a sentence of its own. `incidents.json` CITES third-party
+postmortems and reproduces none of them: every summary in it is written here from
+the source, and the source is linked with the date somebody read it. So the file is
+this project's own work under `CC0-1.0` like the rest, while the outages it
+describes remain the accounts of the organizations that published them — which is
+also why the retrieval date is a required field rather than a courtesy.
+
+A data artifact the project writes itself is registered the same way, with its
+source pointing at this repository. Such artifacts are released under `CC0-1.0`:
+they are catalogs of plain facts — class and method names, and the reason each
+one matters — and a fact table carries no attribution burden worth imposing on
+anyone who reads or re-uses it. The surrounding code keeps the package's own
+license; the data allowlist stays as narrow as it was.
+
+- prescan-catalogs.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-07-22
+- rule-evidence.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-07-24
+- incidents.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-08-23
+- rule-examples.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-07-24
+- pg-type-change-matrix.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-07-24
+- online-ddl-matrix.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-07-24
+- schemas/online-ddl-matrix.schema.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-07-24
+- schemas/remediation-payload-v1.schema.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-08-08
+- rule-registry.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-07-25
+- api-surface.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-08-17
+- rule-driver-notes.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-07-25
+- escalation-thresholds.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-08-06
+- money-columns.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-07-25
+- server-settings.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-07-26
+- squawk-map.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-07-29
+- rule-dedupe-rls.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-08-02
+- rule-dedupe-views.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-08-13
+- mysql-static-privileges.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-08-02
+- mysql-admin-privileges.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-08-02
+- mysql-ddl-privileges.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-08-02
+- pgls-map.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-08-04
+- pgls-neutral.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-08-04
+- privacy-dictionary.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-08-20
+- sarif-schema.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-08-03
+- eol.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-08-03

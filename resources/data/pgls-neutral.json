@@ -1,0 +1,10 @@
+{
+  "linter": { "enabled": false },
+  "splinter": { "enabled": true },
+  "pglinter": { "enabled": false },
+  "typecheck": { "enabled": false },
+  "plpgsqlCheck": { "enabled": false },
+  "format": { "enabled": false },
+  "vcs": { "enabled": false },
+  "files": { "ignore": [] }
+}

@@ -1,0 +1,103 @@
+# SQLens — the analyse suite's PHPStan extension.
+#
+# A consuming project pulls this in through composer's phpstan plugin (see composer.json
+# `extra.phpstan.includes`) or by hand:
+#
+#     includes:
+#         - vendor/pushery/sqlens-for-laravel/extension.neon
+#
+# WHAT IT IS FOR. The safety rules elsewhere in this package read statements the database actually
+# received; these read the CODE that hands SQL over, which is the only place a raw-SQL call site is
+# visible at all. The two answer different questions and neither replaces the other.
+#
+# NOT A TYPE CHECKER, and not a taint analysis. Types are phpstan-dba's subject and Eloquent is
+# Larastan's; this extension collects raw-SQL call sites so the package's own rules can judge them.
+# Promising taint tracking would be a claim this design cannot keep — the limitation is stated in
+# the rules themselves, not only here.
+# CONFIGURATION. A project overrides these under `parameters.sqlens.analyse` in its own
+# `phpstan.neon`. Three things are worth knowing before changing them:
+#
+#   policy: off | documented | strict
+#       How hard the justification duty presses. `off` silences the POLICY rule and nothing else —
+#       the injection rules report an exposure rather than a missing sentence, and severity is not
+#       level-gated in this package. One line of neon must never be able to disable half the
+#       security surface.
+#
+#       The schema below accepts a bool as well as a string, and that is not laxity: NEON reads the
+#       bare word `off` as boolean FALSE. Without it, the most likely thing a developer writes —
+#       the mode's own name, unquoted — is refused with a message about types rather than about the
+#       setting. `on`/`yes` is still refused, because it names no mode and both remaining ones are
+#       "on".
+#
+#   exclude_paths
+#       Paths the justification duty does not apply to; generated code is the case it exists for.
+#       Every entry must resolve to something that exists, or the run stops. A path that matches
+#       nothing excludes nothing, and the exemption a project believes it has would silently not
+#       apply. The injection rules ignore this list too.
+#
+#   justification_placeholders
+#       Reasons that stop counting as reasons under `strict` — `todo`, `tbd`, whatever a team
+#       actually types. Empty is refused in every mode and needs no entry.
+#
+# The SCHEMA below is what refuses an unknown key or a wrong type; PHPStan answers that half
+# natively and this package does not re-implement it. A wrong VALUE — a mode that does not exist,
+# a path that is not there — is refused by `AnalyseConfig`, which throws rather than falling back.
+parametersSchema:
+    sqlens: structure([
+        analyse: structure([
+            policy: anyOf(string(), bool())
+            exclude_paths: listOf(string())
+            justification_placeholders: listOf(string())
+        ])
+    ])
+
+parameters:
+    sqlens:
+        analyse:
+            policy: documented
+            exclude_paths: []
+            justification_placeholders: []
+
+services:
+    -
+        class: Pushery\SQLens\Analyse\AnalyseConfig
+        arguments:
+            policy: %sqlens.analyse.policy%
+            excludePaths: %sqlens.analyse.exclude_paths%
+            justificationPlaceholders: %sqlens.analyse.justification_placeholders%
+    -
+        class: Pushery\SQLens\Analyse\RawSqlCallCollector
+        tags:
+            - phpstan.collector
+    -
+        class: Pushery\SQLens\Analyse\JustificationCollector
+        tags:
+            - phpstan.collector
+    -
+        class: Pushery\SQLens\Analyse\RawSqlFragmentCollector
+        tags:
+            - phpstan.collector
+    -
+        class: Pushery\SQLens\Analyse\RawSqlConnectionCallCollector
+        tags:
+            - phpstan.collector
+    -
+        class: Pushery\SQLens\Analyse\RawSqlExpressionCollector
+        tags:
+            - phpstan.collector
+    -
+        class: Pushery\SQLens\Analyse\DynamicIdentifierCollector
+        tags:
+            - phpstan.collector
+    -
+        class: Pushery\SQLens\Analyse\UnjustifiedRawSqlRule
+        tags:
+            - phpstan.rules.rule
+    -
+        class: Pushery\SQLens\Analyse\RawInterpolationRule
+        tags:
+            - phpstan.rules.rule
+    -
+        class: Pushery\SQLens\Analyse\DynamicIdentifierRule
+        tags:
+            - phpstan.rules.rule

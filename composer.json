@@ -1,0 +1,77 @@
+{
+    "$schema": "https://getcomposer.org/schema.json",
+    "name": "pushery/sqlens-for-laravel",
+    "description": "SQLens — database safety toolkit for Laravel. It lints pending migrations for lock and downtime risk and audits the live schema, on PostgreSQL and MySQL.",
+    "keywords": [
+        "laravel",
+        "migrations",
+        "database-safety",
+        "zero-downtime",
+        "schema-audit",
+        "sql-lint",
+        "postgres",
+        "mysql",
+        "ci",
+        "deployment",
+        "row-level-security",
+        "static-analysis"
+    ],
+    "license": "MIT",
+    "type": "library",
+    "homepage": "https://github.com/pushery/sqlens-for-laravel",
+    "support": {
+        "issues": "https://github.com/pushery/sqlens-for-laravel/issues",
+        "source": "https://github.com/pushery/sqlens-for-laravel"
+    },
+    "require": {
+        "php": "^8.4",
+        "composer-runtime-api": "^2.2",
+        "ext-ctype": "*",
+        "ext-filter": "*",
+        "ext-json": "*",
+        "ext-mbstring": "*",
+        "ext-pdo": "*",
+        "illuminate/collections": "^13.0",
+        "illuminate/console": "^13.0",
+        "illuminate/container": "^13.0",
+        "illuminate/contracts": "^13.0",
+        "illuminate/database": "^13.0",
+        "illuminate/filesystem": "^13.0",
+        "illuminate/http": "^13.0",
+        "illuminate/support": "^13.0",
+        "nikic/php-parser": "^5.8",
+        "phpstan/phpstan": "^2.2.7",
+        "psr/log": "^3.0",
+        "symfony/console": "^8.1",
+        "symfony/process": "^8.1"
+    },
+    "suggest": {
+        "laravel/mcp": "Serves the SQLens MCP server over stdio, so an agent can call the read-only tools directly. Without it `sqlens:mcp` reports a named undetermined and prints the install command rather than failing."
+    },
+    "autoload": {
+        "psr-4": {
+            "Pushery\\SQLens\\": "src/"
+        }
+    },
+    "config": {
+        "process-timeout": 0,
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Pushery\\SQLens\\SQLensServiceProvider"
+            ]
+        },
+        "phpstan": {
+            "includes": [
+                "extension.neon"
+            ]
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "about": "Documented production outages caused by schema change, each with its own summary, its source, and the rules that bear on it. Two fields carry the verdict rather than one: `prevented_by` names rules that would have stopped the change from being written this way, and `detected_by` names rules that would only have found the aftermath. An entry with an empty `prevented_by` is kept deliberately — a library that lists only wins is advertising, and the reader who most needs this file is deciding whether to trust it.",
+  "entries": [
+    {
+      "id": "gocardless-foreign-key-lock",
+      "title": "A foreign key constraint queued behind a long read and took the API down",
+      "engine": "postgres",
+      "date": null,
+      "date_note": "The source states the incident happened in late January and gives no year. Recorded as unknown rather than inferred from the article's edit stamp, which is a content-management date and not the incident's.",
+      "summary": "Adding a foreign key takes an ACCESS EXCLUSIVE lock on both tables. A long-running read on the parent table was still holding its own lock, so the migration queued behind it — and because a queued exclusive lock blocks everything behind it in turn, ordinary queries that would not have conflicted with either began timing out. About fifteen seconds of unplanned API downtime followed from a migration that touched no data.",
+      "source_url": "https://gocardless.com/blog/zero-downtime-postgres-migrations-the-hard-parts/",
+      "source_retrieved_at": "2026-08-23",
+      "prevented_by": [
+        "PG.L2.CONSTRAINT_NOT_VALIDATED",
+        "PG.L3.MISSING_LOCK_TIMEOUT"
+      ],
+      "detected_by": [],
+      "notes": "Two rules, two independent stops. Adding the constraint NOT VALID and validating it in a second statement never takes the exclusive lock at all; a lock timeout would have made the migration fail fast instead of holding the queue open. Either one alone is enough, which is why both are listed rather than one chosen."
+    },
+    {
+      "id": "gitlab-2018-03-12-concurrent-index",
+      "title": "A concurrent index build hit a server bug and blocked every comment for ninety minutes",
+      "engine": "postgres",
+      "date": "2018-03-12",
+      "date_note": null,
+      "summary": "CREATE INDEX CONCURRENTLY was used exactly as recommended, and a defect in PostgreSQL 9.6.6 turned it into contention anyway: vacuum cleaning a GIN index's pending-insertions list collided with the build, and inserts into the notes table blocked for fifteen seconds and then failed. Comments on issues and merge requests were unpostable for roughly ninety minutes. The defect was fixed in 9.6.7.",
+      "source_url": "https://gitlab.com/gitlab-com/infrastructure/issues/3850",
+      "source_retrieved_at": "2026-08-23",
+      "prevented_by": [],
+      "detected_by": [
+        "DEPLOY.LEGACY.INVALID_INDEX"
+      ],
+      "notes": "Kept precisely because no rule here would have prevented it. The migration was written the way every guide including this package's own says to write it, and the failure came from the server rather than from the statement. What the package offers afterwards is narrow and worth stating plainly: a concurrent build that fails leaves an INVALID index behind, which is found and named rather than left to be discovered by a query plan months later. Read as an argument for the postdeploy check, not against the rule."
+    }
+  ]
+}

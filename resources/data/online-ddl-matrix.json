@@ -1,0 +1,1112 @@
+{
+    "schema_version": 1,
+    "reference_server": "mysql 8.4",
+    "about": "How InnoDB performs a DDL operation on MySQL 8.4 — the algorithm it runs under (INSTANT, INPLACE, or COPY), whether it rewrites the whole table, whether it lets other sessions write while it runs, and the lock it holds. The rules read this to classify a migration's downtime_class without a live server. Every entry is a fact stated in our own words with a source link; it is not a copy of the MySQL manual's table. Conditions name the table- or session-level facts a static reader cannot see (a resolver leaves an operation undetermined when one is unknown); explanatory prose lives in notes. This file ships with a few reference entries and is filled out per operation group in its own tickets.",
+    "entries": [
+        {
+            "id": "mysql.column.add_auto_increment",
+            "operation": "add_auto_increment_column",
+            "algorithm": "inplace",
+            "rebuilds_table": true,
+            "permits_concurrent_dml": false,
+            "lock": "shared",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-column-syntax-notes",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Adding a column that carries AUTO_INCREMENT rewrites the whole table in place AND blocks concurrent writes while it runs — the one column addition that is an outage rather than a background cost, because every existing row has to be given a value in order. Preview: the manual states the write-blocking and the rewrite for this case but publishes no table row of its own for it, so the empirical verification against a real server is what will settle the remaining axes.",
+            "stability": "preview"
+        },
+        {
+            "id": "mysql.column.add_column",
+            "operation": "add_column",
+            "algorithm": "instant",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [
+                {
+                    "id": "instant_row_version_limit_reached",
+                    "text": "Runs INSTANT only while the table still has room for another row version; after enough instant changes the next one falls back to a rebuild."
+                },
+                {
+                    "id": "row_format_compressed",
+                    "text": "Not available on a table using ROW_FORMAT=COMPRESSED, which forces a rebuild instead."
+                },
+                {
+                    "id": "table_has_fulltext_index",
+                    "text": "Not available on a table carrying a FULLTEXT index, which forces a rebuild instead."
+                }
+            ],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-column-operations",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Adding a column is metadata-only under INSTANT (the default in 8.4): the table keeps serving reads and writes and is not rewritten. The cheap case that a naive linter would confuse with the expensive ones below. The conditions are the edges a static reader cannot see, so a plain ADD COLUMN is honestly undetermined until they can be confirmed.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.column.add_stored_generated",
+            "operation": "add_stored_generated_column",
+            "algorithm": "copy",
+            "rebuilds_table": true,
+            "permits_concurrent_dml": false,
+            "lock": "shared",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-generated-column-syntax-notes",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Adding a STORED generated column rewrites the whole table under a COPY, because the value is materialized into every existing row. Concurrent writes are blocked for the duration while reads continue. Its VIRTUAL counterpart is free by comparison — the choice between the two is a downtime decision, not only a storage one.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.column.add_virtual_generated",
+            "operation": "add_virtual_generated_column",
+            "algorithm": "instant",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [
+                {
+                    "id": "table_is_partitioned",
+                    "text": "The in-place and instant paths apply to a table that is not partitioned; on a partitioned table this operation is classified separately."
+                }
+            ],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-generated-column-syntax-notes",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Adding a VIRTUAL generated column is a definition change only: nothing is materialized into the rows, so no rewrite happens and the table stays available. This is the cheap half of the generated-column choice — the same column declared STORED copies the whole table instead.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.column.change_character_set",
+            "operation": "change_column_character_set",
+            "algorithm": "inplace",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [
+                {
+                    "id": "character_set_encoding_unchanged",
+                    "text": "In place ONLY when the stored bytes stay valid — measured on 8.4.10: utf8mb3 to utf8mb4 is accepted without a rebuild, while latin1 and ascii to utf8mb4 are refused in place and fall back to COPY."
+                }
+            ],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-column-operations",
+                    "retrieved": "2026-07-26"
+                }
+            ],
+            "notes": "Changing ONE column's character set is markedly cheaper than converting the whole table: measured on 8.4.10, utf8mb3 to utf8mb4 leaves the tablespace id unchanged — no rebuild at all — where CONVERT TO on the same table does rebuild it, because CONVERT TO touches every column. The condition is the same one: a pair that changes the stored encoding is refused in place and becomes a COPY. A column widened this way may also exceed an index prefix limit, which the statement does not show. See also MySQL's chapter on converting between 3-byte and 4-byte Unicode character sets.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.column.change_collation",
+            "operation": "change_column_collation",
+            "algorithm": "inplace",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-column-operations",
+                    "retrieved": "2026-07-26"
+                }
+            ],
+            "notes": "Changing a column's collation WITHIN the same character set re-sorts nothing on disk — the bytes are identical, only the comparison rules change. Measured on 8.4.10: tablespace id unchanged, LOCK=NONE accepted. The cost it does carry is invisible here: any index on the column now orders differently, so a query relying on the old ordering silently changes its answer, and a UNIQUE index may start rejecting rows that were distinct under the previous collation.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.column.change_type",
+            "operation": "change_column_type",
+            "algorithm": "copy",
+            "rebuilds_table": true,
+            "permits_concurrent_dml": false,
+            "lock": "shared",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-column-operations",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Changing a column's data type rewrites the whole table under a COPY. Concurrent writes are blocked for the duration (reads continue under the shared lock) — on a large table this is an outage with a rewrite, the most expensive migration MySQL has. There is no in-place path for a data-type change; ALGORITHM=COPY is the only option, so this holds unconditionally.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.column.drop_column",
+            "operation": "drop_column",
+            "algorithm": "instant",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [
+                {
+                    "id": "column_has_functional_index",
+                    "text": "Not available for a column covered by a functional index, which takes the drop off its instant path."
+                },
+                {
+                    "id": "instant_row_version_limit_reached",
+                    "text": "Runs INSTANT only while the table still has room for another row version; once that budget is spent the statement is refused outright rather than falling back."
+                },
+                {
+                    "id": "row_format_compressed",
+                    "text": "Not available on a table using ROW_FORMAT=COMPRESSED, which forces a rebuild instead."
+                },
+                {
+                    "id": "table_has_fulltext_index",
+                    "text": "Not available on a table carrying a FULLTEXT index, which forces a rebuild instead."
+                }
+            ],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-column-syntax-notes",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Dropping a column is metadata-only under INSTANT: the table keeps serving reads and writes and is not rewritten. Every instant add or drop spends one of the table's row versions, and that budget is only returned by a full rebuild — so a migration history full of cheap drops eventually makes the next one impossible rather than merely slow. Preview: the manual's own table marks this row both as rebuilding the table and as metadata-only, which cannot both describe one path; this entry states the instant path, and the empirical verification against a real server settles it.",
+            "stability": "preview"
+        },
+        {
+            "id": "mysql.column.drop_stored_generated",
+            "operation": "drop_stored_generated_column",
+            "algorithm": "instant",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [
+                {
+                    "id": "column_has_functional_index",
+                    "text": "Not available for a column covered by a functional index, which takes the drop off its instant path."
+                },
+                {
+                    "id": "instant_row_version_limit_reached",
+                    "text": "Runs INSTANT only while the table still has room for another row version; once that budget is spent the statement is refused outright rather than falling back."
+                },
+                {
+                    "id": "row_format_compressed",
+                    "text": "Not available on a table using ROW_FORMAT=COMPRESSED, which forces a rebuild instead."
+                },
+                {
+                    "id": "table_has_fulltext_index",
+                    "text": "Not available on a table carrying a FULLTEXT index, which forces a rebuild instead."
+                }
+            ],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-generated-column-syntax-notes",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Dropping a STORED generated column was recorded here as an in-place rebuild, on the reasoning that the materialized values have to come out of every row. The server says otherwise: on 8.4.10 it accepts ALGORITHM=INSTANT and the table keeps its storage identity, so nothing is rewritten -- the column simply stops being part of the row format, exactly like an ordinary column drop. That the clause is being evaluated rather than ignored was checked separately: this statement rejects ALGORITHM=COPY with LOCK=NONE, which the statements that ignore the clause accept. It therefore carries the same instant-drop conditions as a plain column drop, because it IS one.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.column.drop_virtual_generated",
+            "operation": "drop_virtual_generated_column",
+            "algorithm": "instant",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [
+                {
+                    "id": "column_has_functional_index",
+                    "text": "Not available for a column covered by a functional index, which takes the drop off its instant path."
+                },
+                {
+                    "id": "table_is_partitioned",
+                    "text": "The in-place and instant paths apply to a table that is not partitioned; on a partitioned table this operation is classified separately."
+                }
+            ],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-generated-column-syntax-notes",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Dropping a VIRTUAL generated column touches the table definition only, so the table is neither rewritten nor made unavailable. A functional index over the column is the edge that removes this cheap path, and a migration file does not show whether one exists.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.column.extend_varchar",
+            "operation": "extend_varchar",
+            "algorithm": "inplace",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [
+                {
+                    "id": "varchar_length_bytes_unchanged",
+                    "text": "Stays in place only while the column keeps the same number of length bytes: InnoDB spends one below 256 bytes and two at 256 and above, and the boundary is in bytes, so the column's character set decides where a declared size falls."
+                }
+            ],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-column-syntax-notes",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Making a VARCHAR longer is metadata-only as long as the column stays on the same side of the 256-byte line, and a full table copy the moment it crosses. This is the trap in a migration that widens a column: the SQL looks identical either way, and the declared character count does not answer the question because the limit counts bytes, so on utf8mb4 a column of 64 characters already occupies 256. Nothing in the statement reveals the current size, which is why this resolves to undetermined unless a capture can read it.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.column.make_not_null",
+            "operation": "make_column_not_null",
+            "algorithm": "inplace",
+            "rebuilds_table": true,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-column-syntax-notes",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Forbidding NULL in a column rewrites the whole table in place while other sessions keep reading and writing. Two things decide whether it succeeds at all rather than how it performs: the statement fails if any row still holds NULL, and it needs a strict SQL mode — neither is visible in the migration, and both are a correctness question rather than an availability one, so they are named here instead of gating this entry.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.column.make_nullable",
+            "operation": "make_column_nullable",
+            "algorithm": "inplace",
+            "rebuilds_table": true,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-column-syntax-notes",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Allowing NULL in a column rewrites the whole table in place. Other sessions can keep reading and writing throughout, so this is not an outage — but it is a full rewrite, and on a large table it costs the time and the disk space of one, which a migration that looks like a one-word change does not suggest.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.column.modify_enum_definition",
+            "operation": "modify_enum_definition",
+            "algorithm": "instant",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [
+                {
+                    "id": "enum_storage_size_unchanged",
+                    "text": "Stays cheap only while the column's storage size does not grow: an ENUM crossing 255 possible values needs a second byte, and a SET needs one more byte for every eight members."
+                },
+                {
+                    "id": "enum_value_appended_at_end",
+                    "text": "Stays cheap only when the new member went on the END of the list; one inserted in the middle renumbers everything after it and rewrites the stored values."
+                }
+            ],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-column-syntax-notes",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Changing the value list of an ENUM or SET column is metadata-only under two conditions, and a full table copy otherwise. Both conditions turn on the list the column ALREADY has, and a migration carries only the new one — so a static reader cannot tell the free case from the expensive one and gets an honest undetermined. This is the single most common MySQL enum trap in a Laravel project: appending one status value is usually free, and the same statement becomes a rewrite the moment the list crosses a storage boundary or the value is placed anywhere but last.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.column.rename_column",
+            "operation": "rename_column",
+            "algorithm": "instant",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [
+                {
+                    "id": "column_referenced_by_foreign_key",
+                    "text": "A column another table's foreign key points at can only be renamed in place, so the instant path this entry states does not apply to it."
+                }
+            ],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-column-syntax-notes",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Renaming a column changes the table definition only, leaving the data untouched and the table fully available. This holds while the rename is all the statement does: keeping the same type and the same nullability is what makes it free, and folding a type change into the same statement makes it as expensive as that type change.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.column.reorder_column",
+            "operation": "reorder_column",
+            "algorithm": "inplace",
+            "rebuilds_table": true,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-column-syntax-notes",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Moving a column to another position rewrites the whole table in place. Reads and writes continue throughout, so it is not an outage, but it pays the full cost of a rewrite for a change that alters no data and no type — which is why column order is rarely worth a migration on a large table.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.column.set_default",
+            "operation": "set_column_default",
+            "algorithm": "instant",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-column-syntax-notes",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Setting or dropping a column's default is a change to the table definition only: no row is touched, nothing is rewritten, and the table stays fully available. The default applies to rows inserted afterwards, so existing rows are unaffected — which is what makes it free and also what makes it no substitute for a backfill.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.column.shrink_varchar",
+            "operation": "shrink_varchar",
+            "algorithm": "copy",
+            "rebuilds_table": true,
+            "permits_concurrent_dml": false,
+            "lock": "shared",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-column-syntax-notes",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Making a VARCHAR shorter rewrites the whole table under a COPY, whichever direction the byte boundary lies in. Concurrent writes are blocked for the duration while reads continue, so on a large table this is an outage. There is no in-place path for shrinking, so it holds unconditionally — unlike widening the same column, which is usually free.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.constraint.add_foreign_key",
+            "operation": "add_foreign_key",
+            "algorithm": "copy",
+            "rebuilds_table": true,
+            "permits_concurrent_dml": false,
+            "lock": "shared",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [
+                {
+                    "id": "foreign_key_checks_disabled",
+                    "text": "This classification is the one that holds while foreign-key checking is on; a migration that switches it off takes a different and cheaper path that is not stated here."
+                }
+            ],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-foreign-key-syntax-notes",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Adding a foreign key rewrites the whole table under a COPY while foreign-key checking is on, which is the default and what a Laravel migration does unless it explicitly says otherwise. Writes are blocked for the duration and reads continue. Switching the checks off makes the operation far cheaper, but it also skips the validation that the existing rows actually satisfy the new constraint — so the tool refuses to classify that path as merely cheap and reports it as undetermined instead.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.constraint.drop_foreign_key",
+            "operation": "drop_foreign_key",
+            "algorithm": "inplace",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-foreign-key-operations",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Dropping a foreign key is a definition change that neither rewrites the table nor blocks writes, whatever the state of foreign-key checking. It is the cheap half of the pair, which is worth knowing: the constraint can be removed under load, while putting it back cannot.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.index.add_fulltext_index",
+            "operation": "add_fulltext_index",
+            "algorithm": "inplace",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": false,
+            "lock": "shared",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [
+                {
+                    "id": "first_fulltext_index_on_table",
+                    "text": "Runs without a rebuild only when the table already carries a FULLTEXT index; the first one on a table also rebuilds it, unless the table was given an explicit document-id column up front."
+                }
+            ],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-index-syntax-notes",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Building a FULLTEXT index blocks writes for the whole build while reads continue — the operation this package's blocking class exists for: it does not rewrite the table, and it still makes it unwritable for as long as it runs. The first such index on a table is the expensive one, because the table needs a document-id column it does not yet have; every later one is merely blocking. A migration shows neither fact, so a static reader gets an honest undetermined instead of the cheap answer.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.index.add_secondary_index",
+            "operation": "add_secondary_index",
+            "algorithm": "inplace",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-index-operations",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Building an ordinary secondary index runs INPLACE without rewriting the table and lets other sessions keep writing. Online, not free — but not the outage a type change is. This entry covers an ordinary secondary index; FULLTEXT and SPATIAL indexes have their own, stricter behavior and are separate entries.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.index.add_spatial_index",
+            "operation": "add_spatial_index",
+            "algorithm": "inplace",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": false,
+            "lock": "shared",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-index-syntax-notes",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Building a SPATIAL index blocks writes for the duration while reads continue, and does not rewrite the table. It behaves like a FULLTEXT build rather than like an ordinary secondary index, which is the surprise: the same ADD INDEX shape in a migration is free for a plain index and an outage for writes here.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.index.change_index_type",
+            "operation": "change_index_type",
+            "algorithm": "instant",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-index-syntax-notes",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Switching an index between B-tree and hash is recorded in the table definition without touching the index data or the rows, so the table stays fully available. This is the one index operation in the group that returns at once.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.index.change_index_visibility",
+            "operation": "change_index_visibility",
+            "algorithm": "inplace",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-index-syntax-notes",
+                    "retrieved": "2026-07-27"
+                }
+            ],
+            "notes": "Making an index invisible or visible again changes only whether the optimizer is allowed to consider it; the index itself stays maintained and up to date the whole time. That is what makes it the safe way to retire an index: hide it, watch, and drop it only once nothing has slowed down -- and make it visible again in one statement if something has. Measured on 8.4.10, and it is NOT the same operation as changing an index TYPE, which the matrix records separately as instant: ALGORITHM=INSTANT is refused here with error 1845, while INPLACE succeeds, accepts LOCK=NONE and leaves the tablespace id unchanged. ALGORITHM=COPY is accepted too and does rebuild -- as COPY always does -- which is a fact about COPY rather than about this operation.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.index.drop_index",
+            "operation": "drop_index",
+            "algorithm": "inplace",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-index-operations",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Dropping an index is metadata-only and INPLACE: the table stays writable throughout. The statement still completes only once every transaction accessing the table has finished, though it holds no exclusive lock.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.index.rename_index",
+            "operation": "rename_index",
+            "algorithm": "inplace",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-index-syntax-notes",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Renaming an index changes the table definition only: the index itself is not touched, nothing is rewritten, and other sessions keep reading and writing throughout. One of the few genuinely free schema changes, and worth knowing precisely because a rename looks like it should be as costly as a rebuild.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.key.add_primary_key",
+            "operation": "add_primary_key",
+            "algorithm": "inplace",
+            "rebuilds_table": true,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-primary-key-syntax-notes",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Adding a primary key rewrites the whole table, because the rows are physically ordered by it and have to be rearranged. Other sessions keep reading and writing throughout, so this is a cost in time and disk space rather than an outage — but it is the full cost of a rewrite on a table that may be large. Two edges are named rather than gated: a column brought into the key is silently made NOT NULL, which fails if any row holds NULL, and the manual does not enumerate the conditions under which the in-place path is refused outright.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.key.drop_primary_key",
+            "operation": "drop_primary_key",
+            "algorithm": "copy",
+            "rebuilds_table": true,
+            "permits_concurrent_dml": false,
+            "lock": "shared",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-primary-key-operations",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Dropping a primary key on its own copies the whole table and blocks writes for the duration, because the physical row order it defined has to be replaced. It is markedly more expensive than adding one, which stays in place — the asymmetry is the surprise. Dropping and adding a key in the SAME statement is a different, cheaper operation and is classified separately.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.key.replace_primary_key",
+            "operation": "replace_primary_key",
+            "algorithm": "inplace",
+            "rebuilds_table": true,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-primary-key-operations",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Dropping and adding a primary key in ONE statement rewrites the table in place and keeps it readable and writable throughout — far cheaper than the same two changes as separate migrations, where the drop alone blocks writes. The one-statement form is the safe way to change a primary key, and splitting it across two migrations is the mistake worth catching.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.partition.add_hash_partitions",
+            "operation": "add_hash_partitions",
+            "algorithm": "inplace",
+            "rebuilds_table": true,
+            "permits_concurrent_dml": false,
+            "lock": "shared",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-partitioning",
+                    "retrieved": "2026-07-26"
+                }
+            ],
+            "notes": "Adding partitions to a HASH or KEY table changes the modulus, so every row has to be placed again: all existing partitions get a new tablespace id, and LOCK=NONE is refused with 'Try LOCK=SHARED' -- reads continue, writes wait for the whole redistribution. It reads like the RANGE form and costs like a table rewrite.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.partition.add_range_partition",
+            "operation": "add_range_partition",
+            "algorithm": "inplace",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-partitioning",
+                    "retrieved": "2026-07-26"
+                }
+            ],
+            "notes": "Adding a partition at the top of a RANGE or LIST table appends an empty tablespace and leaves every existing partition alone, so it is the cheapest partitioning change there is: LOCK=NONE is accepted and the existing partitions keep their tablespace ids. It shares the ADD PARTITION keyword with the HASH and KEY form, which is a different operation entirely -- that one redistributes every row. The two are separate entries because the statement text looks nearly identical and the cost does not.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.partition.coalesce_partition",
+            "operation": "coalesce_partition",
+            "algorithm": "inplace",
+            "rebuilds_table": true,
+            "permits_concurrent_dml": false,
+            "lock": "shared",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-partitioning",
+                    "retrieved": "2026-07-26"
+                }
+            ],
+            "notes": "Reducing the partition count of a HASH or KEY table is the mirror of adding to one: the modulus changes, every surviving partition gets a new tablespace id, and LOCK=NONE is refused. COALESCE PARTITION 1 sounds like it touches one partition; it rewrites all of them.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.partition.drop_partition",
+            "operation": "drop_partition",
+            "algorithm": "inplace",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-partitioning",
+                    "retrieved": "2026-07-26"
+                }
+            ],
+            "notes": "Dropping a partition discards its tablespace and leaves the survivors untouched, so it is cheap and LOCK=NONE is accepted. Availability is not the risk here -- the rows in that partition are gone, and unlike a DELETE there is no WHERE clause to get wrong and no way back. It is a data-loss question wearing an availability question's clothes.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.partition.exchange_partition",
+            "operation": "exchange_partition",
+            "algorithm": "not_applicable",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": false,
+            "lock": "exclusive",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-partitioning",
+                    "retrieved": "2026-07-26"
+                }
+            ],
+            "notes": "Exchanging a partition with a standalone table swaps their tablespaces: measured on 8.4.10 the ids trade places rather than change, so no row is copied whatever the table size. The ALGORITHM and LOCK clause is not refused here -- it is parsed and ignored, which is worse. This statement accepts ALGORITHM=COPY together with LOCK=NONE, a contradictory pair every other ALTER TABLE rejects with 1846, so a migration can state LOCK=NONE on an exchange and receive neither an error nor a guarantee. Cost is not the swap but the validation in front of it: by default MySQL checks every row of the incoming table against the partition definition (measured 0.19 s over 800k rows against 0.01 s with WITHOUT VALIDATION), and the exchange is unavailable for writes for that scan. Hence blocking, scaling with the exchanged table, unless the statement opts out -- and opting out moves the risk rather than removing it, because a row that does not belong in that partition then simply lives there.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.partition.optimize_partition",
+            "operation": "optimize_partition",
+            "algorithm": "not_applicable",
+            "rebuilds_table": true,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-partitioning",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Optimizing a partition rebuilds it, and this entry previously read that off an ALGORITHM the statement never evaluates: it accepts ALGORITHM=COPY together with LOCK=NONE, the contradictory pair that DROP PARTITION -- the control -- rejects with 1846. So the clause is parsed and discarded here, and both the copy claim and the shared lock that came with it were inferred from a value the server ignores. Measured instead: the statement takes time proportional to the data (2.25 s over a 700k-row partition), and a write issued from a second session into THAT partition mid-statement landed immediately. It is a rewrite whose availability is intact -- expensive in time and disk, free in writes. The statement names one partition and the rebuild is that partition's.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.partition.partition_by",
+            "operation": "partition_by",
+            "algorithm": "not_applicable",
+            "rebuilds_table": true,
+            "permits_concurrent_dml": false,
+            "lock": "shared",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-partitioning",
+                    "retrieved": "2026-07-26"
+                }
+            ],
+            "notes": "Partitioning an existing table, or repartitioning one under a new scheme, rejects ALGORITHM and LOCK the same way REMOVE PARTITIONING does (1064), so the class comes from the same two measurements: every row is written into the new partition tablespaces, a concurrent write waited out the statement, a concurrent read did not. This is the statement behind an innocent-looking 'let us partition that table now' -- it is a full rewrite with a write outage the length of the copy.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.partition.remove_partitioning",
+            "operation": "remove_partitioning",
+            "algorithm": "not_applicable",
+            "rebuilds_table": true,
+            "permits_concurrent_dml": false,
+            "lock": "shared",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-partitioning",
+                    "retrieved": "2026-07-26"
+                }
+            ],
+            "notes": "Collapsing a partitioned table back into one tablespace takes no ALGORITHM or LOCK clause at all -- writing one is a syntax error (1064), in the same position where every ordinary ALTER TABLE accepts it. The two axes that remain were therefore measured directly rather than read off the clause: every partition tablespace is gone afterwards, and a write issued from a second session mid-statement waited for the statement to finish while a read in the same position returned at once. So: a full rewrite, reads served, writes queued.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.partition.reorganize_partition",
+            "operation": "reorganize_partition",
+            "algorithm": "inplace",
+            "rebuilds_table": true,
+            "permits_concurrent_dml": false,
+            "lock": "shared",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-partitioning",
+                    "retrieved": "2026-07-26"
+                }
+            ],
+            "notes": "Splitting or merging partitions copies every row of the partitions it names into new tablespaces; the ones it does not name keep their ids. LOCK=NONE is refused with 'Try LOCK=SHARED', so writes to the whole table wait for the duration. The scope is the named partitions rather than the table, which makes this cheaper than a full rewrite on a large table and no more available while it runs -- the class is a rewrite because rows are copied, and calling a row-copying operation merely blocking would rank it below what it costs.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.partition.truncate_partition",
+            "operation": "truncate_partition",
+            "algorithm": "not_applicable",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-partitioning",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Emptying a partition discards its rows without copying the rest of the table. The algorithm field says nothing here on purpose: this statement accepts ALGORITHM=COPY with LOCK=NONE, a pair the neighboring DROP PARTITION rejects with 1846, so it is not reading the clause at all. What is measurable is the duration -- 0.04 s over a 1.2M-row partition, the same as over an empty one, because a tablespace is dropped rather than scanned -- which leaves no window in which writes could be held. It is the cheap way to drop a slice of data, and it is still an irreversible removal of every row in that partition, which is a data-loss question rather than an availability one.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.table.change_auto_increment_value",
+            "operation": "change_auto_increment_value",
+            "algorithm": "inplace",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-column-operations",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Setting the next auto-increment value adjusts a counter rather than the stored rows, so nothing is rewritten and the table stays available. Note this is the table option, not the column attribute — adding AUTO_INCREMENT to a column is a rewrite and is classified separately.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.table.change_default_character_set",
+            "operation": "change_table_default_character_set",
+            "algorithm": "inplace",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-table-syntax-notes",
+                    "retrieved": "2026-07-26"
+                }
+            ],
+            "notes": "Changing a table's DEFAULT character set is metadata only: it sets what a column added LATER will use and re-encodes nothing that is already stored. Measured on 8.4.10 — the InnoDB tablespace id is unchanged afterwards, so no rebuild happened, and LOCK=NONE is accepted. It is a separate entry from CONVERT TO precisely because the two read almost identically in a migration and differ by everything: one is instantaneous and touches no row, the other rewrites the table. ALGORITHM=INSTANT is nevertheless refused, so this is cheap rather than free.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.table.change_default_collation",
+            "operation": "change_table_default_collation",
+            "algorithm": "inplace",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-table-syntax-notes",
+                    "retrieved": "2026-07-26"
+                }
+            ],
+            "notes": "Changing a table's DEFAULT collation, like its default character set, decides what a later column inherits and leaves existing data untouched. Measured on 8.4.10: tablespace id unchanged, LOCK=NONE accepted. What it does NOT do is change how existing columns compare or sort — those keep the collation they were created with, which is the usual surprise: the table's default now says one thing and its columns do another.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.table.change_key_block_size",
+            "operation": "change_key_block_size",
+            "algorithm": "inplace",
+            "rebuilds_table": true,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-table-operations",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Changing the compressed page size rewrites the whole table in place while it stays readable and writable. Like the row-format change it looks like a table option and behaves like a rewrite; it only has an effect at all on a table that is actually stored compressed.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.table.change_persistent_statistics",
+            "operation": "change_persistent_statistics",
+            "algorithm": "inplace",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-table-operations",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Turning persistent statistics on or off, or changing how they are sampled, touches only the table's settings: nothing is rewritten and the table stays fully available. One of the few table options that is genuinely free, which is worth stating next to the ones beside it that are not.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.table.change_row_format",
+            "operation": "change_row_format",
+            "algorithm": "inplace",
+            "rebuilds_table": true,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-table-operations",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Changing a table's row format rewrites every row in place, since the format decides how each one is stored. Reads and writes continue, so it is a cost rather than an outage — but a one-line table option here does the work of a full table copy.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.table.convert_character_set",
+            "operation": "convert_to_character_set",
+            "algorithm": "inplace",
+            "rebuilds_table": true,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-table-syntax-notes",
+                    "retrieved": "2026-07-26"
+                }
+            ],
+            "notes": "Converting a table's character set rewrites every row, whatever the pair — so the class is `rewrite` either way and this entry needs no condition to say it. What the pair DOES change is how the rewrite runs, measured on 8.4.10: utf8mb3 to utf8mb4 is accepted in place with LOCK=NONE, so writes continue during it, while latin1 or ascii to utf8mb4 is refused in place entirely and becomes a COPY that blocks them. Note ascii is refused even though its bytes are already valid UTF-8, so this is not a subset rule — it is the utf8mb3-to-utf8mb4 pair plus conversions that change nothing. Two further consequences travel with the conversion and the statement shows neither: a text column may be promoted to a longer type to fit the wider encoding, and an index prefix measured in bytes covers fewer characters afterwards.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.table.force_rebuild",
+            "operation": "force_rebuild",
+            "algorithm": "inplace",
+            "rebuilds_table": true,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [
+                {
+                    "id": "table_has_fulltext_index",
+                    "text": "Runs the in-place way only on a table with no FULLTEXT index; one present takes the operation off that path and onto a full copy."
+                }
+            ],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-table-operations",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Rebuilding a table without changing its definition rewrites every row in place while reads and writes continue. This is the deliberate maintenance rebuild — reclaiming space, applying a changed setting — and it costs exactly what a rewrite costs, which is the point worth surfacing when it appears in a migration rather than in a maintenance window.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.table.optimize_table",
+            "operation": "optimize_table",
+            "algorithm": "inplace",
+            "rebuilds_table": true,
+            "permits_concurrent_dml": true,
+            "lock": "none",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [
+                {
+                    "id": "table_has_fulltext_index",
+                    "text": "Runs the in-place way only on a table with no FULLTEXT index; one present takes the operation off that path and onto a full copy."
+                }
+            ],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-table-operations",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Optimizing a table rewrites it in place, keeping it readable and writable throughout. It is the same physical work as a plain rebuild, so the cost scales with the table and not with how much space is actually reclaimed — an OPTIMIZE in a migration is a full rewrite wearing a maintenance name.",
+            "stability": "stable"
+        },
+        {
+            "id": "mysql.table.rename_table",
+            "operation": "rename_table",
+            "algorithm": "instant",
+            "rebuilds_table": false,
+            "permits_concurrent_dml": false,
+            "lock": "exclusive",
+            "min_version": "8.4",
+            "max_version": null,
+            "conditions": [],
+            "sources": [
+                {
+                    "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                    "anchor": "online-ddl-table-operations",
+                    "retrieved": "2026-07-24"
+                }
+            ],
+            "notes": "Renaming a table changes the data dictionary and returns at once, without touching a single row -- but it is not lock-free, which is what this entry claimed. Measured on 8.4.10: LOCK=SHARED is refused and LOCK=EXCLUSIVE accepted, so readers are held out too, for the instant the rename takes. The class stays online because an instant operation is over before it is an outage; the fields say what actually happens. The real cost is not in the database at all: any foreign key or grant that names the old table follows different rules, so a rename that is free to execute can still be the most disruptive line in a deploy.",
+            "stability": "stable"
+        }
+    ]
+}

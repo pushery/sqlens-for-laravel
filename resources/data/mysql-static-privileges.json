@@ -1,0 +1,193 @@
+{
+    "schema_version": 1,
+    "reference_server": "MySQL 8.4.10",
+    "about": "MySQL's STATIC privileges, and the grant-table column each one is stored in. MySQL keeps them as one Y/N column per privilege in `mysql.user` (global scope) and `mysql.db` (database scope), and the column name is not the privilege name — `Show_db_priv` is `SHOW DATABASES`, `Repl_slave_priv` is `REPLICATION SLAVE`. A reader has to carry that mapping somewhere, and carrying it inside a query is how it rots: the first version of this reader unpivoted ten of `mysql.db`'s eighteen privilege columns and none of `mysql.user`'s thirty, so `GRANT ALL PRIVILEGES ON *.*` reached the rules as nothing at all and looked exactly like an account with no privileges. Here the mapping is a fact with a reference server, reconciled by a test that asks a REAL MySQL for its column list and then asks it to accept every name — the two questions that, together, catch both a column nobody registered and a name nobody can grant.",
+    "entries": [
+        {
+            "column": "Select_priv",
+            "privilege": "SELECT",
+            "scopes": ["global", "database"],
+            "lifted_to": null
+        },
+        {
+            "column": "Insert_priv",
+            "privilege": "INSERT",
+            "scopes": ["global", "database"],
+            "lifted_to": null
+        },
+        {
+            "column": "Update_priv",
+            "privilege": "UPDATE",
+            "scopes": ["global", "database"],
+            "lifted_to": null
+        },
+        {
+            "column": "Delete_priv",
+            "privilege": "DELETE",
+            "scopes": ["global", "database"],
+            "lifted_to": null
+        },
+        {
+            "column": "Create_priv",
+            "privilege": "CREATE",
+            "scopes": ["global", "database"],
+            "lifted_to": null
+        },
+        {
+            "column": "Drop_priv",
+            "privilege": "DROP",
+            "scopes": ["global", "database"],
+            "lifted_to": null
+        },
+        {
+            "column": "Grant_priv",
+            "privilege": "GRANT OPTION",
+            "scopes": ["global", "database"],
+            "lifted_to": "grantable"
+        },
+        {
+            "column": "References_priv",
+            "privilege": "REFERENCES",
+            "scopes": ["global", "database"],
+            "lifted_to": null
+        },
+        {
+            "column": "Index_priv",
+            "privilege": "INDEX",
+            "scopes": ["global", "database"],
+            "lifted_to": null
+        },
+        {
+            "column": "Alter_priv",
+            "privilege": "ALTER",
+            "scopes": ["global", "database"],
+            "lifted_to": null
+        },
+        {
+            "column": "Create_tmp_table_priv",
+            "privilege": "CREATE TEMPORARY TABLES",
+            "scopes": ["global", "database"],
+            "lifted_to": null
+        },
+        {
+            "column": "Lock_tables_priv",
+            "privilege": "LOCK TABLES",
+            "scopes": ["global", "database"],
+            "lifted_to": null
+        },
+        {
+            "column": "Create_view_priv",
+            "privilege": "CREATE VIEW",
+            "scopes": ["global", "database"],
+            "lifted_to": null
+        },
+        {
+            "column": "Show_view_priv",
+            "privilege": "SHOW VIEW",
+            "scopes": ["global", "database"],
+            "lifted_to": null
+        },
+        {
+            "column": "Create_routine_priv",
+            "privilege": "CREATE ROUTINE",
+            "scopes": ["global", "database"],
+            "lifted_to": null
+        },
+        {
+            "column": "Alter_routine_priv",
+            "privilege": "ALTER ROUTINE",
+            "scopes": ["global", "database"],
+            "lifted_to": null
+        },
+        {
+            "column": "Execute_priv",
+            "privilege": "EXECUTE",
+            "scopes": ["global", "database"],
+            "lifted_to": null
+        },
+        {
+            "column": "Event_priv",
+            "privilege": "EVENT",
+            "scopes": ["global", "database"],
+            "lifted_to": null
+        },
+        {
+            "column": "Trigger_priv",
+            "privilege": "TRIGGER",
+            "scopes": ["global", "database"],
+            "lifted_to": null
+        },
+        {
+            "column": "Reload_priv",
+            "privilege": "RELOAD",
+            "scopes": ["global"],
+            "lifted_to": null
+        },
+        {
+            "column": "Shutdown_priv",
+            "privilege": "SHUTDOWN",
+            "scopes": ["global"],
+            "lifted_to": null
+        },
+        {
+            "column": "Process_priv",
+            "privilege": "PROCESS",
+            "scopes": ["global"],
+            "lifted_to": null
+        },
+        {
+            "column": "File_priv",
+            "privilege": "FILE",
+            "scopes": ["global"],
+            "lifted_to": null
+        },
+        {
+            "column": "Show_db_priv",
+            "privilege": "SHOW DATABASES",
+            "scopes": ["global"],
+            "lifted_to": null
+        },
+        {
+            "column": "Super_priv",
+            "privilege": "SUPER",
+            "scopes": ["global"],
+            "lifted_to": null
+        },
+        {
+            "column": "Repl_slave_priv",
+            "privilege": "REPLICATION SLAVE",
+            "scopes": ["global"],
+            "lifted_to": null
+        },
+        {
+            "column": "Repl_client_priv",
+            "privilege": "REPLICATION CLIENT",
+            "scopes": ["global"],
+            "lifted_to": null
+        },
+        {
+            "column": "Create_user_priv",
+            "privilege": "CREATE USER",
+            "scopes": ["global"],
+            "lifted_to": null
+        },
+        {
+            "column": "Create_tablespace_priv",
+            "privilege": "CREATE TABLESPACE",
+            "scopes": ["global"],
+            "lifted_to": null
+        },
+        {
+            "column": "Create_role_priv",
+            "privilege": "CREATE ROLE",
+            "scopes": ["global"],
+            "lifted_to": null
+        },
+        {
+            "column": "Drop_role_priv",
+            "privilege": "DROP ROLE",
+            "scopes": ["global"],
+            "lifted_to": null
+        }
+    ]
+}

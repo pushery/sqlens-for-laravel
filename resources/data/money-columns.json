@@ -1,0 +1,282 @@
+{
+    "schema_version": 1,
+    "about": "Column-name terms that suggest a column holds MONEY, kept as data so the list is reviewable as a list and a diff shows exactly which term moved. Written for this package from the naming a Laravel schema actually uses; no third-party dictionary or linter catalog was copied. Two confidence levels, and the split is the whole point: a 'strong' term means money on its own, while a 'weak' term is ordinary English or German that happens to be used for money — 'value', 'rate' and 'wert' name a hundred non-monetary things, and a rule that fired on them would be noise nobody reads. A weak term therefore needs a second signal before anything is reported. Matching is on the lowercased column name, whole word or underscore-separated segment, never a substring: 'rating' is not 'rate' and 'evaluate' is not 'value'.",
+    "matching": {
+        "case": "the column name is lowercased before matching",
+        "boundary": "a term matches a whole underscore-separated segment of the name, never a substring",
+        "strong": "reports on its own",
+        "weak": "reports only together with a second signal, which the rule defines and this artifact does not"
+    },
+    "terms": [
+        {
+            "term": "amount",
+            "language": "en",
+            "confidence": "weak"
+        },
+        {
+            "term": "amount_cents",
+            "language": "en",
+            "confidence": "strong"
+        },
+        {
+            "term": "amount_due",
+            "language": "en",
+            "confidence": "strong"
+        },
+        {
+            "term": "amount_paid",
+            "language": "en",
+            "confidence": "strong"
+        },
+        {
+            "term": "balance",
+            "language": "en",
+            "confidence": "weak"
+        },
+        {
+            "term": "betrag",
+            "language": "de",
+            "confidence": "strong"
+        },
+        {
+            "term": "bruttobetrag",
+            "language": "de",
+            "confidence": "strong"
+        },
+        {
+            "term": "bruttopreis",
+            "language": "de",
+            "confidence": "strong"
+        },
+        {
+            "term": "cost",
+            "language": "en",
+            "confidence": "weak"
+        },
+        {
+            "term": "discount_amount",
+            "language": "en",
+            "confidence": "strong"
+        },
+        {
+            "term": "einzelpreis",
+            "language": "de",
+            "confidence": "strong"
+        },
+        {
+            "term": "endbetrag",
+            "language": "de",
+            "confidence": "strong"
+        },
+        {
+            "term": "fee",
+            "language": "en",
+            "confidence": "weak"
+        },
+        {
+            "term": "gebuehr",
+            "language": "de",
+            "confidence": "strong"
+        },
+        {
+            "term": "gesamtbetrag",
+            "language": "de",
+            "confidence": "strong"
+        },
+        {
+            "term": "gesamtpreis",
+            "language": "de",
+            "confidence": "strong"
+        },
+        {
+            "term": "gross_amount",
+            "language": "en",
+            "confidence": "strong"
+        },
+        {
+            "term": "gross_price",
+            "language": "en",
+            "confidence": "strong"
+        },
+        {
+            "term": "honorar",
+            "language": "de",
+            "confidence": "strong"
+        },
+        {
+            "term": "invoice_total",
+            "language": "en",
+            "confidence": "strong"
+        },
+        {
+            "term": "kaufpreis",
+            "language": "de",
+            "confidence": "strong"
+        },
+        {
+            "term": "kosten",
+            "language": "de",
+            "confidence": "weak"
+        },
+        {
+            "term": "line_total",
+            "language": "en",
+            "confidence": "strong"
+        },
+        {
+            "term": "list_price",
+            "language": "en",
+            "confidence": "strong"
+        },
+        {
+            "term": "listenpreis",
+            "language": "de",
+            "confidence": "strong"
+        },
+        {
+            "term": "net_amount",
+            "language": "en",
+            "confidence": "strong"
+        },
+        {
+            "term": "net_price",
+            "language": "en",
+            "confidence": "strong"
+        },
+        {
+            "term": "nettobetrag",
+            "language": "de",
+            "confidence": "strong"
+        },
+        {
+            "term": "nettopreis",
+            "language": "de",
+            "confidence": "strong"
+        },
+        {
+            "term": "order_total",
+            "language": "en",
+            "confidence": "strong"
+        },
+        {
+            "term": "preis",
+            "language": "de",
+            "confidence": "strong"
+        },
+        {
+            "term": "price",
+            "language": "en",
+            "confidence": "strong"
+        },
+        {
+            "term": "price_cents",
+            "language": "en",
+            "confidence": "strong"
+        },
+        {
+            "term": "purchase_price",
+            "language": "en",
+            "confidence": "strong"
+        },
+        {
+            "term": "rabattbetrag",
+            "language": "de",
+            "confidence": "strong"
+        },
+        {
+            "term": "rate",
+            "language": "en",
+            "confidence": "weak"
+        },
+        {
+            "term": "rechnungsbetrag",
+            "language": "de",
+            "confidence": "strong"
+        },
+        {
+            "term": "refund_amount",
+            "language": "en",
+            "confidence": "strong"
+        },
+        {
+            "term": "saldo",
+            "language": "de",
+            "confidence": "strong"
+        },
+        {
+            "term": "sale_price",
+            "language": "en",
+            "confidence": "strong"
+        },
+        {
+            "term": "shipping_cost",
+            "language": "en",
+            "confidence": "strong"
+        },
+        {
+            "term": "steuerbetrag",
+            "language": "de",
+            "confidence": "strong"
+        },
+        {
+            "term": "subtotal_amount",
+            "language": "en",
+            "confidence": "strong"
+        },
+        {
+            "term": "sum",
+            "language": "en",
+            "confidence": "weak"
+        },
+        {
+            "term": "summe",
+            "language": "de",
+            "confidence": "weak"
+        },
+        {
+            "term": "tax_amount",
+            "language": "en",
+            "confidence": "strong"
+        },
+        {
+            "term": "total",
+            "language": "en",
+            "confidence": "weak"
+        },
+        {
+            "term": "total_amount",
+            "language": "en",
+            "confidence": "strong"
+        },
+        {
+            "term": "unit_price",
+            "language": "en",
+            "confidence": "strong"
+        },
+        {
+            "term": "value",
+            "language": "en",
+            "confidence": "weak"
+        },
+        {
+            "term": "verkaufspreis",
+            "language": "de",
+            "confidence": "strong"
+        },
+        {
+            "term": "versandkosten",
+            "language": "de",
+            "confidence": "strong"
+        },
+        {
+            "term": "wert",
+            "language": "de",
+            "confidence": "weak"
+        },
+        {
+            "term": "zwischensumme",
+            "language": "de",
+            "confidence": "strong"
+        }
+    ]
+}

@@ -1,0 +1,591 @@
+{
+    "schema_version": 1,
+    "about": "The surfaces the static pre-scan looks for in a migration, kept as data so the list is reviewable as a list and a diff shows exactly which target moved. Target grammar: 'Class::method' (that method on that class, static or instance), '*::method' (that method on any receiver), 'function()' (a free function), 'Class' (any call on that class), 'Namespace\\*' (any call under that namespace). Within a catalog the first matching entry wins, so a specific target may sit in front of a broad one.",
+    "catalogs": {
+        "indirect_call_exempt": {
+            "description": "Classes an indirect-call hit is deliberately NOT raised for. The indirect-call detector flags a migration that reaches project code the pre-scan cannot follow — but the whole framework, and a handful of pure value surfaces, are neither project code nor side effects, and flagging them would make the rule noise. An application adds its own exemptions through sqlens.capture.prescan.indirect_calls.allowlist rather than editing this list.",
+            "entries": [
+                {
+                    "target": "Illuminate\\*",
+                    "kind": "framework",
+                    "reason": "the framework is the analysis surface, not opaque project code — its database and value helpers are handled by their own detectors or are pure value work"
+                },
+                {
+                    "target": "Carbon\\*",
+                    "kind": "value",
+                    "reason": "constructs a date/time value; it reads nothing from the database and causes no side effect"
+                },
+                {
+                    "target": "DateTime",
+                    "kind": "value",
+                    "reason": "constructs a date/time value"
+                },
+                {
+                    "target": "DateTimeImmutable",
+                    "kind": "value",
+                    "reason": "constructs a date/time value"
+                },
+                {
+                    "target": "DateInterval",
+                    "kind": "value",
+                    "reason": "constructs a duration value"
+                },
+                {
+                    "target": "Ramsey\\Uuid\\*",
+                    "kind": "value",
+                    "reason": "constructs a UUID value"
+                },
+                {
+                    "target": "Symfony\\Component\\Uid\\*",
+                    "kind": "value",
+                    "reason": "constructs a UID value"
+                }
+            ]
+        },
+        "introspection_guards": {
+            "description": "Schema-introspection calls whose answer steers a migration's control flow — the classic if (Schema::hasTable(...)) { ... } guard. Measured against the framework: under pretend these return their EMPTY answer (hasTable is false for a table that really exists) AND the introspection SELECT is itself logged. So the guarded block never runs, its DDL is never captured, and the statement list is non-empty yet holds none of the real work. A capture that trusted either half would report a clean pass over DDL it never saw.",
+            "entries": [
+                {
+                    "target": "Illuminate\\Support\\Facades\\Schema::hasTable",
+                    "kind": "table_guard",
+                    "reason": "guards on whether a table exists; under pretend the answer is always false, so the block it protects is never captured"
+                },
+                {
+                    "target": "*::hasTable",
+                    "kind": "table_guard",
+                    "reason": "guards on whether a table exists (via a schema builder); under pretend the answer is always false, so the block it protects is never captured"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Schema::hasColumn",
+                    "kind": "column_guard",
+                    "reason": "guards on whether a column exists; under pretend the answer is always false, so the block it protects is never captured"
+                },
+                {
+                    "target": "*::hasColumn",
+                    "kind": "column_guard",
+                    "reason": "guards on whether a column exists (via a schema builder); under pretend the answer is always false, so the block it protects is never captured"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Schema::hasColumns",
+                    "kind": "column_guard",
+                    "reason": "guards on whether columns exist; under pretend the answer is always false, so the block it protects is never captured"
+                },
+                {
+                    "target": "*::hasColumns",
+                    "kind": "column_guard",
+                    "reason": "guards on whether columns exist (via a schema builder); under pretend the answer is always false, so the block it protects is never captured"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Schema::hasIndex",
+                    "kind": "index_guard",
+                    "reason": "guards on whether an index exists; under pretend the answer is always false, so the block it protects is never captured"
+                },
+                {
+                    "target": "*::hasIndex",
+                    "kind": "index_guard",
+                    "reason": "guards on whether an index exists (via a schema builder); under pretend the answer is always false, so the block it protects is never captured"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Schema::getColumnType",
+                    "kind": "shape_guard",
+                    "reason": "branches on a column's type; under pretend there is no real column to read, so the branch is decided on an empty answer"
+                },
+                {
+                    "target": "*::getColumnType",
+                    "kind": "shape_guard",
+                    "reason": "branches on a column's type (via a schema builder); under pretend there is no real column to read, so the branch is decided on an empty answer"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Schema::getTables",
+                    "kind": "shape_guard",
+                    "reason": "branches on the set of tables; under pretend the set comes back empty, so the branch is decided on an empty answer"
+                },
+                {
+                    "target": "*::getTables",
+                    "kind": "shape_guard",
+                    "reason": "branches on the set of tables (via a schema builder); under pretend the set comes back empty, so the branch is decided on an empty answer"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Schema::getColumns",
+                    "kind": "shape_guard",
+                    "reason": "branches on a table's columns; under pretend the set comes back empty, so the branch is decided on an empty answer"
+                },
+                {
+                    "target": "*::getColumns",
+                    "kind": "shape_guard",
+                    "reason": "branches on a table's columns (via a schema builder); under pretend the set comes back empty, so the branch is decided on an empty answer"
+                }
+            ]
+        },
+        "side_effects": {
+            "description": "Surfaces that reach the world outside the database. Pretend mode intercepts SQL and nothing else: the PHP around it runs for real, so a notification in a migration is sent, an HTTP call is made, a file is written, a job is queued — from a command whose whole purpose is to look at a migration without running it. A lint run that sends a message to a customer is the worst thing this tool could do, so a migration touching any of these is never captured, and is reported before anything of it executes.",
+            "entries": [
+                {
+                    "target": "Illuminate\\Support\\Facades\\Http",
+                    "kind": "network",
+                    "reason": "performs a real HTTP request to a real host"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Process",
+                    "kind": "network",
+                    "reason": "starts a real external process, which can do anything"
+                },
+                {
+                    "target": "curl_exec()",
+                    "kind": "network",
+                    "reason": "performs a real network request"
+                },
+                {
+                    "target": "curl_init()",
+                    "kind": "network",
+                    "reason": "opens a network handle, which is only ever opened to use it"
+                },
+                {
+                    "target": "curl_multi_exec()",
+                    "kind": "network",
+                    "reason": "performs real network requests"
+                },
+                {
+                    "target": "fsockopen()",
+                    "kind": "network",
+                    "reason": "opens a real socket to a real host"
+                },
+                {
+                    "target": "stream_socket_client()",
+                    "kind": "network",
+                    "reason": "opens a real socket to a real host"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Storage",
+                    "kind": "filesystem",
+                    "reason": "reads or writes a real filesystem, local or remote"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\File",
+                    "kind": "filesystem",
+                    "reason": "reads or writes the local filesystem"
+                },
+                {
+                    "target": "file_put_contents()",
+                    "kind": "filesystem",
+                    "reason": "writes a real file"
+                },
+                {
+                    "target": "file_get_contents()",
+                    "kind": "filesystem",
+                    "reason": "reads a path — and a path may be a URL, which no static reading of the argument can rule out"
+                },
+                {
+                    "target": "fopen()",
+                    "kind": "filesystem",
+                    "reason": "opens a real stream, which may be a file or a URL"
+                },
+                {
+                    "target": "unlink()",
+                    "kind": "filesystem",
+                    "reason": "deletes a real file"
+                },
+                {
+                    "target": "rename()",
+                    "kind": "filesystem",
+                    "reason": "moves a real file"
+                },
+                {
+                    "target": "copy()",
+                    "kind": "filesystem",
+                    "reason": "writes a real file"
+                },
+                {
+                    "target": "mkdir()",
+                    "kind": "filesystem",
+                    "reason": "creates a real directory"
+                },
+                {
+                    "target": "rmdir()",
+                    "kind": "filesystem",
+                    "reason": "removes a real directory"
+                },
+                {
+                    "target": "touch()",
+                    "kind": "filesystem",
+                    "reason": "creates or restamps a real file"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Mail",
+                    "kind": "messaging",
+                    "reason": "sends a real email to a real recipient"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Notification",
+                    "kind": "messaging",
+                    "reason": "sends a real notification — the mail, Slack message or push a lint run must never produce"
+                },
+                {
+                    "target": "*::notify",
+                    "kind": "messaging",
+                    "reason": "notifies a real recipient"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Queue",
+                    "kind": "queue",
+                    "reason": "puts a real job on a real queue, where a worker will run it"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Bus",
+                    "kind": "queue",
+                    "reason": "dispatches a real job or batch"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Event",
+                    "kind": "queue",
+                    "reason": "fires a real event, and its listeners do whatever they do"
+                },
+                {
+                    "target": "dispatch()",
+                    "kind": "queue",
+                    "reason": "dispatches a real job"
+                },
+                {
+                    "target": "dispatch_sync()",
+                    "kind": "queue",
+                    "reason": "runs a real job immediately"
+                },
+                {
+                    "target": "event()",
+                    "kind": "queue",
+                    "reason": "fires a real event, and its listeners do whatever they do"
+                },
+                {
+                    "target": "*::dispatch",
+                    "kind": "queue",
+                    "reason": "dispatches a real job"
+                },
+                {
+                    "target": "*::dispatchSync",
+                    "kind": "queue",
+                    "reason": "runs a real job immediately"
+                },
+                {
+                    "target": "*::dispatchAfterResponse",
+                    "kind": "queue",
+                    "reason": "queues a real job to run once the process finishes"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Cache",
+                    "kind": "shared_state",
+                    "reason": "writes shared state the application reads elsewhere"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Session",
+                    "kind": "shared_state",
+                    "reason": "writes session state"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Redis",
+                    "kind": "shared_state",
+                    "reason": "writes shared state on a real Redis server"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Broadcast",
+                    "kind": "shared_state",
+                    "reason": "publishes to a real broadcast channel that real clients are listening on"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\RateLimiter",
+                    "kind": "shared_state",
+                    "reason": "consumes from a shared rate-limit budget the application depends on"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Artisan::call",
+                    "kind": "command",
+                    "reason": "runs another command in full, whatever that command does"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Artisan::queue",
+                    "kind": "command",
+                    "reason": "queues another command for a worker to run in full"
+                }
+            ]
+        },
+        "result_dependent": {
+            "description": "Calls whose result decides what SQL a migration emits. Pretend mode answers every query with an empty result set, so a loop over one runs zero times and a branch on one is never taken: the captured SQL would be a strict subset of the real SQL, and the run would be green for the wrong reason.",
+            "entries": [
+                {
+                    "target": "*::get",
+                    "kind": "materialization",
+                    "reason": "reads rows out of the database; under pretend it yields nothing, so anything built from those rows is never emitted"
+                },
+                {
+                    "target": "*::first",
+                    "kind": "materialization",
+                    "reason": "reads a single row; under pretend it is null, so a branch that depends on it takes the wrong path"
+                },
+                {
+                    "target": "*::firstOrFail",
+                    "kind": "materialization",
+                    "reason": "reads a single row and expects one to exist; under pretend none does"
+                },
+                {
+                    "target": "*::firstWhere",
+                    "kind": "materialization",
+                    "reason": "reads a single row by condition; under pretend it is null"
+                },
+                {
+                    "target": "*::sole",
+                    "kind": "materialization",
+                    "reason": "reads the one matching row; under pretend there is none"
+                },
+                {
+                    "target": "*::find",
+                    "kind": "materialization",
+                    "reason": "reads a row by key; under pretend it is null"
+                },
+                {
+                    "target": "*::findOrFail",
+                    "kind": "materialization",
+                    "reason": "reads a row by key and expects it; under pretend none is found"
+                },
+                {
+                    "target": "*::value",
+                    "kind": "materialization",
+                    "reason": "reads one column of one row; under pretend it is null"
+                },
+                {
+                    "target": "*::pluck",
+                    "kind": "materialization",
+                    "reason": "reads a column across rows; under pretend the list is empty"
+                },
+                {
+                    "target": "*::cursor",
+                    "kind": "materialization",
+                    "reason": "streams rows; under pretend the stream is empty and its body never runs"
+                },
+                {
+                    "target": "*::lazy",
+                    "kind": "materialization",
+                    "reason": "streams rows in chunks; under pretend the stream is empty and its body never runs"
+                },
+                {
+                    "target": "*::lazyById",
+                    "kind": "materialization",
+                    "reason": "streams rows by key; under pretend the stream is empty and its body never runs"
+                },
+                {
+                    "target": "*::lazyByIdDesc",
+                    "kind": "materialization",
+                    "reason": "streams rows by descending key; under pretend the stream is empty and its body never runs"
+                },
+                {
+                    "target": "*::all",
+                    "kind": "materialization",
+                    "reason": "reads every row of a table; under pretend the result is empty"
+                },
+                {
+                    "target": "*::toArray",
+                    "kind": "materialization",
+                    "reason": "materializes a query result into an array; under pretend the array is empty"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\DB::select",
+                    "kind": "materialization",
+                    "reason": "runs a SELECT and returns its rows; under pretend the statement is logged instead of executed and no rows come back"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\DB::selectOne",
+                    "kind": "materialization",
+                    "reason": "runs a SELECT and returns one row; under pretend nothing comes back"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\DB::scalar",
+                    "kind": "materialization",
+                    "reason": "runs a SELECT and returns one value; under pretend nothing comes back"
+                },
+                {
+                    "target": "*::chunk",
+                    "kind": "iteration",
+                    "reason": "iterates rows in chunks; under pretend there are no chunks, so the body never runs"
+                },
+                {
+                    "target": "*::chunkById",
+                    "kind": "iteration",
+                    "reason": "iterates rows in key-ordered chunks; under pretend the body never runs"
+                },
+                {
+                    "target": "*::chunkByIdDesc",
+                    "kind": "iteration",
+                    "reason": "iterates rows in descending key-ordered chunks; under pretend the body never runs"
+                },
+                {
+                    "target": "*::each",
+                    "kind": "iteration",
+                    "reason": "iterates rows one by one; under pretend the body never runs"
+                },
+                {
+                    "target": "*::eachById",
+                    "kind": "iteration",
+                    "reason": "iterates rows by key; under pretend the body never runs"
+                },
+                {
+                    "target": "*::exists",
+                    "kind": "predicate",
+                    "reason": "asks whether any row matches; under pretend the answer is always false"
+                },
+                {
+                    "target": "*::doesntExist",
+                    "kind": "predicate",
+                    "reason": "asks whether no row matches; under pretend the answer is always true"
+                },
+                {
+                    "target": "*::count",
+                    "kind": "predicate",
+                    "reason": "counts rows; under pretend the count is always zero"
+                },
+                {
+                    "target": "*::max",
+                    "kind": "predicate",
+                    "reason": "reads a maximum across rows; under pretend there are no rows to take it from"
+                },
+                {
+                    "target": "*::min",
+                    "kind": "predicate",
+                    "reason": "reads a minimum across rows; under pretend there are no rows to take it from"
+                },
+                {
+                    "target": "*::sum",
+                    "kind": "predicate",
+                    "reason": "sums a column across rows; under pretend the sum is always zero"
+                },
+                {
+                    "target": "*::avg",
+                    "kind": "predicate",
+                    "reason": "averages a column across rows; under pretend there are no rows to average"
+                }
+            ]
+        },
+        "result_dependent_exempt": {
+            "description": "Surfaces that carry a method name from the result-dependent catalog without reading the database. Method names alone cannot separate 'Config::get' from a query builder's 'get', because the receiver's type is not statically known — so the exceptions are written down here, each with its reason, rather than hidden in the detector. This catalog is consulted first: a call it covers is never a result-dependent hit.",
+            "entries": [
+                {
+                    "target": "Illuminate\\Support\\Facades\\Config",
+                    "kind": "configuration",
+                    "reason": "reads configuration, which pretend mode does not change"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\App",
+                    "kind": "configuration",
+                    "reason": "reads container and environment state, not database rows"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Schema",
+                    "kind": "introspection",
+                    "reason": "schema introspection has its own pre-scan detector, which reports it with a reason a user can act on"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Cache",
+                    "kind": "side_effect_surface",
+                    "reason": "reads the cache; when it matters it is reported as a side effect, not as a result-dependent read"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Http",
+                    "kind": "side_effect_surface",
+                    "reason": "performs an HTTP request; reported as a side effect, which is the finding a user needs"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Storage",
+                    "kind": "side_effect_surface",
+                    "reason": "touches a filesystem; reported as a side effect, which is the finding a user needs"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\File",
+                    "kind": "side_effect_surface",
+                    "reason": "touches the local filesystem; reported as a side effect, which is the finding a user needs"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Session",
+                    "kind": "side_effect_surface",
+                    "reason": "reads request session state, not database rows"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Redis",
+                    "kind": "side_effect_surface",
+                    "reason": "talks to Redis; reported as a side effect, which is the finding a user needs"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Log",
+                    "kind": "diagnostic",
+                    "reason": "writes a log line and returns nothing a migration branches on"
+                },
+                {
+                    "target": "Illuminate\\Support\\Arr",
+                    "kind": "value_helper",
+                    "reason": "operates on arrays already in memory"
+                },
+                {
+                    "target": "Illuminate\\Support\\Str",
+                    "kind": "value_helper",
+                    "reason": "operates on strings already in memory"
+                },
+                {
+                    "target": "Illuminate\\Support\\Collection",
+                    "kind": "value_helper",
+                    "reason": "operates on a collection already in memory; where that collection came from is judged where it was built"
+                },
+                {
+                    "target": "Illuminate\\Database\\Schema\\Blueprint",
+                    "kind": "schema_definition",
+                    "reason": "describes the table being built; it reads nothing"
+                }
+            ]
+        },
+        "ddl_emitters": {
+            "description": "The calls that put DDL or data changes into a migration. Inside a loop whose iteration count comes from the database, these are the statements a pretend run never sees — the classic backfill, where the loop runs zero times and the migration looks like it emits nothing at all.",
+            "entries": [
+                {
+                    "target": "Illuminate\\Support\\Facades\\Schema",
+                    "kind": "schema_change",
+                    "reason": "emits DDL"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\DB::statement",
+                    "kind": "raw_statement",
+                    "reason": "runs a raw statement"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\DB::unprepared",
+                    "kind": "raw_statement",
+                    "reason": "runs a raw unprepared statement"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\DB::insert",
+                    "kind": "data_change",
+                    "reason": "writes rows"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\DB::update",
+                    "kind": "data_change",
+                    "reason": "changes rows"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\DB::delete",
+                    "kind": "data_change",
+                    "reason": "removes rows"
+                },
+                {
+                    "target": "*::update",
+                    "kind": "data_change",
+                    "reason": "changes rows through a query builder"
+                },
+                {
+                    "target": "*::insert",
+                    "kind": "data_change",
+                    "reason": "writes rows through a query builder"
+                },
+                {
+                    "target": "*::save",
+                    "kind": "data_change",
+                    "reason": "persists a model"
+                }
+            ]
+        }
+    }
+}

@@ -1,0 +1,173 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Pushery\SQLens\Rules;
+
+use FilesystemIterator;
+use SplFileInfo;
+
+/**
+ * Which documentation pages exist, and the one-line prose each of them opens with.
+ *
+ * The registry export has to say whether a rule's page is written or still {@see
+ * RuleDocumentationState::Pending}, and that is the only thing it needs to know about
+ * documentation: a set of slugs it can ask. Where those pages live is deliberately NOT encoded
+ * here — the directory arrives through {@see self::fromDirectory()}. The package's own pages sit
+ * in a private tree that never ships, so a shipped class naming that path would be both wrong
+ * for a consumer and a private path in a public file.
+ *
+ * The set is sorted and unique, so an index built twice from the same directory is the same
+ * index, and an export built from it is byte-identical between runs.
+ *
+ * ## Why it carries the title and the summary as well
+ *
+ * The shipped rule catalog is read by four different outputs, and one of them is an MCP tool an
+ * agent calls to have a rule EXPLAINED. Without a sentence it could only classify — `level: 2` and
+ * a URL, which is nothing at all to a consumer inside a sealed CI container.
+ *
+ * The two texts are DERIVED here rather than authored into the catalog, and that distinction is
+ * the whole reason this is cheap. Every page already opens with a `title` and a `description` in
+ * its front matter — written, reviewed, and already the single statement of what a rule is. Copying
+ * them into a second hand-maintained place would be a second thing to keep in step; reading them is
+ * not.
+ *
+ * `rationale` deliberately does NOT follow. There is no existing source for it: the page BODY is
+ * the rationale, it is long, and it is what the stable `documentation_url` on every entry exists to
+ * point at. Putting it in the catalog would mean authoring 200 new texts and carrying them in the
+ * public contract from 1.0 onward, to duplicate something a reader can already reach.
+ */
+final readonly class DocumentationPageIndex
+{
+    /**
+     * @param  list<string>  $slugs
+     * @param  array<string, array{title: string, summary: string}>  $prose  keyed by slug; empty for
+     *                                                                       an index built from slugs alone, which is what a test that only
+     *                                                                       cares about existence wants
+     */
+    private function __construct(public array $slugs, private array $prose = []) {}
+
+    /**
+     * An index over an explicit set of slugs — the form a test uses to pin behavior without a
+     * directory, and the form a generator uses when it already knows what it produced.
+     *
+     * @param  list<string>  $slugs
+     */
+    public static function fromSlugs(array $slugs): self
+    {
+        $unique = array_values(array_unique($slugs));
+        sort($unique, SORT_STRING);
+
+        return new self($unique);
+    }
+
+    /**
+     * An index over slugs WITH their prose — the form a test uses to drive the derived fields
+     * without putting a Markdown file on disk.
+     *
+     * @param  array<string, array{title: string, summary: string}>  $pages  keyed by slug
+     */
+    public static function fromPages(array $pages): self
+    {
+        $slugs = array_map(strval(...), array_keys($pages));
+        sort($slugs, SORT_STRING);
+
+        return new self($slugs, $pages);
+    }
+
+    /**
+     * An index over the Markdown files directly inside a directory, each file's basename being
+     * its slug. A missing directory yields an EMPTY index rather than an error: before the first
+     * page is written there is no directory, and "nothing is published yet" is a true answer,
+     * not a failure.
+     *
+     * Only the top level is read. A nested page would mean a nested URL, and the scheme is flat
+     * by decision ({@see RuleDocumentationUrl}).
+     */
+    public static function fromDirectory(string $directory): self
+    {
+        if (! is_dir($directory)) {
+            return self::fromSlugs([]);
+        }
+
+        $pages = [];
+
+        /** @var SplFileInfo $file */
+        foreach (new FilesystemIterator($directory, FilesystemIterator::SKIP_DOTS) as $file) {
+            if ($file->isFile() && $file->getExtension() === 'md') {
+                $pages[$file->getBasename('.md')] = self::frontMatter((string) file_get_contents($file->getPathname()));
+            }
+        }
+
+        return self::fromPages($pages);
+    }
+
+    /**
+     * The `title` and `description` a page opens with.
+     *
+     * ## Why this parses rather than pulls in a YAML library
+     *
+     * The front matter these pages carry is two scalar keys, and both are written in the folded
+     * form (`title: >-`) because they are long enough to wrap. That is the whole grammar in play,
+     * and it is stable — the pages are generated by this repository, not written by hand in
+     * arbitrary YAML.
+     *
+     * A parser is a dependency in the SHIPPED tree, and this class is shipped. Adding one so that
+     * a two-key header can be read would put a library in every consumer's vendor directory to
+     * solve a problem no consumer has: they read the artifact, never the pages.
+     *
+     * What it does NOT do is guess. A key it cannot find yields an empty string, and the export's
+     * own completeness arm is what turns that into a failure — a parser that invented a title
+     * would produce a catalog that looks complete and says the wrong thing.
+     *
+     * @return array{title: string, summary: string}
+     */
+    private static function frontMatter(string $markdown): array
+    {
+        return ['title' => self::scalar($markdown, 'title'), 'summary' => self::scalar($markdown, 'description')];
+    }
+
+    /** One front-matter scalar, in either the plain or the folded (`>-`) form. */
+    private static function scalar(string $markdown, string $key): string
+    {
+        if (preg_match('/^'.preg_quote($key, '/').':\s*>-\s*\n((?:[ \t]+\S.*\n?)+)/m', $markdown, $folded) === 1) {
+            // A folded block is one paragraph split across indented lines; YAML joins them with a
+            // single space, and so does this.
+            $lines = array_map(trim(...), array_filter(explode("\n", $folded[1]), static fn (string $line): bool => trim($line) !== ''));
+
+            return implode(' ', $lines);
+        }
+
+        if (preg_match('/^'.preg_quote($key, '/').':[ \t]+(\S.*)$/m', $markdown, $plain) === 1) {
+            return trim($plain[1], " \t\"'");
+        }
+
+        return '';
+    }
+
+    /** The page's human-readable title, or an empty string when there is no page. */
+    public function titleFor(string $ruleId): string
+    {
+        return $this->prose[RuleDocumentationUrl::slug($ruleId)]['title'] ?? '';
+    }
+
+    /** The page's one-sentence summary, or an empty string when there is no page. */
+    public function summaryFor(string $ruleId): string
+    {
+        return $this->prose[RuleDocumentationUrl::slug($ruleId)]['summary'] ?? '';
+    }
+
+    /** Whether a page exists for this slug. */
+    public function has(string $slug): bool
+    {
+        return in_array($slug, $this->slugs, true);
+    }
+
+    /** The documentation state of a rule id — the whole reason this index exists. */
+    public function stateFor(string $ruleId): RuleDocumentationState
+    {
+        return $this->has(RuleDocumentationUrl::slug($ruleId))
+            ? RuleDocumentationState::Published
+            : RuleDocumentationState::Pending;
+    }
+}
