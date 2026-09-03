@@ -8,7 +8,7 @@
 
 [![Latest Version](https://img.shields.io/packagist/v/pushery/sqlens-for-laravel.svg)](https://packagist.org/packages/pushery/sqlens-for-laravel)
 [![PHP Version](https://img.shields.io/packagist/dependency-v/pushery/sqlens-for-laravel/php.svg)](https://packagist.org/packages/pushery/sqlens-for-laravel)
-[![Laravel Versions](https://badge.laravel.cloud/badge/pushery/sqlens-for-laravel?style=flat)](https://packagist.org/packages/pushery/sqlens-for-laravel)
+[![Laravel Version](https://img.shields.io/packagist/dependency-v/pushery/sqlens-for-laravel/illuminate%2Fsupport.svg?label=Laravel&color=FF2D20)](https://packagist.org/packages/pushery/sqlens-for-laravel)
 [![License](https://img.shields.io/packagist/l/pushery/sqlens-for-laravel.svg)](LICENSE)
 
 [![Tests](https://img.shields.io/badge/tests-Pest%205-8BC34A.svg)](https://pestphp.com)

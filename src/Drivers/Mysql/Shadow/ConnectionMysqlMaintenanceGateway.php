@@ -49,6 +49,9 @@ final readonly class ConnectionMysqlMaintenanceGateway implements MysqlMaintenan
             }
         }
 
+        // The catalog view has no inherent order; the contract says this list has one.
+        sort($names);
+
         return $names;
     }
 

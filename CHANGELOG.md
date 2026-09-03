@@ -2,6 +2,13 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-09-03
+
+### Fixed
+
+- The shadow orphan sweep reported the databases it dropped in whatever order the catalog happened to return them, so the same state could produce two different reports. `pg_database` and `information_schema.schemata` promise no order; the listing now has one, and it is part of the catalog contract.
+- The README's Laravel badge rendered an empty field. It read from a service that derives its answer from `laravel/framework`, which this package deliberately does not declare — it requires the `illuminate/*` components it actually uses. The badge now reads the constraint from Packagist and shows the Laravel major the package supports.
+
 ## [0.1.0] - 2026-09-03
 
 The first public release. Nothing before it ever shipped, so there is no earlier version for any of this to be a change *from* — read the sections below as a description of what the package **is**, not as a diff.
