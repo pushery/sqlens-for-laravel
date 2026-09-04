@@ -67,7 +67,7 @@ final readonly class MigrateErrorRule implements CaptureRule
         );
     }
 
-    public function appliesTo(CaptureResult $result): bool
+    public function appliesTo(CaptureResult $result, SubjectContext $context): bool
     {
         // The FIRST `up` only. A roundtrip's later legs have their own findings —
         // `CAP.L0.DOWN_FAILED` and `CAP.L0.DOWN_NOT_INVERTIBLE` — and the sections are

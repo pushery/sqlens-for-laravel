@@ -61,12 +61,27 @@ final readonly class NotCapturableRule implements CaptureRule
         );
     }
 
-    public function appliesTo(CaptureResult $result): bool
+    public function appliesTo(CaptureResult $result, SubjectContext $context): bool
     {
         // Tried, succeeded, got nothing. A fail (it threw) or an undetermined (a
         // pre-scan flag, an unreadable file) is a different state with a different
         // rule, and reading either as "not capturable" would misname it.
-        return $result->isPass() && $result->statementCount() === 0;
+        if (! $result->isPass() || $result->statementCount() !== 0) {
+            return false;
+        }
+
+        // …and the emptiness is not one the migration DECLARED for the driver this run is on.
+        //
+        // Two different things used to land in this rule: an `up()` somebody forgot to fill, and an
+        // `up()` that is deliberately empty on one driver. The first is a defect; the second is a
+        // decision, and reporting it on every run is what gets a rule silenced wholesale.
+        //
+        // ⚠️ THE DRIVER OF THE RUN, NOT MERELY THE PRESENCE OF AN ANNOTATION. `#[NoSqlOnDriver]`
+        // names a driver, and this compares it: emptiness on a driver the file did NOT name still
+        // fires, which is what keeps the attribute from being a blanket switch that merely sits
+        // closer to the code. A misspelled driver name therefore excuses nothing on any run, and
+        // that is how the typo surfaces instead of silently disabling the check.
+        return ! array_key_exists($context->driver, $result->declaredEmptyOn);
     }
 
     public function evaluate(CaptureResult $result, SubjectContext $context, string $projectRoot): Finding

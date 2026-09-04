@@ -101,8 +101,11 @@ final readonly class PreScanGate implements Captor
         /** @var array<string, DownMethodState> $downStates */
         $downStates = [];
 
+        /** @var array<string, array<string, string>> $declaredEmpty */
+        $declaredEmpty = [];
+
         foreach ($migrations as $migration) {
-            $verdict = $this->judge($migration, $section, $downStates);
+            $verdict = $this->judge($migration, $section, $downStates, $declaredEmpty);
 
             if ($verdict instanceof CaptureResult) {
                 $flagged[] = $verdict;
@@ -121,6 +124,16 @@ final readonly class PreScanGate implements Captor
         $captured = array_map(
             static fn (CaptureResult $result): CaptureResult => isset($downStates[$result->file])
                 ? $result->withDownMethodState($downStates[$result->file])
+                : $result,
+            $captured,
+        );
+
+        // What the file declared about deliberate emptiness rides back the same way, and for the
+        // same reason. Read for THIS section only: the run captures one direction at a time, and a
+        // migration whose `up()` is deliberately empty on SQLite may still owe a real `down()`.
+        $captured = array_map(
+            static fn (CaptureResult $result): CaptureResult => ($declaredEmpty[$result->file] ?? []) !== []
+                ? $result->withDeclaredEmptyOn($declaredEmpty[$result->file])
                 : $result,
             $captured,
         );
@@ -184,12 +197,13 @@ final readonly class PreScanGate implements Captor
      * place the parsed file exists — the scan result is discarded right after.
      *
      * @param  array<string, DownMethodState>  $downStates  keyed by migration file path
+     * @param  array<string, array<string, string>>  $declaredEmpty  keyed by file, then driver => reason
      *
      * A file the scanner cannot parse is undetermined too, for its own reason — a
      * file whose syntax the scanner cannot follow is a file whose side effects it
      * also cannot see, so it never gets the benefit of the doubt and never runs.
      */
-    private function judge(PendingMigration $migration, CaptureSection $section, array &$downStates): ?CaptureResult
+    private function judge(PendingMigration $migration, CaptureSection $section, array &$downStates, array &$declaredEmpty): ?CaptureResult
     {
         $scanned = $this->scanner->scan($migration->file);
 
@@ -206,6 +220,10 @@ final readonly class PreScanGate implements Captor
         // Recorded for every scannable file, flagged or not: a migration the pre-scan stops is
         // still a migration whose down() a later run will ask about.
         $downStates[$migration->file] = $scanned->downMethodState();
+
+        // Recorded for every scannable file too, and for the section being captured: a declaration
+        // is a fact about the file, not about whether the gate let it through.
+        $declaredEmpty[$migration->file] = $scanned->driversDeclaredEmpty($section->direction()->value);
 
         $hits = $this->hits($scanned);
 

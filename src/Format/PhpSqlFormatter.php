@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Format;
 
 use Pushery\SQLens\Contracts\SqlFormatter;
+use Pushery\SQLens\PackageVersion;
 
 /**
  * The formatter that is always there: pure PHP, no binary, no network, no install step.
@@ -47,6 +48,19 @@ final readonly class PhpSqlFormatter implements SqlFormatter
         // install step, so the first experience of `sqlens:format` is never "the tool you need is
         // missing".
         return true;
+    }
+
+    /**
+     * The package's own version, because this backend ships WITH the package.
+     *
+     * Not `null`, and that is deliberate. `null` is the contract's "could not be answered", which a
+     * diagnostic renders the same way it renders a missing binary -- and the built-in core is the
+     * one backend that is never missing. Its version is the package's, since it has no separate
+     * release of its own.
+     */
+    public function version(): string
+    {
+        return PackageVersion::current();
     }
 
     public function supports(Dialect $dialect): bool

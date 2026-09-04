@@ -2,6 +2,20 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-09-05
+
+### Added
+
+- `#[NoSqlOnDriver]` says where a migration's emptiness is deliberate, so `CAP.L0.NOT_CAPTURABLE` stops reporting a decision you already made. A migration that emits nothing on one driver — a partial index is a PostgreSQL feature, a storage-engine change means nothing outside MySQL — annotates the method or the class with the driver and a reason, and the rule stays quiet on exactly that driver. It still reports on a driver you did not name, so the attribute cannot become a blanket switch that merely sits closer to the code, and a misspelled driver name excuses nothing anywhere, which is how the typo shows up instead of quietly disabling the check. Unlike a baseline entry, it moves with the file when you rename it, it sits where the decision was made rather than in another document, and it stops applying the moment the migration becomes empty for some other reason. The reason is required; an empty one is treated as though the attribute were absent.
+
+- A formatter backend can now be asked which version of itself is installed, without formatting a file first. `SqlFormatter::version()` returns the installed version, or `null` when the question cannot be answered — the binary is absent, or it did not respond to the probe. It never throws: a backend is something that improves the output, never something a run requires, so asking about a missing one must not be what fails. The built-in PHP core answers with the package's own version rather than `null`, because it ships inside the package and cannot be missing, and `null` would put the one backend that always works in the same column as the ones that are not installed. Asking repeatedly costs one probe: the answer is a fact about the machine, identical for the first file and the two-hundredth.
+
+### Changed
+
+- **If you implement `CaptureRule` yourself, `appliesTo()` now receives the run's `SubjectContext` as a second argument.** Some capture questions depend on which driver the run is on, and the answer has to exist before a finding does — `evaluate()` must return one, so a rule that decides in there that it should stay quiet has no way to say so.
+
+- **If you implement `SqlFormatter` yourself, you now need a `version()` method.** The interface is the seam behind which a custom backend plugs in, so adding a method to it is a change your implementation has to follow. Returning `null` is a valid answer and the right one when you cannot determine a version.
+
 ## [0.2.0] - 2026-09-04
 
 ### Added

@@ -87,7 +87,7 @@ final readonly class DownNotInvertibleRule implements CaptureRule
         );
     }
 
-    public function appliesTo(CaptureResult $result): bool
+    public function appliesTo(CaptureResult $result, SubjectContext $context): bool
     {
         return $result->isFail()
             && $result->mode === CaptureMode::Shadow

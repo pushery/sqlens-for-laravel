@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Capture\PreScan;
 
 use PhpParser\Node;
+use PhpParser\Node\Attribute;
+use PhpParser\Node\AttributeGroup;
+use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Nop;
 use PhpParser\NodeFinder;
+use Pushery\SQLens\Attributes\NoSqlOnDriver;
 use Pushery\SQLens\Subjects\DownMethodState;
 
 /**
@@ -85,6 +89,128 @@ final readonly class ScannedMigration
         }
 
         return DownMethodState::Missing;
+    }
+
+    /**
+     * The drivers this file DECLARES it deliberately emits nothing on, mapped to the stated reason.
+     *
+     * Read off the AST the pre-scan already parsed, exactly like {@see DownMethodState()} above, so
+     * it costs no second parse — the fast path's sub-second promise rests on parsing each file once.
+     *
+     * ⚠️ READ FROM THE SOURCE, NOT BY REFLECTION, and the reason is the shape of a Laravel
+     * migration. Since Laravel 9 a migration file returns an ANONYMOUS class, so there is no name to
+     * reflect on until the file has been required — and the pre-scan runs before anything is
+     * required, on purpose. The AST is the only place the answer exists at this point.
+     *
+     * A class-level annotation covers both migration methods; a method-level one covers that method.
+     * The finer form matters: a migration whose `up()` is deliberately empty on SQLite may still owe
+     * a real `down()`, and a class-level annotation would excuse both.
+     *
+     * An attribute whose reason is an empty string is IGNORED — a reason nobody wrote is the state
+     * this whole mechanism exists to surface, so it must not be the thing that silences it.
+     *
+     * @param  string  $method  `up` or `down`
+     * @return array<string, string> driver name => the stated reason
+     */
+    public function driversDeclaredEmpty(string $method): array
+    {
+        $declared = [];
+
+        foreach (new NodeFinder()->findInstanceOf($this->ast, ClassLike::class) as $class) {
+            foreach ($this->readNoSqlOnDriver($class->attrGroups) as $driver => $reason) {
+                $declared[$driver] = $reason;
+            }
+
+            foreach ($class->getMethods() as $classMethod) {
+                if ($classMethod->name->toLowerString() !== strtolower($method)) {
+                    continue;
+                }
+
+                foreach ($this->readNoSqlOnDriver($classMethod->attrGroups) as $driver => $reason) {
+                    $declared[$driver] = $reason;
+                }
+            }
+        }
+
+        return $declared;
+    }
+
+    /**
+     * The `#[NoSqlOnDriver]` annotations in these groups, as driver => reason.
+     *
+     * Matched on the LAST segment of the attribute name, so it works whether the file imported the
+     * class or wrote it fully qualified — the pre-scan resolves names, but a migration is an
+     * ordinary file and both spellings are ordinary things to write.
+     *
+     * Only literal strings are read. A constant or a variable in either argument means evaluating
+     * project code to learn what a migration promises, and that is a thing this package does not do
+     * — the same decision `#[RawSql]` makes about its own reason.
+     *
+     * @param  array<AttributeGroup>  $groups
+     * @return array<string, string>
+     */
+    private function readNoSqlOnDriver(array $groups): array
+    {
+        $found = [];
+
+        foreach ($groups as $group) {
+            foreach ($group->attrs as $attribute) {
+                if (strtolower($attribute->name->getLast()) !== $this->noSqlOnDriverName()) {
+                    continue;
+                }
+
+                $driver = $this->literalArgument($attribute, 0, 'driver');
+                $reason = $this->literalArgument($attribute, 1, 'reason');
+
+                if ($driver === null || $driver === '' || $reason === null || $reason === '') {
+                    continue;
+                }
+
+                $found[$driver] = $reason;
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * The short name of {@see NoSqlOnDriver}, lowercased — read OFF THE CLASS, never typed.
+     *
+     * A literal here would leave the attribute class with no reference anywhere in `src/`, which is
+     * what the unwired-mechanism guard reports and is right to: a class nothing names is a class a
+     * rename silently detaches from the reader looking for it. Deriving it means a rename either
+     * carries this along or does not compile.
+     *
+     * A constant cannot hold this — `const` takes no function call — so it is a method.
+     */
+    private function noSqlOnDriverName(): string
+    {
+        $segments = explode('\\', NoSqlOnDriver::class);
+
+        return strtolower(end($segments));
+    }
+
+    /**
+     * One argument of an attribute, by position OR by name, when it is a plain string literal.
+     *
+     * Both forms are read because both are written: `#[NoSqlOnDriver('sqlite', reason: '…')]` mixes
+     * them in the very example the attribute's own docblock gives. A named argument may also appear
+     * in any order, so position alone would miss it.
+     */
+    private function literalArgument(Attribute $attribute, int $position, string $name): ?string
+    {
+        foreach ($attribute->args as $index => $argument) {
+            $matchesName = $argument->name?->toString() === $name;
+            $matchesPosition = $argument->name === null && $index === $position;
+
+            if (! $matchesName && ! $matchesPosition) {
+                continue;
+            }
+
+            return $argument->value instanceof String_ ? $argument->value->value : null;
+        }
+
+        return null;
     }
 
     /**
