@@ -29,6 +29,17 @@ enum PendingSkipReason: string
     /** No migration path holds any migration file to resolve. */
     case EmptyMigrationPath = 'empty_migration_path';
 
+    /**
+     * Every migration a path holds lives inside `vendor/`, and this run does not judge those.
+     *
+     * Its own case rather than {@see self::EmptyMigrationPath}, because the two send a reader to
+     * different places: the path is not empty, and somebody told that it was would go and look at a
+     * directory with files in it. It is also the shape this enum exists to refuse — a run that
+     * judged nothing must never read as a run that found nothing wrong — and here the emptiness is
+     * produced by a setting rather than by the tree, which makes naming it the only honest option.
+     */
+    case OnlyVendorMigrations = 'only_vendor_migrations';
+
     /** The reserved rule id this skip reports under. */
     public function ruleId(): string
     {
@@ -36,6 +47,7 @@ enum PendingSkipReason: string
             self::ConnectionUnreachable => 'CONNECTION_UNREACHABLE',
             self::NoMigrationTable => 'NO_MIGRATION_TABLE',
             self::EmptyMigrationPath => 'EMPTY_MIGRATION_PATH',
+            self::OnlyVendorMigrations => 'ONLY_VENDOR_MIGRATIONS',
         };
     }
 
@@ -48,7 +60,7 @@ enum PendingSkipReason: string
     {
         return match ($this) {
             self::ConnectionUnreachable => UndeterminedReason::ServerUnreachable,
-            self::NoMigrationTable, self::EmptyMigrationPath => UndeterminedReason::StructurallyNotApplicable,
+            self::NoMigrationTable, self::EmptyMigrationPath, self::OnlyVendorMigrations => UndeterminedReason::StructurallyNotApplicable,
         };
     }
 
@@ -59,6 +71,7 @@ enum PendingSkipReason: string
             self::ConnectionUnreachable => 'The connection could not be reached, so which migrations are pending is unknown.',
             self::NoMigrationTable => 'The connection has no migration repository table yet, so the pending set could not be read.',
             self::EmptyMigrationPath => 'No migration path holds a migration file to resolve.',
+            self::OnlyVendorMigrations => 'Every pending migration lives inside a package, and this run does not judge those. Set sqlens.security.include_vendor_migrations to true, or name the path explicitly with --path.',
         };
     }
 }

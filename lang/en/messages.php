@@ -27,6 +27,11 @@ return [
         'undetermined' => 'undetermined',
         'not_applicable' => 'not applicable',
         'suppressed' => 'suppressed',
+        // The denominator, so a count is readable as a proportion rather than as an absolute. It
+        // reads "over 32 migrations" beside the counts, and the singular case says "1 migration".
+        'over_subjects' => 'over :count :noun',
+        'subject_singular' => 'migration',
+        'subject_plural' => 'migrations',
         'level_findings' => 'Level findings',
         'security_findings' => 'Security findings',
         'level_gate' => 'Level gate',

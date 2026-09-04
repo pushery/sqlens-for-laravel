@@ -173,6 +173,10 @@ final readonly class RawSqlCallCollector implements Collector
             // error waiting to happen, not a statement anybody can classify, and the honest answer
             // to "what does this SQL look like" is that there is none to look at.
             'signal' => $verdict?->signal->value ?? 'undetermined',
+            // Whether the engine's identifier quoting stands between the value and the text.
+            // It does not change the signal — see ParameterizationVerdict — it lets the rule
+            // downstream name a remedy that exists at a position no engine parameterizes.
+            'quoted' => $verdict->identifierQuoted ?? false,
             'origin' => $verdict?->origin->value ?? 'unknown_variable',
             'reason' => $verdict instanceof ParameterizationVerdict
                 ? $verdict->reason?->value

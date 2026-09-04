@@ -170,6 +170,13 @@ final readonly class UnjustifiedRawSqlRule implements Rule
      * call reports — which is correct rather than harsh: a raw statement at file scope has no place
      * to carry its reasoning either.
      *
+     * "Outside a class" means a free function, file scope or a closure. It does NOT mean an
+     * anonymous class, and reading it that way was a real defect: an anonymous class IS a
+     * class, it has methods, the attribute is syntactically placeable on both, and PHPStan gives it
+     * a name that both sides of this join agree on. It is also the form every Laravel migration
+     * takes, so treating it as unanswerable shut the hatch precisely where raw DDL lives. See
+     * {@see JustificationCollector::processNode()} for the name that makes the join work.
+     *
      * @param  list<string>  $justified
      */
     private function isJustified(?string $scope, array $justified): bool

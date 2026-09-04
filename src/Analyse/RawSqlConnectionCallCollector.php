@@ -112,6 +112,10 @@ final readonly class RawSqlConnectionCallCollector implements Collector
             'line' => $node->getStartLine(),
             'resolved' => $scope->getType($node)->describe(VerbosityLevel::typeOnly()),
             'signal' => $verdict?->signal->value ?? 'undetermined',
+            // Whether the engine's identifier quoting stands between the value and the text.
+            // It does not change the signal — see ParameterizationVerdict — it lets the rule
+            // downstream name a remedy that exists at a position no engine parameterizes.
+            'quoted' => $verdict->identifierQuoted ?? false,
             'origin' => $verdict?->origin->value ?? 'unknown_variable',
             'reason' => $verdict instanceof ParameterizationVerdict
                 ? $verdict->reason?->value

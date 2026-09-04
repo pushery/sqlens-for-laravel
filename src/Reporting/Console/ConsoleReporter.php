@@ -87,6 +87,34 @@ final readonly class ConsoleReporter implements Reporter
         return (string) $this->translator->get('sqlens::messages.reporting.'.$key, [], ShippedLocale::CODE);
     }
 
+    /**
+     * The denominator clause — ` — over 32 migrations` — or nothing when the run states no count.
+     *
+     * Every number on the summary line is a numerator, and a numerator alone cannot tell "nothing
+     * was wrong" from "almost nothing was read". Measured in a consuming project:
+     * `--path=database/migrations` reads one directory level, because that is what Laravel's own
+     * `getMigrationFiles()` globs, so a tree of 32 central and 298 tenant migrations printed
+     * `0 fail` and exited 0 over 32 files with nothing to say the other 298 existed.
+     *
+     * Omitted rather than printed as zero when the producer states no count: the audit reads a
+     * catalog and has no file list, and `over 0 migrations` there would be a false statement rather
+     * than a missing one.
+     */
+    private function denominator(RunContext $context): string
+    {
+        if ($context->subjectCount === null) {
+            return '';
+        }
+
+        $noun = $this->label($context->subjectCount === 1 ? 'subject_singular' : 'subject_plural');
+
+        return ' — '.$this->translator->get(
+            'sqlens::messages.reporting.over_subjects',
+            ['count' => (string) $context->subjectCount, 'noun' => $noun],
+            ShippedLocale::CODE,
+        );
+    }
+
     public function name(): string
     {
         return 'console';
@@ -604,7 +632,7 @@ final readonly class ConsoleReporter implements Reporter
         // decision somebody made. not-applicable sits BESIDE it rather than inside
         // it — "7 undetermined" and "7 undetermined, 4 not applicable" are two
         // different sentences about the same database.
-        $out->writeln($this->label('summary').': '.$counts[Outcome::Fail->value].' '.$this->label('fail').', '.$undetermined.' '.$this->label('undetermined').$reasonSuffix.$notApplicableSuffix.', '.count($result->suppressed).' '.$this->label('suppressed'));
+        $out->writeln($this->label('summary').': '.$counts[Outcome::Fail->value].' '.$this->label('fail').', '.$undetermined.' '.$this->label('undetermined').$reasonSuffix.$notApplicableSuffix.', '.count($result->suppressed).' '.$this->label('suppressed').$this->denominator($context));
 
         if ($result->suppressed !== []) {
             $out->writeln($this->label('by_suppression_source').': '.$this->counts($result->countsBySuppressionSource()));
