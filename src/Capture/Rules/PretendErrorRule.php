@@ -66,7 +66,7 @@ final readonly class PretendErrorRule implements CaptureRule
         );
     }
 
-    public function appliesTo(CaptureResult $result): bool
+    public function appliesTo(CaptureResult $result, SubjectContext $context): bool
     {
         // Pretend failures only — a shadow-mode failure is CAP.L0.MIGRATE_ERROR's,
         // and scoping by mode keeps the two from double-reporting or mislabeling

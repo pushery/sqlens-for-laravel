@@ -11,8 +11,13 @@ use Pushery\SQLens\Format\FormatStyle;
 /**
  * The seam behind which a pure-PHP core, pgFormatter and SQLFluff are interchangeable.
  *
- * Three methods, and the smallness is the design: a backend that needed a fourth would be one this
- * package had to know something specific about, and the point of the seam is that it does not.
+ * The smallness is the design: a backend that needed the package to know something specific about it
+ * would be one the seam had failed to hide. Every method here is a question any backend can answer
+ * about itself.
+ *
+ * ⚠️ This paragraph said "three methods" while the interface carried four, and it now carries five.
+ * A count in prose beside a list is a fact with a second copy, and the copy is the one that rots --
+ * so the sentence no longer states one.
  *
  * ## `format()` NEVER throws
  *
@@ -61,6 +66,25 @@ interface SqlFormatter
      * and the answer cannot change during a run.
      */
     public function isAvailable(): bool;
+
+    /**
+     * Which version of this backend is on the machine, or `null` when that cannot be answered.
+     *
+     * ASKED WITHOUT FORMATTING ANYTHING, and that is the whole reason it exists. The version used to
+     * be reachable only through a `FormatResult`, so "which pgFormatter is installed?" could only be
+     * answered by formatting a file first -- which a diagnostic command has no business doing, and
+     * which says nothing at all when no file is at hand.
+     *
+     * `null` means the question could not be answered: the binary is absent, or it did not respond
+     * to the probe. It NEVER means "no version" for a backend that is present, and it never throws
+     * -- these backends are amplifiers, never a requirement, so a diagnostic that asks about one
+     * must not be the thing that fails.
+     *
+     * ⚠️ A backend that is always there answers with something rather than `null`. The built-in core
+     * has no binary and no probe, but reporting `null` for it would render as "missing" beside the
+     * ones that really are.
+     */
+    public function version(): ?string;
 
     /** Format one statement, or say why not. Never throws. */
     public function format(string $sql, Dialect $dialect, FormatStyle $style): FormatResult;

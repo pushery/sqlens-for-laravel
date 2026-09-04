@@ -67,7 +67,7 @@ final readonly class UndeterminedCaptureRule implements CaptureRule
         );
     }
 
-    public function appliesTo(CaptureResult $result): bool
+    public function appliesTo(CaptureResult $result, SubjectContext $context): bool
     {
         // Undetermined, but not the pre-scan's doing: a pre-scan-flagged migration is
         // reported through its own CAP.PRESCAN hits, so this rule leaves it alone and

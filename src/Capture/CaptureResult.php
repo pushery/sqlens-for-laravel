@@ -62,6 +62,18 @@ final readonly class CaptureResult
          * from an execution, and never in any other mode's own words. See {@see DownLegDigest}.
          */
         public ?DownLegDigest $downLeg = null,
+        /**
+         * The drivers this migration DECLARES it deliberately emits nothing on, mapped to the
+         * stated reason, read statically by the pre-scan from `#[NoSqlOnDriver]`.
+         *
+         * Empty when nothing was declared -- which is also what a result carries when no pre-scan
+         * ran for it. The two are the same answer here on purpose: a declaration that was never
+         * read cannot excuse anything, and treating "nobody looked" as "nothing declared" fails
+         * toward reporting the finding rather than toward silencing it.
+         *
+         * @var array<string, string>
+         */
+        public array $declaredEmptyOn = [],
     ) {}
 
     /**
@@ -88,6 +100,7 @@ final readonly class CaptureResult
             $clone->annotationClass,
             $clone->downMethodState,
             $downLeg,
+            $clone->declaredEmptyOn,
         );
     }
 
@@ -115,6 +128,37 @@ final readonly class CaptureResult
             $clone->annotationClass,
             $state,
             $clone->downLeg,
+            $clone->declaredEmptyOn,
+        );
+    }
+
+    /**
+     * The same result carrying what the file declared about deliberate emptiness.
+     *
+     * Attached by the pre-scan gate for the same reason the two above are: it is the one place
+     * that has already parsed the file, and a second parse would break the cost model the fast
+     * path's sub-second promise rests on.
+     *
+     * @param  array<string, string>  $declaredEmptyOn  driver name => the stated reason
+     */
+    public function withDeclaredEmptyOn(array $declaredEmptyOn): self
+    {
+        $clone = clone $this;
+
+        return new self(
+            $clone->file,
+            $clone->migrationClass,
+            $clone->statements,
+            $clone->section,
+            $clone->mode,
+            $clone->outcome,
+            $clone->reason,
+            $clone->failureDetail,
+            $clone->preScanHits,
+            $clone->annotationClass,
+            $clone->downMethodState,
+            $clone->downLeg,
+            $declaredEmptyOn,
         );
     }
 

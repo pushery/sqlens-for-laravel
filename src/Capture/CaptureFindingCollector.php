@@ -105,7 +105,7 @@ final readonly class CaptureFindingCollector
             // The capture-outcome rules judge the result itself (empty, failed,
             // undetermined-without-a-hit). At most one ever applies to a result.
             foreach ($this->captureRules as $rule) {
-                if ($rule->appliesTo($result)) {
+                if ($rule->appliesTo($result, $context)) {
                     $findings[] = $rule->evaluate($result, $context, $projectRoot);
                 }
             }

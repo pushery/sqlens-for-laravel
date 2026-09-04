@@ -34,10 +34,15 @@ interface CaptureRule
     public function metadata(): CaptureRuleMetadata;
 
     /**
-     * Whether this rule judges the given capture outcome. A result it does not
+     * Whether this rule judges the given capture outcome, on THIS run. A result it does not
      * apply to produces NO finding — "not applicable" is silence, never a pass.
+     *
+     * ⚠️ The context is here because some capture questions are driver-dependent, and the answer
+     * has to be available BEFORE a finding exists. `evaluate()` must return a Finding, so a rule
+     * that discovers in there that it should say nothing has no way to say nothing — the collector
+     * appends whatever comes back. A rule that needs the driver to decide therefore needs it here.
      */
-    public function appliesTo(CaptureResult $result): bool;
+    public function appliesTo(CaptureResult $result, SubjectContext $context): bool;
 
     /**
      * The finding for a result this rule applies to. The project root turns the

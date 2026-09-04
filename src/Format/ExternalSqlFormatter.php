@@ -47,6 +47,21 @@ abstract readonly class ExternalSqlFormatter implements SqlFormatter
         return $this->processes->locate($this->binary) !== null;
     }
 
+    /**
+     * The installed version, probed directly rather than harvested from a run.
+     *
+     * Located first: probing a path that does not exist would spend a process to learn what
+     * `locate()` already knows. Both calls go through the memoizing runner, so asking N times across
+     * a repository costs one lookup and one probe -- the cap ExternalFormatterProcessBudgetTest
+     * holds for `format()` covers this for the same reason, because it is the same runner.
+     */
+    public function version(): ?string
+    {
+        $path = $this->processes->locate($this->binary);
+
+        return $path === null ? null : $this->processes->version($path);
+    }
+
     public function format(string $sql, Dialect $dialect, FormatStyle $style): FormatResult
     {
         if (! $this->supports($dialect)) {
