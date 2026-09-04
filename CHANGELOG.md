@@ -2,6 +2,12 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-09-04
+
+### Fixed
+
+- The package can be installed again on Symfony 8.0 and on Composer 2.1. `symfony/console`, `symfony/process` and `composer-runtime-api` each asked for a version higher than anything the code actually uses — the numbers were whichever ones happened to be installed the day they were first written down, not a requirement. Measured against the Symfony 8.0.0 tag before lowering them: every method, constructor and type this package touches is present there and unchanged. Laravel itself was never affected — `illuminate/*` has asked for `^13.0` since the first release and still does. A test now states every one of these floors outright, so a future one cannot tighten without somebody deciding to.
+
 ## [0.1.1] - 2026-09-03
 
 ### Fixed
