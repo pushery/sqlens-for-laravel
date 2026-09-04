@@ -33,7 +33,35 @@
 #       Paths the justification duty does not apply to; generated code is the case it exists for.
 #       Every entry must resolve to something that exists, or the run stops. A path that matches
 #       nothing excludes nothing, and the exemption a project believes it has would silently not
-#       apply. The injection rules ignore this list too.
+#       apply.
+#
+#       THE INJECTION RULES DO NOT READ THIS LIST, and that is deliberate rather than an omission.
+#       This setting governs one axis — whether a raw statement owes a written reason. Whether a
+#       runtime value was assembled into statement text is the other, and it is an exposure rather
+#       than a missing sentence. A path list that silenced both would let one line of neon disable
+#       half the security surface, which is the same reason `policy: off` reaches the policy rule
+#       and nothing else.
+#
+#       So where an injection finding cannot be acted on — an identifier, a schema name, DDL built
+#       from an enum, all positions where no binding form exists — the exemption goes in PHPStan's
+#       own mechanism, which is rule-precise and can be scoped to a path:
+#
+#           parameters:
+#               ignoreErrors:
+#                   -
+#                       identifier: sqlens.rawSql.interpolation
+#                       paths:
+#                           - database/migrations
+#
+#       That removes exactly those findings and leaves every other rule reporting.
+#
+#       It is worth knowing what it does NOT do, because this list behaves the other way: an entry
+#       here that matches nothing stops the run. An ignoreErrors entry naming a file the run
+#       analyses, for a finding that file no longer produces, is accepted in silence — measured,
+#       rather than assumed from the default of `reportUnmatchedIgnoredErrors`, which does report an
+#       entry a NARROWED run never reached but not this case. So an exemption whose call site was
+#       rewritten years ago goes on sitting in a project's configuration looking like protection.
+#       Review them when the code under them moves.
 #
 #   justification_placeholders
 #       Reasons that stop counting as reasons under `strict` — `todo`, `tbd`, whatever a team

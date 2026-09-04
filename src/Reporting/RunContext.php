@@ -270,7 +270,53 @@ final readonly class RunContext
          * package has one, so in practice it is always a name or `off`.
          */
         public ?string $guardProfile = null,
+        /**
+         * How many subjects this run actually looked at — the DENOMINATOR behind every count above.
+         *
+         * Null means the producer does not state one, which is a different answer from zero: an
+         * audit reads a catalog rather than a file list and has no honest number to give here.
+         *
+         * It exists because "nothing found" and "almost nothing read" print identically without it.
+         * Measured in a consuming project: `--path=database/migrations` reads one directory level,
+         * because that is what Laravel's own `getMigrationFiles()` globs — so a tree with 32 central
+         * and 298 tenant migrations reported `0 fail` and exit 0 over 32 files, and nobody could see
+         * the 298 were missing. The first run that named the second path found a real defect
+         * immediately.
+         *
+         * The number does not fix that configuration and is not meant to. It makes EVERY
+         * misconfiguration of this shape visible at the place a reader already looks, which is worth
+         * more than a check against the one that was reported.
+         *
+         * ⚠️ It is NOT in {@see self::toArray()}, and the omission is deliberate rather than
+         * forgotten. A machine consumer gating on `fail == 0` has exactly the same blind spot a
+         * human reader does, so the field belongs there too — but adding a key to the report
+         * envelope bumps `schema_version`, and the published contract binds that to a MINOR release
+         * (`.docs-portal/docs/contracts.md`). Putting it in a patch would either break that rule or
+         * decide the next version number on the way past. The JSON half is an owner decision that
+         * travels with the release, not a line to slip in here.
+         */
+        public ?int $subjectCount = null,
     ) {}
+
+    /**
+     * The same context, carrying how many subjects the run looked at.
+     *
+     * Derived rather than passed at construction, and that is forced rather than stylistic: the
+     * header is assembled before the pending set is resolved, so the number does not exist yet when
+     * the context is built. Deriving it keeps the one hand-written field list in `copyWith()` as the
+     * only place a field can be forgotten.
+     */
+    public function withSubjectCount(int $subjectCount): self
+    {
+        return $this->copyWith(
+            undeterminedWaiver: $this->undeterminedWaiver,
+            driftMode: $this->driftMode,
+            comparedObjectTypes: $this->comparedObjectTypes,
+            expectation: $this->expectation,
+            guardProfile: $this->guardProfile,
+            subjectCount: $subjectCount,
+        );
+    }
 
     /**
      * The same context, with the drift policy filled in.
@@ -287,6 +333,7 @@ final readonly class RunContext
             comparedObjectTypes: $this->comparedObjectTypes,
             expectation: $this->expectation,
             guardProfile: $this->guardProfile,
+            subjectCount: $this->subjectCount,
         );
     }
 
@@ -312,6 +359,7 @@ final readonly class RunContext
             comparedObjectTypes: $values,
             expectation: $this->expectation,
             guardProfile: $this->guardProfile,
+            subjectCount: $this->subjectCount,
         );
     }
 
@@ -332,6 +380,7 @@ final readonly class RunContext
             comparedObjectTypes: $this->comparedObjectTypes,
             expectation: $this->expectation,
             guardProfile: $this->guardProfile,
+            subjectCount: $this->subjectCount,
         );
     }
 
@@ -352,6 +401,7 @@ final readonly class RunContext
             comparedObjectTypes: $this->comparedObjectTypes,
             expectation: $expectation,
             guardProfile: $this->guardProfile,
+            subjectCount: $this->subjectCount,
         );
     }
 
@@ -365,7 +415,7 @@ final readonly class RunContext
      * @param  list<string>|null  $comparedObjectTypes
      * @param  array{requested: bool, compared: bool, note: string}|null  $expectation
      */
-    private function copyWith(?bool $undeterminedWaiver, ?DriftRunMode $driftMode, ?array $comparedObjectTypes, ?array $expectation, ?string $guardProfile): self
+    private function copyWith(?bool $undeterminedWaiver, ?DriftRunMode $driftMode, ?array $comparedObjectTypes, ?array $expectation, ?string $guardProfile, ?int $subjectCount): self
     {
         return new self(
             serverVersions: $this->serverVersions,
@@ -394,6 +444,13 @@ final readonly class RunContext
             driftMode: $driftMode,
             comparedObjectTypes: $comparedObjectTypes,
             expectation: $expectation,
+            // Both of these were being DROPPED. `guardProfile` arrived as a parameter and was never
+            // handed to `new self()`, so every derived context lost the guard profile silently —
+            // exactly the failure this method's own docblock says it exists to prevent, in the one
+            // field no test compared. `subjectCount` is added beside it rather than after it,
+            // because a field appended to a list that already lost one is the next to go.
+            guardProfile: $guardProfile,
+            subjectCount: $subjectCount,
         );
     }
 

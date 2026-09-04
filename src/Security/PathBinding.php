@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Security;
 
+use Pushery\SQLens\Capture\VendorPath;
+
 /**
  * Decides whether a captured statement came from a migration — the mechanism behind "a password
  * literal is Critical in a migration and nothing at all in a seeder".
@@ -149,15 +151,17 @@ final readonly class PathBinding
     /**
      * Whether the file lives inside the dependency tree.
      *
-     * Matched as a path SEGMENT rather than a substring: a project directory called
-     * `app/Vendors/` or a migration named `2026_01_01_add_vendor_id.php` contains the word and is
-     * not the dependency tree, and treating either as vendor code would silence a real finding in
-     * the project's own migrations.
+     * Delegated to {@see VendorPath}, which the lint layer asks the same question. It used to be
+     * two segment matches — this one and the enumeration's — and that is the shape this package has
+     * been bitten by before: each side internally consistent, neither aware the other exists.
+     * {@see VendorPath} carries the measurement of how they diverge under a Composer `path`
+     * repository.
+     *
+     * The path arriving here is already resolved, and passing it through the resolution again is
+     * harmless: `realpath()` of a resolved path is that path.
      */
     private function withinVendor(string $resolved): bool
     {
-        $separator = DIRECTORY_SEPARATOR;
-
-        return str_contains($resolved, $separator.'vendor'.$separator);
+        return VendorPath::contains($resolved);
     }
 }

@@ -111,8 +111,27 @@ final class RawInterpolationRule implements Rule
      * framework by reflection rather than typed — so a Laravel that gives `raw()` bindings moves the
      * advice back without anybody editing this method.
      */
-    private function remedy(string $method): string
+    private function remedy(string $method, bool $identifierQuoted): string
     {
+        // The value already went through the engine's identifier quoting, and that changes what can
+        // honestly be asked of the author. Every sentence below tells them to bind the value; no
+        // engine binds an identifier, a schema name or a DDL fragment — measured with a positive
+        // control, `SELECT 1 FROM ?` is a syntax error where `SELECT ? FROM migrations` runs. So the
+        // advice would be impossible to follow, which this method's own docblock names as the way a
+        // tool loses its reader.
+        //
+        // The finding STAYS, and the sentence says why rather than pretending the value is gone:
+        // `wrap()` prevents the breakout and not the object choice — `wrap('other_schema.secrets')`
+        // yields `"other_schema"."secrets"`, measured. So the remaining question is not escaping,
+        // it is which objects the value is allowed to name, and that is answerable.
+        if ($identifierQuoted) {
+            return 'The value goes through the connection\'s grammar, so it cannot break out of the '
+                .'identifier quoting — but it still chooses WHICH object the statement addresses, and '
+                .'a value carrying a dot reaches across schemas. Constrain it to a set you wrote '
+                .'(an enum, a match, a constant map) rather than passing it through; no engine binds '
+                .'an identifier, so a list is the only place that decision can live.';
+        }
+
         if (in_array($method, RawSqlSinks::SINKS_WITHOUT_BINDINGS, true)) {
             // Two sinks take no bindings, and the way out of each is different — so the sentence is
             // chosen by FAMILY rather than by name. A branch on `unprepared` would be the
@@ -153,7 +172,7 @@ final class RawInterpolationRule implements Rule
             'A runtime value is assembled into the text of this statement (%s, through %s()). %s',
             $this->shape($call['origin']),
             $call['method'],
-            $this->remedy($call['method']),
+            $this->remedy($call['method'], ($call['quoted'] ?? false) === true),
         ))
             ->file($file)
             ->line($call['line'])
@@ -163,6 +182,18 @@ final class RawInterpolationRule implements Rule
                 .'claim about whether this value is attacker-controlled. It reports that the value '
                 .'reached the STATEMENT rather than the parameters, which is the property that decides '
                 .'whether it could ever matter.'
+                // Where a binding form does not EXIST — an identifier, a schema name, DDL assembled
+                // from an enum — the remedy above cannot be followed, because PostgreSQL takes no
+                // parameter in those positions. Without naming the way out, the only remaining
+                // moves are to stop running the rule or to stop running the analyzer, and a project
+                // that reaches for either loses the findings it could have acted on. So the
+                // structural case is named, with PHPStan's own mechanism and the identifier this
+                // rule emits — built from the constant, never typed, so a renamed identifier cannot
+                // leave a wrong one printed here.
+                .' Where no binding form exists — an identifier, a schema name, DDL built from an '
+                .'enum — the remedy above does not apply, and the exemption belongs in PHPStan\'s '
+                .'own ignoreErrors with identifier: '.self::IDENTIFIER.', scoped with paths:. '
+                .'analyse.exclude_paths deliberately does not reach this rule.'
                 .' '.RuleDocumentationUrl::for(self::RULE_ID)
             )
             ->build();

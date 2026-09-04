@@ -555,13 +555,28 @@ final class SQLensServiceProvider extends ServiceProvider
                 // does not re-ask about the first.
                 $processes = new MemoizingProcessRunner($app->make(ProcessRunner::class));
 
-                return new FormatterRegistry([
-                    new PgFormatterBackend($processes, $settings->pgFormatterPath ?? 'pg_format', $settings->timeout),
-                    new SqlFluffBackend($processes, $settings->sqlFluffPath ?? 'sqlfluff', $settings->timeout),
-                    // Last, and always present. The two above are better at the job and are not
-                    // installed on the machine of somebody who just ran `composer require`.
-                    new PhpSqlFormatter,
-                ]);
+                // A backend this project switched off is not REGISTERED, rather than registered
+                // and skipped later. That keeps `auto` honest for free: an absent candidate never
+                // reaches the passed-over list, so a decision is never reported as a loss and strict
+                // tool mode never fails over it. The names travel separately so a NAMED disabled
+                // backend can still be refused with the true reason.
+                $backends = [];
+
+                if (! in_array('pgformatter', $settings->disabledBackends, true)) {
+                    $backends[] = new PgFormatterBackend($processes, $settings->pgFormatterPath ?? 'pg_format', $settings->timeout);
+                }
+
+                if (! in_array('sqlfluff', $settings->disabledBackends, true)) {
+                    $backends[] = new SqlFluffBackend($processes, $settings->sqlFluffPath ?? 'sqlfluff', $settings->timeout);
+                }
+
+                // Last, and always present — and never switchable off. The two above are better at
+                // the job and are not installed on the machine of somebody who just ran
+                // `composer require`; this one is what makes `sqlens:format` work with no binaries
+                // at all, so a project that could turn it off could turn the suite into nothing.
+                $backends[] = new PhpSqlFormatter;
+
+                return new FormatterRegistry($backends, $settings->disabledBackends);
             });
 
             $this->app->singleton(DialectResolver::class, static fn (Application $app): DialectResolver => new DialectResolver($app->make(Repository::class)));

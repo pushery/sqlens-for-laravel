@@ -32,8 +32,16 @@ final readonly class FormatterRegistry
      */
     public const array AUTO_ORDER = ['pgformatter', 'sqlfluff', 'php'];
 
-    /** @param list<SqlFormatter> $formatters */
-    public function __construct(private array $formatters = []) {}
+    /**
+     * @param  list<SqlFormatter>  $formatters
+     * @param  list<string>  $disabled  backends this project decided to do without — see
+     *                                  {@see FormatConfig::$disabledBackends}. They are kept OUT of
+     *                                  the registry rather than filtered inside it, so `auto` never
+     *                                  reaches them and never counts them as a loss; this list
+     *                                  survives only so a NAMED one can be refused with the true
+     *                                  reason instead of "no such backend".
+     */
+    public function __construct(private array $formatters = [], private array $disabled = []) {}
 
     /**
      * The backend for a request, or a named reason there is none.
@@ -48,6 +56,22 @@ final readonly class FormatterRegistry
     {
         if ($requested !== 'auto') {
             $named = $this->byName($requested);
+
+            // Named AND switched off by this project — a contradiction, and it gets its own sentence
+            // rather than the "no such backend" one below. Those are different mistakes: one is a
+            // typo, the other is a project asking for the thing it decided to do without, and a
+            // reader told the wrong one goes looking in the wrong file.
+            if (! $named instanceof SqlFormatter && in_array($requested, $this->disabled, true)) {
+                return FormatterResolution::unavailable(FormatResult::undetermined(
+                    FormatUndeterminedReason::ToolMissing,
+                    $requested,
+                    $dialect,
+                    $style,
+                    'this project set `format.binaries.'.$requested.'` to false, so that backend is '
+                        .'switched off — and a backend you named is never substituted. Remove the '
+                        .'`--backend` option to use what is available, or set the path back to null',
+                ));
+            }
 
             if (! $named instanceof SqlFormatter) {
                 return FormatterResolution::unavailable(FormatResult::undetermined(

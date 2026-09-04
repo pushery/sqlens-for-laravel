@@ -514,7 +514,7 @@ final readonly class ConfigSchema
             'security.rls.tenant_column' => 'a column name, or null when the heuristic is not used',
             'security.runtime_connection' => 'a connection name from config/database.php, or null when the application uses one connection for everything',
             'security.migration_connection' => 'a connection name from config/database.php, or null when the application uses one connection for everything',
-            'security.include_vendor_migrations' => 'a boolean: whether a migration shipped inside a package counts as one of yours',
+            'security.include_vendor_migrations' => 'a boolean: whether a migration shipped inside a package is enumerated by a run, and counted as one of yours when it is',
             'security.min_severity' => 'one of: '.$this->enumValues(Severity::class).", or 'none' (report, never block) — null is refused: say which of the two you mean",
             'preflight' => 'an array with the keys: connection, budget_ms, long_running_ms, replication_lag_ms, thresholds',
             'preflight.long_running_ms' => "a positive integer number of milliseconds a session must have been running before the preflight treats it as something a deploy could collide with — zero is refused rather than read as 'report everything', because a preflight listing every session on a busy server is one nobody reads twice",
@@ -526,8 +526,8 @@ final readonly class ConfigSchema
             'format.backend' => 'one of: auto, php, pgformatter, sqlfluff. `auto` picks the best AVAILABLE backend; NAMING one is a promise that it is installed, because a named backend that cannot run is refused rather than silently substituted — a substitution would produce output you did not ask for, and the machine where the binary IS installed would rewrite every file',
             'format.dialect' => 'one of: auto, pgsql, mysql. With `auto` the dialect follows the configured connection',
             'format.binaries' => 'an array with the keys: pgformatter, sqlfluff',
-            'format.binaries.pgformatter' => 'an absolute path to the pg_format binary, or null to look on the search path',
-            'format.binaries.sqlfluff' => 'an absolute path to the sqlfluff binary, or null to look on the search path',
+            'format.binaries.pgformatter' => 'an absolute path to the pg_format binary, null to look on the search path, or false to do without this backend entirely. The last is a DECISION rather than a gap: a backend that is merely missing is reported as a loss and fails a strict-tool run, because the machine that has it formats differently and the output is committed — one you switched off is neither',
+            'format.binaries.sqlfluff' => 'an absolute path to the sqlfluff binary, null to look on the search path, or false to do without this backend entirely. The last is a DECISION rather than a gap: a backend that is merely missing is reported as a loss and fails a strict-tool run, because the machine that has it formats differently and the output is committed — one you switched off is neither',
             'format.timeout' => 'a positive integer number of seconds one formatter invocation may take. A formatter without a bound holds a CI step, and the shared queue behind it, for as long as it stands',
             'format.style' => 'an array with the keys: indent, uppercase_keywords, leading_commas, line_width',
             'format.style.indent' => 'a positive integer number of spaces per indentation level',
@@ -1051,8 +1051,12 @@ final readonly class ConfigSchema
             'format.dialect' => is_string($value) && in_array($value, ['auto', 'pgsql', 'mysql'], true)
                 ? []
                 : [ConfigViolation::outOfRange($path, $expected, $value)],
+            // Three-valued, and the third is the one the other two cannot say: `false` means this
+            // project decided to do without the backend. `null` has meant "look on the search path"
+            // since this block existed and keeps meaning it — reading a falsy null as a decision
+            // would turn every default installation into one that switched both backends off.
             'format.binaries.pgformatter',
-            'format.binaries.sqlfluff' => $value === null || (is_string($value) && $value !== '')
+            'format.binaries.sqlfluff' => $value === null || $value === false || (is_string($value) && $value !== '')
                 ? []
                 : [ConfigViolation::wrongType($path, $expected, $value)],
             'format.timeout',

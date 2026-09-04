@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Capture;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Migrations\Migrator;
 use Pushery\SQLens\Contracts\PendingResolver;
+use Pushery\SQLens\Security\PathBinding;
 use Throwable;
 
 /**
@@ -46,6 +47,10 @@ final readonly class PendingMigrationResolver implements PendingResolver
 {
     /**
      * @param  list<string>  $migrationPaths
+     * @param  bool  $includeVendorMigrations  whether a migration discovered inside `vendor/` is
+     *                                         enumerated. False drops it before anything reads it;
+     *                                         see {@see self::vendorFiltered()} for what is never
+     *                                         dropped and why.
      */
     public function __construct(
         private DatabaseManager $db,
@@ -53,6 +58,7 @@ final readonly class PendingMigrationResolver implements PendingResolver
         private array $migrationPaths,
         private string $migrationsTable,
         private string $projectRoot,
+        private bool $includeVendorMigrations = true,
     ) {}
 
     public function resolve(string $connection): PendingResolution
@@ -82,6 +88,16 @@ final readonly class PendingMigrationResolver implements PendingResolver
 
         if ($files === []) {
             return PendingResolution::skipped(PendingSkipReason::EmptyMigrationPath);
+        }
+
+        $files = $this->vendorFiltered($files);
+
+        // Every discovered file was a package's. That is a different fact from "no migration path
+        // holds a file", and it gets its own skip rather than being folded into that one: the run
+        // really did see migrations and really is not judging them, and a reader told the path was
+        // empty would go and look at a directory that is not.
+        if ($files === []) {
+            return PendingResolution::skipped(PendingSkipReason::OnlyVendorMigrations);
         }
 
         // The already-run migrations and the last batch, read from the WRITE side so a
@@ -115,6 +131,51 @@ final readonly class PendingMigrationResolver implements PendingResolver
         }
 
         return PendingResolution::resolved($migrations);
+    }
+
+    /**
+     * The discovered files, less the ones that live inside the dependency tree.
+     *
+     * ## Why the enumeration filters at all, when the classifier already knew
+     *
+     * The capture layer has always known a `vendor/` migration from one of yours — that is what
+     * {@see PathBinding} decides, and what
+     * `security.include_vendor_migrations` switches. But it decides it about a statement that has
+     * ALREADY been captured, so a package's migration was still loaded, still pretend-executed, and
+     * still able to produce a capture-layer finding of its own. A first run after `composer require`
+     * therefore failed on three findings inside another package, none of which the project could
+     * fix, every one of them repeating on every run.
+     *
+     * The switch's own docblock makes the argument, and it holds here just as well: a rule whose
+     * only available fix is "open an issue upstream" is one people silence wholesale, taking the
+     * findings they COULD have acted on with it. It weighs more for `lint`, the suite that hangs in
+     * CI, where the gate would be red on day one over another package's migrations.
+     *
+     * ## What is deliberately NOT filtered
+     *
+     * A path somebody NAMED. `--path`, `sqlens.migration_paths` and `--file` are a person saying
+     * "these", and quietly dropping part of what they named would make the argument advisory. The
+     * caller decides that and it arrives here as `$includeVendorMigrations`.
+     *
+     * `sqlens:predeploy` passes true as well, and that one is not a preference: a package's
+     * migration RUNS during a deploy and can take an ACCESS EXCLUSIVE lock like any other. Hiding it
+     * from the run that exists to see what the deploy is about to walk into would answer that
+     * question wrongly.
+     *
+     * @param  array<string, string>  $files
+     * @return array<string, string>
+     */
+    private function vendorFiltered(array $files): array
+    {
+        if ($this->includeVendorMigrations) {
+            return $files;
+        }
+
+        // Through `VendorPath`, which RESOLVES before it matches. Matching the raw path here would
+        // disagree with the capture layer under a Composer `path` repository — the raw path still
+        // carries `/vendor/` where the resolved one does not — and the file would then be dropped
+        // from the enumeration while the classifier bound it as a migration of yours.
+        return array_filter($files, static fn (string $path): bool => ! VendorPath::contains($path));
     }
 
     /** The repo-relative path — deterministic across machines, and what a finding shows. */

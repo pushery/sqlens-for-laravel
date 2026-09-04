@@ -6,6 +6,8 @@ namespace Pushery\SQLens\Analyse;
 
 use PhpParser\Node;
 use PhpParser\Node\Attribute;
+use PhpParser\Node\Expr;
+use PhpParser\Node\Expr\BinaryOp\Concat;
 use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
@@ -77,21 +79,39 @@ final readonly class JustificationCollector implements Collector
      */
     public function processNode(Node $node, Scope $scope): ?array
     {
-        if ($node->namespacedName === null) {
-            return null;
-        }
-
-        $class = $node->namespacedName->toString();
+        // `namespacedName` FIRST, and the order is load-bearing: on a declared class `name` is the
+        // SHORT name while only `namespacedName` carries the fully-qualified one a call site
+        // reports. `name` is the fallback, and the case it exists for is the anonymous class.
+        //
+        // ## Why an anonymous class needs a fallback at all
+        //
+        // PHPStan reflects `new class extends Migration { … }` before it walks the body, and that
+        // step writes a synthetic identifier onto the node while explicitly nulling
+        // `namespacedName` (`BetterReflectionProvider::getAnonymousClassReflection()`). The
+        // identifier it writes — `AnonymousClass<hash>` — is exactly the string
+        // `ClassReflection::getName()` answers for code INSIDE that class, which is what every
+        // call-site collector records as its scope. So the two sides do join; this collector simply
+        // returned before it looked.
+        //
+        // The consequence was not marginal. Every Laravel migration since Laravel 9 is
+        // `return new class extends Migration`, and migrations are where raw DDL lives — so the
+        // rule's own escape hatch was shut in the one place the rule fires most, leaving
+        // `policy: off` or an `exclude_paths` entry as the only answers. Both silence more than the
+        // finding, which is the outcome this package's own documentation warns about.
+        //
+        // It is NOT the display name. `class@anonymous/path/to/file.php:12` is what PHPStan builds
+        // for messages; joining on that would match a string neither side ever produces.
+        $class = $node->namespacedName?->toString() ?? $node->name?->toString();
         $names = [];
 
         // A class-level annotation covers every call in the class; a method-level one covers only
         // that method. Both are recorded under the name a call site reports itself as, so the rule
         // downstream joins on equality rather than on a prefix.
-        if ($this->isReasoned($node->attrGroups, $scope)) {
+        if ($class !== null && $this->isReasoned($node->attrGroups, $scope)) {
             $names[] = $class;
         }
 
-        foreach ($node->stmts as $statement) {
+        foreach ($class === null ? [] : $node->stmts as $statement) {
             if ($statement instanceof ClassMethod && $this->isReasoned($statement->attrGroups, $scope)) {
                 $names[] = $class.'::'.$statement->name->toString();
             }
@@ -128,10 +148,25 @@ final readonly class JustificationCollector implements Collector
     /**
      * Whether the annotation's reason is one the run's policy accepts.
      *
-     * Only a literal string is read. A constant, a variable or a concatenation is not resolved, and
-     * that is deliberate rather than lazy: resolving it would mean evaluating project code during
-     * analysis. The consequence lands in the safe direction — a reason written that way does not
-     * count, so the finding stays visible.
+     * Only text the SYNTAX already carries is read — a literal, or literals joined with `.`. A
+     * constant or a variable is not resolved, and that is deliberate rather than lazy: resolving one
+     * would mean evaluating project code during analysis. The consequence lands in the safe
+     * direction: a reason written that way does not count, so the finding stays visible.
+     *
+     * ## Why a concatenation of literals IS read, when a constant is not
+     *
+     * The two used to be refused together, on one sentence about evaluating project code. That
+     * sentence is true of a constant and false of `'a ' . 'b'`, which is finished text sitting in
+     * the parse tree with nothing left to resolve.
+     *
+     * The difference was not academic. A reason worth writing is often a sentence, a sentence does
+     * not fit a line, and joining the halves with `.` is how PHP wraps one — so the most careful
+     * annotation in a file was the one that silently did not count. Measured in a consuming project
+     * before this changed: eighteen attributes in a tree, all of them looking like enforcement, and
+     * the ones spanning two lines answering nothing.
+     *
+     * A constant anywhere in the expression still refuses the whole of it, which keeps the original
+     * decision exactly where it was made.
      *
      * Whitespace is refused in every mode. Beyond that the mode decides: under
      * {@see AnalysePolicy::Strict} a configured placeholder — `todo`, `tbd`, whatever the project
@@ -143,11 +178,39 @@ final readonly class JustificationCollector implements Collector
         foreach ($attribute->args as $index => $argument) {
             $isReason = $argument->name?->toString() === 'reason' || ($argument->name === null && $index === 0);
 
-            if ($isReason && $argument->value instanceof String_) {
-                return $this->config->accepts($argument->value->value);
+            if (! $isReason) {
+                continue;
             }
+
+            $reason = $this->literalText($argument->value);
+
+            return $reason !== null && $this->config->accepts($reason);
         }
 
         return false;
+    }
+
+    /**
+     * The text an expression carries in the SOURCE, or null when reading it would take more than
+     * the parse tree.
+     *
+     * Recursive over `.` so a reason wrapped across three lines reads the same as one written on
+     * one. Anything else — a constant, a variable, a call, an interpolated string — answers null,
+     * and null is refusal rather than an empty reason: the finding stays.
+     */
+    private function literalText(Expr $expression): ?string
+    {
+        if ($expression instanceof String_) {
+            return $expression->value;
+        }
+
+        if (! $expression instanceof Concat) {
+            return null;
+        }
+
+        $left = $this->literalText($expression->left);
+        $right = $this->literalText($expression->right);
+
+        return $left === null || $right === null ? null : $left.$right;
     }
 }

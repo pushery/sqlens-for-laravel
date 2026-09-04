@@ -48,5 +48,20 @@ interface LintRuns
          * all, so adding this parameter changed no existing behavior.
          */
         ?DebtMode $debt = null,
+        /**
+         * Whether a migration discovered inside `vendor/` is enumerated at all.
+         *
+         * Null means "read `sqlens.security.include_vendor_migrations`", which is what every
+         * ordinary caller wants: a finding inside somebody else's package is one a team cannot act
+         * on, repeated on every run, and a rule that cannot be acted on is one people silence
+         * wholesale.
+         *
+         * A caller passes TRUE when its question is a different one. `sqlens:predeploy` does,
+         * because a package's migration really does run during a deploy and really can take a lock.
+         *
+         * A run whose paths were NAMED — `--path`, `sqlens.migration_paths`, `--file` — is never
+         * filtered, whatever this says: naming a path is a person saying "these".
+         */
+        ?bool $includeVendorMigrations = null,
     ): LintOutcome;
 }

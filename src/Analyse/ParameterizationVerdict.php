@@ -31,6 +31,20 @@ final readonly class ParameterizationVerdict
         public ParametrizationSignal $signal,
         public FragmentOrigin $origin,
         public ?UndeterminedReason $reason,
+        /**
+         * Every runtime part of the text went through the engine's identifier quoting.
+         *
+         * It rides on an INTERPOLATED verdict and changes nothing about it — the signal stays
+         * `interpolated`, because a quoted identifier is still a runtime value in the statement's
+         * text and can still choose which object the statement addresses. What it changes is the
+         * ADVICE a rule can give: "pass it as a binding" is impossible at an identifier position,
+         * and a rule that says it anyway reads as one that did not understand the code.
+         *
+         * False by default and false for every other signal, which is the honest reading: a
+         * parameterized statement has nothing to quote, and an undetermined one is a statement the
+         * classifier could not see.
+         */
+        public bool $identifierQuoted = false,
     ) {}
 
     /** The SQL text is fully known at analysis time — no runtime value reaches the statement's shape. */
@@ -39,10 +53,16 @@ final readonly class ParameterizationVerdict
         return new self(ParametrizationSignal::Parametrized, $origin, null);
     }
 
-    /** Something non-constant was visibly assembled into the SQL text. */
-    public static function interpolated(FragmentOrigin $origin): self
+    /**
+     * Something non-constant was visibly assembled into the SQL text.
+     *
+     * `$identifierQuoted` says the assembly went through `Grammar::wrap()`. It does NOT soften the
+     * verdict — see the property for why — it only lets a rule downstream give advice that can be
+     * followed.
+     */
+    public static function interpolated(FragmentOrigin $origin, bool $identifierQuoted = false): self
     {
-        return new self(ParametrizationSignal::Interpolated, $origin, null);
+        return new self(ParametrizationSignal::Interpolated, $origin, null, $identifierQuoted);
     }
 
     /**

@@ -23,11 +23,28 @@ final readonly class FormatConfig
         public int $timeout,
         public ?string $pgFormatterPath,
         public ?string $sqlFluffPath,
+        /**
+         * The backends this project has DECIDED not to use, by name.
+         *
+         * A third state beside "look on the search path" (null) and "it is here" (a path), and the
+         * one the other two cannot express: `false` says the project does not want this backend at
+         * all. That is not the same fact as a missing binary, and the difference is what a run
+         * reports.
+         *
+         * A backend that is missing is a LOSS — the machine that has it formats differently, the
+         * output is committed, and strict tool mode is right to refuse. A backend the project turned
+         * off is a DECISION, and reporting it as a loss would tell somebody every run that they are
+         * missing the thing they chose to do without.
+         *
+         * @var list<string>
+         */
+        public array $disabledBackends = [],
     ) {}
 
     public static function from(Repository $config): self
     {
         $style = is_array($declared = $config->get('sqlens.format.style')) ? $declared : [];
+        $binaries = is_array($declared = $config->get('sqlens.format.binaries')) ? $declared : [];
 
         return new self(
             backend: is_string($backend = $config->get('sqlens.format.backend')) ? $backend : 'auto',
@@ -39,8 +56,9 @@ final readonly class FormatConfig
                 lineWidth: self::positiveInt($style['line_width'] ?? null, 100),
             ),
             timeout: self::positiveInt($config->get('sqlens.format.timeout'), 15),
-            pgFormatterPath: self::path($config->get('sqlens.format.binaries.pgformatter')),
-            sqlFluffPath: self::path($config->get('sqlens.format.binaries.sqlfluff')),
+            pgFormatterPath: self::path($binaries['pgformatter'] ?? null),
+            sqlFluffPath: self::path($binaries['sqlfluff'] ?? null),
+            disabledBackends: self::disabled($binaries),
         );
     }
 
@@ -48,6 +66,33 @@ final readonly class FormatConfig
     private static function path(mixed $value): ?string
     {
         return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    /**
+     * The backends set to `false` — the ones a project decided to do without.
+     *
+     * Read off the same map the paths come from rather than a second key, because it is the same
+     * question: where does this backend live, and `false` is the answer "nowhere, on purpose". A
+     * separate list would be a second place to say it and a second place for the two to disagree.
+     *
+     * Only an exact `false` counts. `null` means "look on the search path" and has meant that since
+     * the block existed; reading a falsy null as a decision would turn every default installation
+     * into a project that had switched both backends off.
+     *
+     * @param  array<mixed>  $binaries
+     * @return list<string>
+     */
+    private static function disabled(array $binaries): array
+    {
+        $off = [];
+
+        foreach (['pgformatter', 'sqlfluff'] as $name) {
+            if (($binaries[$name] ?? null) === false) {
+                $off[] = $name;
+            }
+        }
+
+        return $off;
     }
 
     private static function positiveInt(mixed $value, int $default): int

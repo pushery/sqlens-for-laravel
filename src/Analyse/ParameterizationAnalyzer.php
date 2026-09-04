@@ -85,9 +85,25 @@ final class ParameterizationAnalyzer
                 return ParameterizationVerdict::parametrized($origin);
             }
 
+            // …and the second case where "assembled" and "a value reached the statement" come apart:
+            // the value went through `Connection::escape()`, so what landed in the text is a VALUE
+            // LITERAL. That is what a binding guarantees, at a position that accepts no binding —
+            // PostgreSQL takes no placeholder for an identifier, a schema name or a DDL fragment,
+            // measured with a positive control.
+            //
+            // Only `escape()`, deliberately. `Grammar::wrap()` is the other half of the same idiom
+            // and is NOT admitted here: it stops the breakout and not the object choice — measured,
+            // `wrap('other_schema.secrets')` yields `"other_schema"."secrets"`. It earns a truthful
+            // remedy in {@see RawInterpolationRule}, never silence. See {@see EngineNeutralization}.
+            if ($origin !== FragmentOrigin::UnknownVariable && EngineNeutralization::valueEscaped($sql, $scope)) {
+                return ParameterizationVerdict::parametrized($origin);
+            }
+
             return $origin === FragmentOrigin::UnknownVariable
                 ? ParameterizationVerdict::undetermined($origin, UndeterminedReason::ArgumentTypeUnresolved)
-                : ParameterizationVerdict::interpolated($origin);
+                // Still interpolated — `wrap()` stops the breakout, not the object choice. The flag
+                // travels so the finding can name a remedy that exists.
+                : ParameterizationVerdict::interpolated($origin, EngineNeutralization::identifierQuoted($sql, $scope));
         }
 
         return $this->coherent($texts, $bindings, $scope)

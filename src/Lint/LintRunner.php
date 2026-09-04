@@ -133,8 +133,9 @@ final readonly class LintRunner implements LintRuns
      * @param  list<string>|null  $migrationPaths
      * @param  list<string>|null  $categories  category values to scope to (null = the config's, empty = all)
      * @param  bool  $applyBaseline  whether to suppress against the configured baseline; the baseline command turns this OFF, because it is WRITING that baseline and must see every finding, not the ones the previous baseline already accepted (config and annotation suppression still apply — those findings are handled by other means and need no baselining)
+     * @param  bool|null  $includeVendorMigrations  whether a migration discovered inside `vendor/` is enumerated. Null reads `sqlens.security.include_vendor_migrations`, which is what every ordinary caller wants. `sqlens:predeploy` passes TRUE and does not read the config, because a package's migration really does run during a deploy and really can take a lock — see PreflightService for that reasoning. A caller that NAMED its paths gets them unfiltered regardless.
      */
-    public function run(?string $connection, ?array $migrationPaths, CaptureMode $mode, ?string $assumeServerVersion = null, ?int $level = null, ?array $categories = null, bool $applyBaseline = true, ?bool $strictTools = null, ?string $file = null, ?GuardDecision $guard = null, bool $roundtrip = false, ?DebtMode $debt = null): LintOutcome
+    public function run(?string $connection, ?array $migrationPaths, CaptureMode $mode, ?string $assumeServerVersion = null, ?int $level = null, ?array $categories = null, bool $applyBaseline = true, ?bool $strictTools = null, ?string $file = null, ?GuardDecision $guard = null, bool $roundtrip = false, ?DebtMode $debt = null, ?bool $includeVendorMigrations = null): LintOutcome
     {
         // The session bound belongs to the RUN, not to the connection — and the connection
         // is the HOST APPLICATION's, which under Octane, a queue worker or a test suite
@@ -148,7 +149,7 @@ final readonly class LintRunner implements LintRuns
         $release = null;
 
         try {
-            return $this->runBounded($release, $connection, $migrationPaths, $mode, $assumeServerVersion, $level, $categories, $applyBaseline, $strictTools, $file, $guard, $roundtrip, $debt);
+            return $this->runBounded($release, $connection, $migrationPaths, $mode, $assumeServerVersion, $level, $categories, $applyBaseline, $strictTools, $file, $guard, $roundtrip, $debt, $includeVendorMigrations);
         } finally {
             if ($release instanceof Closure) {
                 $release();
@@ -164,13 +165,24 @@ final readonly class LintRunner implements LintRuns
      * @param  list<string>|null  $migrationPaths
      * @param  list<string>|null  $categories
      */
-    private function runBounded(?Closure &$release, ?string $connection, ?array $migrationPaths, CaptureMode $mode, ?string $assumeServerVersion = null, ?int $level = null, ?array $categories = null, bool $applyBaseline = true, ?bool $strictTools = null, ?string $file = null, ?GuardDecision $guard = null, bool $roundtrip = false, ?DebtMode $debt = null): LintOutcome
+    private function runBounded(?Closure &$release, ?string $connection, ?array $migrationPaths, CaptureMode $mode, ?string $assumeServerVersion = null, ?int $level = null, ?array $categories = null, bool $applyBaseline = true, ?bool $strictTools = null, ?string $file = null, ?GuardDecision $guard = null, bool $roundtrip = false, ?DebtMode $debt = null, ?bool $includeVendorMigrations = null): LintOutcome
     {
         $connectionName = $this->connectionName($connection);
+        // Whether somebody NAMED these paths, decided before the coalesce below overwrites the
+        // evidence. `--path` and `sqlens.migration_paths` are a person saying "these", and a run
+        // that silently dropped part of what they named would make the argument advisory. Only
+        // paths the run discovered on its own can be filtered.
+        $pathsWereNamed = $migrationPaths !== null || $this->configuredMigrationPaths() !== null;
+
         // Path resolution: the --path flag (a non-null argument) wins; else the
         // configured `migration_paths` when a project set them; else the application's
         // registered paths. One precedence, no value threaded twice.
         $migrationPaths ??= $this->configuredMigrationPaths() ?? $this->defaultMigrationPaths();
+
+        // Null means "read the config"; a caller that passes a bool has a reason and carries it
+        // (PreflightService does). Named paths win over both — see above.
+        $includeVendorMigrations = $pathsWereNamed || ($includeVendorMigrations
+            ?? $this->config->get('sqlens.security.include_vendor_migrations') === true);
 
         // ────────────────────────────────────────────────────────────────────────────────────
         // The connect the run ALREADY makes, moved above the one banner read instead of 180 lines
@@ -443,12 +455,23 @@ final readonly class LintRunner implements LintRuns
                 return $this->unsupported($engine, $context, $mode, $connectionName);
             }
 
-            $resolution = $this->resolvePending($connectionName, $migrationPaths);
+            $resolution = $this->resolvePending($connectionName, $migrationPaths, $includeVendorMigrations);
 
             if (! $resolution->isResolved()) {
                 return $this->skipped($resolution, $connectionName, $migrationPaths, $subjectContext, $context, $mode);
             }
         }
+
+        // The DENOMINATOR, attached before anything is judged. Every count the report prints is a
+        // numerator, and a numerator alone cannot separate "nothing was wrong" from "almost nothing
+        // was read" — the state a consuming project met when `--path=database/migrations` read one
+        // directory level (Laravel's own `getMigrationFiles()` globs `*_*.php`, not a tree) and
+        // reported a clean run over 32 of 330 migrations.
+        //
+        // It is the resolved set rather than the discovered one, so it is the number of migrations
+        // this run actually judged. Both the `--file` fast path and the pending path arrive here,
+        // and each states its own.
+        $context = $context->withSubjectCount(count($resolution->migrations));
 
         $run = $captor->capture($resolution->migrations, CaptureSection::Up);
 
@@ -714,7 +737,7 @@ final readonly class LintRunner implements LintRuns
     }
 
     /** @param  list<string>  $migrationPaths */
-    private function resolvePending(string $connectionName, array $migrationPaths): PendingResolution
+    private function resolvePending(string $connectionName, array $migrationPaths, bool $includeVendorMigrations): PendingResolution
     {
         $resolver = new PendingMigrationResolver(
             $this->database,
@@ -722,6 +745,7 @@ final readonly class LintRunner implements LintRuns
             $migrationPaths,
             'migrations',
             $this->projectRoot(),
+            $includeVendorMigrations,
         );
 
         return $resolver->resolve($connectionName);

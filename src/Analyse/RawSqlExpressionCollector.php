@@ -100,6 +100,10 @@ final readonly class RawSqlExpressionCollector implements Collector
             'line' => $node->getStartLine(),
             'scope' => $this->scopeName($scope),
             'signal' => $verdict->signal->value,
+            // Whether the engine's identifier quoting stands between the value and the text.
+            // It does not change the signal — see ParameterizationVerdict — it lets the rule
+            // downstream name a remedy that exists at a position no engine parameterizes.
+            'quoted' => $verdict->identifierQuoted,
             'origin' => $verdict->origin->value,
             'reason' => $verdict->reason?->value,
         ];

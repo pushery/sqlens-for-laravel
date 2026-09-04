@@ -36,10 +36,26 @@ return [
     |--------------------------------------------------------------------------
     |
     | The database connection SQLens resolves, canonicalizes, and audits against.
-    | `null` means the host application's default connection
-    | (config('database.default')) — deliberately NOT a hard-coded 'pgsql',
-    | because guessing a connection is exactly the resolution heuristic this
-    | package refuses. Set it to a named connection to target a specific one.
+    | Set it to a named connection to target a specific one — deliberately NOT a
+    | hard-coded 'pgsql', because guessing a connection is exactly the resolution
+    | heuristic this package refuses.
+    |
+    | `null` does NOT mean the same thing in every suite, and the difference is
+    | worth reading once:
+    |
+    |   capture, lint   the host application's default connection,
+    |                   config('database.default').
+    |
+    |   sqlens:audit    that default is NOT consulted. With exactly one supported
+    |                   connection the audit takes it and names it in the report.
+    |                   With more than one it REFUSES and lists the candidates,
+    |                   exiting 2. Pass --connection for a one-off, or name one
+    |                   here for good.
+    |
+    | The audit is stricter on purpose: which instance was read is part of what
+    | the report asserts, and a primary and its replica disagree about settings,
+    | about lag, sometimes about schema. Silently taking one would put a claim in
+    | the report that nobody made, and its reader would have no way to notice.
     |
     */
 
@@ -791,6 +807,29 @@ return [
          * Turn it on when the question is genuinely about the dependency tree: an audit that has to
          * state what everything running against this database does, not just what your own team
          * wrote. Expect findings you cannot fix, and read them as inventory rather than as a backlog.
+         *
+         * ## It decides two things, and it used to decide only one
+         *
+         * Off, a run does not ENUMERATE a package's migrations at all — the file is never loaded and
+         * never pretend-executed. On, it does, and the classifier then binds it as a migration of
+         * yours so the rules that ask about provenance treat it like one.
+         *
+         * The second half is what this setting always did. The first was missing, and the gap was
+         * user-facing: a package's migration was still read and still able to produce a
+         * capture-layer finding, so a first run after `composer require` could fail on findings
+         * inside somebody else's package while reporting nothing about the project's own. The
+         * argument above is the one that closes it — it is the same argument, applied one step
+         * earlier.
+         *
+         * ## Two runs are deliberately not filtered
+         *
+         * A run whose paths were NAMED — `--path`, `sqlens.migration_paths`, or `--file` — sees
+         * everything under them. Naming a path is a person saying "these", and quietly dropping
+         * part of what they named would make the argument advisory.
+         *
+         * And `sqlens:predeploy` always includes them, whatever this says. A package's migration
+         * runs during a deploy and can take a lock like any other, so a preflight that could not see
+         * it would answer its own question wrongly.
          */
         'include_vendor_migrations' => false,
 
@@ -1817,8 +1856,22 @@ return [
         /*
          * Where the external backends live, when they are not on PATH.
          *
-         * Null means "look on the search path". A path that is set and wrong is
-         * an error with a name, never a silent fallback to another backend.
+         * Three answers, and the third is the one the other two cannot give:
+         *
+         *   null        look on the search path
+         *   '/a/path'   it is here
+         *   false       this project does without this backend
+         *
+         * A path that is set and wrong is an error with a name, never a silent
+         * fallback to another backend.
+         *
+         * The difference between the first and the last is what a run REPORTS.
+         * A backend that is merely missing is a loss: the machine that has it
+         * formats differently, the output is committed, and the next run there
+         * rewrites every file -- so it is named, and `--strict-tools` refuses.
+         * One you switched off is a decision, and telling you on every run that
+         * you are missing what you chose to do without is how a report stops
+         * being read.
          */
         'binaries' => [
             'pgformatter' => null,

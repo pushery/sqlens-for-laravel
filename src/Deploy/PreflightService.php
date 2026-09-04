@@ -94,11 +94,19 @@ final readonly class PreflightService implements PreflightRuns
         // Baseline applied, deliberately. A rule a project suppressed stays suppressed here: an
         // answer that differed from CI's would make two runs over the same migrations disagree, and
         // whichever somebody read last would win.
+        // Package migrations INCLUDED, and this one is not a preference. `sqlens:lint` leaves them
+        // out by default because a finding inside somebody else's package is one a team cannot act
+        // on, repeated on every run. A preflight asks a different question: what is this deploy
+        // about to walk into. A package's migration runs in that deploy like any other and can take
+        // an ACCESS EXCLUSIVE lock like any other, so leaving it out would answer the question
+        // wrongly — and `pendingFiles` below is filled from this run, so the subset guarantee would
+        // shrink with it, silently.
         $lint = $this->lint->run(
             connection: $name,
             migrationPaths: null,
             mode: CaptureMode::Pretend,
             applyBaseline: true,
+            includeVendorMigrations: true,
         );
 
         $context = new PreflightContext(
