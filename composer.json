@@ -25,7 +25,7 @@
     },
     "require": {
         "php": "^8.4",
-        "composer-runtime-api": "^2.2",
+        "composer-runtime-api": "^2.0",
         "ext-ctype": "*",
         "ext-filter": "*",
         "ext-json": "*",
@@ -42,8 +42,8 @@
         "nikic/php-parser": "^5.8",
         "phpstan/phpstan": "^2.2.7",
         "psr/log": "^3.0",
-        "symfony/console": "^8.1",
-        "symfony/process": "^8.1"
+        "symfony/console": "^8.0",
+        "symfony/process": "^8.0"
     },
     "suggest": {
         "laravel/mcp": "Serves the SQLens MCP server over stdio, so an agent can call the read-only tools directly. Without it `sqlens:mcp` reports a named undetermined and prints the install command rather than failing."
