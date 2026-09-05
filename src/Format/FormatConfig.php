@@ -39,6 +39,12 @@ final readonly class FormatConfig
          * @var list<string>
          */
         public array $disabledBackends = [],
+        /**
+         * Which files a run may find. Its own object because it is the only part of this block that
+         * decides what gets WRITTEN — see {@see FormatDiscovery} for why that makes it a safety
+         * surface rather than a convenience one.
+         */
+        public FormatDiscovery $discovery = new FormatDiscovery,
     ) {}
 
     public static function from(Repository $config): self
@@ -59,6 +65,7 @@ final readonly class FormatConfig
             pgFormatterPath: self::path($binaries['pgformatter'] ?? null),
             sqlFluffPath: self::path($binaries['sqlfluff'] ?? null),
             disabledBackends: self::disabled($binaries),
+            discovery: FormatDiscovery::from($config),
         );
     }
 

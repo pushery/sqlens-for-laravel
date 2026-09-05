@@ -65,6 +65,16 @@ interface RunNotice
     public function severity(): ?Severity;
 
     /**
+     * Whether this notice names something the READER wrote, or something the run OBSERVED.
+     *
+     * Every family here answers `Observed` through {@see ReportsWhatTheRunObserved}, and the slot
+     * exists anyway rather than being assumed: the question is asked of every catalog id, and a
+     * family that answered it by not being asked would be the one place the classification means
+     * nothing. {@see Attribution} carries the reasoning and what each answer obliges.
+     */
+    public function attribution(): Attribution;
+
+    /**
      * The suites this notice can appear in.
      *
      * Stated rather than left implicit: the export lists notices next to rules, and an empty list

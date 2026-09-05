@@ -11,8 +11,7 @@ use Laravel\Mcp\Server\Attributes\Name;
 use Override;
 use Pushery\SQLens\Agent\Mcp\RuleCatalog;
 use Pushery\SQLens\Agent\Mcp\ToolAnswer;
-use Pushery\SQLens\Rules\RuleExampleEntry;
-use Pushery\SQLens\Rules\RuleExamples;
+use Pushery\SQLens\Catalog\RuleExampleCatalog;
 
 /**
  * `explain_rule` — what a rule is, so an agent understands it before it tries to work around one.
@@ -73,7 +72,7 @@ final class ExplainRuleTool extends SqlensTool
         'worked examples' => ['examples'],
     ];
 
-    private ?RuleExamples $examples = null;
+    private ?RuleExampleCatalog $examples = null;
 
     public function __construct(private readonly RuleCatalog $catalog = new RuleCatalog) {}
 
@@ -144,9 +143,14 @@ final class ExplainRuleTool extends SqlensTool
      */
     private function examplesFor(string $ruleId): array
     {
-        $entry = ($this->examples ??= RuleExamples::bundled())->for($ruleId);
+        // ⚠️ THROUGH THE CATALOG, NOT THE JSON REGISTER ALONE — and the difference was ten rules.
+        // The capture family carries its pairs as constructor arguments on its metadata, and this
+        // tool read only the file beside them, so an agent asking about `CAP.PRESCAN.SIDE_EFFECT`
+        // was told no example was registered while a good one sat in the class. Nothing was red:
+        // `badExample` and `goodExample` had no reader anywhere in `src/`.
+        $example = ($this->examples ??= RuleExampleCatalog::shipped())->for($ruleId);
 
-        if (! $entry instanceof RuleExampleEntry) {
+        if ($example === null) {
             return ['registered' => false, 'reason' => 'no example is registered for this rule'];
         }
 
@@ -155,14 +159,14 @@ final class ExplainRuleTool extends SqlensTool
             // Stated rather than assumed to be PHP: a server-baseline rule's example is a
             // configuration line, and an agent that pasted it into a migration would ship a syntax
             // error taking the package's word for it.
-            'language' => $entry->language,
-            'bad' => $entry->bad,
-            'good' => $entry->good,
-            'note' => $entry->note,
-            // Null where the rule's author has not written down where it cries wolf. Carried even
-            // then, because the field's absence and its emptiness mean different things and the
-            // register itself draws that line.
-            'false_positives' => $entry->falsePositives,
+            'language' => $example['language'],
+            'bad' => $example['bad'],
+            'good' => $example['good'],
+            // Null for a class-carried pair, which has no note field, and null where the author has
+            // not written down where the rule cries wolf. Carried in both cases, because an absent
+            // field and an empty one mean different things.
+            'note' => $example['note'],
+            'false_positives' => $example['false_positives'],
         ];
     }
 

@@ -12,6 +12,7 @@ use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Deploy\Drift\DriftRunMode;
 use Pushery\SQLens\Exceptions\UndeclaredConfigPath;
 use Pushery\SQLens\Findings\UndeterminedReason;
+use Pushery\SQLens\Format\FormatDiscovery;
 use Pushery\SQLens\Reporting\Baseline\StaleBaselinePolicy;
 use Pushery\SQLens\Reporting\CaptureMode;
 use Pushery\SQLens\Reporting\RunProfile;
@@ -167,7 +168,7 @@ final readonly class ConfigSchema
         'tools.pgls' => self::TOOL_OPTIONS['pgls'],
         // The guard suite. `profiles` is a WILDCARD section — see self::WILDCARD_SECTIONS — so its
         // own keys are absent here and everything beneath a profile is spelled with the `*`.
-        'format' => ['backend', 'dialect', 'binaries', 'timeout', 'style'],
+        'format' => ['paths', 'exclude', 'extensions', 'backend', 'dialect', 'binaries', 'timeout', 'style'],
         'format.binaries' => ['pgformatter', 'sqlfluff'],
         'format.style' => ['indent', 'uppercase_keywords', 'leading_commas', 'line_width'],
         'guard' => ['profile', 'profiles'],
@@ -522,7 +523,13 @@ final readonly class ConfigSchema
             'preflight.thresholds' => 'an array keyed by operation — rewrite, index_build, constraint_validation, backfill — replacing that operation\'s escalation steps entirely. An operation the shipped artefact does not define is REFUSED rather than ignored, because a typo would otherwise mean the escalation somebody configured silently never happens. These numbers only RAISE a severity and can neither create a finding nor remove one: a row estimate depends on when ANALYZE last ran, and a number that could silence a finding would make the same migration pass on Monday and fail on Friday',
             'preflight.budget_ms' => "a positive integer number of milliseconds the WHOLE preflight run may take before the checks it did not reach are reported undetermined — zero would mean 'no bound', and a gate that can delay a deploy indefinitely is the one that gets switched off",
             'preflight.connection' => 'a connection name from config/database.php for the deploy readers to use, or null. Null does NOT fall through to the default connection: that is the one running your migrations, and a preflight reading through it holds ALTER and DROP it never needs',
-            'format' => 'an array with the keys: backend, dialect, binaries, timeout, style',
+            'format' => 'an array with the keys: paths, exclude, extensions, backend, dialect, binaries, timeout, style',
+            'format.paths' => "a list of repo-relative roots to scan for SQL files; empty means the application's registered migration paths",
+            'format.paths-item' => 'a repo-relative path (absolute paths are not portable across machines)',
+            'format.exclude' => 'a list of globs excluded from every run, matched against the walked path; a repo-relative glob is anchored for you. The default protects `schema:dump` output, which the next dump overwrites anyway',
+            'format.exclude-item' => 'a non-empty glob',
+            'format.extensions' => 'a non-empty list of extensions counting as a SQL file, without the dot. `php` and `phtml` are RESERVED: a Laravel migration is a PHP file, and reading one as SQL rewrites the whole file as a single statement — a destroyed migration reported as `reformatted`',
+            'format.extensions-item' => 'a bare extension without the dot, and not one of: '.implode(', ', FormatDiscovery::RESERVED_EXTENSIONS),
             'format.backend' => 'one of: auto, php, pgformatter, sqlfluff. `auto` picks the best AVAILABLE backend; NAMING one is a promise that it is installed, because a named backend that cannot run is refused rather than silently substituted — a substitution would produce output you did not ask for, and the machine where the binary IS installed would rewrite every file',
             'format.dialect' => 'one of: auto, pgsql, mysql. With `auto` the dialect follows the configured connection',
             'format.binaries' => 'an array with the keys: pgformatter, sqlfluff',
@@ -1045,6 +1052,38 @@ final readonly class ConfigSchema
             'reporting.default_format' => is_string($value)
                 ? (in_array($value, $this->reporterFormats, true) ? [] : [ConfigViolation::outOfRange($path, $expected, $value)])
                 : [ConfigViolation::wrongType($path, $expected, $value)],
+            // Repo-relative, the same portability rule `migration_paths` follows — an absolute
+            // path pins the config to one machine.
+            'format.paths' => $this->listOfStrings(
+                $path,
+                $value,
+                'format.paths',
+                fn (string $item): bool => $item !== '' && ! $this->isAbsolutePath($item),
+                'format.paths-item',
+            ),
+            // An EMPTY exclude list is legitimate and is the documented opt-in for formatting
+            // `schema:dump` output, so this one is not `requireNonEmpty` while `extensions` is.
+            'format.exclude' => $this->listOfStrings(
+                $path,
+                $value,
+                'format.exclude',
+                static fn (string $item): bool => $item !== '',
+                'format.exclude-item',
+            ),
+            // Non-empty, because an empty list finds nothing and a formatter that looked at no
+            // files while reporting a clean tree is the one answer this suite must never give. And
+            // the reserved names are refused HERE, where a configuration is judged — the runtime
+            // drops them again, on the other path, where the cost is a destroyed migration.
+            'format.extensions' => $this->listOfStrings(
+                $path,
+                $value,
+                'format.extensions',
+                static fn (string $item): bool => $item !== ''
+                    && ! str_contains($item, '.')
+                    && ! in_array(strtolower($item), FormatDiscovery::RESERVED_EXTENSIONS, true),
+                'format.extensions-item',
+                requireNonEmpty: true,
+            ),
             'format.backend' => is_string($value) && in_array($value, self::FORMAT_BACKENDS, true)
                 ? []
                 : [ConfigViolation::outOfRange($path, $expected, $value)],

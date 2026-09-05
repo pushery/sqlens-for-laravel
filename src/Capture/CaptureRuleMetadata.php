@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Capture;
 
 use Pushery\SQLens\Categories\Category;
+use Pushery\SQLens\Contracts\Attribution;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDeprecation;
+use Pushery\SQLens\Rules\RuleExampleRegister;
 use Pushery\SQLens\Rules\StabilityTier;
 use Pushery\SQLens\Rules\Suite;
 use Pushery\SQLens\Rules\VersionWindow;
@@ -58,6 +60,23 @@ final readonly class CaptureRuleMetadata
         public string $badExample,
         public string $goodExample,
     ) {}
+
+    /**
+     * Always `Authored`, and the constructor above is the reason rather than a claim beside it.
+     *
+     * Every producer in this family hands over a bad and a good example as REQUIRED arguments, so a
+     * capture id that named something the run merely observed could not be declared: whoever wrote
+     * it would have had to invent the two migrations. The classification is therefore already made,
+     * by the shape of the constructor, and this method reads it out instead of restating it.
+     *
+     * ⚠️ Those examples reached nobody until now. They are written, they are good, and
+     * `ExplainRuleTool` answered `registered: false` for all ten ids because it read only the JSON
+     * register beside them. {@see RuleExampleRegister} is the join.
+     */
+    public function attribution(): Attribution
+    {
+        return Attribution::Authored;
+    }
 
     /**
      * A deterministic array projection with a fixed key order — what the
