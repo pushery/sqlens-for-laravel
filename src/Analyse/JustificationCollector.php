@@ -5,15 +5,10 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Analyse;
 
 use PhpParser\Node;
-use PhpParser\Node\Attribute;
-use PhpParser\Node\Expr;
-use PhpParser\Node\Expr\BinaryOp\Concat;
-use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
 use PHPStan\Analyser\Scope;
 use PHPStan\Collectors\Collector;
-use Pushery\SQLens\Attributes\RawSql;
 use Pushery\SQLens\Attributes\SqlensIgnore;
 
 /**
@@ -45,23 +40,38 @@ use Pushery\SQLens\Attributes\SqlensIgnore;
  *
  * ## Methods as well as classes
  *
- * Reached through the class node rather than by a second collector: PHPStan's registry does not walk
- * subclasses, so one collector per node shape is the rule — but a class node carries its own
- * statements, and one traversal therefore sees both levels.
+ * Reached through the class node rather than by a second collector: a class node carries its own
+ * statements, so one traversal sees both levels.
  *
- * @implements Collector<Class_, array{names: list<string>}|null>
+ * ⚠️ THIS PARAGRAPH USED TO GIVE A REASON THAT IS NOT TRUE — *"PHPStan's registry does not walk
+ * subclasses, so one collector per node shape is the rule"*. Measured against the installed
+ * version: `PHPStan\Collectors\Registry::getCollectors()` resolves through `class_parents` plus
+ * `class_implements` of the node's actual class, so a collector may declare an interface and be
+ * reached for every node implementing it. The sentence was load-bearing in the wrong direction — it
+ * argued that reaching a free function or a closure would cost a collector per shape, and the two
+ * shapes stayed unreachable while `#[RawSql]` went on declaring `TARGET_FUNCTION`.
+ * {@see JustificationSpanCollector} is the one registration that reaches all of them.
+ *
+ * ## What this collector deliberately does NOT reach
+ *
+ * A free function and a closure. Neither has a name a call site inside it reports — outside a class
+ * the call site's own scope name is `null` — so a name join has nothing to compare. They are covered
+ * by POSITION instead, in the span collector beside this one.
+ *
+ * @implements Collector<Class_, array{names: list<string>, lines: list<int>}|null>
  */
 final readonly class JustificationCollector implements Collector
 {
     /**
-     * The run's policy, because WHAT counts as a reason is a configured question.
+     * The one unit that decides what counts as a reason — the run's policy lives inside it.
      *
-     * Read here rather than in the rule, and the placement is the whole design: a reason the mode
-     * refuses is simply not collected, so the rule downstream needs no second notion of "reasoned"
-     * and cannot drift from this one. The default instance means an unconfigured run behaves
-     * identically to one that spelled the defaults out.
+     * Read at COLLECTION time rather than in the rule, and the placement is the whole design: a
+     * reason the mode refuses is simply not collected, so the rule downstream needs no second notion
+     * of "reasoned" and cannot drift from this one. It is a shared unit rather than a method here
+     * because {@see JustificationSpanCollector} asks the identical question, and two answers to it
+     * would let an annotation justify a call site through one channel and not the other.
      */
-    public function __construct(private AnalyseConfig $config = new AnalyseConfig) {}
+    public function __construct(private RawSqlReason $reason = new RawSqlReason) {}
 
     public function getNodeType(): string
     {
@@ -75,7 +85,12 @@ final readonly class JustificationCollector implements Collector
      * several annotated methods. Returning the first would justify one call site and leave the
      * others reporting — which reads as an inconsistent rule rather than as a missing entry.
      *
-     * @return array{names: list<string>}|null
+     * Each name carries the LINE its annotation sits on, in a parallel list. Nothing needs it to
+     * justify a call site — a name join has no use for a position — but {@see StaleRawSqlReasonRule}
+     * reports the annotation itself, and a finding has to point somewhere. Parallel rather than a
+     * map, because a class and a method of the same name are two entries and a map would keep one.
+     *
+     * @return array{names: list<string>, lines: list<int>}|null
      */
     public function processNode(Node $node, Scope $scope): ?array
     {
@@ -103,114 +118,25 @@ final readonly class JustificationCollector implements Collector
         // for messages; joining on that would match a string neither side ever produces.
         $class = $node->namespacedName?->toString() ?? $node->name?->toString();
         $names = [];
+        $lines = [];
 
         // A class-level annotation covers every call in the class; a method-level one covers only
         // that method. Both are recorded under the name a call site reports itself as, so the rule
         // downstream joins on equality rather than on a prefix.
-        if ($class !== null && $this->isReasoned($node->attrGroups, $scope)) {
+        if ($class !== null && $this->reason->isPresentIn($node->attrGroups, $scope)) {
             $names[] = $class;
+            $lines[] = $node->getStartLine();
         }
 
         foreach ($class === null ? [] : $node->stmts as $statement) {
-            if ($statement instanceof ClassMethod && $this->isReasoned($statement->attrGroups, $scope)) {
+            if ($statement instanceof ClassMethod && $this->reason->isPresentIn($statement->attrGroups, $scope)) {
                 $names[] = $class.'::'.$statement->name->toString();
+                $lines[] = $statement->getStartLine();
             }
         }
 
         // An unannotated class is the overwhelming majority, and one entry per class in a codebase
         // would make the rule's join proportional to the whole project for no gain.
-        return $names === [] ? null : ['names' => $names];
-    }
-
-    /**
-     * Does this attribute list carry a `#[RawSql]` whose reason says anything?
-     *
-     * An annotation with an empty reason answers `false`. The constructor makes the argument
-     * required and cannot make it meaningful — `reason: ''` satisfies PHP and states nothing, and
-     * accepting it is how a justification requirement becomes a keystroke everybody learns and
-     * nobody means.
-     *
-     * @param  array<array-key, Node\AttributeGroup>  $groups
-     */
-    private function isReasoned(array $groups, Scope $scope): bool
-    {
-        foreach ($groups as $group) {
-            foreach ($group->attrs as $attribute) {
-                if ($scope->resolveName($attribute->name) === RawSql::class && $this->hasRealReason($attribute)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Whether the annotation's reason is one the run's policy accepts.
-     *
-     * Only text the SYNTAX already carries is read — a literal, or literals joined with `.`. A
-     * constant or a variable is not resolved, and that is deliberate rather than lazy: resolving one
-     * would mean evaluating project code during analysis. The consequence lands in the safe
-     * direction: a reason written that way does not count, so the finding stays visible.
-     *
-     * ## Why a concatenation of literals IS read, when a constant is not
-     *
-     * The two used to be refused together, on one sentence about evaluating project code. That
-     * sentence is true of a constant and false of `'a ' . 'b'`, which is finished text sitting in
-     * the parse tree with nothing left to resolve.
-     *
-     * The difference was not academic. A reason worth writing is often a sentence, a sentence does
-     * not fit a line, and joining the halves with `.` is how PHP wraps one — so the most careful
-     * annotation in a file was the one that silently did not count. Measured in a consuming project
-     * before this changed: eighteen attributes in a tree, all of them looking like enforcement, and
-     * the ones spanning two lines answering nothing.
-     *
-     * A constant anywhere in the expression still refuses the whole of it, which keeps the original
-     * decision exactly where it was made.
-     *
-     * Whitespace is refused in every mode. Beyond that the mode decides: under
-     * {@see AnalysePolicy::Strict} a configured placeholder — `todo`, `tbd`, whatever the project
-     * lists — is not a reason either. Under `documented` it is, on purpose: a team mid-adoption is
-     * better served by an annotation it can grep for than by a rule it switched off.
-     */
-    private function hasRealReason(Attribute $attribute): bool
-    {
-        foreach ($attribute->args as $index => $argument) {
-            $isReason = $argument->name?->toString() === 'reason' || ($argument->name === null && $index === 0);
-
-            if (! $isReason) {
-                continue;
-            }
-
-            $reason = $this->literalText($argument->value);
-
-            return $reason !== null && $this->config->accepts($reason);
-        }
-
-        return false;
-    }
-
-    /**
-     * The text an expression carries in the SOURCE, or null when reading it would take more than
-     * the parse tree.
-     *
-     * Recursive over `.` so a reason wrapped across three lines reads the same as one written on
-     * one. Anything else — a constant, a variable, a call, an interpolated string — answers null,
-     * and null is refusal rather than an empty reason: the finding stays.
-     */
-    private function literalText(Expr $expression): ?string
-    {
-        if ($expression instanceof String_) {
-            return $expression->value;
-        }
-
-        if (! $expression instanceof Concat) {
-            return null;
-        }
-
-        $left = $this->literalText($expression->left);
-        $right = $this->literalText($expression->right);
-
-        return $left === null || $right === null ? null : $left.$right;
+        return $names === [] ? null : ['names' => $names, 'lines' => $lines];
     }
 }

@@ -461,6 +461,10 @@ final readonly class SecuritySubjects
                 // state that must not pass silently.
                 'rls_supported' => $rls->supported,
                 'rls_configured' => $rls->configured,
+                // The third state, and the reason `rls_configured` alone was not enough: a project
+                // that set the mode to `off` answered the question, and answering it must not produce
+                // the same line as never having been asked.
+                'rls_declined' => $rls->declined,
                 // The HBA reading's two states, on the same subject and for the same reason. A refused
                 // reading produces NO hba subjects, so a rule that had to say "this server's
                 // authentication rules could not be read" would have nothing to attach it to — and an

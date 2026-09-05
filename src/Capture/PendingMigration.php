@@ -30,6 +30,22 @@ final readonly class PendingMigration
     ) {}
 
     /**
+     * The same migration, at a different position in the run.
+     *
+     * The single-file resolver answers about ONE file and has no list to number against, so it
+     * hands back index 0 every time. That was invisible while `--file` took one file and became a
+     * defect the moment it took several: four subjects all claiming position 0 is not an order.
+     *
+     * A wither rather than a resolver parameter, because the position is a property of the LIST the
+     * caller is building and not of the file — the resolver would have to be told the index in
+     * order to hand it straight back.
+     */
+    public function withOrderIndex(int $orderIndex): self
+    {
+        return new self($this->file, $this->migrationClass, $this->relativePath, $orderIndex, $this->batchNumber, $this->connection);
+    }
+
+    /**
      * The sort key that fixes run order: the migration file's basename, which
      * carries Laravel's timestamp prefix. Deterministic across machines because
      * it never involves a filesystem listing order.

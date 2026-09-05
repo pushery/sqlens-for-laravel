@@ -373,11 +373,35 @@ final readonly class PgsqlSecurityReader implements SecurityReader
         // table instead would produce a finding for every reference table, job queue and migration
         // ledger in the schema — a report nobody finishes, from a tool that has learned nothing about
         // the application.
+
+        // `off` is read BEFORE the scope, and that ordering is the fix. Collecting first collapsed it
+        // into the same empty list an unconfigured project produces, and from there nothing
+        // downstream could tell the two apart — so a project that had done what the finding asked of
+        // it got the finding again, at severity high, on every run.
+        if ($this->config->get('sqlens.security.rls.mode') === 'off') {
+            return RlsReading::declinedByConfig();
+        }
+
         $tables = $this->rlsScope();
 
         if ($tables === []) {
             return RlsReading::unconfigured();
         }
+
+        // An unqualified name is resolved the way the SERVER resolves one, and that is the whole of
+        // this split. `security.rls.tables` used to match only against `schema.table`, so a consumer
+        // who wrote `api_keys` — the name his own migration created the table under — got
+        // `not found in the catalog` for every entry: fifteen skips over fifteen tables that exist,
+        // with a message pointing at a missing table and a managed-instance hint that fitted the
+        // symptom and not the cause. A security list matching NOTHING also reports nothing, so it
+        // looked configured.
+        //
+        // `current_schema()` is not a guess about naming: it is the first existing entry of the
+        // session's own search_path, which is exactly where an unqualified CREATE TABLE puts a table.
+        // Both literals are built HERE rather than inside the query closure: that closure is `static`,
+        // so `$this` does not exist in it and only what an arrow function captures is reachable.
+        $qualifiedList = $this->textArray(array_values(array_filter($tables, static fn (string $t): bool => str_contains($t, '.'))));
+        $bareList = $this->textArray(array_values(array_filter($tables, static fn (string $t): bool => ! str_contains($t, '.'))));
 
         $skips = [];
 
@@ -413,9 +437,10 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 // Partitions themselves are judged at the parent: RLS is a property of the partitioned
                 // table, and reporting n partitions would multiply one finding by however many exist.
                 .' where c.relkind in (\'r\', \'p\') and c.relispartition = false'
-                .' and n.nspname||\'.\'||c.relname = any(?)'
+                .' and (n.nspname||\'.\'||c.relname = any(?)'
+                .' or (n.nspname = current_schema() and c.relname = any(?)))'
                 .' order by 1, p.polname',
-                ['{"'.implode('","', $tables).'"}'],
+                [$qualifiedList, $bareList],
             ))),
             SchemaObjectType::Policy,
             'pg_policy',
@@ -468,11 +493,54 @@ final readonly class PgsqlSecurityReader implements SecurityReader
 
         // A table the project named and the catalog does not have is a finding of its own kind — a
         // configuration that points at nothing — so it is a SKIP rather than a silent absence.
-        foreach (array_diff($tables, array_keys($collected)) as $missing) {
-            $skips[] = CatalogSkip::for(SchemaObjectType::Policy, $missing, SkipReason::NotReadable, 'named in sqlens.security.rls.tables, not found in the catalog');
+        //
+        // A bare name reached the result set only through the `current_schema()` branch above, so
+        // matching it back by its own bare half is exact rather than approximate. It gets its own
+        // sentence too: `not found in the catalog` describes a missing table, and a reader who was
+        // told that went looking for a typo or an unrun migration over a table that was there.
+        $qualifiedFound = array_keys($collected);
+        $bareFound = array_map(static fn (string $name): string => str_contains($name, '.') ? explode('.', $name, 2)[1] : $name, $qualifiedFound);
+
+        foreach ($tables as $named) {
+            if (in_array($named, $qualifiedFound, true)) {
+                continue;
+            }
+
+            if (! str_contains($named, '.')) {
+                if (in_array($named, $bareFound, true)) {
+                    continue;
+                }
+
+                $skips[] = CatalogSkip::for(SchemaObjectType::Policy, $named, SkipReason::NotReadable, 'named in sqlens.security.rls.tables without a schema, and the current schema holds no table of that name; write it as schema.table if it lives in another one');
+
+                continue;
+            }
+
+            $skips[] = CatalogSkip::for(SchemaObjectType::Policy, $named, SkipReason::NotReadable, 'named in sqlens.security.rls.tables, not found in the catalog');
         }
 
         return $skips === [] ? RlsReading::complete($states) : RlsReading::partial($states, $skips);
+    }
+
+    /**
+     * A PostgreSQL text-array literal for a bound parameter.
+     *
+     * The quoting is not decoration: an entry carrying a `"` or a `\` would otherwise close the
+     * literal early and the whole array would arrive as something else. These names come from a
+     * project's own configuration file rather than from a request, so this is a correctness guard
+     * rather than a boundary — but a literal built by concatenation is where that distinction stops
+     * being visible to the next reader.
+     *
+     * @param  list<string>  $values
+     */
+    private function textArray(array $values): string
+    {
+        $escaped = array_map(
+            static fn (string $value): string => str_replace(['\\', '"'], ['\\\\', '\\"'], $value),
+            $values,
+        );
+
+        return '{"'.implode('","', $escaped).'"}';
     }
 
     /**
@@ -510,11 +578,13 @@ final readonly class PgsqlSecurityReader implements SecurityReader
             return array_map(fn (object $row): string => $this->text($row, 'table_name'), $rows);
         }
 
-        if ($mode !== 'listed') {
-            return [];
-        }
-
-        $tables = $this->config->get('sqlens.security.rls.tables');
+        // The `listed` test rides in the EXPRESSION rather than as an early return, and that is the
+        // coverage floor rather than style. `off` is answered in rlsStates() before this method is
+        // reached and `heuristic` returned above, so the only value that could take an early return
+        // here is a mode the config validator refuses outright — a branch no run can enter, and one
+        // no test can honestly close. The behavior is unchanged: anything but `listed` reads null,
+        // and null is not an array.
+        $tables = $mode === 'listed' ? $this->config->get('sqlens.security.rls.tables') : null;
 
         return is_array($tables)
             ? array_values(array_filter(array_map(static fn (mixed $t): string => is_string($t) ? trim($t) : '', $tables), static fn (string $t): bool => $t !== ''))

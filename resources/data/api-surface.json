@@ -827,6 +827,17 @@
             "replaced_by": null
         },
         {
+            "id": "LINT.NO_MIGRATIONS_READ",
+            "category": "safety",
+            "level": 0,
+            "severity": null,
+            "stability": "stable",
+            "message_prefix": "sqlens.lint",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/lint-no-migrations-read/",
+            "deprecated_since": null,
+            "replaced_by": null
+        },
+        {
             "id": "LINT.SERVER_BELOW_FLOOR",
             "category": "safety",
             "level": 0,
@@ -2132,6 +2143,17 @@
             "stability": "stable",
             "message_prefix": "sqlens.analyse",
             "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/sec-inj-raw-interpolation/",
+            "deprecated_since": null,
+            "replaced_by": null
+        },
+        {
+            "id": "SEC.INJ.RAW_SQL_REASON_STALE",
+            "category": "security",
+            "level": 0,
+            "severity": "info",
+            "stability": "stable",
+            "message_prefix": "sqlens.analyse",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/sec-inj-raw-sql-reason-stale/",
             "deprecated_since": null,
             "replaced_by": null
         },

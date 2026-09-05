@@ -68,7 +68,7 @@ final class LintPendingTool extends SqlensTool
             // Handed straight to the engine's own single-file resolver, which is the one place that
             // decides whether a path names a migration this project lints. A pre-check here would be
             // a second answer to that question.
-            file: is_string($validated['file'] ?? null) ? $validated['file'] : null,
+            files: is_string($validated['file'] ?? null) ? [$validated['file']] : [],
         );
 
         $envelope = JsonEnvelope::for($outcome->result, $outcome->context)->toArray();

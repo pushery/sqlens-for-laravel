@@ -131,11 +131,12 @@ final readonly class LintRunner implements LintRuns
      * database class to discover them, so that resolution lives here.
      *
      * @param  list<string>|null  $migrationPaths
+     * @param  list<string>  $files  the migration files this run judges instead of the pending set — the DB-free fast path, and empty means the pending set
      * @param  list<string>|null  $categories  category values to scope to (null = the config's, empty = all)
      * @param  bool  $applyBaseline  whether to suppress against the configured baseline; the baseline command turns this OFF, because it is WRITING that baseline and must see every finding, not the ones the previous baseline already accepted (config and annotation suppression still apply — those findings are handled by other means and need no baselining)
      * @param  bool|null  $includeVendorMigrations  whether a migration discovered inside `vendor/` is enumerated. Null reads `sqlens.security.include_vendor_migrations`, which is what every ordinary caller wants. `sqlens:predeploy` passes TRUE and does not read the config, because a package's migration really does run during a deploy and really can take a lock — see PreflightService for that reasoning. A caller that NAMED its paths gets them unfiltered regardless.
      */
-    public function run(?string $connection, ?array $migrationPaths, CaptureMode $mode, ?string $assumeServerVersion = null, ?int $level = null, ?array $categories = null, bool $applyBaseline = true, ?bool $strictTools = null, ?string $file = null, ?GuardDecision $guard = null, bool $roundtrip = false, ?DebtMode $debt = null, ?bool $includeVendorMigrations = null): LintOutcome
+    public function run(?string $connection, ?array $migrationPaths, CaptureMode $mode, ?string $assumeServerVersion = null, ?int $level = null, ?array $categories = null, bool $applyBaseline = true, ?bool $strictTools = null, array $files = [], ?GuardDecision $guard = null, bool $roundtrip = false, ?DebtMode $debt = null, ?bool $includeVendorMigrations = null): LintOutcome
     {
         // The session bound belongs to the RUN, not to the connection — and the connection
         // is the HOST APPLICATION's, which under Octane, a queue worker or a test suite
@@ -149,7 +150,7 @@ final readonly class LintRunner implements LintRuns
         $release = null;
 
         try {
-            return $this->runBounded($release, $connection, $migrationPaths, $mode, $assumeServerVersion, $level, $categories, $applyBaseline, $strictTools, $file, $guard, $roundtrip, $debt, $includeVendorMigrations);
+            return $this->runBounded($release, $connection, $migrationPaths, $mode, $assumeServerVersion, $level, $categories, $applyBaseline, $strictTools, $files, $guard, $roundtrip, $debt, $includeVendorMigrations);
         } finally {
             if ($release instanceof Closure) {
                 $release();
@@ -163,9 +164,10 @@ final readonly class LintRunner implements LintRuns
      *
      * @param  Closure|null  $release  set to the session restorer once one is owed
      * @param  list<string>|null  $migrationPaths
+     * @param  list<string>  $files
      * @param  list<string>|null  $categories
      */
-    private function runBounded(?Closure &$release, ?string $connection, ?array $migrationPaths, CaptureMode $mode, ?string $assumeServerVersion = null, ?int $level = null, ?array $categories = null, bool $applyBaseline = true, ?bool $strictTools = null, ?string $file = null, ?GuardDecision $guard = null, bool $roundtrip = false, ?DebtMode $debt = null, ?bool $includeVendorMigrations = null): LintOutcome
+    private function runBounded(?Closure &$release, ?string $connection, ?array $migrationPaths, CaptureMode $mode, ?string $assumeServerVersion = null, ?int $level = null, ?array $categories = null, bool $applyBaseline = true, ?bool $strictTools = null, array $files = [], ?GuardDecision $guard = null, bool $roundtrip = false, ?DebtMode $debt = null, ?bool $includeVendorMigrations = null): LintOutcome
     {
         $connectionName = $this->connectionName($connection);
         // Whether somebody NAMED these paths, decided before the coalesce below overwrites the
@@ -219,7 +221,7 @@ final readonly class LintRunner implements LintRuns
         //  - a failed connect is swallowed: an unreachable server is named by the pending
         //    resolver as `ConnectionUnreachable`, which is the specific and actionable answer.
         //    Crashing here would replace it with a stack trace.
-        $connected = $file === null && $this->openSource($connectionName);
+        $connected = $files === [] && $this->openSource($connectionName);
 
         // The server version is resolved once — flag → config → detected → undetermined —
         // and drives both the header (which version, from where) and rule activation.
@@ -405,14 +407,27 @@ final readonly class LintRunner implements LintRuns
         // The subject source is the ONLY thing the fast path changes: a single --file
         // migration instead of the pending set. A file that does not resolve to a
         // migration is a named misconfiguration, never a silent empty run.
-        if ($file !== null) {
-            $single = $this->resolveSingleFile($file, $migrationPaths, $connectionName);
+        if ($files !== []) {
+            $subjects = [];
 
-            if ($single instanceof SingleFileFailure) {
-                return $this->fileMisconfiguration($single, $context, $mode, $connectionName);
+            foreach ($files as $index => $named) {
+                $single = $this->resolveSingleFile($named, $migrationPaths, $connectionName);
+
+                // The FIRST failure ends the run, rather than linting the rest and mentioning it.
+                // A run that silently judged three of four files and exited 2 would leave the
+                // reader with a report whose denominator is wrong — and this is a misconfiguration,
+                // which is a thing to fix before running, not a partial result to interpret.
+                if ($single instanceof SingleFileFailure) {
+                    return $this->fileMisconfiguration($single, $named, $context, $mode, $connectionName);
+                }
+
+                // Numbered in the order they were NAMED. The pending path numbers by migration
+                // name; here the caller's order is the only one there is, and a pre-commit hook
+                // hands them over in the order git staged them.
+                $subjects[] = $single->withOrderIndex($index);
             }
 
-            $resolution = PendingResolution::resolved([$single]);
+            $resolution = PendingResolution::resolved($subjects);
         } else {
             // The source session was opened and bounded at the top of this method ,
             // before the banner read that needs the handle. It used to happen here, and here was
@@ -498,6 +513,22 @@ final readonly class LintRunner implements LintRuns
             $findings[] = $this->noActiveRulesFinding($activeCategories, $connectionName, $subjectContext);
         }
 
+        // The mirror image, and the one the principle was written for: rules but no SUBJECTS. The
+        // resolution succeeded — nothing is pending — so no skip reason applies and the run walks
+        // the whole pipeline over an empty set, producing a clean report in every format.
+        //
+        // Measured in a consuming project: 56 migrations in the directory, 0 read, exit 0. `--path`
+        // lints the PENDING set, and nothing is pending on a database that has been migrated, which
+        // is every developer machine after `migrate` and every pipeline that lints after its
+        // migration step — that is, precisely where the check is most likely to be hung.
+        //
+        // Kept out of the `--file` path by construction: that one resolves every named file, or
+        // returns a named misconfiguration, before reaching here — so its subject set is empty only
+        // if the caller named nothing, and then this is the pending path.
+        if ($resolution->migrations === []) {
+            $findings[] = $this->noMigrationsReadFinding($connectionName, $migrationPaths, $subjectContext);
+        }
+
         // A pin that disagreed with the connected server is its own finding — the
         // result reflects the pin, not the live instance, and that drift is reported.
         if ($resolvedVersion->hasSkew()) {
@@ -558,7 +589,7 @@ final readonly class LintRunner implements LintRuns
         // differently from one without it.
         foreach ($diagnostics as $diagnostic) {
             if ($diagnostic->tool instanceof SquawkTool) {
-                $findings = $this->squawk->contribute($findings, $run, $diagnostic, $resolvedVersion, $subjectContext, Level::from($activeLevel), $file !== null);
+                $findings = $this->squawk->contribute($findings, $run, $diagnostic, $resolvedVersion, $subjectContext, Level::from($activeLevel), $files !== []);
             }
         }
 
@@ -577,7 +608,7 @@ final readonly class LintRunner implements LintRuns
         // every other one. A pass that appended after `Result::of()` would have to rebuild that
         // pipeline, the second copy would drift from the first, and both halves would stay green
         // while a suppressed debt finding came through anyway.
-        $findings = [...$findings, ...$this->debtFindings($debt, $findings, $registry->all(), $driver->key(), $subjectContext, $file !== null)];
+        $findings = [...$findings, ...$this->debtFindings($debt, $findings, $registry->all(), $driver->key(), $subjectContext, $files !== [])];
 
         // The three-stage suppression chain (baseline · config · annotation) is
         // applied here, after the rule engine and before the reporter, so a second
@@ -763,11 +794,11 @@ final readonly class LintRunner implements LintRuns
     }
 
     /** The `--file`-could-not-resolve outcome: no findings, the failure carried, misconfiguration exit. */
-    private function fileMisconfiguration(SingleFileFailure $failure, RunContext $context, CaptureMode $mode, string $connectionName): LintOutcome
+    private function fileMisconfiguration(SingleFileFailure $failure, string $file, RunContext $context, CaptureMode $mode, string $connectionName): LintOutcome
     {
         $result = Result::of([], $this->metadata($mode));
 
-        return new LintOutcome($result, $context, $this->exitCodes->resolve($result, $context, true), $connectionName, fileFailure: $failure);
+        return new LintOutcome($result, $context, $this->exitCodes->resolve($result, $context, true), $connectionName, fileFailure: $failure, fileFailurePath: $file);
     }
 
     /**
@@ -1341,6 +1372,33 @@ final readonly class LintRunner implements LintRuns
     private function baselineFile(): BaselineFile
     {
         return new ConfiguredBaseline($this->config)->forRun();
+    }
+
+    /**
+     * The undetermined finding for a run that judged no migration at all.
+     *
+     * It names the paths, because the first question a reader has is "which directory did it look
+     * in", and the answer decides between the two very different causes: a path that holds nothing,
+     * and a path whose migrations have all already run.
+     *
+     * @param  list<string>|null  $migrationPaths
+     */
+    private function noMigrationsReadFinding(string $connectionName, ?array $migrationPaths, SubjectContext $subjectContext): Finding
+    {
+        $paths = $migrationPaths === null || $migrationPaths === [] ? 'the application default paths' : implode(', ', $migrationPaths);
+
+        return Finding::undetermined(
+            RunnerNotice::NoMigrationsRead->value,
+            RunnerNotice::MESSAGE_PREFIX,
+            sprintf('No migration was read, so the run judged nothing (%s). --path lints the PENDING migrations of a connection, and nothing is pending once they have all run; lint before the migration step, or name the files with --file.', $paths),
+            UndeterminedReason::NoMigrationsRead,
+            Location::inCallsite('--path', 0, 'connection '.$connectionName, $this->projectRoot()),
+            RunnerNotice::NoMigrationsRead->category(),
+            RunnerNotice::NoMigrationsRead->level(),
+            RunnerNotice::NoMigrationsRead->stability(),
+            RunnerNotice::NoMigrationsRead->documentationUrl(),
+            $subjectContext,
+        );
     }
 
     /**

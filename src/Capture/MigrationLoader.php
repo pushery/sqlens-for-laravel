@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Capture;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Migrations\Migrator;
 use Illuminate\Support\Str;
+use Pushery\SQLens\Exceptions\UnloadableMigration;
 use ReflectionClass;
 
 /**
@@ -84,10 +85,36 @@ final class MigrationLoader
             return new $class;
         }
 
-        /** @var Migration $migration */
         $migration = require $file;
 
-        return $migration;
+        if ($migration instanceof Migration) {
+            return $migration;
+        }
+
+        // ⚠️ THE OLD CLASS SHAPE, AND IT ARRIVES HERE AS `int(1)`.
+        //
+        // `require` returns what the file RETURNS, and 1 when it returns nothing. Both shapes are
+        // valid Laravel: the modern one returns an anonymous class, the older one declares a named
+        // class and returns nothing. The declared-class shortcut above cannot see the second,
+        // because before the `require` the class is not declared yet -- so control lands here with
+        // an integer, and a `/** @var Migration */` docblock above it made the return type read as
+        // a fact rather than an intention.
+        //
+        // Measured in a consuming project on 2026-09-05: 24 migrations, exactly ONE in the old
+        // shape, and that one aborted the entire run with a TypeError. It came from `vendor:publish`
+        // -- a package-published migration, unchanged since -- which is why this is not rare: it is
+        // not old project code, it is anybody who ever published one.
+        //
+        // The second look costs nothing and needs no new derivation: AFTER the require the class IS
+        // declared, so the same reflection-checked lookup that answered `null` a moment ago now
+        // finds it. Same rule as the framework's own `Migrator::resolve()`.
+        $declared = $this->declaredClassFor($file);
+
+        if ($declared !== null) {
+            return new $declared;
+        }
+
+        throw UnloadableMigration::yieldedNothing($file, get_debug_type($migration));
     }
 
     /**
