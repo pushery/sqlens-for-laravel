@@ -5,10 +5,21 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Api;
 
 use Pushery\SQLens\Console\ExitCode;
+use Pushery\SQLens\Contracts\ChecksServerSetting;
+use Pushery\SQLens\Contracts\DeclaresJudgedObjectTypes;
+use Pushery\SQLens\Contracts\DeclaresSecurityPosture;
+use Pushery\SQLens\Contracts\DerivesDowntimeClass;
+use Pushery\SQLens\Contracts\JudgesMigrationStatements;
+use Pushery\SQLens\Contracts\JudgesSchemaObjects;
+use Pushery\SQLens\Contracts\ProvidesRemediation;
+use Pushery\SQLens\Contracts\ProvidesSchemaObjectRemediation;
+use Pushery\SQLens\Contracts\Rule;
 use Pushery\SQLens\Exceptions\MalformedRuleRegistry;
 use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Reporting\Baseline\BaselineSchema;
 use Pushery\SQLens\Reporting\Json\JsonEnvelope;
+use ReflectionClass;
+use ReflectionParameter;
 
 /**
  * The promised surface, as data a machine can diff.
@@ -72,6 +83,40 @@ final readonly class ApiSurface
     ];
 
     /**
+     * The interfaces a third-party rule package implements — the extension API, by name.
+     *
+     * ## Why a declared list AND a derived check
+     *
+     * The public-API page has always called this "the rule contract — the interfaces a third-party
+     * rule package implements", and nobody had ever enumerated them. A prose set cannot be diffed,
+     * so a signature change on any of them reached a consumer with nothing red in between.
+     *
+     * Declared here, because this list IS the promise and it should be read as a decision every
+     * time it changes — the same reasoning as {@see self::RULE_FIELDS} above. And held honest by a
+     * DERIVED arm: `ExtensionContractsTest` reads which interfaces under `src/Contracts/` a rule
+     * class actually implements and requires the two sets to agree. A hand list alone would rot the
+     * day somebody added a capability interface; a derivation alone would silently promise every
+     * internal seam a driver happens to reach through.
+     *
+     * ⚠️ NOT every interface in `src/Contracts/`. That namespace also holds the seams a DRIVER
+     * implements — a catalog reader, a pooler probe, an activity reader. Promising those would make
+     * a major release out of an internal refactor nobody outside this package can observe.
+     *
+     * @var list<class-string>
+     */
+    public const array EXTENSION_CONTRACTS = [
+        ChecksServerSetting::class,
+        DeclaresJudgedObjectTypes::class,
+        DeclaresSecurityPosture::class,
+        DerivesDowntimeClass::class,
+        JudgesMigrationStatements::class,
+        JudgesSchemaObjects::class,
+        ProvidesRemediation::class,
+        ProvidesSchemaObjectRemediation::class,
+        Rule::class,
+    ];
+
+    /**
      * Build the snapshot from the shipped registry.
      *
      * @param  array{entries?: list<array<string, mixed>>}  $registry  decoded rule-registry.json
@@ -126,7 +171,55 @@ final readonly class ApiSurface
             // only the version could not tell which rule to apply.
             'remediation_schema_version' => RemediationPayload::SCHEMA_VERSION,
             'remediation_schema_stability' => RemediationPayload::STABILITY->value,
+            // The extension API's own shape, so a signature change on it is a diff rather than a
+            // surprise. It was absent entirely: the page promised "the interfaces a third-party rule
+            // package implements" and the gate compared rules, exit codes and schema versions —
+            // never a method signature. A consumer's rule package could stop compiling on a minor.
+            'extension_contracts' => self::extensionContracts(),
         ];
+    }
+
+    /**
+     * Every extension contract's methods, as a consumer's implementation has to match them.
+     *
+     * Read by REFLECTION rather than written down: a hand-copied signature agrees on the day it is
+     * typed and is free to disagree afterwards, which is the failure this snapshot exists to catch
+     * happening to the snapshot itself.
+     *
+     * Parameter names are included and that is deliberate — PHP 8 named arguments make a rename a
+     * breaking change for any caller using them, and an implementer's override keeps the parent's
+     * name in its own signature. Sorted at every level so two runs over one tree produce identical
+     * bytes.
+     *
+     * @return array<string, array<string, string>>
+     */
+    private static function extensionContracts(): array
+    {
+        $contracts = [];
+
+        foreach (self::EXTENSION_CONTRACTS as $contract) {
+            $methods = [];
+
+            foreach (new ReflectionClass($contract)->getMethods() as $method) {
+                $parameters = array_map(
+                    static fn (ReflectionParameter $parameter): string => ($parameter->getType() ?? 'mixed').' $'.$parameter->getName(),
+                    $method->getParameters(),
+                );
+
+                $methods[$method->getName()] = sprintf(
+                    '(%s): %s',
+                    implode(', ', $parameters),
+                    (string) ($method->getReturnType() ?? 'mixed'),
+                );
+            }
+
+            ksort($methods);
+            $contracts[$contract] = $methods;
+        }
+
+        ksort($contracts);
+
+        return $contracts;
     }
 
     /**

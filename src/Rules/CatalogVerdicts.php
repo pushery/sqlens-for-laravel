@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Rules;
 
+use Pushery\SQLens\Agent\Remediation\RemediationValidator;
 use Pushery\SQLens\Contracts\JudgesSchemaObjects;
+use Pushery\SQLens\Contracts\ProvidesSchemaObjectRemediation;
 use Pushery\SQLens\Contracts\Rule;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
 use Pushery\SQLens\Findings\NotApplicableReason;
+use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Subjects\SchemaObject;
 
@@ -35,10 +38,59 @@ final readonly class CatalogVerdicts
      */
     public static function toFindings(array $verdicts, Rule $rule, SchemaObject $object): array
     {
+        // Asked ONCE per object rather than once per verdict: the material is about the object, and
+        // a rule that flags twice attaches the same template twice rather than building it twice.
+        $payload = self::remediationFor($rule, $object);
+
         return array_map(
-            static fn (RuleVerdict $verdict): Finding => self::finding($verdict, $rule, $object),
+            static fn (RuleVerdict $verdict): Finding => self::withMaterial(self::finding($verdict, $rule, $object), $payload),
             $verdicts,
         );
+    }
+
+    /**
+     * The second remediation seam's ONE caller — the catalog counterpart of `CaptureFindingCollector`.
+     *
+     * One, and an architecture arm holds it there. On the lint side the number of callers grew from
+     * one to three, and the unspoken precondition — "a rule is only asked about something it
+     * reported" — broke silently when it did. Here the precondition is written on the contract and
+     * the call site is single, which is the pair that keeps it true.
+     *
+     * ⚠️ Asked with the OBJECT, never with a statement. That is the whole reason the second contract
+     * exists: {@see ProvidesRemediation} guarantees its placeholders come from a canonicalized
+     * statement, and a catalog rule has none — so widening that seam would have made its guarantee
+     * conditional rather than adding a case to it.
+     */
+    private static function remediationFor(Rule $rule, SchemaObject $object): ?RemediationPayload
+    {
+        return $rule instanceof ProvidesSchemaObjectRemediation
+            ? $rule->remediationForObject($object)
+            : null;
+    }
+
+    /**
+     * The finding, carrying its material — or carrying why it does not.
+     *
+     * The only place a payload reaches a catalog finding, which is what makes the validator
+     * unbypassable rather than merely available. A refusal never touches the finding itself: the
+     * rule looked at the object and was right about it, and downgrading a real verdict over our own
+     * defective template would hide a problem behind a second one.
+     *
+     * The validator is constructed here rather than injected because it is structural — no
+     * database, no network, no clock, by its own contract — so there is nothing about it a caller
+     * could need to vary, and a parameter would be a seam with one possible value.
+     */
+    private static function withMaterial(Finding $finding, ?RemediationPayload $payload): Finding
+    {
+        if (! $payload instanceof RemediationPayload) {
+            return $finding;
+        }
+
+        $refusal = new RemediationValidator()->refusalFor($payload);
+
+        return $refusal === null
+            ? $finding->withRemediation($payload)
+            : $finding->withRemediationRefusal($refusal);
     }
 
     /**

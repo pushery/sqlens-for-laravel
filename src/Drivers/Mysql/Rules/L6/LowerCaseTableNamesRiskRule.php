@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Drivers\Mysql\Rules\L6;
 
+use Override;
 use Pushery\SQLens\Catalog\CrossFactState;
 use Pushery\SQLens\Catalog\SettingCrossFacts;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\DeclaresJudgedObjectTypes;
+use Pushery\SQLens\Contracts\ProvidesSchemaObjectRemediation;
 use Pushery\SQLens\Drivers\Mysql\Catalog\MysqlSettingCrossFactCollector;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\AbstractCatalogRule;
+use Pushery\SQLens\Rules\OffersAConsideredNone;
 use Pushery\SQLens\Rules\RuleVerdict;
 use Pushery\SQLens\Rules\Suite;
 use Pushery\SQLens\Subjects\SchemaObject;
@@ -43,8 +46,26 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * something MySQL refuses. So the finding proposes CONSISTENT NAMING — the thing a project can
  * actually do this afternoon — and says the switch is not available.
  */
-final class LowerCaseTableNamesRiskRule extends AbstractCatalogRule implements DeclaresJudgedObjectTypes
+final class LowerCaseTableNamesRiskRule extends AbstractCatalogRule implements DeclaresJudgedObjectTypes, ProvidesSchemaObjectRemediation
 {
+    use OffersAConsideredNone;
+
+    /**
+     * Why there is no standard sequence here.
+     *
+     * The rule's own docblock settles this one: the value *"is fixed when the server is initialized and
+     * cannot be changed afterwards"*. It shares the answer with every initdb-scoped server setting,
+     * and the shared key is the point — one fact, one sentence, however many rules meet it.
+     *
+     * The trait decides WHEN this is attached — only where this rule itself flagged — so the rule
+     * only has to say what it concluded.
+     */
+    #[Override]
+    protected function noSequenceReasonKey(): string
+    {
+        return 'sqlens::messages.remediation.no_safe_sequence.server_setting_initdb';
+    }
+
     /**
      * Server variables only. The rule narrows twice — this type, then one variable name — so a run
      * whose reading never named that variable never asked this question at all.

@@ -11,6 +11,7 @@ use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Remediation\RemediationStep;
 use Pushery\SQLens\Remediation\RemediationStepKind;
 use Pushery\SQLens\Remediation\RemediationStrategy;
+use Pushery\SQLens\Remediation\RemediationSubject;
 use Pushery\SQLens\ShippedLocale;
 
 /**
@@ -157,7 +158,7 @@ final readonly class RemediationRenderer
         }
 
         foreach ($payload->steps as $step) {
-            $lines = [...$lines, ...$this->step($step)];
+            $lines = [...$lines, ...$this->step($step, $payload->subject)];
         }
 
         if ($payload->verification !== null) {
@@ -177,10 +178,10 @@ final readonly class RemediationRenderer
      *
      * @return list<string>
      */
-    private function step(RemediationStep $step): array
+    private function step(RemediationStep $step, RemediationSubject $subject): array
     {
         $lines = [
-            sprintf('  %d. **%s** — %s', $step->order, $this->kindLabel($step->kind), $this->text($step->noteKey)),
+            sprintf('  %d. **%s** — %s', $step->order, $this->kindLabel($step->kind, $subject), $this->text($step->noteKey)),
         ];
 
         if ($step->sqlTemplate !== null) {
@@ -248,7 +249,7 @@ final readonly class RemediationRenderer
         }
 
         foreach ($payload->steps as $step) {
-            $lines[] = sprintf('      %d. %s — %s', $step->order, $this->kindLabel($step->kind), $this->text($step->noteKey));
+            $lines[] = sprintf('      %d. %s — %s', $step->order, $this->kindLabel($step->kind, $payload->subject), $this->text($step->noteKey));
 
             if ($step->sqlTemplate !== null) {
                 // Indented one level further and never fenced: a terminal has no code block, and a
@@ -264,9 +265,38 @@ final readonly class RemediationRenderer
         return $lines;
     }
 
-    /** A step kind as a reader meets it, rather than as the schema spells it. */
-    private function kindLabel(RemediationStepKind $kind): string
+    /**
+     * A step kind as a reader meets it, rather than as the schema spells it.
+     *
+     * ## Two vocabularies, because the reader is in two different situations
+     *
+     * A statement payload rewrites something in front of the reader: "in this migration" and "in a
+     * later migration" both point at files that exist. A state payload points at nothing — the
+     * finding came from reading a database, and the fix is a migration nobody has written. "In a
+     * later migration" there quietly implies an earlier one.
+     *
+     * ⚠️ THE SUBJECT COMES FROM THE PAYLOAD, never from a shape this renderer recognizes. Exactly
+     * one place knows which of the two a template is about, and it is the field the producer set. A
+     * renderer that inferred it — from the location kind, from the step kind, from whether a step
+     * carries SQL — would be a second answer to a question that already has one, and two answers
+     * drift.
+     *
+     * `MigrationStatement` is listed in the state arm rather than defaulted, and it is unreachable
+     * there: the validator refuses that kind on a state payload. A `default` would silently hand it
+     * the lint wording, which is the one outcome this method exists to prevent.
+     */
+    private function kindLabel(RemediationStepKind $kind, RemediationSubject $subject): string
     {
+        if ($subject === RemediationSubject::SchemaObject) {
+            return match ($kind) {
+                RemediationStepKind::SeparateMigration => 'In a new migration',
+                RemediationStepKind::QueuedJob => 'In a queued job',
+                RemediationStepKind::SessionSetting => 'Session setting',
+                RemediationStepKind::MigrationStatement,
+                RemediationStepKind::ManualGate => 'Decide first',
+            };
+        }
+
         return match ($kind) {
             RemediationStepKind::MigrationStatement => 'In this migration',
             RemediationStepKind::SeparateMigration => 'In a later migration',

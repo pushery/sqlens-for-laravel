@@ -45,9 +45,19 @@ final readonly class NoSafeSequenceTemplate
      *                             a default would make the reason forgettable, which is the only
      *                             failure this class exists to prevent.
      * @param  string  $verificationKey  how a reader confirms whatever they decide
+     * @param  RemediationSubject  $subject  a statement the reader wrote, or an object the run found.
+     *                                       Defaulted because every caller before the catalog seam
+     *                                       existed judged a statement — and because getting it
+     *                                       wrong is caught rather than rendered: a `schema_object`
+     *                                       payload carrying a downtime class is refused.
      */
-    public function payload(string $reasonKey, string $verificationKey, string $ruleId, ?DowntimeClass $downtimeClass): RemediationPayload
-    {
+    public function payload(
+        string $reasonKey,
+        string $verificationKey,
+        string $ruleId,
+        ?DowntimeClass $downtimeClass,
+        RemediationSubject $subject = RemediationSubject::Statement,
+    ): RemediationPayload {
         return new RemediationPayload(
             steps: [
                 new RemediationStep(
@@ -60,6 +70,7 @@ final readonly class NoSafeSequenceTemplate
             ruleId: $ruleId,
             downtimeClass: $downtimeClass,
             verification: $verificationKey,
+            subject: $subject,
         );
     }
 }

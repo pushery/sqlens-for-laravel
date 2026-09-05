@@ -4,11 +4,18 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Drivers\Pgsql\Rules\L5;
 
+use Pushery\SQLens\Agent\Remediation\RemediationValidator;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\DeclaresJudgedObjectTypes;
+use Pushery\SQLens\Contracts\ProvidesSchemaObjectRemediation;
 use Pushery\SQLens\Findings\DowntimeClass;
+use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
+use Pushery\SQLens\Remediation\RemediationStep;
+use Pushery\SQLens\Remediation\RemediationStepKind;
+use Pushery\SQLens\Remediation\RemediationStrategy;
+use Pushery\SQLens\Remediation\RemediationSubject;
 use Pushery\SQLens\Rules\AbstractCatalogRule;
 use Pushery\SQLens\Rules\RuleVerdict;
 use Pushery\SQLens\Rules\Suite;
@@ -58,7 +65,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * corruption, which is worse than doing nothing. The message states them in that order and a test
  * pins the ORDER rather than the presence of both words.
  */
-final class CollationVersionMismatchRule extends AbstractCatalogRule implements DeclaresJudgedObjectTypes
+final class CollationVersionMismatchRule extends AbstractCatalogRule implements DeclaresJudgedObjectTypes, ProvidesSchemaObjectRemediation
 {
     /**
      * Collations only. The reading is its own catalog surface, so an audit that could not read it
@@ -169,5 +176,71 @@ final class CollationVersionMismatchRule extends AbstractCatalogRule implements 
             $recorded,
             $actual,
         ))];
+    }
+
+    /**
+     * The safe sequence, and its ORDER is the whole of it.
+     *
+     * A `schema_object` payload, not a `statement` one: there is no migration at hand to put this in,
+     * so every step is a `separate_migration` and the payload carries no `downtime_class`. The class
+     * would be a sentence about a deploy that does not exist yet -- what the repair costs depends on
+     * how large the indexes are and who is writing to them while it runs, and that is decided when
+     * somebody writes the migration. {@see RemediationValidator}
+     * refuses one here rather than rendering it.
+     *
+     * The first step is a QUERY rather than a change, and that is deliberate: the finding names the
+     * COLLATION, and the indexes that sort under it are a join away. Listing them for the reader
+     * beats guessing the set, because an index left out keeps answering with the old sort order
+     * after everything else has been repaired -- and nothing at all reports that.
+     */
+    public function remediationForObject(SchemaObject $object): ?RemediationPayload
+    {
+        if ($object->type !== SchemaObjectType::Collation) {
+            return null;
+        }
+
+        // Only where this rule actually flagged. Asking a rule about an object it did not report is
+        // the precondition the first seam left unspoken and paid for; this one states it.
+        if ($this->judgeSchemaObject($object) === []) {
+            return null;
+        }
+
+        return new RemediationPayload(
+            steps: [
+                new RemediationStep(
+                    order: 1,
+                    kind: RemediationStepKind::ManualGate,
+                    noteKey: 'sqlens::messages.remediation.reindex_before_refresh.find_dependents',
+                    sqlTemplate: 'SELECT i.indexrelid::regclass AS index_name FROM pg_index i '
+                        .'JOIN pg_class c ON c.oid = i.indexrelid '
+                        .'JOIN pg_depend d ON d.objid = i.indexrelid AND d.refclassid = \'pg_collation\'::regclass '
+                        .'JOIN pg_collation col ON col.oid = d.refobjid '
+                        .'WHERE col.collname = {{collation}}',
+                    withinTransaction: false,
+                ),
+                new RemediationStep(
+                    order: 2,
+                    kind: RemediationStepKind::SeparateMigration,
+                    noteKey: 'sqlens::messages.remediation.reindex_before_refresh.reindex',
+                    sqlTemplate: 'REINDEX INDEX CONCURRENTLY {{index}}',
+                    withinTransaction: false,
+                ),
+                new RemediationStep(
+                    order: 3,
+                    kind: RemediationStepKind::SeparateMigration,
+                    noteKey: 'sqlens::messages.remediation.reindex_before_refresh.refresh_version',
+                    sqlTemplate: 'ALTER COLLATION {{collation}} REFRESH VERSION',
+                    withinTransaction: true,
+                ),
+            ],
+            strategy: RemediationStrategy::ReindexBeforeRefresh,
+            ruleId: $this->id(),
+            preconditions: [
+                'sqlens::messages.remediation.reindex_before_refresh.precondition.not_a_replica',
+                'sqlens::messages.remediation.reindex_before_refresh.precondition.interruption_is_survivable',
+            ],
+            verification: 'sqlens::messages.remediation.reindex_before_refresh.verification',
+            subject: RemediationSubject::SchemaObject,
+        );
     }
 }

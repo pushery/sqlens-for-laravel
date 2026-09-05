@@ -86,6 +86,29 @@ enum RemediationStrategy: string
      */
     case ExplicitIdentifier = 'explicit_identifier';
 
+    /**
+     * Rebuild the indexes FIRST, and only then tell the server the recorded version is current.
+     *
+     * The order is the whole strategy, which is why it is in the name. A B-tree index on a text
+     * column stores its entries in the collation's sort order; change the collation underneath it
+     * and the index is sorted by rules the server no longer uses, so an equality lookup can miss a
+     * row that is there and a unique constraint can stop rejecting a duplicate. Refreshing the
+     * recorded version first silences the warning and leaves exactly that intact — worse than doing
+     * nothing, because the one signal that something is wrong is gone.
+     *
+     * Added after the enumeration was written, and it costs a SCHEMA VERSION rather than nothing:
+     * `strategy` is a closed enum in the published document, so a consumer validating against the
+     * previous version rejects a payload carrying this value. That is the coupling the digest freeze
+     * in PublishedSchemaTest now enforces mechanically -- this value could not be added without a
+     * new document and a new number, and it did not have to be remembered.
+     *
+     * It duplicates none of the others. `drift_correction` is the nearest, and its own description
+     * names the drift comparison as what found the difference; this one is found by reading a
+     * collation's recorded version against the installed one, which is a different instrument.
+     * `none` would be false: there IS a safe standard sequence, and it is two statements long.
+     */
+    case ReindexBeforeRefresh = 'reindex_before_refresh';
+
     /** Looked at, and there is no safe standard sequence — a statement, not an absence. */
     case None = 'none';
 }
