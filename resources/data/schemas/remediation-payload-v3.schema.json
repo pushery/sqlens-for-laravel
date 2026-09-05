@@ -1,0 +1,163 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://docs.pushery.com/sqlens-for-laravel/schemas/remediation-payload-v1.schema.json",
+    "title": "SQLens remediation payload, version 3",
+    "description": "The machine-readable fix template that rides beside a finding. Material for an agent to apply, never something this tool executes: no field names a path, a command or an execution. A reader that meets a HIGHER schema_version than it understands must ignore the payload rather than guess at it. Within a version the field set does not move: this document is strict, so a key it does not describe is a payload from another version rather than a newer producer, and every published version stays fetchable under its own filename.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "schema_version",
+        "stability",
+        "strategy",
+        "steps",
+        "subject"
+    ],
+    "properties": {
+        "schema_version": {
+            "const": 3
+        },
+        "stability": {
+            "const": "preview",
+            "description": "Constant for the whole version-1 line. Not a field a producer chooses."
+        },
+        "rule_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Which rule this fixes, so a payload lifted out of a finding still says what it is about."
+        },
+        "subject": {
+            "type": "string",
+            "enum": [
+                "statement",
+                "schema_object"
+            ],
+            "default": "statement",
+            "description": "What this template is ABOUT. `statement` rewrites a statement the reader wrote: placeholders come from the canonicalized statement, `downtime_class` describes what applying this deploy does, and a `migration_statement` step means \"in this migration\". `schema_object` describes a migration that does not exist yet, for an object the run found in the database — there is no \"this migration\" and no deploy whose effect a downtime class could describe. Every version-1 payload is a `statement`, which is why that is the default a reader should assume when reading an archived one."
+        },
+        "strategy": {
+            "type": "string",
+            "description": "The named safe sequence. `none` is a conclusion — this rule looked and there is no safe standard sequence — and is not the same as an absent payload, which says only that nobody wrote one.",
+            "enum": [
+                "concurrently",
+                "not_valid_then_validate",
+                "expand_contract",
+                "batched_backfill",
+                "timeout_preamble",
+                "deploy_window_drop",
+                "rewrite_avoidance",
+                "algorithm_lock_hint",
+                "charset_migration",
+                "enum_append_only",
+                "transaction_split",
+                "drift_correction",
+                "explicit_identifier",
+                "reindex_before_refresh",
+                "none"
+            ]
+        },
+        "downtime_class": {
+            "type": "string",
+            "enum": [
+                "online",
+                "blocking",
+                "rewrite"
+            ]
+        },
+        "debt_kind": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The debt this sequence deliberately leaves open between its steps, in the ledger's own vocabulary — absent for almost every sequence. A pattern like `not_valid_then_validate` is correct and incomplete at the same moment, and naming the account it opens is what stops a half-applied fix from becoming a silent, permanent one."
+        },
+        "preconditions": {
+            "type": "array",
+            "items": {
+                "type": "string",
+                "minLength": 1
+            },
+            "description": "Translation keys for what must hold BEFORE step one. A sequence whose preconditions nobody checked is a sequence that fails halfway."
+        },
+        "steps": {
+            "type": "array",
+            "description": "The safe sequence, sorted by `order`. The order is the safety property: a sequence applied out of order is not a slower fix, it is a different and usually broken one.",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "order",
+                    "kind",
+                    "note_key",
+                    "within_transaction"
+                ],
+                "properties": {
+                    "order": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "kind": {
+                        "type": "string",
+                        "enum": [
+                            "migration_statement",
+                            "separate_migration",
+                            "queued_job",
+                            "session_setting",
+                            "manual_gate"
+                        ],
+                        "description": "WHERE the step belongs. The difference between `migration_statement` and `separate_migration` is the difference between a sequence that works and one that deadlocks on its own transaction."
+                    },
+                    "note_key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "A translation key, never a sentence: prose here would make every payload a translation unit and the same fix would drift into as many wordings as there are locales."
+                    },
+                    "sql_template": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Named placeholders `{{table}}`, `{{column}}`, `{{index}}`, filled deterministically from the finding's own context. Never generated, never guessed."
+                    },
+                    "laravel_snippet": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "within_transaction": {
+                        "type": "boolean",
+                        "description": "FALSE is the load-bearing value: CONCURRENTLY and its relatives fail inside a transaction, so a reader who assumes the default gets a sequence that cannot run."
+                    }
+                }
+            }
+        },
+        "verification": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Translation key for how to confirm it worked — the step an agent skips, and the reason this package re-verifies afterwards."
+        },
+        "references": {
+            "type": "array",
+            "items": {
+                "type": "string",
+                "format": "uri"
+            }
+        }
+    },
+    "allOf": [
+        {
+            "if": {
+                "properties": {
+                    "subject": {
+                        "const": "schema_object"
+                    }
+                },
+                "required": [
+                    "subject"
+                ]
+            },
+            "then": {
+                "not": {
+                    "required": [
+                        "downtime_class"
+                    ]
+                },
+                "description": "A state finding carries no downtime class. The effect arrives when somebody writes the migration and depends on what they write, so a value here would be a sentence about a deploy that does not exist — and exactly as legible as a true one. Refused rather than ignored: absent is a fact, present-and-ignored is a lie a reader cannot see."
+            }
+        }
+    ]
+}

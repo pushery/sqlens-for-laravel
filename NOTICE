@@ -82,6 +82,7 @@ license; the data allowlist stays as narrow as it was.
 - schemas/online-ddl-matrix.schema.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-07-24
 - schemas/remediation-payload-v1.schema.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-08-08
 - schemas/remediation-payload-v2.schema.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-09-05
+- schemas/remediation-payload-v3.schema.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-09-05
 - rule-registry.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-07-25
 - api-surface.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-08-17
 - rule-driver-notes.json · https://github.com/pushery/sqlens-for-laravel (written for this package) · CC0-1.0 · 2026-07-25

@@ -345,6 +345,74 @@ final readonly class BreakingChangeDetector
             $changes[] = $change;
         }
 
+        foreach (self::extensionContractChanges($released, $candidate) as $change) {
+            $changes[] = $change;
+        }
+
+        return $changes;
+    }
+
+    /**
+     * Any move in an extension contract's shape, which is a break for every rule package there is.
+     *
+     * ## Why it is forbidden in BOTH directions, unlike a rule field
+     *
+     * A rule may gain a severity and that is a raise, not a break. An interface has no such
+     * asymmetry: ADDING a method breaks every existing implementer, removing one breaks every
+     * caller, and changing a parameter type or name breaks both — PHP 8 named arguments make a
+     * rename observable, and an implementer's override carries the parent's parameter names into
+     * its own signature. There is no benign direction, so there is no allowance.
+     *
+     * ## Reported per METHOD, not per contract
+     *
+     * "ProvidesRemediation changed" tells an implementer to go and diff nine interfaces. The method
+     * and its two signatures are what somebody acts on, and the whole point of this gate is that a
+     * consumer learns before their build does.
+     *
+     * @param  array<string, mixed>  $released
+     * @param  array<string, mixed>  $candidate
+     * @return list<SurfaceChange>
+     */
+    private static function extensionContractChanges(array $released, array $candidate): array
+    {
+        $before = is_array($released['extension_contracts'] ?? null) ? $released['extension_contracts'] : [];
+        $after = is_array($candidate['extension_contracts'] ?? null) ? $candidate['extension_contracts'] : [];
+        $changes = [];
+
+        // ⚠️ `array_unique`, and the arm below is why it is here. Without it a contract present on
+        // both sides is visited twice and every change it carries is reported twice — which reads,
+        // in a failing gate, as two separate breaks to go and look at.
+        foreach (array_unique([...array_keys($before), ...array_keys($after)]) as $contract) {
+            $contract = (string) $contract;
+            $was = is_array($before[$contract] ?? null) ? $before[$contract] : [];
+            $is = is_array($after[$contract] ?? null) ? $after[$contract] : [];
+
+            foreach (array_unique([...array_keys($was), ...array_keys($is)]) as $method) {
+                $method = (string) $method;
+                $from = $was[$method] ?? null;
+                $to = $is[$method] ?? null;
+
+                if ($from === $to) {
+                    continue;
+                }
+
+                $changes[] = new SurfaceChange(
+                    SurfaceChangeClass::ForbiddenWithoutMajor,
+                    'extension_contracts.'.$contract,
+                    $method,
+                    sprintf('%s::%s went from %s to %s', $contract, $method, self::render($from), self::render($to)),
+                    'this is the interface a third-party rule package implements. A signature that '
+                    .'moves takes their build with it, and they find out at composer update rather '
+                    .'than here.',
+                );
+            }
+        }
+
+        // Deterministic, and sorted on the pair rather than on the message: two runs over one tree
+        // must produce identical bytes, and the message embeds a rendered value whose ordering
+        // would then depend on its content.
+        usort($changes, static fn (SurfaceChange $a, SurfaceChange $b): int => [$a->subject, $a->field] <=> [$b->subject, $b->field]);
+
         return $changes;
     }
 

@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Drivers\Pgsql\Rules\L5;
 
+use Override;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\DeclaresJudgedObjectTypes;
+use Pushery\SQLens\Contracts\ProvidesSchemaObjectRemediation;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\AbstractCatalogRule;
 use Pushery\SQLens\Rules\Coverage\ForeignKeyIndexCoverage;
+use Pushery\SQLens\Rules\OffersAConsideredNone;
 use Pushery\SQLens\Rules\RuleVerdict;
 use Pushery\SQLens\Rules\Suite;
 use Pushery\SQLens\Subjects\SchemaObject;
@@ -56,8 +59,26 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * Naming the limit is the honest form; a live test asserts it so it stays a documented boundary
  * rather than a surprise.
  */
-final class MoneyTypeRule extends AbstractCatalogRule implements DeclaresJudgedObjectTypes
+final class MoneyTypeRule extends AbstractCatalogRule implements DeclaresJudgedObjectTypes, ProvidesSchemaObjectRemediation
 {
+    use OffersAConsideredNone;
+
+    /**
+     * Why there is no standard sequence here.
+     *
+     * PostgreSQL's `money` is not a binary float, but the path off it is the same decision: the target
+     * is `numeric(19, 4)` with the currency in a column of its own, and moving a populated column
+     * there decides how every existing value lands.
+     *
+     * The trait decides WHEN this is attached — only where this rule itself flagged — so the rule
+     * only has to say what it concluded.
+     */
+    #[Override]
+    protected function noSequenceReasonKey(): string
+    {
+        return 'sqlens::messages.remediation.no_safe_sequence.money_in_a_binary_float';
+    }
+
     /**
      * Tables only — a run that read none produced no subject for this rule, and the report has to be
      * able to say so rather than let the silence read as a clean answer.

@@ -11,6 +11,7 @@ use Pushery\SQLens\Contracts\DeclaresJudgedObjectTypes;
 use Pushery\SQLens\Contracts\DerivesDowntimeClass;
 use Pushery\SQLens\Contracts\JudgesSchemaObjects;
 use Pushery\SQLens\Contracts\ProvidesRemediation;
+use Pushery\SQLens\Contracts\ProvidesSchemaObjectRemediation;
 use Pushery\SQLens\Drivers\Mysql\DowntimeClass\MysqlDowntimeClassSource;
 use Pushery\SQLens\Drivers\Mysql\Rules\AbstractMysqlRule;
 use Pushery\SQLens\Engine\ResolvedServerVersion;
@@ -19,6 +20,7 @@ use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Remediation\NoSafeSequenceTemplate;
+use Pushery\SQLens\Remediation\RemediationSubject;
 use Pushery\SQLens\Rules\InstanceScope;
 use Pushery\SQLens\Rules\Keys\TableKeyState;
 use Pushery\SQLens\Rules\RuleVerdict;
@@ -70,7 +72,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * way every intentional exception in this package is: with a baseline entry, a config ignore, or
  * a migration annotation — never by weakening the rule until it stops seeing the real ones.
  */
-final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements DeclaresJudgedObjectTypes, DerivesDowntimeClass, JudgesSchemaObjects, ProvidesRemediation
+final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements DeclaresJudgedObjectTypes, DerivesDowntimeClass, JudgesSchemaObjects, ProvidesRemediation, ProvidesSchemaObjectRemediation
 {
     /**
      * Tables only — a run that read none produced no subject for this rule, and the report has to be
@@ -198,6 +200,52 @@ final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements Decl
             'sqlens::messages.remediation.no_safe_sequence.schema_decision_verification',
             $this->id(),
             $this->downtimeClassFor($statement),
+        );
+    }
+
+    /**
+     * The same considered `none`, about a table that is unkeyed RIGHT NOW rather than about a
+     * statement that would leave it so — and the first implementer of the second seam.
+     *
+     * The conclusion is not new here, which is why this rule was chosen to go first: the lint side
+     * already reasoned it out and wrote it down. Putting a key on a populated table needs a
+     * candidate that is unique AND `NOT NULL` across every row, and that is a fact about DATA this
+     * package never reads. A surrogate `id BIGINT UNSIGNED AUTO_INCREMENT` is usually right, and a
+     * rule that emitted it would be choosing somebody's clustering order — which on InnoDB decides
+     * physical row order. So the answer is a decision named, not a statement handed over.
+     *
+     * The catalog case is if anything the harder of the two: a table in the database is populated by
+     * definition, so the empty-table escape the `CREATE TABLE` case has does not exist here.
+     *
+     * ⚠️ NO DOWNTIME CLASS, and it is not an omission. The lint side passes one because it is about
+     * a deploy that is about to happen; here there is no deploy — the cost arrives when somebody
+     * writes the migration, and depends on which key they choose. A value would be a sentence about
+     * a deploy that does not exist, and the validator refuses one rather than rendering it.
+     *
+     * Silent for an object it did not flag, and silent for the undetermined reading: material saying
+     * "you have no key" would overtake a verdict that says it does not know.
+     */
+    #[Override]
+    public function remediationForObject(SchemaObject $object): ?RemediationPayload
+    {
+        if ($object->type !== SchemaObjectType::Table || $object->isPartition || $object->fromExtension) {
+            return null;
+        }
+
+        if (TableKeyState::inCatalog($object) !== TableKeyState::Unkeyed) {
+            return null;
+        }
+
+        return $this->noSafeSequence->payload(
+            'sqlens::messages.remediation.no_safe_sequence.no_primary_key_live_table',
+            // ⚠️ NOT the statement half's verification key, and the first version reached for it.
+            // Its text says "run sqlens:lint again" — correct for a finding that read a migration,
+            // wrong here: this one read the CATALOG, so lint would never go quiet however good the
+            // fix. Two commands, two moments.
+            'sqlens::messages.remediation.no_safe_sequence.schema_decision_state_verification',
+            $this->id(),
+            null,
+            RemediationSubject::SchemaObject,
         );
     }
 

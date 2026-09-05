@@ -34,7 +34,7 @@ final readonly class RemediationPayload
      * Monotonic; bumps on any change to the field set, even in preview. Versions
      * the envelope, not the package SemVer.
      */
-    public const int SCHEMA_VERSION = 2;
+    public const int SCHEMA_VERSION = 3;
 
     /**
      * Where the published contract lives, relative to the package root — in exactly ONE place.
@@ -43,8 +43,14 @@ final readonly class RemediationPayload
      * and the half that still points at the old place fails in whichever direction nobody is
      * watching. Named here rather than in the test that reads it, so a move stays a one-line change.
      */
-    public const string PUBLISHED_SCHEMA = 'resources/data/schemas/remediation-payload-v2.schema.json';
+    public const string PUBLISHED_SCHEMA = 'resources/data/schemas/remediation-payload-v3.schema.json';
 
+    // 3 since `RemediationStrategy::ReindexBeforeRefresh` landed, and that value could not have been
+    // added without this bump: `strategy` is a CLOSED enum in the published document, so a consumer
+    // validating against version 2 rejects a payload carrying a value version 2 never described.
+    // Nobody had to remember the coupling -- the digest freeze below turned red on the commit that
+    // added the case, before a line of the new document existed.
+    //
     // 2 since the `subject` field landed, and the version this replaced said 1 for a reason that had
     // QUIETLY EXPIRED — which is why the old text is not left standing to be believed.
     //

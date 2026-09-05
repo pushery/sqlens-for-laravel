@@ -2485,6 +2485,51 @@
     },
     "baseline_schema_version": 2,
     "report_schema_version": 5,
-    "remediation_schema_version": 2,
-    "remediation_schema_stability": "preview"
+    "remediation_schema_version": 3,
+    "remediation_schema_stability": "preview",
+    "extension_contracts": {
+        "Pushery\\SQLens\\Contracts\\ChecksServerSetting": {
+            "settingDriver": "(): string",
+            "settingVariable": "(): string"
+        },
+        "Pushery\\SQLens\\Contracts\\DeclaresJudgedObjectTypes": {
+            "judgedObjectTypes": "(): array"
+        },
+        "Pushery\\SQLens\\Contracts\\DeclaresSecurityPosture": {
+            "limitations": "(): array",
+            "severity": "(): ?Pushery\\SQLens\\Severity\\Severity"
+        },
+        "Pushery\\SQLens\\Contracts\\DerivesDowntimeClass": {
+            "downtimeClassFor": "(Pushery\\SQLens\\Subjects\\MigrationStatementView $statement): ?Pushery\\SQLens\\Findings\\DowntimeClass"
+        },
+        "Pushery\\SQLens\\Contracts\\JudgesMigrationStatements": {
+            "judgeStatement": "(Pushery\\SQLens\\Subjects\\MigrationStatementView $statement): ?Pushery\\SQLens\\Rules\\RuleVerdict"
+        },
+        "Pushery\\SQLens\\Contracts\\JudgesSchemaObjects": {
+            "judgeSchemaObject": "(Pushery\\SQLens\\Subjects\\SchemaObject $object): array"
+        },
+        "Pushery\\SQLens\\Contracts\\ProvidesRemediation": {
+            "remediationFor": "(Pushery\\SQLens\\Subjects\\MigrationStatementView $statement): ?Pushery\\SQLens\\Findings\\RemediationPayload"
+        },
+        "Pushery\\SQLens\\Contracts\\ProvidesSchemaObjectRemediation": {
+            "remediationForObject": "(Pushery\\SQLens\\Subjects\\SchemaObject $object): ?Pushery\\SQLens\\Findings\\RemediationPayload"
+        },
+        "Pushery\\SQLens\\Contracts\\Rule": {
+            "appliesTo": "(Pushery\\SQLens\\Contracts\\Subject $subject): bool",
+            "category": "(): Pushery\\SQLens\\Categories\\Category",
+            "confidence": "(): Pushery\\SQLens\\Findings\\Confidence",
+            "deprecation": "(): ?Pushery\\SQLens\\Rules\\RuleDeprecation",
+            "documentationUrl": "(): string",
+            "downtimeClass": "(): ?Pushery\\SQLens\\Findings\\DowntimeClass",
+            "evaluate": "(Pushery\\SQLens\\Contracts\\Subject $subject): array",
+            "id": "(): string",
+            "instanceScope": "(): Pushery\\SQLens\\Rules\\InstanceScope",
+            "level": "(): Pushery\\SQLens\\Levels\\Level",
+            "messagePrefix": "(): string",
+            "severity": "(): ?Pushery\\SQLens\\Severity\\Severity",
+            "stability": "(): Pushery\\SQLens\\Rules\\StabilityTier",
+            "suites": "(): array",
+            "versionWindow": "(): Pushery\\SQLens\\Rules\\VersionWindow"
+        }
+    }
 }

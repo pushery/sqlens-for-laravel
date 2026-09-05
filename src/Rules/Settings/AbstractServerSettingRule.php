@@ -10,7 +10,11 @@ use Pushery\SQLens\Catalog\PoolerVerdict;
 use Pushery\SQLens\Catalog\SettingCrossFacts;
 use Pushery\SQLens\Contracts\ChecksServerSetting;
 use Pushery\SQLens\Contracts\DeclaresJudgedObjectTypes;
+use Pushery\SQLens\Contracts\ProvidesSchemaObjectRemediation;
+use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Findings\UndeterminedReason;
+use Pushery\SQLens\Remediation\NoSafeSequenceTemplate;
+use Pushery\SQLens\Remediation\RemediationSubject;
 use Pushery\SQLens\Rules\AbstractCatalogRule;
 use Pushery\SQLens\Rules\InstanceScope;
 use Pushery\SQLens\Rules\RuleVerdict;
@@ -44,7 +48,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * confidently, and with no test failing. The subject carries both; this base hands the subclass only
  * `server_value`, so the wrong one is not in reach.
  */
-abstract class AbstractServerSettingRule extends AbstractCatalogRule implements ChecksServerSetting, DeclaresJudgedObjectTypes
+abstract class AbstractServerSettingRule extends AbstractCatalogRule implements ChecksServerSetting, DeclaresJudgedObjectTypes, ProvidesSchemaObjectRemediation
 {
     /**
      * Server variables only. The family narrows twice — first to this type, then to one variable name —
@@ -322,6 +326,62 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
         $violation = $this->violation($serverValue, $expectation, $object);
 
         return $violation === null ? [] : [RuleVerdict::flag($violation)];
+    }
+
+    /**
+     * The same conclusion as {@see self::remediation()}, in the shape a consumer can act on.
+     *
+     * ## It is a considered `none` for every one of these, and that is not a shortcut
+     *
+     * No migration sets a server variable. There is no sequence to hand over, and the thing that
+     * IS worth handing over — what changing it costs and where the work is — is exactly what the
+     * `none` reason carries. A payload proposing a migration here would be the failure this base
+     * class already names one method down: *advice they will follow for an afternoon before
+     * discovering it cannot be done.*
+     *
+     * ## The reason is DERIVED from the change cost, not written per rule
+     *
+     * Twelve rules reach this base and they have three distinct answers between them, because the
+     * fact that differs is the cost axis rather than the variable. Writing twelve reasons would be
+     * writing the same three sentences four times each, and the fourth copy is the one that stops
+     * agreeing with the other three.
+     *
+     * ⚠️ NO DOWNTIME CLASS. There is no deploy here at all — the change happens in a configuration
+     * file, and what it costs is stated in the reason rather than in an axis about migrations. The
+     * validator refuses one on a `schema_object` payload, so this is enforced rather than merely
+     * intended.
+     *
+     * Silent for an object this rule does not judge and for a version with no expectation on file:
+     * material beside a verdict that says "read but not judged" would overtake it.
+     */
+    #[Override]
+    final public function remediationForObject(SchemaObject $object): ?RemediationPayload
+    {
+        if ($object->type !== SchemaObjectType::Setting || $object->qualifiedName !== $this->settingVariable()) {
+            return null;
+        }
+
+        $expectation = $this->matrix()->for(
+            $this->settingDriver(),
+            $this->settingVariable(),
+            $object->context()->serverVersion?->toString(),
+        );
+
+        if (! $expectation instanceof ServerSettingExpectation) {
+            return null;
+        }
+
+        return new NoSafeSequenceTemplate()->payload(
+            match ($expectation->changeable) {
+                SettingChangeCost::Session, SettingChangeCost::Reload => 'sqlens::messages.remediation.no_safe_sequence.server_setting_reload',
+                SettingChangeCost::Restart => 'sqlens::messages.remediation.no_safe_sequence.server_setting_restart',
+                SettingChangeCost::Initdb => 'sqlens::messages.remediation.no_safe_sequence.server_setting_initdb',
+            },
+            'sqlens::messages.remediation.no_safe_sequence.server_setting_verification',
+            $this->id(),
+            null,
+            RemediationSubject::SchemaObject,
+        );
     }
 
     /**
