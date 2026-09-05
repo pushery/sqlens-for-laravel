@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Lint;
 use Pushery\SQLens\Capture\PendingSkipReason;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\CarriesNoSeverity;
+use Pushery\SQLens\Contracts\ReportsWhatTheRunObserved;
 use Pushery\SQLens\Contracts\RunNotice;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
@@ -39,6 +40,7 @@ use Pushery\SQLens\Rules\Suite;
 enum RunnerNotice: string implements RunNotice
 {
     use CarriesNoSeverity;
+    use ReportsWhatTheRunObserved;
 
     /** The family page for `LINT.SKIPPED.<reason>` — a run that could not lint anything. */
     case Skipped = 'LINT.SKIPPED';

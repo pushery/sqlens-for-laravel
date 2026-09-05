@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Catalog\Degradation;
 use Pushery\SQLens\Catalog\SkipReason;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\CarriesNoSeverity;
+use Pushery\SQLens\Contracts\ReportsWhatTheRunObserved;
 use Pushery\SQLens\Contracts\RunNotice;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Lint\RunnerNotice;
@@ -32,6 +33,7 @@ use Pushery\SQLens\Rules\Suite;
 enum CatalogNotice: string implements RunNotice
 {
     use CarriesNoSeverity;
+    use ReportsWhatTheRunObserved;
 
     /** The family page for `AUDIT.CATALOG.UNREAD.<reason>` — something in scope went unread. */
     case CatalogUnread = 'AUDIT.CATALOG.UNREAD';

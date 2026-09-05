@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Audit;
 use Pushery\SQLens\Catalog\Degradation\CatalogNotice;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\CarriesNoSeverity;
+use Pushery\SQLens\Contracts\ReportsWhatTheRunObserved;
 use Pushery\SQLens\Contracts\RunNotice;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Lint\RunnerNotice;
@@ -36,6 +37,7 @@ use Pushery\SQLens\Rules\Suite;
 enum AuditNotice: string implements RunNotice
 {
     use CarriesNoSeverity;
+    use ReportsWhatTheRunObserved;
 
     /** The filters admitted no rule, so the run checked nothing. */
     case NoActiveRules = 'CAP.L0.NO_ACTIVE_RULES';

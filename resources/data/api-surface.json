@@ -2485,6 +2485,6 @@
     },
     "baseline_schema_version": 2,
     "report_schema_version": 5,
-    "remediation_schema_version": 1,
+    "remediation_schema_version": 2,
     "remediation_schema_stability": "preview"
 }

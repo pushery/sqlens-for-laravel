@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Deploy;
 
 use Pushery\SQLens\Categories\Category;
+use Pushery\SQLens\Contracts\Attribution;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
@@ -78,6 +79,26 @@ final readonly class DeployCheckMetadata
         public string $messagePrefix,
         public array $suites,
         public array $limitations,
+        /**
+         * Whether this check names something the READER wrote, or something the run OBSERVED.
+         *
+         * This is the family the question was raised for, because it is the family that splits.
+         * Twenty-two of these checks read the world — a lock another session holds, a replica
+         * behind, an index whose build died, a privilege the role lacks — and for those an example
+         * pair would be confident, concrete, and about something else. Two read a state a MIGRATION
+         * left: a constraint added `NOT VALID` and never validated, and a MySQL check written
+         * `NOT ENFORCED`. Those two have a clean pair and owe one.
+         *
+         * ⚠️ Required rather than defaulted, and the four name-based `LEGACY` checks are why. They
+         * look authored — `orders_old`, `_t_gho`, an invalid index — and they are not: each says in
+         * its own limitations that it cannot tell wreckage from a healthy in-flight state, so no
+         * migration reliably causes them and none avoids them. A default would have classified all
+         * six of that family the same way without anybody deciding, and a new check would inherit
+         * whichever answer happened to be the default.
+         *
+         * {@see Attribution} carries the criterion and what each answer obliges.
+         */
+        public Attribution $attribution,
     ) {}
 
     /**
@@ -91,12 +112,13 @@ final readonly class DeployCheckMetadata
         Severity $severity,
         array $suites,
         array $limitations,
+        Attribution $attribution,
         ?DowntimeClass $downtimeClass = null,
         bool $downtimeClassDerived = false,
         Category $category = Category::Safety,
         Level $level = Level::Capturable,
     ): self {
-        return new self($id, $category, $level, $severity, false, $downtimeClass, $downtimeClassDerived, StabilityTier::Stable, DeployCheckCatalog::MESSAGE_PREFIX, $suites, $limitations);
+        return new self($id, $category, $level, $severity, false, $downtimeClass, $downtimeClassDerived, StabilityTier::Stable, DeployCheckCatalog::MESSAGE_PREFIX, $suites, $limitations, $attribution);
     }
 
     /**
@@ -112,12 +134,13 @@ final readonly class DeployCheckMetadata
         string $id,
         array $suites,
         array $limitations,
+        Attribution $attribution,
         ?DowntimeClass $downtimeClass = null,
         bool $downtimeClassDerived = false,
         Category $category = Category::Safety,
         Level $level = Level::Capturable,
     ): self {
-        return new self($id, $category, $level, null, true, $downtimeClass, $downtimeClassDerived, StabilityTier::Stable, DeployCheckCatalog::MESSAGE_PREFIX, $suites, $limitations);
+        return new self($id, $category, $level, null, true, $downtimeClass, $downtimeClassDerived, StabilityTier::Stable, DeployCheckCatalog::MESSAGE_PREFIX, $suites, $limitations, $attribution);
     }
 
     /**

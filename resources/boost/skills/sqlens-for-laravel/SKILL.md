@@ -388,11 +388,24 @@ exits non-zero if so, which is the form a CI step uses. `--diff` shows the chang
 php artisan sqlens:format          # rewrite
 php artisan sqlens:format --check  # a verdict a pipeline can act on
 php artisan sqlens:format --diff   # a unified diff, written nowhere
+php artisan sqlens:format database/sql/report.sql   # one file, as an argument or --path=
 ```
+
+`--format=console|json|github` picks the report, the same spelling as every other command — yes,
+`--format` on `sqlens:format`, and the collision is deliberate rather than an oversight. `console`
+is the default and goes to STDERR; `json` and `github` go to STDOUT, so `--format=json > report.json`
+yields a file holding nothing but the document. An unknown value is a misconfiguration, refused
+before anything is written, never a quiet fall back to `console`.
 
 In `auto` the run names any backend it could not use (`TOOL.PGFORMATTER.MISSING`) and what
 installing it would add — the fallback to the built-in core is right, but a silent one leaves two
 machines formatting differently with nothing saying so. `--strict-tools` makes that a failure.
+
+Which files a run finds comes from `sqlens.format.paths` (empty: the app's migration paths),
+`exclude` (default `['database/schema/*']`, because `schema:dump` rewrites those anyway) and
+`extensions` (default `['sql']`). ⚠️ `php` is **reserved** and cannot be added — a migration is a PHP
+file, and reading one as SQL rewrites the whole file as a single statement. `vendor/`,
+`node_modules/` and `storage/` are never walked into, and symlinks are not followed.
 
 `--diff` and `--check` are not the same question. `--diff` shows the work and leaves the exit code
 alone; `--check` returns the verdict. Run `--diff` to decide whether to run the write, `--check` in

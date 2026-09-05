@@ -1840,6 +1840,48 @@ return [
     'format' => [
 
         /*
+         * WHERE to look for SQL files. Empty means the application's registered
+         * migration paths, which is right for most projects and wrong for the one
+         * that keeps its SQL somewhere else — `database/sql/`, `db/`, a legacy
+         * dump directory. Name those roots here rather than on every invocation.
+         *
+         * Repo-relative. `format` is the only suite that WRITES, so this list is
+         * the blast radius rather than a convenience.
+         */
+        'paths' => [],
+
+        /*
+         * Globs excluded from every run, matched against the walked path; a
+         * repo-relative glob is anchored for you, so `database/schema/*` works.
+         *
+         * The default protects `schema:dump`'s output. That file is written from
+         * the database in whatever shape the dumper produces, so reformatting it
+         * makes the next dump a large diff against a file nobody edits — visible
+         * on every deploy. A project that hand-maintains its schema file can take
+         * the entry out; the run then NAMES the dump files it touched, so the
+         * decision shows up in the output and not only here.
+         *
+         * `vendor/`, `node_modules/` and `storage/` are never walked into and are
+         * deliberately not on this list: they are not a preference.
+         */
+        'exclude' => ['database/schema/*'],
+
+        /*
+         * Which extensions count as a SQL file. Without the dot.
+         *
+         * ⚠️ `php` and `phtml` are RESERVED and cannot be added. A Laravel
+         * migration is a PHP file whose SQL, where there is any, lives inside a
+         * heredoc — running a SQL formatter over one does not format that SQL, it
+         * reads the whole file as a statement and rewrites it. That is a destroyed
+         * migration, reported as `reformatted`. The refusal is not a warning
+         * because the outcome is data loss rather than a bad report.
+         *
+         * So this key widens the set to other files that hold nothing but SQL
+         * (`.ddl`, `.psql`, `.pgsql`), never to files that hold a program.
+         */
+        'extensions' => ['sql'],
+
+        /*
          * `auto`, `php`, `pgformatter` or `sqlfluff`.
          */
         'backend' => 'auto',

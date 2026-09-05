@@ -345,15 +345,15 @@ final class GithubReporter implements Reporter
         };
     }
 
-    /** Escape a workflow-command MESSAGE: `%` first so later replacements are not re-escaped. */
+    /** Escape a workflow-command MESSAGE. Delegated: {@see WorkflowCommandEscaping} says why it is shared. */
     private function escapeData(string $value): string
     {
-        return str_replace(['%', "\r", "\n"], ['%25', '%0D', '%0A'], $value);
+        return WorkflowCommandEscaping::data($value);
     }
 
-    /** Escape a workflow-command PROPERTY value: the message escapes plus `:` and `,`. */
+    /** Escape a workflow-command PROPERTY value. Delegated: {@see WorkflowCommandEscaping} says why it is shared. */
     private function escapeProperty(string $value): string
     {
-        return str_replace(['%', "\r", "\n", ':', ','], ['%25', '%0D', '%0A', '%3A', '%2C'], $value);
+        return WorkflowCommandEscaping::property($value);
     }
 }

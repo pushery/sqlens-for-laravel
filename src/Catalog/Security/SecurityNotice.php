@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Catalog\Security;
 use Pushery\SQLens\Catalog\Degradation\CatalogNotice;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\CarriesNoSeverity;
+use Pushery\SQLens\Contracts\ReportsWhatTheRunObserved;
 use Pushery\SQLens\Contracts\RunNotice;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
@@ -40,6 +41,7 @@ use Pushery\SQLens\Rules\Suite;
 enum SecurityNotice: string implements RunNotice
 {
     use CarriesNoSeverity;
+    use ReportsWhatTheRunObserved;
 
     /** The family page for `SEC.SKIPPED.<DRIVER>.<AREA>` — part of the security reading was refused. */
     case SecuritySkipped = 'SEC.SKIPPED';

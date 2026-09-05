@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Deploy;
 
 use Pushery\SQLens\Categories\Category;
+use Pushery\SQLens\Contracts\Attribution;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Rules\Suite;
 use Pushery\SQLens\Severity\Severity;
@@ -95,6 +96,7 @@ final readonly class DeployCheckCatalog
                 'reads only the object types both catalog readings covered — a type one side could '
                 .'not read is a named blind spot rather than an absence',
             ],
+            Attribution::Observed,
             DowntimeClass::Online,
         );
     }
@@ -120,6 +122,7 @@ final readonly class DeployCheckCatalog
                 'says nothing about WHEN the object went missing; the comparison is of two states, '
                 .'not of a history',
             ],
+            Attribution::Observed,
             DowntimeClass::Online,
         );
     }
@@ -143,6 +146,7 @@ final readonly class DeployCheckCatalog
                 .'finding the tool caused itself',
                 'names the attributes that differ, not the reason they differ',
             ],
+            Attribution::Observed,
             DowntimeClass::Online,
         );
     }
@@ -179,6 +183,7 @@ final readonly class DeployCheckCatalog
                 'a run carrying this finding has not established that the schema matches, however '
                 .'empty the other three classes came back',
             ],
+            Attribution::Observed,
             DowntimeClass::Online,
         );
     }
@@ -230,6 +235,7 @@ final readonly class DeployCheckCatalog
                 .'replay is dominated by the size of the migration history and belongs outside the '
                 .'deploy window',
             ],
+            Attribution::Observed,
             DowntimeClass::Online,
             category: Category::Performance,
         );
@@ -254,6 +260,7 @@ final readonly class DeployCheckCatalog
                 .'migration at a replica is usually a configuration mistake, and this check names it '
                 .'rather than deciding it',
             ],
+            Attribution::Observed,
             DowntimeClass::Blocking,
         );
     }
@@ -270,6 +277,7 @@ final readonly class DeployCheckCatalog
                 'a session setting can be overridden after this check ran, so the finding describes '
                 .'the state at the moment it looked',
             ],
+            Attribution::Observed,
             DowntimeClass::Online,
         );
     }
@@ -288,6 +296,7 @@ final readonly class DeployCheckCatalog
                 'covers the settings this package knows to matter for a deploy; a setting nobody '
                 .'mapped is not reported, and its absence is not a statement that it is safe',
             ],
+            Attribution::Observed,
             downtimeClassDerived: true,
         );
     }
@@ -304,6 +313,7 @@ final readonly class DeployCheckCatalog
                 'Info rather than a warning on purpose: a skew is a fact a reader needs when judging '
                 .'every other finding in the run, not a reason to stop',
             ],
+            Attribution::Observed,
             DowntimeClass::Online,
         );
     }
@@ -321,6 +331,11 @@ final readonly class DeployCheckCatalog
                 'a constraint added without validation is enforced for new rows and unproven for old '
                 .'ones — the check reports that state and does not guess whether the validation is planned',
             ],
+            // AUTHORED, and one of only two in this family. The state is not something the run
+            // found in the world: a migration wrote `ADD CONSTRAINT … NOT VALID` and no later one
+            // validated it, so there is a migration that causes this and a migration that avoids
+            // it. That is exactly what a bad/good pair can teach.
+            Attribution::Authored,
             // Declared, where it was absent — the same omission the invalid-index entry above
             // carried, and it reads the same way: a null class in this artifact does not mean
             // "unset", it means the rule classifies no downtime at all. `NotValidConstraintCheck`
@@ -350,6 +365,7 @@ final readonly class DeployCheckCatalog
                 'cannot tell an index that is mid-build from one whose build failed — both are '
                 .'`indisvalid = false` while they exist',
             ],
+            Attribution::Observed,
             // Declared, where it was absent. A null class is not "unset" in this artifact: the
             // record's own docblock says a null pair means "classifies no downtime whatsoever",
             // which was a statement about this rule that its own findings contradicted. Every
@@ -377,6 +393,7 @@ final readonly class DeployCheckCatalog
                 'cannot tell a leftover from an object somebody meant to keep; what would settle it '
                 .'is the object appearing in no migration state at all, which is a separate reading',
             ],
+            Attribution::Observed,
             DowntimeClass::Online,
         );
     }
@@ -397,6 +414,7 @@ final readonly class DeployCheckCatalog
                 'cannot tell a run that DIED from one still in flight: gh-ost works in `_t_gho` for '
                 .'hours, and reporting that as wreckage would call the healthy case the broken one',
             ],
+            Attribution::Observed,
             DowntimeClass::Online,
         );
     }
@@ -416,6 +434,10 @@ final readonly class DeployCheckCatalog
                 .'a data decision rather than a schema one — and makes the age a question for the '
                 .'debt reconciliation rather than for this reading',
             ],
+            // AUTHORED, the MySQL sibling of the row above and the second of two. `ENFORCED = NO`
+            // is a fact the catalog states outright rather than a name this check guessed at, and a
+            // migration put it there — so the pair is about the reader's own text.
+            Attribution::Authored,
             DowntimeClass::Online,
         );
     }
@@ -433,6 +455,7 @@ final readonly class DeployCheckCatalog
                 .'figure can be a quota rather than a disk, and an autoscaling volume makes it a '
                 .'moving target',
             ],
+            Attribution::Observed,
             DowntimeClass::Rewrite,
         );
     }
@@ -448,6 +471,7 @@ final readonly class DeployCheckCatalog
                 'an inactive slot is not always abandoned: a replica that is down for maintenance '
                 .'looks identical to one that will never return, and only a human knows which',
             ],
+            Attribution::Observed,
         );
     }
 
@@ -464,6 +488,7 @@ final readonly class DeployCheckCatalog
                 'sees the relations the migration NAMES; a lock taken on a relation reached '
                 .'indirectly — through a foreign key, a trigger, a view — is not anticipated here',
             ],
+            Attribution::Observed,
         );
     }
 
@@ -480,6 +505,7 @@ final readonly class DeployCheckCatalog
                 .'migration and every reader queued behind it — the finding is about the queue, not '
                 .'only about the one session it names',
             ],
+            Attribution::Observed,
             DowntimeClass::Blocking,
         );
     }
@@ -496,6 +522,7 @@ final readonly class DeployCheckCatalog
                 'Critical because the migration will not run at all — this is the one finding in the '
                 .'family that is about a deploy that cannot start rather than one that should not',
             ],
+            Attribution::Observed,
             DowntimeClass::Blocking,
         );
     }
@@ -524,6 +551,7 @@ final readonly class DeployCheckCatalog
                 'says nothing about an object the migration CREATES — that needs `CREATE` on the '
                 .'schema, and an object that does not exist yet has no owner to compare against',
             ],
+            Attribution::Observed,
             DowntimeClass::Blocking,
         );
     }
@@ -548,6 +576,7 @@ final readonly class DeployCheckCatalog
                 'cannot tell an index that is mid-build from one whose build failed — both read '
                 .'`indisvalid = false` while they exist, and only the second is wreckage',
             ],
+            Attribution::Observed,
             DowntimeClass::Online,
         );
     }
@@ -573,6 +602,7 @@ final readonly class DeployCheckCatalog
                 'counts sessions past the activity reader\'s threshold on ANY table, so it cannot say '
                 .'which of them the build will actually end up waiting for',
             ],
+            Attribution::Observed,
             DowntimeClass::Online,
         );
     }
@@ -598,6 +628,7 @@ final readonly class DeployCheckCatalog
                 'the failure direction is "no escalation", never a wrong severity: the escalator only '
                 .'ever raises, so a reading it could not make leaves the honest answer in place',
             ],
+            Attribution::Observed,
         );
     }
 
@@ -613,6 +644,7 @@ final readonly class DeployCheckCatalog
                 'Info rather than a warning: what lag is acceptable depends on what the application '
                 .'does with its replicas, which this package cannot know',
             ],
+            Attribution::Observed,
             DowntimeClass::Online,
         );
     }

@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Agent\Remediation;
 
+use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Remediation\RemediationStep;
 use Pushery\SQLens\Remediation\RemediationStepKind;
 use Pushery\SQLens\Remediation\RemediationStrategy;
+use Pushery\SQLens\Remediation\RemediationSubject;
 
 /**
  * The last thing that looks at a payload before a finding carries it.
@@ -82,6 +84,18 @@ final readonly class RemediationValidator
             return self::REASON_PREFIX.'none_carries_a_sequence';
         }
 
+        // The two the SUBJECT makes checkable, and the reason they are refusals rather than
+        // omissions at render time. A field that is merely meaningless for half the ground set is
+        // still a field somebody reads: `downtime_class: online` on a state finding is a sentence
+        // about a deploy that does not exist, and it is exactly as legible as a true one.
+        if (! $payload->subject->carriesADowntimeClass() && $payload->downtimeClass instanceof DowntimeClass) {
+            return self::REASON_PREFIX.'downtime_class_without_a_deploy';
+        }
+
+        if ($payload->subject === RemediationSubject::SchemaObject && $this->namesThisMigration($payload)) {
+            return self::REASON_PREFIX.'this_migration_without_a_migration';
+        }
+
         foreach ($payload->steps as $step) {
             if (! str_starts_with($step->noteKey, 'sqlens::messages.')) {
                 // A note that is not a catalog key is a sentence this package already chose, in a
@@ -97,6 +111,21 @@ final readonly class RemediationValidator
         }
 
         return null;
+    }
+
+    /**
+     * Whether any step says "in this migration" — the one step kind a state finding cannot use.
+     *
+     * `SeparateMigration` is the right kind there and stays valid: the fix for a state IS a new
+     * migration. What cannot be true is a step that edits the migration at hand, because a catalog
+     * rule was not handed one.
+     */
+    private function namesThisMigration(RemediationPayload $payload): bool
+    {
+        return array_any(
+            $payload->steps,
+            static fn (RemediationStep $step): bool => $step->kind === RemediationStepKind::MigrationStatement,
+        );
     }
 
     /** Whether the payload may be carried by a finding. */

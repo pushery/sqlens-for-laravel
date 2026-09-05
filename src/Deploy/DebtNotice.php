@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Deploy;
 
 use Pushery\SQLens\Categories\Category;
+use Pushery\SQLens\Contracts\ReportsWhatTheRunObserved;
 use Pushery\SQLens\Contracts\RunNotice;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
@@ -31,6 +32,8 @@ use Pushery\SQLens\Severity\Severity;
  */
 enum DebtNotice: string implements RunNotice
 {
+    use ReportsWhatTheRunObserved;
+
     /**
      * A debt the committed account records and the live catalog still shows.
      *

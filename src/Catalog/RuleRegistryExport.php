@@ -12,6 +12,7 @@ use Pushery\SQLens\Capture\CaptureFindingCatalog;
 use Pushery\SQLens\Capture\CaptureRuleMetadata;
 use Pushery\SQLens\Catalog\Degradation\CatalogNotice;
 use Pushery\SQLens\Catalog\Security\SecurityNotice;
+use Pushery\SQLens\Contracts\Attribution;
 use Pushery\SQLens\Contracts\DerivesDowntimeClass;
 use Pushery\SQLens\Contracts\Rule;
 use Pushery\SQLens\Contracts\RunNotice;
@@ -254,6 +255,7 @@ final readonly class RuleRegistryExport
         ?string $downtimeClass,
         string $messagePrefix,
         array $suites,
+        Attribution $attribution,
         ?string $documentationUrl = null,
         bool $downtimeClassDerived = false,
         ?string $debtKind = null,
@@ -265,6 +267,12 @@ final readonly class RuleRegistryExport
             'slug' => RuleDocumentationUrl::slug($id),
             'source' => $source,
             'covers' => $coversFamily ? 'family' : 'exact',
+            // Whether this id names something the READER wrote or something the run OBSERVED, which
+            // is the field that decides whether it owes a bad/good example pair. `source` almost
+            // answers it and not quite: the deploy family splits down the middle, and no shipped
+            // field separated the halves — `severity` is null for a lock blocker and for an unread
+            // statistic alike. {@see Attribution} carries the criterion.
+            'attribution' => $attribution->value,
             // The two texts a consumer needs to READ a rule rather than only classify it. They are
             // derived from the documentation page's front matter, never authored here: the page is
             // already the one statement of what a rule is, and a second copy would be a second
@@ -350,6 +358,9 @@ final readonly class RuleRegistryExport
             downtimeClass: $downtime instanceof DowntimeClass ? $downtime->value : null,
             messagePrefix: $rule->messagePrefix(),
             suites: array_map(static fn (Suite $suite): string => $suite->value, $rule->suites()),
+            // A rule judges a statement the reader wrote, so the classification is a property of
+            // the family rather than of the entry: there is no engine rule that reports on the run.
+            attribution: Attribution::Authored,
             documentationUrl: $rule->documentationUrl(),
             downtimeClassDerived: $rule instanceof DerivesDowntimeClass,
             debtKind: $rule instanceof ProducesDebt ? $rule->debtKind() : null,
@@ -378,6 +389,9 @@ final readonly class RuleRegistryExport
             downtimeClass: $metadata->downtimeClass?->value,
             messagePrefix: $metadata->messagePrefix,
             suites: array_map(static fn (Suite $suite): string => $suite->value, $metadata->suites),
+            // Read out rather than restated: the metadata's constructor takes the two examples as
+            // REQUIRED arguments, so a capture id that reported on the run could not be declared.
+            attribution: $metadata->attribution(),
             documentationUrl: $metadata->documentationUrl,
         );
     }
@@ -410,6 +424,8 @@ final readonly class RuleRegistryExport
             downtimeClass: $metadata->downtimeClass?->value,
             messagePrefix: $metadata->messagePrefix,
             suites: array_map(static fn (Suite $suite): string => $suite->value, $metadata->suites),
+            // The only family that splits, and the only one where this is a per-entry decision.
+            attribution: $metadata->attribution,
             documentationUrl: $metadata->documentationUrl(),
             downtimeClassDerived: $metadata->downtimeClassDerived,
             severityDerived: $metadata->severityDerived,
@@ -443,6 +459,8 @@ final readonly class RuleRegistryExport
             downtimeClass: null,
             messagePrefix: $metadata->messagePrefix,
             suites: array_map(static fn (Suite $suite): string => $suite->value, $metadata->suites),
+            // A PHPStan rule over the reader's own PHP source — authored by construction.
+            attribution: Attribution::Authored,
             documentationUrl: $metadata->documentationUrl(),
             reportedIdentifier: $metadata->reportedIdentifier,
         );
@@ -478,6 +496,10 @@ final readonly class RuleRegistryExport
             downtimeClass: null,
             messagePrefix: $notice->messagePrefix(),
             suites: array_map(static fn (Suite $suite): string => $suite->value, $notice->suites()),
+            // Always `Observed`, through the trait every notice family uses. The slot is asked for
+            // anyway: a family that answered by not being asked would be the one place this
+            // classification means nothing.
+            attribution: $notice->attribution(),
             documentationUrl: $notice->documentationUrl(),
         );
     }
