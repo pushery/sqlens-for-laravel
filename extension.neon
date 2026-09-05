@@ -97,8 +97,21 @@ services:
         class: Pushery\SQLens\Analyse\RawSqlCallCollector
         tags:
             - phpstan.collector
+    # NOT tagged as a collector: it is the shared unit both justification collectors ask "does this
+    # attribute list carry a reason this run accepts". It is registered rather than left to each
+    # constructor's default, because a default would build its own AnalyseConfig and answer under the
+    # SHIPPED policy while the rest of the run used the project's.
+    -
+        class: Pushery\SQLens\Analyse\RawSqlReason
     -
         class: Pushery\SQLens\Analyse\JustificationCollector
+        tags:
+            - phpstan.collector
+    # The second justification channel, joined by POSITION rather than by name — a free function and
+    # a closure have no name a call site inside them reports, and a Pest test body is always the
+    # second of those.
+    -
+        class: Pushery\SQLens\Analyse\JustificationSpanCollector
         tags:
             - phpstan.collector
     -
@@ -119,6 +132,10 @@ services:
             - phpstan.collector
     -
         class: Pushery\SQLens\Analyse\UnjustifiedRawSqlRule
+        tags:
+            - phpstan.rules.rule
+    -
+        class: Pushery\SQLens\Analyse\StaleRawSqlReasonRule
         tags:
             - phpstan.rules.rule
     -

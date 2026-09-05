@@ -47,8 +47,8 @@ final class LintCommand extends Command
     /** @var string */
     protected $signature = 'sqlens:lint
         {--connection= : The database connection to lint; defaults to the resolved sqlens/default connection}
-        {--path=* : A migration path to lint; repeatable. Defaults to the application’s registered migration paths}
-        {--file=* : Lint exactly one migration file — the DB-free fast path for pre-commit hooks. Must be inside a configured migration path}
+        {--path=* : A migration path whose PENDING migrations to lint; repeatable. Nothing is pending once they have all run, and such a run reports LINT.NO_MIGRATIONS_READ rather than clean. Defaults to the application’s registered migration paths}
+        {--file=* : Lint these migration files and nothing else — the DB-free fast path for pre-commit hooks; repeatable. Each must be inside a configured migration path}
         {--profile= : The environment profile — local, ci, or predeploy. Overrides SQLENS_PROFILE and the configured profile}
         {--level= : The cumulative strictness level 0–9 (defaults to the configured level); security rules run at any level}
         {--category=* : Scope the run to these categories; repeatable and comma-separable (defaults to the configured set; empty = all)}
@@ -179,30 +179,27 @@ final class LintCommand extends Command
             $config->set('sqlens.security.min_severity', $minSeverity);
         }
 
-        // The --file fast path takes exactly one migration and is pretend-only: more
-        // than one file, or --file with --shadow, is a misconfiguration named before
-        // the run, not a silent partial.
-        $fileValue = null;
+        // The --file fast path is pretend-only, and it takes as many files as you name.
+        //
+        // ⚠️ IT REFUSED MORE THAN ONE UNTIL NOW, while its own `--help` line ended in Symfony's
+        // automatic "(multiple values allowed)" — the sentence contradicted itself, in one line,
+        // because the option was declared VALUE_IS_ARRAY and then rejected an array. It failed
+        // cleanly, so it cost time rather than correctness: a pre-commit hook over 53 migrations
+        // paid one artisan boot per file, measured at 0.58 s each, about 23 seconds for a run that
+        // should have been one.
+        //
+        // Resolved toward the capability rather than toward the narrower declaration, because a
+        // hook over several staged migrations is the use case the description itself names.
         $rawFiles = $this->option('file');
 
         // Declared `--file=*`, so this is an array by construction; only emptiness is a real
         // question here.
-        if ($rawFiles !== []) {
-            $files = array_values(array_filter($rawFiles, is_string(...)));
+        $files = array_values(array_filter($rawFiles, is_string(...)));
 
-            if (count($files) > 1) {
-                $this->stderr()->writeln($this->translate('sqlens::messages.commands.file_multiple'));
+        if ($files !== [] && $this->option('shadow') === true) {
+            $this->stderr()->writeln($this->translate('sqlens::messages.commands.file_shadow_conflict'));
 
-                return ExitCode::Misconfiguration->value;
-            }
-
-            if ($this->option('shadow') === true) {
-                $this->stderr()->writeln($this->translate('sqlens::messages.commands.file_shadow_conflict'));
-
-                return ExitCode::Misconfiguration->value;
-            }
-
-            $fileValue = $files[0];
+            return ExitCode::Misconfiguration->value;
         }
 
         // The debt mode, named before the run like every other flag whose wrong value would
@@ -225,7 +222,7 @@ final class LintCommand extends Command
         // the flag, which would let a user believe a roundtrip happened.
         if ($roundtrip) {
             $refusal = match (true) {
-                $fileValue !== null => 'roundtrip_file_conflict',
+                $files !== [] => 'roundtrip_file_conflict',
                 $this->option('shadow') !== true => 'roundtrip_requires_shadow',
                 is_string($connection) && $connection !== '' => 'roundtrip_connection_conflict',
                 default => null,
@@ -238,7 +235,7 @@ final class LintCommand extends Command
             }
         }
 
-        $shadow = $fileValue === null && $this->option('shadow') === true;
+        $shadow = $files === [] && $this->option('shadow') === true;
 
         // Shadow mode creates and drops a database, so the production guard decides
         // BEFORE anything is built — and its decision is passed down rather than
@@ -261,7 +258,7 @@ final class LintCommand extends Command
                 $level,
                 $categoryValues,
                 strictTools: $this->strictToolsOverride(),
-                file: $fileValue,
+                files: $files,
                 guard: $guard,
                 roundtrip: $roundtrip,
                 debt: $debt,
@@ -272,9 +269,11 @@ final class LintCommand extends Command
             return ExitCode::Misconfiguration->value;
         }
 
-        // A --file that did not resolve to a migration is a named misconfiguration.
+        // A --file that did not resolve to a migration is a named misconfiguration, and the outcome
+        // carries WHICH one: with several named, the reason without the path sends a reader to the
+        // first file in the list, which is usually not the one that failed.
         if ($outcome->fileFailure instanceof SingleFileFailure) {
-            $this->stderr()->writeln($this->translate($outcome->fileFailure->translationKey(), ['file' => (string) $fileValue]));
+            $this->stderr()->writeln($this->translate($outcome->fileFailure->translationKey(), ['file' => (string) $outcome->fileFailurePath]));
 
             return $outcome->exitCode->value;
         }

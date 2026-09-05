@@ -51,6 +51,16 @@ enum RunnerNotice: string implements RunNotice
     /** The category/level scope admitted no rule at all, so the run checked nothing. */
     case NoActiveRules = 'LINT.NO_ACTIVE_RULES';
 
+    /**
+     * The run had rules and no subjects: zero migrations were judged.
+     *
+     * Derived from the COUNT rather than from a list of causes, so a cause nobody has enumerated
+     * is covered too. The one that actually happens is a database on which everything has already
+     * been migrated — the state of every developer machine after `migrate`, and of every pipeline
+     * that lints after its migration step.
+     */
+    case NoMigrationsRead = 'LINT.NO_MIGRATIONS_READ';
+
     /** The assumed server version disagrees with the version the server reported. */
     case VersionSkew = 'LINT.VERSION_SKEW';
 

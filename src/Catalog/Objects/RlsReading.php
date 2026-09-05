@@ -48,6 +48,20 @@ final readonly class RlsReading
          * reader returned instead of a line somebody has to remember to write in four rules.
          */
         public bool $supported,
+        /**
+         * Whether the project DECLARED that row-level security is not how it separates tenants.
+         *
+         * The third state, and the one whose absence made the first two lie. `configured` false meant
+         * both "nobody has answered" and "somebody answered no", because `security.rls.mode = off` and
+         * an empty `listed` list both collapsed into an empty table list before anything downstream
+         * could tell them apart. The rule then reported `not_configured` at severity high over a
+         * project that had done exactly what the finding asked of it.
+         *
+         * It rides beside `configured` rather than replacing it: the three states are produced by
+         * three named constructors and nothing else can build one, so the combination that would be
+         * nonsense — declined AND configured — is unreachable by construction rather than by rule.
+         */
+        public bool $declined = false,
     ) {}
 
     /**
@@ -89,6 +103,19 @@ final readonly class RlsReading
     public static function unsupported(): self
     {
         return new self([], CatalogCompleteness::Complete, [], false, false);
+    }
+
+    /**
+     * The project set `security.rls.mode` to `off`: asked, answered, nothing to read.
+     *
+     * Distinct from {@see self::unconfigured()} in exactly the way the two reports must differ. That
+     * one says SQLens does not know which tables hold tenant data and names the key to set; this one
+     * says the project set it, and the answer was that this database separates nothing. Both read
+     * nothing; only one of them is a question still open.
+     */
+    public static function declinedByConfig(): self
+    {
+        return new self([], CatalogCompleteness::Complete, [], false, true, true);
     }
 
     public function isComplete(): bool

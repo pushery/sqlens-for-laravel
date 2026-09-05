@@ -27,6 +27,7 @@ interface LintRuns
      * migrations found under the given paths.
      *
      * @param  list<string>|null  $migrationPaths  null means the application's registered paths
+     * @param  list<string>  $files  the migration files this run judges instead of the pending set (empty = the pending set)
      * @param  list<string>|null  $categories  category values to scope to (null = the config's, empty = all)
      * @param  bool  $applyBaseline  whether to suppress against the configured baseline
      */
@@ -39,7 +40,17 @@ interface LintRuns
         ?array $categories = null,
         bool $applyBaseline = true,
         ?bool $strictTools = null,
-        ?string $file = null,
+        /**
+         * The migration FILES this run judges instead of the pending set — the DB-free fast path.
+         *
+         * A list, and it took one string until `--file` started accepting several. The option had
+         * declared itself repeatable all along (`--file=*`, and Symfony's own help said so), while
+         * the command refused a second value: a pre-commit hook over 53 staged migrations paid one
+         * artisan boot per file for a run that should have been one.
+         *
+         * @var list<string>
+         */
+        array $files = [],
         ?GuardDecision $guard = null,
         bool $roundtrip = false,
         /**

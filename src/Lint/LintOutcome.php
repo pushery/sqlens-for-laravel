@@ -32,6 +32,15 @@ final readonly class LintOutcome
         public ?DriverResolutionFailure $unsupported = null,
         public ?SingleFileFailure $fileFailure = null,
         /**
+         * WHICH `--file` failed to resolve.
+         *
+         * It became necessary the moment the option accepted several: the failure is an enum and
+         * cannot carry the path, so a run over four files that refused one of them could name the
+         * reason and not the file. Naming the wrong half of that is worse than naming neither —
+         * the reader checks the first file in the list and finds nothing wrong with it.
+         */
+        public ?string $fileFailurePath = null,
+        /**
          * The migration FILES this run resolved as pending, in the order they will be applied.
          *
          * Carried out of the runner so a caller that needs to know WHICH migrations are about to

@@ -926,7 +926,15 @@ return [
          *   off        no RLS checks at all
          *
          * With `listed` and an empty list, SQLens reports ONE undetermined naming this key — not a
-         * silent pass, and not a hundred findings.
+         * silent pass, and not a hundred findings. `off` is an ANSWER to that: the run then reports
+         * that this database separates nothing, which is a different line from never having been
+         * asked.
+         *
+         * A name may be written either way. `orders` resolves through `current_schema()`, exactly
+         * where an unqualified CREATE TABLE puts a table, so the name your migration used is the name
+         * that works here; `reporting.orders` reaches a table in another schema.
+         *
+         *     'tables' => ['orders', 'invoices', 'reporting.orders_archive'],
          *
          * https://docs.pushery.com/sqlens-for-laravel/rules/sec-rls-disabled/
          */

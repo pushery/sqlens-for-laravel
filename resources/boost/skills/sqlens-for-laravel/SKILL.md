@@ -88,11 +88,13 @@ php artisan sqlens:lint --connection=pgsql --path=database/migrations --level=4 
   then the application default).
 - `--path` (repeatable) limits the migrations scanned (defaults to the
   application's registered migration paths).
-- `--file=<migration>` lints exactly one migration file without a database
-  connection — the fast path for a pre-commit hook or an editor save on the file
-  that just changed. It runs the same rules and suppression as a full run, so a
-  baseline entry or a `#[SqlensIgnore]` still applies. The file must sit inside a
-  configured migration path; it is pretend-only (not combinable with `--shadow`).
+- `--file=<migration>` (repeatable) lints the migrations you name and nothing
+  else, without a database connection — the fast path for a pre-commit hook or an
+  editor save on the file that just changed. Name every staged migration in one
+  call and the hook pays one process start instead of one per file. It runs the
+  same rules and suppression as a full run, so a baseline entry or a
+  `#[SqlensIgnore]` still applies. Each file must sit inside a configured
+  migration path; it is pretend-only (not combinable with `--shadow`).
 - `--profile=local|ci|predeploy` presets an environment's strictness settings in one
   named choice. A profile is a partial override of the configuration; anything it
   does not name keeps its configured value. `local` overrides nothing (the shipped
@@ -351,8 +353,9 @@ Which tool answers which question:
 
 - **`lint_pending`** — right after writing or editing a migration, before the commit.
   It lints what the project has not run yet and hands back structured findings, each
-  carrying its `downtime_class`. Pass `file` to lint exactly one migration on the
+  carrying its `downtime_class`. Pass `file` to lint one named migration on the
   sub-second path an editor loop can afford; it opens no database connection at all.
+  (The MCP tool takes one file; the `sqlens:lint` command takes as many as you name.)
 - **`explain_rule`** — *before* trying to work around a finding. It returns the rule's
   own metadata: what it judges, why, its level and severity, and where the
   documentation is. Reading it is usually cheaper than the workaround.

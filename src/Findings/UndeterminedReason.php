@@ -447,6 +447,23 @@ enum UndeterminedReason: string
     case NoActiveRules = 'no_active_rules';
 
     /**
+     * The run resolved its subject set and the set was EMPTY — no migration was judged.
+     *
+     * Its own reason rather than {@see self::NoActiveRules}, because the two send a reader to
+     * opposite places: there the rules were filtered away over real migrations, here there were
+     * rules and nothing to apply them to. And not a pending-SKIP reason either, because nothing
+     * failed to resolve — the answer is known and it is zero. (Named in prose rather than with a
+     * `{@see}`: the capture layer already imports THIS enum, and a reference back would make the
+     * two files cite each other for a docblock's sake.)
+     *
+     * The state that produces it is the ordinary one, which is why it needed naming: `--path` lints
+     * the PENDING migrations, and on any machine where `migrate` has already run nothing is pending.
+     * A pipeline that lints after its migration step therefore hangs the check exactly where it can
+     * no longer see anything, and the run before this existed said `over 0 migrations` and exited 0.
+     */
+    case NoMigrationsRead = 'no_migrations_read';
+
+    /**
      * A rule that reasons about the server's table statistics ran with statistics
      * turned on (`use_statistics`), but no statistics reader is available in this
      * build to answer it — the reader arrives with the audit suite. "Could not read
@@ -850,6 +867,7 @@ enum UndeterminedReason: string
             self::UncanonicalizableStatement => 'A captured statement could not be substituted or canonicalized into the form a rule reads.',
             self::PreScanFlagged => 'The static pre-scan flagged this migration, so it was not pretend-executed; resolve it in shadow mode.',
             self::NoActiveRules => 'A filter (the requested categories or the level) left no rules active for this run, so nothing was checked; widen the selection.',
+            self::NoMigrationsRead => 'No migration was read, so the run judged nothing; --path lints the PENDING migrations of a connection, and nothing is pending once they have all run.',
             self::StatisticsUnavailable => 'The check needs the server table statistics, but no statistics reader is available in this build; it will run once the audit suite lands.',
             self::ShadowGuardBlocked => 'The production guard blocked the shadow capture, so nothing was run.',
             self::TargetIsReplica => 'The target connection is a read replica, which a database-creating mode cannot run against.',

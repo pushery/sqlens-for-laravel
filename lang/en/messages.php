@@ -74,7 +74,6 @@ return [
         'file_not_found' => 'The --file ":file" does not exist or cannot be read.',
         'file_not_php' => 'The --file ":file" is not a PHP migration file.',
         'file_outside_paths' => 'The --file ":file" is outside the configured migration paths; --file lints a migration, not an arbitrary file.',
-        'file_multiple' => '--file accepts exactly one migration file.',
         'file_shadow_conflict' => '--file cannot be combined with --shadow; the fast path is pretend-only.',
         'roundtrip_requires_shadow' => '--roundtrip only runs in shadow mode: it replays down() for real, which is destructive by design, so it needs a throwaway database. Add --shadow.',
         'roundtrip_connection_conflict' => '--roundtrip cannot be pointed at a named connection with --connection: it runs only against the throwaway database it creates itself.',

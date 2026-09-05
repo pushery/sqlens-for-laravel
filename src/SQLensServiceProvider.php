@@ -8,6 +8,7 @@ use Illuminate\Container\Container;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Contracts\Foundation\CachesConfiguration;
 use Illuminate\Database\Connection;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Eloquent\Model;
@@ -32,6 +33,7 @@ use Pushery\SQLens\Catalog\CatalogReaderFactory;
 use Pushery\SQLens\Catalog\CatalogReaders;
 use Pushery\SQLens\Catalog\ReaderSession;
 use Pushery\SQLens\Catalog\SessionBudget;
+use Pushery\SQLens\Config\PublishedConfigMerge;
 use Pushery\SQLens\Console\AgentRulesCommand;
 use Pushery\SQLens\Console\AuditCommand;
 use Pushery\SQLens\Console\BaselineCommand;
@@ -154,7 +156,27 @@ final class SQLensServiceProvider extends ServiceProvider
         // constructions would be two places a connection's values are read.
         $this->app->bind(Redactor::class, fn (Application $app): Redactor => new Redactor(new CredentialRedaction($app->make('config'))));
 
-        $this->mergeConfigFrom(__DIR__.'/../config/sqlens.php', 'sqlens');
+        // Deep, and NOT through either of Laravel's two helpers — see PublishedConfigMerge for what
+        // each of them does to a 99 KB reference configuration. The short version: `mergeConfigFrom`
+        // asks one question per TOP-LEVEL key, so answering `security.rls.mode` freezes the whole
+        // `security` block against every key this package ships later; `replaceConfigRecursivelyFrom`
+        // fixes that and silently ignores an EMPTIED list, which this package's own config comments
+        // tell a project to write.
+        //
+        // The cached-configuration guard is Laravel's and is kept: with a cached config the file has
+        // already been folded in, and merging again would put package defaults back over values the
+        // cache holds.
+        if (! $this->app instanceof CachesConfiguration || ! $this->app->configurationIsCached()) {
+            $config = $this->app->make('config');
+
+            /** @var array<array-key, mixed> $published */
+            $published = $config->get('sqlens', []);
+
+            /** @var array<array-key, mixed> $defaults */
+            $defaults = require __DIR__.'/../config/sqlens.php';
+
+            $config->set('sqlens', PublishedConfigMerge::of($defaults, $published));
+        }
 
         // The registry is bound in its OWN right, and that is the whole point of
         // the extension seam: a consuming application registers a third-party driver

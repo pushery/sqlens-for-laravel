@@ -52,7 +52,7 @@ final class BaselineCommand extends Command
     /** @var string */
     protected $signature = 'sqlens:baseline
         {--connection= : The database connection to lint; defaults to the resolved sqlens/default connection}
-        {--path=* : A migration path to lint; repeatable. Defaults to the application’s registered migration paths}
+        {--path=* : A migration path whose PENDING migrations to lint; repeatable. Nothing is pending once they have all run, and such a run reports LINT.NO_MIGRATIONS_READ rather than clean. Defaults to the application’s registered migration paths}
         {--profile= : The environment profile — local, ci, or predeploy. Overrides SQLENS_PROFILE and the configured profile}
         {--update : Merge the current findings into the existing baseline instead of replacing it}
         {--dry-run : Report what would be written without touching the file}';

@@ -1456,6 +1456,20 @@
                 "note": "Every raw method this rule looks at takes a bindings array beside the SQL fragment, and the framework documents the binding form for each of them. That is what keeps the fix to one line: the call site being reported already has a parameter for the value that was interpolated into it."
             }
         ],
+        "SEC.INJ.RAW_SQL_REASON_STALE": [
+            {
+                "type": "doc",
+                "url": "https://www.php.net/manual/en/language.attributes.overview.php",
+                "applies_to": "PHP 8.4",
+                "note": "An attribute is metadata that nothing at runtime is obliged to read, so a stale one costs nothing to keep and is invisible to every test. That is precisely why it needs a check of its own: the language will never tell anybody the annotation stopped applying."
+            },
+            {
+                "type": "doc",
+                "url": "https://laravel.com/docs/13.x/queries",
+                "applies_to": "Laravel 13",
+                "note": "The builder keeps gaining expressions, which is what makes a justification perishable rather than permanent: the gap a raw call was written around closes in a later minor, somebody rewrites the call, and the attribute above it stays. The reason was true when written and the framework moved underneath it."
+            }
+        ],
         "SEC.INJ.RAW_SQL_WITHOUT_REASON": [
             {
                 "type": "doc",

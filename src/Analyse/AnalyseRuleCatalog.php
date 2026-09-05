@@ -45,7 +45,7 @@ final readonly class AnalyseRuleCatalog
      */
     public static function metadata(): array
     {
-        $rules = [self::unjustifiedRawSql(), self::rawInterpolation(), self::dynamicIdentifier()];
+        $rules = [self::unjustifiedRawSql(), self::staleRawSqlReason(), self::rawInterpolation(), self::dynamicIdentifier()];
 
         usort($rules, static fn (AnalyseRuleMetadata $a, AnalyseRuleMetadata $b): int => $a->id <=> $b->id);
 
@@ -170,6 +170,66 @@ final readonly class AnalyseRuleCatalog
                 .'stays visible, which is the safe direction',
             ],
             reportedIdentifier: UnjustifiedRawSqlRule::IDENTIFIER,
+        );
+    }
+
+    /**
+     * A written reason that no longer covers any raw SQL.
+     *
+     * **Severity `Info`, and it is a step below its own sibling on purpose.** The policy rule says a
+     * decision was never written down; this one says a decision was written down and has since
+     * stopped applying. Nothing is exposed either way, and this one is the milder of the two — the
+     * project did the thing that was asked, and the code moved afterwards. Rating it any higher
+     * would mean a tidy-up item arriving at the same weight as a missing one.
+     *
+     * **It is still worth a finding, and that is the argument the ticket behind it makes better than
+     * this docblock could.** An exemption that outlives its reason reads for years as a decision
+     * somebody weighed, and the next reader trusts it. A consuming project had built the two-way
+     * check by hand and could not retire it in favor of this package, because trading a two-way
+     * check for a one-way one is not adoption.
+     *
+     * **Level `Capturable`** for the same reason as every rule in this suite.
+     *
+     * **`stable` rather than `preview`, and the question was put rather than skipped.** The
+     * package's own breaking-change detector raises it on any new rule: *ship it as `preview` if
+     * its false-positive behavior is not settled yet.* This one HAS a false-positive class and it
+     * is written down in the example register — a call reached through a variable or a container
+     * binding is invisible to the collectors, so an annotation covering only such a call reads as
+     * stale, and the rule then asks somebody to delete something true.
+     *
+     * It ships stable anyway, for three reasons that hold together. That false-positive class is
+     * the SAME syntactic limit {@see UnjustifiedRawSqlRule} has, and that rule is stable. The
+     * severity is `info`, so a false positive costs a line in a report rather than a red build.
+     * And the consuming project this was built for runs a hand-written check with the identical
+     * limit as a hard gate today — shipping the replacement behind an opt-in would ask them to
+     * consent to something strictly better than what they already trust.
+     */
+    private static function staleRawSqlReason(): AnalyseRuleMetadata
+    {
+        return new AnalyseRuleMetadata(
+            id: StaleRawSqlReasonRule::RULE_ID,
+            category: Category::Security,
+            level: Level::Capturable,
+            severity: Severity::Info,
+            stability: StabilityTier::Stable,
+            messagePrefix: self::MESSAGE_PREFIX,
+            suites: [Suite::Analyse],
+            limitations: [
+                'never reads the query text and performs no taint analysis: it reports that an '
+                .'annotation covers no raw SQL any more, which is a bookkeeping fact about the '
+                .'attribute rather than any claim about the code under it',
+                'counts a justification as live if ANY raw-SQL call site this suite collects is '
+                .'attributed to it — including a fragment or a dynamic identifier, which the policy '
+                .'rule itself does not report, because a reason covering one of those is doing its job',
+                'syntactic detection only, the same limit its sibling has: a call reached through a '
+                .'variable or a container binding is invisible, so an annotation covering only such a '
+                .'call reads as stale',
+                'a class-level annotation is kept alive by a raw statement in ANY of its methods, so '
+                .'the coarse form is also the one least likely to be reported as stale',
+                'says nothing under policy off or inside an excluded path: a project that switched '
+                .'the duty off must not get findings about the annotations it wrote while it was on',
+            ],
+            reportedIdentifier: StaleRawSqlReasonRule::IDENTIFIER,
         );
     }
 }

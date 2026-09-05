@@ -45,12 +45,28 @@ enum NotApplicableReason: string
      */
     case ProviderEnforced = 'provider_enforced';
 
+    /**
+     * The project was asked and answered that the construct is not how it solves this.
+     *
+     * `security.rls.mode = off` is the case it exists for, and the reason it needed a case of its own
+     * is that the rule's own remediation OFFERS it: *set the mode to off — that is an answer SQLens can
+     * record, and a guess it will not make.* A project that follows that sentence has said something
+     * true about its database, and the report has to be able to show the difference between having
+     * answered and never having been asked. Otherwise the one line saying "tenant separation was not
+     * checked" is unclosable, and a finding nobody can close is one everybody learns to skip.
+     *
+     * Not an {@see UndeterminedReason}, and the distinction is the one this enum is built on: nothing
+     * was undecided here. The question was put and answered.
+     */
+    case DeclinedByProject = 'declined_by_project';
+
     /** What a reader is told, in the report, about what was not checked here. */
     public function description(): string
     {
         return match ($this) {
             self::EngineLacksConstruct => 'This engine has no such concept, so there is nothing here for the check to look at; the rule is reported rather than left silent, because silence reads as a pass.',
             self::ProviderEnforced => 'The platform decides this above the server, so the server\'s own setting cannot answer the question; what the provider enforces is outside what this run can read.',
+            self::DeclinedByProject => 'The project declared in its configuration that this construct is not how it solves the problem, so there is nothing here to judge; reported rather than left silent, because a question that was answered should read differently from one that was never asked.',
         };
     }
 }

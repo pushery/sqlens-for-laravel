@@ -173,7 +173,31 @@ final class RlsDisabledRule extends AbstractSchemaObjectSecurityRule implements 
             )];
         }
 
-        if ($object->getBool('connection_role') !== true || $object->getBool('rls_configured') !== false) {
+        if ($object->getBool('connection_role') !== true) {
+            return [];
+        }
+
+        // The project ANSWERED. `security.rls.mode = off` is the answer this rule's own remediation
+        // offers, and until it produced a different report than silence the sentence was an
+        // instruction that changed nothing: a project that followed it kept the same undetermined, at
+        // severity high, on every run — and under --profile=ci kept a run it could not get green
+        // except by waiving every undetermined at once.
+        //
+        // notApplicable rather than nothing, for the same reason the MySQL arm above is: an absent
+        // finding reads as a check that passed, and "this database separates nothing" is a statement
+        // worth having in the report.
+        if ($object->getBool('rls_declined') === true) {
+            return [RuleVerdict::notApplicable(
+                'this project has set sqlens.security.rls.mode to off, which says that row-level '
+                .'security is not how this database separates tenants. Nothing is judged here, and '
+                .'that is an answer rather than a gap. If the answer changes — a tenant table arrives, '
+                .'or separation moves into the database — name the tables in sqlens.security.rls.tables '
+                .'or switch the mode to heuristic, and the SEC.RLS.* checks come back.',
+                NotApplicableReason::DeclinedByProject,
+            )];
+        }
+
+        if ($object->getBool('rls_configured') !== false) {
             return [];
         }
 

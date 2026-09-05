@@ -410,7 +410,7 @@ final readonly class ConfigSchema
             // its last argument through `expectation()`, so an undeclared one throws instead of
             // reporting — which is the opposite of what a config VALIDATOR is for. Measured: three
             // list keys did exactly that, one of them shipped.
-            'security.rls.tables-item' => 'a qualified table name (a non-empty string) — for example "public.orders"',
+            'security.rls.tables-item' => 'a table name (a non-empty string) — "orders" resolves in the current schema, "reporting.orders" names another one',
             'security.privacy.extra_terms-item' => 'a term to add to the dictionary (a non-empty string)',
             'security.privacy.ignore_columns-item' => 'a QUALIFIED column name — for example "orders.iban". Unqualified would silence every column with that name, including ones nobody looked at',
             'stability-item' => 'one of: '.$this->enumValues(StabilityTier::class),
@@ -511,7 +511,7 @@ final readonly class ConfigSchema
             'security.privacy.extra_terms' => 'a list of terms to ADD to whichever dictionary is in force, or an empty list',
             'security.privacy.ignore_columns' => 'a list of QUALIFIED column names this project has looked at and decided about, or an empty list — unqualified would silence a column somebody never considered',
             'security.rls.mode' => "one of: 'listed' (only the tables you name), 'heuristic' (every table carrying the tenant column), 'off'",
-            'security.rls.tables' => 'a list of qualified table names, or an empty list',
+            'security.rls.tables' => 'a list of table names, qualified or not, or an empty list',
             'security.rls.tenant_column' => 'a column name, or null when the heuristic is not used',
             'security.runtime_connection' => 'a connection name from config/database.php, or null when the application uses one connection for everything',
             'security.migration_connection' => 'a connection name from config/database.php, or null when the application uses one connection for everything',

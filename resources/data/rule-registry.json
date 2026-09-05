@@ -2,8 +2,8 @@
     "schema_version": 1,
     "documentation_base": "https://docs.pushery.com/sqlens-for-laravel/rules/",
     "counts": {
-        "total": 225,
-        "published": 225,
+        "total": 227,
+        "published": 227,
         "pending": 0
     },
     "entries": [
@@ -2168,6 +2168,35 @@
             "title": "LINT.NO_ACTIVE_RULES — the scope admitted no rule, so nothing was checked",
             "summary": "A run that checked nothing and a run that found nothing produce the same silence. This finding tells them apart.",
             "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/lint-no-active-rules/",
+            "documentation_state": "published",
+            "category": "safety",
+            "level": 0,
+            "severity": null,
+            "severity_derived": false,
+            "stability": "stable",
+            "confidence": null,
+            "deprecated_since": null,
+            "replaced_by": null,
+            "min_version": null,
+            "max_version": null,
+            "downtime_class": null,
+            "downtime_class_derived": false,
+            "message_prefix": "sqlens.lint",
+            "reported_identifier": null,
+            "debt_kind": null,
+            "suites": [
+                "lint"
+            ]
+        },
+        {
+            "id": "LINT.NO_MIGRATIONS_READ",
+            "slug": "lint-no-migrations-read",
+            "source": "runner",
+            "covers": "exact",
+            "attribution": "observed",
+            "title": "LINT.NO_MIGRATIONS_READ — the run judged no migration at all",
+            "summary": "`--path` lints the pending migrations, and nothing is pending on a database that has been migrated. This finding is what stops that from reading as a clean run.",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/lint-no-migrations-read/",
             "documentation_state": "published",
             "category": "safety",
             "level": 0,
@@ -5643,6 +5672,35 @@
             "downtime_class_derived": false,
             "message_prefix": "sqlens.analyse",
             "reported_identifier": "sqlens.rawSql.interpolation",
+            "debt_kind": null,
+            "suites": [
+                "analyse"
+            ]
+        },
+        {
+            "id": "SEC.INJ.RAW_SQL_REASON_STALE",
+            "slug": "sec-inj-raw-sql-reason-stale",
+            "source": "analyse",
+            "covers": "exact",
+            "attribution": "authored",
+            "title": "SEC.INJ.RAW_SQL_REASON_STALE — a written reason that no longer covers any raw SQL",
+            "summary": "The expiry direction. An exemption that outlives its reason reads for years as a decision somebody weighed, and the next reader trusts it.",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/sec-inj-raw-sql-reason-stale/",
+            "documentation_state": "published",
+            "category": "security",
+            "level": 0,
+            "severity": "info",
+            "severity_derived": false,
+            "stability": "stable",
+            "confidence": null,
+            "deprecated_since": null,
+            "replaced_by": null,
+            "min_version": null,
+            "max_version": null,
+            "downtime_class": null,
+            "downtime_class_derived": false,
+            "message_prefix": "sqlens.analyse",
+            "reported_identifier": "sqlens.rawSql.staleReason",
             "debt_kind": null,
             "suites": [
                 "analyse"
