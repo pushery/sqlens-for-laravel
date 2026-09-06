@@ -50,14 +50,43 @@ final readonly class ColumnTypeChange
     /**
      * The TARGET type alone: the tail cut at a `USING` clause or a following `ALTER` clause.
      *
-     * What the narrowing matrix is keyed on. Derived rather than separately parsed, so it cannot
+     * What both matrices are keyed on. Derived rather than separately parsed, so it cannot
      * disagree with {@see $rest} about where the type ends.
+     *
+     * ⚠️ The comma that ends the type is a STRUCTURAL one, and a plain split on the character
+     * cannot tell it from the one inside `numeric(10, 2)`. That mattered more than a lost digit:
+     * `numeric` is in the rewrite list, so cutting at the first comma handed the matrix
+     * `numeric(10`, which it does not recognize — a full table rewrite reporting as "cannot
+     * classify from the migration alone". The depth scan below is why the specifier survives.
      */
     public function targetType(): string
     {
-        $type = preg_split('/\s+USING\b|,/', $this->rest, 2);
+        $head = $this->headBeforeFollowingClause();
 
-        return trim($type === false ? $this->rest : $type[0]);
+        $type = preg_split('/\s+USING\b/', $head, 2);
+
+        return trim($type === false ? $head : $type[0]);
+    }
+
+    /**
+     * The tail up to the comma that separates one `ALTER TABLE` subcommand from the next — the
+     * first comma at parenthesis depth zero, or the whole tail when there is none.
+     */
+    private function headBeforeFollowingClause(): string
+    {
+        $depth = 0;
+
+        foreach (str_split($this->rest) as $offset => $character) {
+            if ($character === '(') {
+                $depth++;
+            } elseif ($character === ')') {
+                $depth = max(0, $depth - 1);
+            } elseif ($character === ',' && $depth === 0) {
+                return substr($this->rest, 0, $offset);
+            }
+        }
+
+        return $this->rest;
     }
 
     /** Whether the change carries a `USING` expression — which forces a rewrite on its own. */

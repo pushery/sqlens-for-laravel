@@ -105,8 +105,11 @@ final readonly class UnjustifiedRawSqlRule implements Rule
             return [];
         }
 
-        $justified = $this->justifiedNames($node);
-        $spans = $this->justifiedSpans($node);
+        // Both joins — by name and by position — in one unit, shared with the interpolation rule
+        // that asks the same question of the OTHER channel. Two copies of this join is the failure
+        // this package has paid for elsewhere: two readings agreeing today, disagreeing the first
+        // time either is touched, and each rule's tests green about its own half.
+        $justified = JustificationCoverage::rawSql($node);
         $errors = [];
 
         // Both spellings of the same decision. `DB::statement(…)` and
@@ -129,12 +132,7 @@ final readonly class UnjustifiedRawSqlRule implements Rule
                 }
 
                 foreach ($calls as $call) {
-                    if ($this->isJustified($call['scope'], $justified)) {
-                        continue;
-                    }
-
-                    // The positional channel, for the two shapes a name cannot reach.
-                    if ($this->isInsideAJustifiedSpan((string) $file, $call['line'], $spans)) {
+                    if ($justified->covers($call['scope'], (string) $file, $call['line'])) {
                         continue;
                     }
 
@@ -167,114 +165,5 @@ final readonly class UnjustifiedRawSqlRule implements Rule
         }
 
         return $errors;
-    }
-
-    /**
-     * Is this call site covered by a justification?
-     *
-     * A call in `App\\Report::build()` is justified by an annotation on the method OR on the class,
-     * so both names are tried.
-     *
-     * ⚠️ THIS DOCBLOCK USED TO CONTINUE *"outside a class there is nothing an attribute could sit
-     * on … a raw statement at file scope has no place to carry its reasoning either"*, and it was
-     * wrong twice over. PHP places `#[RawSql]` on a free function, a closure and an arrow function
-     * quite happily, and the attribute has declared `TARGET_FUNCTION` since it was written — so the
-     * sentence described this method's limitation as a property of the language. The consequence was
-     * that a Pest suite, whose every test body is a file-scope closure, could not discharge the duty
-     * at all. Those shapes are joined by POSITION now, in
-     * {@see self::isInsideAJustifiedSpan()}; this method still answers the name half.
-     *
-     * "Outside a class" also does NOT mean an anonymous class, and reading it that way was a real
-     * defect: an anonymous class IS a class, it has methods, the attribute is syntactically placeable
-     * on both, and PHPStan gives it a name that both sides of this join agree on. It is also the form
-     * every Laravel migration takes, so treating it as unanswerable shut the hatch precisely where
-     * raw DDL lives. See {@see JustificationCollector::processNode()} for the name that makes the
-     * join work.
-     *
-     * @param  list<string>  $justified
-     */
-    private function isJustified(?string $scope, array $justified): bool
-    {
-        if ($scope === null) {
-            return false;
-        }
-
-        if (in_array($scope, $justified, true)) {
-            return true;
-        }
-
-        $class = str_contains($scope, '::') ? substr($scope, 0, (int) strpos($scope, '::')) : $scope;
-
-        return in_array($class, $justified, true);
-    }
-
-    /**
-     * Is this call site inside a function-like that carries a reasoned `#[RawSql]`?
-     *
-     * The second join, and it exists because the first one cannot reach two very ordinary shapes: a
-     * free function and a closure. Neither has a name a call site inside it reports — outside a
-     * class the recorded scope is `null` — so there is nothing for an equality join to compare, and
-     * `#[RawSql]` went on declaring `TARGET_FUNCTION` while nothing read it there. A Pest test body
-     * is always a file-scope closure, which made the duty not merely hard to discharge but
-     * impossible: the only remaining answer was an `exclude_paths` entry over the whole test tree.
-     *
-     * Containment rather than equality, because position is the only identity a closure has. The
-     * span is the whole node, so a nested closure inside an annotated one is covered as well — the
-     * same reach a method-level annotation has over its own body.
-     *
-     * @param  array<string, list<array{from: int, to: int}>>  $spans
-     */
-    private function isInsideAJustifiedSpan(string $file, int $line, array $spans): bool
-    {
-        return array_any(
-            $spans[$file] ?? [],
-            static fn (array $span): bool => $line >= $span['from'] && $line <= $span['to'],
-        );
-    }
-
-    /**
-     * Every class and method that carries a reasoned `#[RawSql]`.
-     *
-     * @return list<string>
-     */
-    private function justifiedNames(CollectedDataNode $node): array
-    {
-        $names = [];
-
-        foreach ($node->get(JustificationCollector::class) as $perFile) {
-            foreach ($perFile as $entry) {
-                if (is_array($entry)) {
-                    foreach ($entry['names'] as $name) {
-                        $names[] = $name;
-                    }
-                }
-            }
-        }
-
-        return $names;
-    }
-
-    /**
-     * Every annotated line range, kept per FILE.
-     *
-     * Per file because a line number means nothing on its own: line 42 of one file and line 42 of
-     * another are not the same place, and a flat list of ranges would justify a call site in a file
-     * that carries no annotation at all — silently, and in the direction that hides findings.
-     *
-     * @return array<string, list<array{from: int, to: int}>>
-     */
-    private function justifiedSpans(CollectedDataNode $node): array
-    {
-        $spans = [];
-
-        foreach ($node->get(JustificationSpanCollector::class) as $file => $perFile) {
-            foreach ($perFile as $entry) {
-                if (is_array($entry)) {
-                    $spans[(string) $file][] = $entry;
-                }
-            }
-        }
-
-        return $spans;
     }
 }

@@ -27,6 +27,33 @@ use Attribute;
  * The ownership follows the same line: suppression is one component's concern, justification is the
  * analyse suite's, and neither reimplements the other.
  *
+ * ## `interpolation:` is a SECOND question, and it is separate on purpose
+ *
+ * `reason:` answers *"why raw SQL"*. It does NOT answer *"why is this runtime value in the
+ * statement's text instead of in its parameters"*, and letting it do so would be the expensive
+ * mistake available here: a method reasoned *"we need a window function"* would then silently
+ * accept an interpolated request value, and the injection rule would be off wherever this
+ * annotation is on.
+ *
+ * So the second answer is written separately, or it is not given:
+ *
+ * ```php
+ * #[RawSql(
+ *     reason: 'partitioned-table DDL; the query builder cannot express PARTITION BY',
+ *     interpolation: 'the suffix is a formatted date computed here — PostgreSQL binds no identifier',
+ * )]
+ * ```
+ *
+ * The two are also independent in the other direction: a `reason:` the run's policy refuses does
+ * not withdraw an `interpolation:` that is written, because they are answers to different
+ * questions and one being unsatisfactory says nothing about the other.
+ *
+ * **Why a justification and not a suppression here.** The alternative a project has today is a
+ * PHPStan `ignoreErrors` entry, and it is worse in both directions that matter: it carries no
+ * reason, so nobody later knows whether the line was considered; and it is scoped by PATH, so the
+ * next interpolation in that file — one that DOES have a binding available — is silenced with it.
+ * An annotation is at the call site, carries the sentence, and covers what it sits on.
+ *
  * ## The reason is mandatory, at the language level
  *
  * Not checked by a rule, not validated at runtime — a constructor argument. An annotation without a
@@ -54,8 +81,25 @@ final readonly class RawSql
     /**
      * @param  string  $reason  why raw SQL is the right tool here — for the next reader, never parsed
      * @param  string|null  $until  an optional revisit hint (a date or a version), never an auto-expiry
+     * @param  string|null  $interpolation  why a runtime value is in the statement TEXT rather than
+     *                                      in its parameters — a SECOND question, see below
      */
-    public function __construct(public string $reason, public ?string $until = null) {}
+    public function __construct(
+        public string $reason,
+        public ?string $until = null,
+        public ?string $interpolation = null,
+    ) {}
+
+    /**
+     * Whether this annotation answers the INTERPOLATION question as well.
+     *
+     * Same emptiness rule as {@see isReasoned()}, for the same reason: `interpolation: ''` satisfies
+     * PHP and states nothing.
+     */
+    public function justifiesInterpolation(): bool
+    {
+        return $this->interpolation !== null && trim($this->interpolation) !== '';
+    }
 
     /**
      * Whether this annotation actually carries a reason.

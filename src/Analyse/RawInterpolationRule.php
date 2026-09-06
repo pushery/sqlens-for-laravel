@@ -83,10 +83,28 @@ final class RawInterpolationRule implements Rule
         // The expression collector is deliberately NOT read by the policy rule beside this one —
         // see its class docblock. Requiring a written justification for every `DB::raw('count(*)')`
         // is how an analyse suite gets switched off in its first week.
+        // The hatch, and it is a SEPARATE channel from the policy rule's — `#[RawSql(interpolation:
+        // '…')]`, never `reason:`. A method reasoned "we need a window function" has said nothing
+        // about an interpolated value inside it, and reading one as the other would switch this rule
+        // off wherever the policy annotation is on.
+        //
+        // Why the rule accepts an annotation at all, having refused one until now: where no binding
+        // form EXISTS the remedy this rule prints cannot be followed. No engine binds an identifier,
+        // a schema name or a DDL fragment — measured with a positive control, `SELECT 1 FROM ?` is a
+        // syntax error where `SELECT ? FROM migrations` runs. The only answer left was a PHPStan
+        // `ignoreErrors` entry, which carries no reason and is scoped by PATH: the next
+        // interpolation in that file, one that DOES have a binding available, is silenced with it.
+        // An annotation is at the call site, carries the sentence, and covers what it sits on.
+        $justified = JustificationCoverage::interpolation($node);
+
         foreach ([RawSqlCallCollector::class, RawSqlFragmentCollector::class, RawSqlConnectionCallCollector::class, RawSqlExpressionCollector::class] as $collector) {
             foreach ($node->get($collector) as $file => $calls) {
                 foreach ($calls as $call) {
                     if ($call['signal'] !== ParametrizationSignal::Interpolated->value) {
+                        continue;
+                    }
+
+                    if ($justified->covers($call['scope'] ?? null, (string) $file, $call['line'])) {
                         continue;
                     }
 
@@ -191,8 +209,10 @@ final class RawInterpolationRule implements Rule
                 // rule emits — built from the constant, never typed, so a renamed identifier cannot
                 // leave a wrong one printed here.
                 .' Where no binding form exists — an identifier, a schema name, DDL built from an '
-                .'enum — the remedy above does not apply, and the exemption belongs in PHPStan\'s '
-                .'own ignoreErrors with identifier: '.self::IDENTIFIER.', scoped with paths:. '
+                .'enum — the remedy above does not apply. Say so at the call site with '
+                .'#[RawSql(interpolation: \'…\')], which covers what it sits on and carries the '
+                .'sentence; a PHPStan ignoreErrors entry with identifier: '.self::IDENTIFIER
+                .' is the coarser fallback, because it is scoped by path and states no reason. '
                 .'analyse.exclude_paths deliberately does not reach this rule.'
                 .' '.RuleDocumentationUrl::for(self::RULE_ID)
             )

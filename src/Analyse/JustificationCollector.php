@@ -9,6 +9,7 @@ use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
 use PHPStan\Analyser\Scope;
 use PHPStan\Collectors\Collector;
+use Pushery\SQLens\Attributes\RawSql;
 use Pushery\SQLens\Attributes\SqlensIgnore;
 
 /**
@@ -58,7 +59,7 @@ use Pushery\SQLens\Attributes\SqlensIgnore;
  * the call site's own scope name is `null` — so a name join has nothing to compare. They are covered
  * by POSITION instead, in the span collector beside this one.
  *
- * @implements Collector<Class_, array{names: list<string>, lines: list<int>}|null>
+ * @implements Collector<Class_, array{names: list<string>, lines: list<int>, interpolationNames: list<string>}|null>
  */
 final readonly class JustificationCollector implements Collector
 {
@@ -90,7 +91,11 @@ final readonly class JustificationCollector implements Collector
      * reports the annotation itself, and a finding has to point somewhere. Parallel rather than a
      * map, because a class and a method of the same name are two entries and a map would keep one.
      *
-     * @return array{names: list<string>, lines: list<int>}|null
+     * `interpolationNames` is the SECOND channel and is kept apart from the first on purpose: an
+     * annotation answering only "why raw SQL" must not clear an injection finding. See
+     * {@see RawSql} for why the two questions are separate arguments.
+     *
+     * @return array{names: list<string>, lines: list<int>, interpolationNames: list<string>}|null
      */
     public function processNode(Node $node, Scope $scope): ?array
     {
@@ -119,6 +124,7 @@ final readonly class JustificationCollector implements Collector
         $class = $node->namespacedName?->toString() ?? $node->name?->toString();
         $names = [];
         $lines = [];
+        $interpolationNames = [];
 
         // A class-level annotation covers every call in the class; a method-level one covers only
         // that method. Both are recorded under the name a call site reports itself as, so the rule
@@ -128,15 +134,29 @@ final readonly class JustificationCollector implements Collector
             $lines[] = $node->getStartLine();
         }
 
+        if ($class !== null && $this->reason->justifiesInterpolationIn($node->attrGroups, $scope)) {
+            $interpolationNames[] = $class;
+        }
+
         foreach ($class === null ? [] : $node->stmts as $statement) {
-            if ($statement instanceof ClassMethod && $this->reason->isPresentIn($statement->attrGroups, $scope)) {
+            if (! $statement instanceof ClassMethod) {
+                continue;
+            }
+
+            if ($this->reason->isPresentIn($statement->attrGroups, $scope)) {
                 $names[] = $class.'::'.$statement->name->toString();
                 $lines[] = $statement->getStartLine();
+            }
+
+            if ($this->reason->justifiesInterpolationIn($statement->attrGroups, $scope)) {
+                $interpolationNames[] = $class.'::'.$statement->name->toString();
             }
         }
 
         // An unannotated class is the overwhelming majority, and one entry per class in a codebase
         // would make the rule's join proportional to the whole project for no gain.
-        return $names === [] ? null : ['names' => $names, 'lines' => $lines];
+        return $names === [] && $interpolationNames === []
+            ? null
+            : ['names' => $names, 'lines' => $lines, 'interpolationNames' => $interpolationNames];
     }
 }
