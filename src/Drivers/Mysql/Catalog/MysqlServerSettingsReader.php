@@ -109,7 +109,10 @@ final class MysqlServerSettingsReader implements ServerSettingsReader
      *
      * @return array<string, string>
      */
-    #[RawSql(reason: 'reads server variables; @@-variables are not columns and no builder can name one')]
+    #[RawSql(
+        reason: 'reads server variables; @@-variables are not columns and no builder can name one',
+        interpolation: 'the scope word is GLOBAL or SESSION and comes from the two callers in this class; SHOW takes no parameter there',
+    )]
     private function variables(string $scope): array
     {
         $table = $scope === 'GLOBAL' ? 'global_variables' : 'session_variables';

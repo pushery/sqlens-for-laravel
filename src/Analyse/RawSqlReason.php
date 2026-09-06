@@ -57,9 +57,47 @@ final readonly class RawSqlReason
      */
     public function isPresentIn(array $groups, Scope $scope): bool
     {
+        return $this->carries($groups, $scope, 'reason', 0);
+    }
+
+    /**
+     * Does this attribute list ANSWER THE OTHER QUESTION — why a runtime value sits in the
+     * statement's text rather than in its parameters?
+     *
+     * A separate argument, read separately, and the separation is the point. `reason:` says why raw
+     * SQL was chosen; a method reasoned *"we need a window function"* has said nothing about an
+     * interpolated value inside it, and treating it as though it had would switch the injection
+     * rule off wherever the policy annotation is on.
+     *
+     * The run's placeholder policy applies here too — an `interpolation: 'todo'` is not an answer
+     * under {@see AnalysePolicy::Strict} any more than a `reason: 'todo'` is. What does NOT apply is
+     * the other argument's verdict: a `reason:` the policy refuses leaves this one standing, because
+     * they answer different questions and one being unsatisfactory says nothing about the other.
+     *
+     * @param  array<array-key, Node\AttributeGroup>  $groups
+     */
+    public function justifiesInterpolationIn(array $groups, Scope $scope): bool
+    {
+        // Position 2 as well as the name, because `#[RawSql('why', null, 'because …')]` is legal PHP
+        // and a reader who wrote it meant it. `until` sits between the two, so the positional form
+        // is easy to get wrong — which is a reason to document the named one, not to refuse this.
+        return $this->carries($groups, $scope, 'interpolation', 2);
+    }
+
+    /**
+     * Whether a `#[RawSql]` in this list carries an accepted value in the named argument.
+     *
+     * One traversal for both questions, so a change to what counts as an annotation cannot reach one
+     * channel and miss the other — the same reason this class exists at all rather than being a
+     * method on the collector that had it.
+     *
+     * @param  array<array-key, Node\AttributeGroup>  $groups
+     */
+    private function carries(array $groups, Scope $scope, string $argument, int $position): bool
+    {
         foreach ($groups as $group) {
             foreach ($group->attrs as $attribute) {
-                if ($scope->resolveName($attribute->name) === RawSql::class && $this->hasRealReason($attribute)) {
+                if ($scope->resolveName($attribute->name) === RawSql::class && $this->hasRealReason($attribute, $argument, $position)) {
                     return true;
                 }
             }
@@ -96,12 +134,12 @@ final readonly class RawSqlReason
      * lists — is not a reason either. Under `documented` it is, on purpose: a team mid-adoption is
      * better served by an annotation it can grep for than by a rule it switched off.
      */
-    private function hasRealReason(Attribute $attribute): bool
+    private function hasRealReason(Attribute $attribute, string $name, int $position): bool
     {
         foreach ($attribute->args as $index => $argument) {
-            $isReason = $argument->name?->toString() === 'reason' || ($argument->name === null && $index === 0);
+            $isWanted = $argument->name?->toString() === $name || ($argument->name === null && $index === $position);
 
-            if (! $isReason) {
+            if (! $isWanted) {
                 continue;
             }
 

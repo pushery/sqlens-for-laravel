@@ -329,6 +329,34 @@ use Pushery\SQLens\Attributes\SqlensIgnore;
 class MyMigration extends Migration { /* … */ }
 ```
 
+A third attribute answers the static-analysis rules instead of suppressing them, and it
+takes two separate reasons because they are two separate questions:
+
+```php
+use Pushery\SQLens\Attributes\RawSql;
+
+#[RawSql(
+    // Why raw SQL rather than the query builder. Answers SEC.INJ.RAW_SQL_WITHOUT_REASON.
+    reason: 'partitioned-table DDL; the query builder cannot express PARTITION OF',
+    // Why a runtime value is in the statement's TEXT rather than in its parameters.
+    // Answers SEC.INJ.RAW_INTERPOLATION, and only this argument does.
+    interpolation: 'the suffix is a date this method formats — no engine binds an identifier',
+)]
+public function createPartition(string $suffix): void
+{
+    DB::statement("CREATE TABLE orders_{$suffix} PARTITION OF orders FOR VALUES …");
+}
+```
+
+Write `interpolation:` only where a binding genuinely does not exist — an identifier, a
+schema name, a DDL fragment. Where the value could be bound, bind it: `reason:` alone
+leaves the interpolation finding standing, on purpose, so annotating for the policy rule
+never switches the injection rule off with it.
+
+It goes on a class, a method, a function, a closure or an arrow function, and covers
+everything inside what it sits on. A class-level annotation is right for a class whose
+whole job is DDL over computed names and too wide for one that has a single such method.
+
 ### 9. Reach the same engine from an agent, over MCP
 
 This one step needs a package SQLens does not require:

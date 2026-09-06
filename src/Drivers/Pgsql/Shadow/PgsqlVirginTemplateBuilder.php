@@ -154,7 +154,10 @@ final readonly class PgsqlVirginTemplateBuilder
      * parentheses PostgreSQL reads the LIMIT as belonging to the whole UNION, which
      * would cap the result at one row and report at most one populated table.
      */
-    #[RawSql(reason: 'counts rows in a table the builder is about to declare untouched; the claim is only worth making if it was measured')]
+    #[RawSql(
+        reason: 'counts rows in a table the builder is about to declare untouched; the claim is only worth making if it was measured',
+        interpolation: 'each table name comes from the catalog and is quoted; no engine binds a table name',
+    )]
     private function rowsIn(Connection $connection): int
     {
         $found = 0;

@@ -152,7 +152,10 @@ final readonly class PgsqlPoolerReader implements PoolerReader
      *
      * @return Closure(): void
      */
-    #[RawSql(reason: 'reads the backend the session is actually bound to, which is the whole evidence a pooler leaves behind')]
+    #[RawSql(
+        reason: 'reads the backend the session is actually bound to, which is the whole evidence a pooler leaves behind',
+        interpolation: 'the setting name is a constant of this class, and SET takes no parameter for one',
+    )]
     private function bound(): Closure
     {
         if (! $this->budget instanceof SessionBudget) {

@@ -120,7 +120,10 @@ final readonly class StaleRawSqlReasonRule implements Rule
             }
 
             foreach ($perFile as $span) {
-                if (! is_array($span) || $this->spanCoversSomething((string) $file, $span, $lines)) {
+                // `rawSql` only: a span carrying just an `interpolation:` answer is not a policy
+                // justification, so reporting it as a stale one would name an argument the author
+                // never wrote. The two channels are separate everywhere, including here.
+                if (! is_array($span) || $span['rawSql'] !== true || $this->spanCoversSomething((string) $file, $span, $lines)) {
                     continue;
                 }
 

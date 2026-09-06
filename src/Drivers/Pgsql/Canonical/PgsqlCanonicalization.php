@@ -445,6 +445,33 @@ final class PgsqlCanonicalization implements DriverCanonicalization
                 // it out would make a reversible migration uncheckable in one direction.
                 'GRANT' => StatementKind::DdlOther,
                 'REVOKE' => StatementKind::DdlOther,
+
+                // `COMMENT ON COLUMN`/`COMMENT ON TABLE`, and it is not an exotic form: Laravel
+                // appends one to EVERY `->change()`. `compileComment()` fires on
+                // `! is_null($column->comment) || $column->change`, so a plain
+                // `$table->string('endpoint', 1024)->change()` emits `comment on column … is NULL`
+                // beside its `alter table`. One unrecognized statement makes the whole migration
+                // report CAP.L0.UNDETERMINED_CAPTURE, so this word decided whether a `->change()`
+                // migration was checked at all — and `->change()` is the Laravel spelling for the
+                // column rewrites and NOT NULL sets the lock-hygiene rules exist for. Measured in a
+                // consumer over 56 files: 3 used `->change()`, 3 were uncanonicalizable, and the
+                // intersection was 3 of 3.
+                //
+                // It is the hole the note on the MySQL twin's keyword list warns about — "two lists
+                // have to agree for a statement form to work" — and here only the first was ever
+                // edited. `COMMENT` and `IS` sit in the keyword list above under a note calling a
+                // column comment "a whole statement shape that folded nothing at all"; that fixed
+                // the FOLDING, so two spellings stopped producing two fingerprints, and left the
+                // statement just as unrecognized. Folding a word and classifying a form are two
+                // lists, and a fix to one reads exactly like a fix to both.
+                //
+                // `DdlOther` for the same reason GRANT takes it, and here the case is easier: a
+                // comment writes a catalog description, changes no schema and no row, and takes
+                // only a ShareUpdateExclusive lock — so no safety rule has anything to say about
+                // it. Reaching it through the fallback rather than a signature also keeps its
+                // target set empty, which is the honest shape: the statement that changed the
+                // column is the `alter table` beside it, and that one carries the target.
+                'COMMENT' => StatementKind::DdlOther,
             ],
         );
     }

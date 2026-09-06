@@ -27,11 +27,12 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *   only honest answer about redundancy here is that there isn't one.
  * - **An expression index** indexes `lower(email)`, not `email`. A reader that saw the column list
  *   would call it a duplicate of `(email)` and be wrong in the direction that loses an index.
- * - **A non-default operator class** changes what the index answers: `text_pattern_ops` serves
- *   `LIKE 'foo%'` and the default class does not. Two indexes on the same column with different
- *   classes are two different indexes.
  * - **A method other than b-tree** answers different questions entirely. A GIN index over an array
  *   column is not a slower b-tree; the redundancy question is only meaningful inside one method.
+ * - **A non-default operator class** changes what the index answers: `text_pattern_ops` serves
+ *   `LIKE 'foo%'` and the default class does not. Two indexes on the same column with different
+ *   classes are two different indexes. It is read AFTER the method, because a class only decides
+ *   anything inside a method that is comparable at all — see the ordering note on `of()`.
  *
  * ## What is NOT a comprehension gap, stated rather than left implied
  *
@@ -90,16 +91,29 @@ final readonly class IndexComprehension
             return new self(false, 'expression index — the indexed value is not the column: '.$expression);
         }
 
-        $opclasses = $index->getString('operator_classes');
-
-        if ($opclasses !== null && $opclasses !== '') {
-            return new self(false, 'non-default operator class: '.$opclasses);
-        }
-
+        // The METHOD before the operator class, and the order is the finding rather than a tidy-up.
+        //
+        // An operator class only decides anything INSIDE a comparable method: two b-tree indexes on
+        // one column with different classes are two different indexes, which is why the arm below
+        // exists. Once the method itself is outside the question, naming the class points a reader
+        // at a fact that cannot change the answer. Measured against PostgreSQL 18's `pg_opclass`:
+        // `jsonb_path_ops` is defined for `gin` and for no other access method, so an index
+        // carrying it is a GIN index by construction.
+        //
+        // Reported the other way round it misled a real reader, which is how this order got
+        // measured: an audit said "non-default operator class: jsonb_path_ops" and the consumer
+        // filed "know jsonb_path_ops" as the fix. It would have rewritten this sentence and left
+        // the index exactly as incomparable as before.
         $method = $index->getString('method');
 
         if ($method !== null && ! in_array($method, self::COMPARABLE_METHODS, true)) {
             return new self(false, sprintf('%s index is not compared against b-tree indexes', $method));
+        }
+
+        $opclasses = $index->getString('operator_classes');
+
+        if ($opclasses !== null && $opclasses !== '') {
+            return new self(false, 'non-default operator class: '.$opclasses);
         }
 
         // A MySQL PREFIX-LENGTH key — `KEY (email(20))` — indexes the first 20 bytes rather than

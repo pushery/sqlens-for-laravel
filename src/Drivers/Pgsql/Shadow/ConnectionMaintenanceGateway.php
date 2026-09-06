@@ -131,7 +131,10 @@ final readonly class ConnectionMaintenanceGateway implements MaintenanceGateway,
         return $this->maintenance->selectOne('select 1 as present from pg_database where datname = ?', [$name]) !== null;
     }
 
-    #[RawSql(reason: 'CREATE DATABASE -- DDL, and the query builder has no verb for it')]
+    #[RawSql(
+        reason: 'CREATE DATABASE -- DDL, and the query builder has no verb for it',
+        interpolation: 'the name is built from the prefix this class owns; no engine binds a database name',
+    )]
     public function createEmptyDatabase(string $name): void
     {
         // template0, never template1: template1 is the default source and a site may
@@ -143,7 +146,10 @@ final readonly class ConnectionMaintenanceGateway implements MaintenanceGateway,
         ));
     }
 
-    #[RawSql(reason: 'CREATE DATABASE ... TEMPLATE -- DDL with a clause no builder models, and the fast path the shadow harness stands on')]
+    #[RawSql(
+        reason: 'CREATE DATABASE ... TEMPLATE -- DDL with a clause no builder models, and the fast path the shadow harness stands on',
+        interpolation: 'both names are built from the prefix this class owns; no engine binds a database name',
+    )]
     public function createDatabaseFromTemplate(string $shadow, string $template): void
     {
         $this->maintenance->statement(sprintf(
@@ -153,7 +159,10 @@ final readonly class ConnectionMaintenanceGateway implements MaintenanceGateway,
         ));
     }
 
-    #[RawSql(reason: 'DROP DATABASE -- DDL the builder cannot express, and the reason the name is built from this class own prefix rather than from anything a caller supplies')]
+    #[RawSql(
+        reason: 'DROP DATABASE -- DDL the builder cannot express, and the reason the name is built from this class own prefix rather than from anything a caller supplies',
+        interpolation: 'the name goes through quoteIdentifier(); no engine binds a database name',
+    )]
     public function dropDatabase(string $name): void
     {
         $this->maintenance->statement(sprintf(

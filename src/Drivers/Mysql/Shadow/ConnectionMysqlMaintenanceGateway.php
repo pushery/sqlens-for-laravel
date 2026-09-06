@@ -127,7 +127,10 @@ final readonly class ConnectionMysqlMaintenanceGateway implements MysqlMaintenan
         ];
     }
 
-    #[RawSql(reason: 'CREATE DATABASE -- DDL, and the query builder has no verb for it')]
+    #[RawSql(
+        reason: 'CREATE DATABASE -- DDL, and the query builder has no verb for it',
+        interpolation: 'the name is built from the prefix this class owns and the charset passes validIdentifier() with a constant fallback; no engine binds a database name',
+    )]
     public function createDatabase(string $shadow, string $charset, string $collation): void
     {
         // Defense in depth: the charset/collation come from the catalog, but they
@@ -144,7 +147,10 @@ final readonly class ConnectionMysqlMaintenanceGateway implements MysqlMaintenan
         ));
     }
 
-    #[RawSql(reason: 'DROP DATABASE -- DDL the builder cannot express, and the reason the name is built from this class own prefix rather than from anything a caller supplies')]
+    #[RawSql(
+        reason: 'DROP DATABASE -- DDL the builder cannot express, and the reason the name is built from this class own prefix rather than from anything a caller supplies',
+        interpolation: 'the name goes through quoteIdentifier(); no engine binds a database name',
+    )]
     public function dropDatabase(string $name): void
     {
         $this->maintenance->statement(sprintf('DROP DATABASE IF EXISTS %s', $this->quoteIdentifier($name)));

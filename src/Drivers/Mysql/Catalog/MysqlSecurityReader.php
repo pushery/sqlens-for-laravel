@@ -240,7 +240,10 @@ final readonly class MysqlSecurityReader implements SecurityReader
         return $roles;
     }
 
-    #[RawSql(reason: 'reads the grant catalog; information_schema is not a model, and a privilege picture assembled any other way would be a guess about who can do what')]
+    #[RawSql(
+        reason: 'reads the grant catalog; information_schema is not a model, and a privilege picture assembled any other way would be a guess about who can do what',
+        interpolation: 'the privilege COLUMN name is assembled from the Y/N column list of the catalog itself; no engine binds a column name',
+    )]
     public function grants(): GrantReading
     {
         $skips = [];

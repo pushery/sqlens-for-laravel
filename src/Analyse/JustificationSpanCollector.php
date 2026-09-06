@@ -65,7 +65,7 @@ use PHPStan\Collectors\Collector;
  * the rule now: the name collector takes classes and methods, this one takes everything else PHP
  * lets the attribute sit on.
  *
- * @implements Collector<FunctionLike, array{from: int, to: int}|null>
+ * @implements Collector<FunctionLike, array{from: int, to: int, rawSql: bool, interpolation: bool}|null>
  */
 final readonly class JustificationSpanCollector implements Collector
 {
@@ -84,7 +84,16 @@ final readonly class JustificationSpanCollector implements Collector
      * body, so a range that starts at the attribute is never too wide and is easier to reason about
      * than one that tries to start at the brace.
      *
-     * @return array{from: int, to: int}|null
+     * The two flags say WHICH question the annotation answered, and they are independent. `reason:`
+     * says why raw SQL was chosen; `interpolation:` says why a runtime value is in the statement's
+     * text. A span carrying only the second is not a justification for the policy rule, and a span
+     * carrying only the first must not clear an injection finding — so the span is recorded once and
+     * each reader filters on its own flag.
+     *
+     * A policy that refuses one argument leaves the other standing: they are answers to different
+     * questions, and one being unsatisfactory says nothing about the other.
+     *
+     * @return array{from: int, to: int, rawSql: bool, interpolation: bool}|null
      */
     public function processNode(Node $node, Scope $scope): ?array
     {
@@ -92,7 +101,14 @@ final readonly class JustificationSpanCollector implements Collector
         // node type, and re-checking it is a branch no run can enter — which the analyzer reports
         // rather than tolerates. `ClassMethod` is a different question: it IS reached, and it is the
         // one shape the name collector owns.
-        if ($node instanceof ClassMethod || ! $this->reason->isPresentIn($node->getAttrGroups(), $scope)) {
+        if ($node instanceof ClassMethod) {
+            return null;
+        }
+
+        $rawSql = $this->reason->isPresentIn($node->getAttrGroups(), $scope);
+        $interpolation = $this->reason->justifiesInterpolationIn($node->getAttrGroups(), $scope);
+
+        if (! $rawSql && ! $interpolation) {
             return null;
         }
 
@@ -102,6 +118,11 @@ final readonly class JustificationSpanCollector implements Collector
         // A node whose position the parser could not give is not a span anybody can be inside. -1 is
         // what php-parser answers without position attributes, and a range of -1..-1 would either
         // cover nothing (harmless) or, read the wrong way round, cover a file (not harmless).
-        return $from < 1 || $to < $from ? null : ['from' => $from, 'to' => $to];
+        // Bound to ONE line, deliberately. Wrapped across three, the `? null` arm sits on a line of
+        // its own that no coverage driver ever marks as executed — a known trap in this repository —
+        // so the span is named first and the guard stays a single statement.
+        $span = ['from' => $from, 'to' => $to, 'rawSql' => $rawSql, 'interpolation' => $interpolation];
+
+        return $from < 1 || $to < $from ? null : $span;
     }
 }
