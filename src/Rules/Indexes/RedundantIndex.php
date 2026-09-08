@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Rules\Indexes;
 
+use Pushery\SQLens\Catalog\TableMembers;
 use Pushery\SQLens\Catalog\Understanding\IndexComprehension;
 use Pushery\SQLens\Rules\Coverage\ForeignKeyIndexCoverage;
 use Pushery\SQLens\Subjects\SchemaObject;
@@ -44,6 +45,26 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * - **It is not a strict left prefix.** A B-tree on `(a, b)` serves `(a)`, and does not serve `(b)`.
  *   Order is the fact, not a detail.
  *
+ * ## The one thing a partial index DOES conclude, and the three it does not
+ *
+ * Two partial indexes whose normalized predicates are identical cover exactly the same rows, so the
+ * predicate cancels and the columns decide. That is arithmetic — same condition, same row set — and
+ * it is the only conclusion drawn about a partial index anywhere in this rule.
+ *
+ * Everything else about them stays excluded, and each exclusion is a decision rather than a gap:
+ *
+ * - **Two DIFFERENT predicates** is an implication question, and implication is not built. The pair
+ *   is never formed.
+ * - **A partial index against an UNCONDITIONAL one** is the tempting case. As a statement about rows
+ *   it is true that the full index covers the partial one; as ADVICE it is not, because the partial
+ *   index can be orders of magnitude smaller and somebody kept it that way on purpose. Dropping it
+ *   is a loss, not a tidy-up, and that judgment is not this rule's to make.
+ * - **An expression index** is unchanged: the indexed value is not the column.
+ *
+ * A partial index is still reported as not understood by {@see IndexComprehension}, and that is not
+ * a contradiction. Comprehension answers whether the index can be compared against a column list in
+ * GENERAL; this rule makes one narrow comparison that does not need the general answer.
+ *
  * ## Equal column lists, and why the tie is broken by NAME
  *
  * Two indexes on exactly the same columns are genuinely redundant, and neither is the obvious
@@ -60,18 +81,48 @@ final readonly class RedundantIndex
      */
     public static function on(SchemaObject $table): array
     {
-        $comparable = self::sorted(ForeignKeyIndexCoverage::parse($table->getString('comparable_indexes') ?? ''));
         $protected = self::protectedNames($table);
+        $redundant = self::within(
+            self::sorted(ForeignKeyIndexCoverage::parse($table->getString('comparable_indexes') ?? '')),
+            $protected,
+        );
+
+        // Each group of partial indexes is its own comparison universe, and they are kept apart on
+        // purpose: an index from one group can never be reported against one from another, because
+        // that would be an implication claim rather than an arithmetic one.
+        foreach (self::predicateGroups($table) as $group) {
+            $redundant = [...$redundant, ...self::within($group, $protected)];
+        }
+
+        ksort($redundant);
+
+        return $redundant;
+    }
+
+    /**
+     * The redundant indexes inside one comparison universe.
+     *
+     * A universe is a set of indexes that cover the same rows as each other — every unconditional
+     * comparable index, or one group of partial indexes carrying the same condition. Whether the
+     * membership was earned by having no predicate or by sharing one is settled before this runs;
+     * here they are simply column lists.
+     *
+     * @param  array<string, list<string>>  $universe
+     * @param  list<string>  $protected
+     * @return array<string, string>
+     */
+    private static function within(array $universe, array $protected): array
+    {
         $redundant = [];
 
-        foreach ($comparable as $candidate => $columns) {
+        foreach ($universe as $candidate => $columns) {
             if (in_array($candidate, $protected, true)) {
                 continue;
             }
             if ($columns === []) {
                 continue;
             }
-            foreach ($comparable as $cover => $coverColumns) {
+            foreach ($universe as $cover => $coverColumns) {
                 if ($cover === $candidate) {
                     continue;
                 }
@@ -84,9 +135,47 @@ final readonly class RedundantIndex
             }
         }
 
-        ksort($redundant);
-
         return $redundant;
+    }
+
+    /**
+     * The partial indexes of this table, split into one set per shared condition.
+     *
+     * Two partial indexes whose normalized predicates are identical cover exactly the same rows, so
+     * the predicate cancels and the columns decide. That is arithmetic, not a heuristic — and it is
+     * the ONLY thing about a partial index this rule concludes. The grouping itself is done by
+     * {@see TableMembers}, whose projection also decides what never enters
+     * a group: an unconditional index, a predicate shape the reading refuses, and an index alone
+     * under its condition.
+     *
+     * A group of one is dropped here as well as there. It cannot produce a pair, and letting one
+     * through would mean a token appearing in the projection that no comparison can use.
+     *
+     * @return list<array<string, list<string>>>
+     */
+    private static function predicateGroups(SchemaObject $table): array
+    {
+        $columns = ForeignKeyIndexCoverage::parse($table->getString('same_predicate_indexes') ?? '');
+        $tokens = ForeignKeyIndexCoverage::parse($table->getString('index_predicate_groups') ?? '');
+        $grouped = [];
+
+        foreach ($tokens as $index => $token) {
+            $key = $token[0] ?? '';
+            $name = (string) $index;
+
+            if ($key === '' || ! array_key_exists($name, $columns)) {
+                continue;
+            }
+
+            $grouped[$key][$name] = $columns[$name];
+        }
+
+        ksort($grouped);
+
+        return array_values(array_map(
+            self::sorted(...),
+            array_filter($grouped, static fn (array $group): bool => count($group) > 1),
+        ));
     }
 
     /**
