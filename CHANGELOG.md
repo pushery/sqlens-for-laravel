@@ -2,6 +2,36 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-09-08
+
+### Added
+
+- **The rule catalog has an introduction page instead of a generated list.** It explains what the parts of an id tell you before you open anything — `PG.L7.INDEX_REDUNDANT` reads as engine, level band, finding — which prefixes exist and what each one asks about, why `undetermined` is a third answer rather than a soft pass, and the five layers that can hide a finding, in the order they are applied.
+
+  The links that reach it changed shape with it: a bare `rules/` is resolved against the URL, so on a subpage it points one level too deep the moment the documentation site serves paths with a trailing slash. They now name the file, which the site resolves itself and which our own contract test can check against the tree.
+
+- **Two partial indexes carrying the same condition are compared with each other.** They cover exactly the same rows, so the predicate cancels and the columns decide — the same arithmetic as for two ordinary indexes. `PG.L7.INDEX_REDUNDANT` reports the narrower one, and it survives a difference in spelling: over a `varchar` column PostgreSQL prints `WHERE state IN ('open')` and `WHERE state = ANY (ARRAY['open'])` differently, and they are the same condition.
+
+  ⚠️ **Two neighboring cases deliberately stay out, and both read like the obvious next step.** A *different* condition is an implication question — does `WHERE a IS NULL` cover `WHERE a IS NULL AND b = 1`? — and this release answers no such question. A partial index against an **unconditional** one is true as a statement about rows and wrong as advice: the partial index can be orders of magnitude smaller and somebody kept it that way on purpose, so dropping it is a loss rather than a tidy-up. Both are still reported as not compared, with the reason named.
+
+### Changed
+
+- **A partial index now says which condition went uncompared, instead of repeating the server's SQL back at you.** A partial index is still reported as not comparable, and no finding moves — knowing two predicates are the same condition says nothing about one covering the other, which is what a drop needs answered. What changed is the sentence: `partial index predicate not compared — it selects the rows where consumed_at is null: (consumed_at IS NULL)`.
+
+  Four shapes are read: an inequality against a literal, a boolean test, a fixed set, a NULL test. Several of them have two spellings PostgreSQL prints differently over identical rows — `status IN ('a','b')` against `status = ANY (ARRAY['a','b'])`, `WHERE is_active` against `WHERE is_active = true` — and both spellings are read as the one condition they are. Anything else keeps the previous wording on purpose: a compound `AND`, a range test or a function call is reported as read-and-not-recognized rather than guessed at, because a guess would eventually name a condition the index does not have.
+
+### Fixed
+
+- **The published suppression order was backwards on both pages that describe it, and they disagreed with each other about how many sources there are.** One said three layers, the other four; the resolver applies five, and both put the **baseline first** where it is actually third. That is not a cosmetic disagreement: those pages promise to let you predict which layer a report will blame for a hidden finding, and either prediction was wrong.
+
+  The order is `config`, `audit_ignore`, `baseline`, `annotation`, `destructive_opt_in`. The baseline losing ties is the design — it records findings somebody intends to fix and is meant to shrink, so a standing decision must never land on that burn-down list. Both pages now carry the order as a table, and a test reads the tokens back out and compares them against the resolver, in document order.
+
+- **The documented CI recipe connected as a user that does not exist, to a database that does not exist.** Its `env:` blocks set `DB_CONNECTION`, `DB_HOST` and `DB_PASSWORD` and stopped. The `postgres` image with only `POSTGRES_PASSWORD` set serves user `postgres` and database `postgres`; Laravel's own pgsql defaults are `root` and `laravel`. `DB_DATABASE` and `DB_USERNAME` are now set, with a comment saying why they are not optional.
+
+- **Two dead documentation links in the shipped rule evidence.** `MY.L7.INDEX_UNUSED` pointed at a MySQL manual page that has been dissolved rather than moved — 404 on 8.0, 8.4 and 9.x alike — and `SEC.PRIV.GRANT_SERVER_ADMIN` pointed at a `dynamic-privileges` page that is 404 in every version too. Both now point at pages that exist and that carry the fact the note claims: the table-wait summary reference, and the privilege reference that documents the SUPER split.
+
+  Found by sweeping every external URL the shipped data carries, not by reading the two the report named. ⚠️ **One 403 in that sweep is deliberately left alone**: `blogs.oracle.com` answers 403 to a checker and to a browser alike, and its own index does too, so the host blocks us rather than the page being gone. Replacing a link on that evidence would be trading a working reference for a guess.
+
 ## [0.8.0] - 2026-09-08
 
 ### Added

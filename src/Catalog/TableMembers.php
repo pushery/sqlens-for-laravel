@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Catalog;
 
 use Pushery\SQLens\Catalog\Understanding\IndexComprehension;
+use Pushery\SQLens\Catalog\Understanding\IndexPredicate;
 use Pushery\SQLens\Subjects\SchemaObject;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
@@ -64,6 +65,12 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * - `payload_indexes` — the indexes carrying an INCLUDE payload beyond their key columns. Without
  *   it `(a) INCLUDE (b)` and `(a)` are indistinguishable, and a redundancy rule would recommend
  *   dropping the more useful of the two. See {@see self::withPayload()}.
+ * - `same_predicate_indexes` and `index_predicate_groups` — the partial indexes that share a
+ *   condition with another partial index on the same table, and the group token each one is in. Two
+ *   attributes rather than one because the encoding is flat `name(cols)` and a predicate would not
+ *   survive it; and because they answer two questions — which indexes, and which of them belong
+ *   together. An index absent from both is either unconditional, or alone under its condition, or
+ *   carries a predicate shape the reading refuses. See {@see self::samePredicate()}.
  * - `unique_null_treatment` — whether each unique index counts two NULLs as the same value. Three-
  *   valued by construction: an index absent from the list had the flag unread, which a rule must not
  *   confuse with either answer. See {@see self::nullTreatment()}.
@@ -129,8 +136,11 @@ final readonly class TableMembers
         $ownedSequences = [];
         $sequenceDefaults = [];
 
-        /** @var array{fk: array<string, list<SchemaObject>>, index: array<string, list<SchemaObject>>, primary: array<string, list<SchemaObject>>, unique: array<string, list<SchemaObject>>, comparable: array<string, list<SchemaObject>>} $members */
-        $members = ['fk' => [], 'index' => [], 'primary' => [], 'unique' => [], 'comparable' => []];
+        /** @var array{fk: array<string, list<SchemaObject>>, index: array<string, list<SchemaObject>>, primary: array<string, list<SchemaObject>>, unique: array<string, list<SchemaObject>>, comparable: array<string, list<SchemaObject>>, partial: array<string, list<SchemaObject>>} $members */
+        $members = ['fk' => [], 'index' => [], 'primary' => [], 'unique' => [], 'comparable' => [], 'partial' => []];
+
+        /** @var array<string, string> $predicates index qualified name => its normalized predicate */
+        $predicates = [];
 
         foreach ($objects as $object) {
             $parent = $object->parent ?? '';
@@ -238,6 +248,18 @@ final readonly class TableMembers
                 if (self::mayBeReasonedAboutAsCoverage($object)) {
                     $members['comparable'][$parent][] = $object;
                 }
+
+                // A partial index never joins `comparable` — it does not cover a lookup that the
+                // predicate excludes, and a foreign-key check counting one would report a table as
+                // indexed while every referential action on it still scans. It is collected here
+                // instead, under its NORMALIZED predicate, for the one comparison that survives
+                // without implication: see {@see self::samePredicate()}.
+                $reading = self::partialPredicate($object);
+
+                if ($reading !== null) {
+                    $members['partial'][$parent][] = $object;
+                    $predicates[$object->qualifiedName] = $reading;
+                }
             }
         }
 
@@ -248,6 +270,8 @@ final readonly class TableMembers
         $primary = self::encodeMembers($members['primary'], $spelling);
         $unique = self::encodeMembers($members['unique'], $spelling);
         $comparable = self::encodeMembers($members['comparable'], $spelling);
+        $sharedPredicate = self::samePredicate($members['partial'], $predicates);
+        $samePredicateIndexes = self::encodeMembers($sharedPredicate['indexes'], $spelling);
 
         $edges = self::edges($foreignKeyEdges, $columnCollation, $spelling, skipUnknownLocal: true);
         // The same edges over TYPES, and the one flag between them is load-bearing. A column
@@ -283,6 +307,8 @@ final readonly class TableMembers
                 'foreign_key_types' => self::encode($typeEdges[$name] ?? []),
                 'unique_null_treatment' => self::encode($nullTreatment[$name] ?? []),
                 'payload_indexes' => self::encode($payload[$name] ?? []),
+                'same_predicate_indexes' => self::encode($samePredicateIndexes[$name] ?? []),
+                'index_predicate_groups' => self::encode($sharedPredicate['groups'][$name] ?? []),
                 'identity_columns' => self::encode($identity[$name] ?? []),
                 'sequence_owned_columns' => self::encode($ownedSequences[$name] ?? []),
                 'sequence_default_columns' => self::encode($sequenceDefaults[$name] ?? []),
@@ -570,6 +596,92 @@ final readonly class TableMembers
         }
 
         return $carrying;
+    }
+
+    /**
+     * One partial index's predicate in normalized form, or null when there is nothing to group on.
+     *
+     * Null covers two different states on purpose, because the caller treats them the same: the
+     * index carries no predicate at all, or it carries one whose shape {@see IndexPredicate} refuses
+     * to read. Both mean "this index cannot be grouped by condition", and neither is a defect.
+     */
+    private static function partialPredicate(SchemaObject $index): ?string
+    {
+        $predicate = $index->getString('predicate');
+
+        if ($predicate === null || $predicate === '') {
+            return null;
+        }
+
+        return IndexPredicate::parse($predicate)?->normalized;
+    }
+
+    /**
+     * The partial indexes that share a condition with another partial index on the same table.
+     *
+     * ## The one inference that holds without implication
+     *
+     * Two partial indexes whose normalized predicates are IDENTICAL cover exactly the same rows. The
+     * predicate therefore cancels, and the columns decide — the same arithmetic as for two ordinary
+     * indexes, not a heuristic about which condition is narrower.
+     *
+     * Everything else stays out, and the exclusions are the point rather than a limitation:
+     *
+     * - **Different predicates** is an IMPLICATION question — does `WHERE a IS NULL` cover
+     *   `WHERE a IS NULL AND b = 1`? — and implication is not built. Two such indexes never land in
+     *   one group, so no rule can reach the pair.
+     * - **A partial index against an UNCONDITIONAL one** is the tempting case and the dangerous one.
+     *   It reads as "the full index covers the partial one", and as a statement about rows that is
+     *   true; as advice it is not, because the partial index can be orders of magnitude smaller and
+     *   dropping it is a loss rather than a tidy-up. That is a judgment somebody has to make, so an
+     *   unconditional index is never in a group at all.
+     * - **A group of one** is dropped. An index alone under its condition has nothing to be compared
+     *   against, and carrying it would put a name into the projection that no comparison can use.
+     *
+     * ## Why a group TOKEN rather than the predicate itself
+     *
+     * The projection is a flat `name(...)` string, and a predicate contains commas, parentheses and
+     * quotes — it would not survive the encoding, and a rule that string-compared the decoded halves
+     * would be re-deciding equality that was already decided here. `g1`, `g2`, … are assigned by
+     * sorting the distinct predicates, so the token is stable for a given schema and two readings of
+     * it diff cleanly.
+     *
+     * @param  array<string, list<SchemaObject>>  $partial  table => its partial indexes with a readable predicate
+     * @param  array<string, string>  $predicates  index qualified name => its normalized predicate
+     * @return array{indexes: array<string, list<SchemaObject>>, groups: array<string, list<string>>}
+     */
+    private static function samePredicate(array $partial, array $predicates): array
+    {
+        $indexes = [];
+        $groups = [];
+
+        foreach ($partial as $parent => $objects) {
+            $byPredicate = [];
+
+            foreach ($objects as $index) {
+                $byPredicate[$predicates[$index->qualifiedName] ?? ''][] = $index;
+            }
+
+            // Sorted so the token a group gets depends on the schema and not on the order the
+            // reader happened to walk it in.
+            ksort($byPredicate, SORT_STRING);
+            $token = 0;
+
+            foreach ($byPredicate as $members) {
+                if (count($members) < 2) {
+                    continue;
+                }
+
+                $token++;
+
+                foreach ($members as $index) {
+                    $indexes[$parent][] = $index;
+                    $groups[$parent][] = self::shortName($index).'(g'.$token.')';
+                }
+            }
+        }
+
+        return ['indexes' => $indexes, 'groups' => $groups];
     }
 
     /**

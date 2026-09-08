@@ -93,9 +93,12 @@ final class RedundantIndexRule extends AbstractCatalogRule implements DeclaresJu
             .'that touches its columns — it occupies its own pages in cache and is one more relation for vacuum '
             .'to walk, for no read it serves alone. Drop it outside peak with DROP INDEX CONCURRENTLY, which '
             .'takes no lock that blocks reads or writes. Only indexes this reading could compare are considered '
-            .'at all: a partial index, an expression index, a non-default operator class, a method other than '
-            .'b-tree and an invalid index are each excluded with a named reason, so a schema full of them is '
-            .'told they were not compared rather than handed a clean report.',
+            .'at all: an expression index, a non-default operator class, a method other than b-tree and an '
+            .'invalid index are each excluded with a named reason, so a schema full of them is told they were '
+            .'not compared rather than handed a clean report. A partial index is compared against another '
+            .'carrying the SAME condition and against nothing else: there the predicate cancels and the columns '
+            .'decide, while a different condition is an implication question and an unconditional neighbor is a '
+            .'judgment about which rows are worth indexing separately — neither is an arithmetic fact.',
             $object->qualifiedName,
             count($redundant) === 1 ? 'an index' : count($redundant).' indexes',
             implode('; ', $named),

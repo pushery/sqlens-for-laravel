@@ -493,7 +493,7 @@
         "MY.L7.INDEX_UNUSED": [
             {
                 "type": "doc",
-                "url": "https://dev.mysql.com/doc/refman/8.4/en/performance-schema-table-io-waits-summary-by-index-usage-table.html",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/performance-schema-table-wait-summary-tables.html",
                 "applies_to": "MySQL 8.4",
                 "note": "COUNT_STAR per index in table_io_waits_summary_by_index_usage is the engine's index usage counter; the instrument belongs to performance_schema, which is a server setting and may be off, and MySQL records no reset point for it."
             }
@@ -1593,7 +1593,7 @@
                 "type": "doc",
                 "url": "https://www.postgresql.org/docs/18/ddl-priv.html",
                 "applies_to": "PostgreSQL 18",
-                "note": "The privileges chapter separates the rights that act on data from those that act on the schema itself — CREATE among them. That separation is what this rule's split rests on, and it is the engine's own rather than a judgement this package invented."
+                "note": "The privileges chapter separates the rights that act on data from those that act on the schema itself — CREATE among them. That separation is what this rule's split rests on, and it is the engine's own rather than a judgment this package invented."
             }
         ],
         "SEC.PRIV.GRANT_PROCESS": [
@@ -1657,13 +1657,13 @@
                 "type": "doc",
                 "url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html",
                 "applies_to": "MySQL 8.4",
-                "note": "The privilege reference defines each of the dynamic privileges this rule reads and states what it permits. Cited as the source of the LIST rather than of the judgement: the list is shipped as a data artifact and reconciled against a real server by a test that asks MySQL to accept every name, because a hand-kept list of engine vocabulary rots silently as the engine changes."
+                "note": "The privilege reference defines each of the dynamic privileges this rule reads and states what it permits. Cited as the source of the LIST rather than of the judgment: the list is shipped as a data artifact and reconciled against a real server by a test that asks MySQL to accept every name, because a hand-kept list of engine vocabulary rots silently as the engine changes."
             },
             {
                 "type": "doc",
-                "url": "https://dev.mysql.com/doc/refman/8.4/en/dynamic-privileges.html",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html",
                 "applies_to": "MySQL 8.4",
-                "note": "The dynamic-privilege chapter documents the split itself: SUPER is deprecated, and the powers it carried are now granted individually. That is the premise of this rule — an account holding none of SUPER can still be an administrator — and it is why a check for the single old name is silent on a modern server."
+                "note": "The privilege reference documents the split itself: SUPER is deprecated, and the powers it carried are now granted individually as dynamic privileges. That is the premise of this rule — an account holding none of SUPER can still be an administrator — and it is why a check for the single old name is silent on a modern server."
             }
         ],
         "SEC.PRIV.GRANT_WILDCARD_HOST_IN_MIGRATION": [

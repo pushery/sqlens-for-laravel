@@ -82,7 +82,15 @@ final readonly class IndexComprehension
         $predicate = $index->getString('predicate');
 
         if ($predicate !== null && $predicate !== '') {
-            return new self(false, 'partial index predicate not compared: '.$predicate);
+            // The VERDICT does not move: a partial index stays incomparable either way. What the
+            // reading adds is which condition went uncompared, in a sentence rather than in the
+            // server's spelling — and a predicate whose shape {@see IndexPredicate} does not know
+            // says so by producing the bare line, which is worth reading as a signal.
+            $reading = IndexPredicate::parse($predicate);
+
+            return new self(false, $reading instanceof IndexPredicate
+                ? sprintf('partial index predicate not compared — it selects %s: %s', $reading->describe(), $predicate)
+                : 'partial index predicate not compared: '.$predicate);
         }
 
         $expression = $index->getString('expression');
