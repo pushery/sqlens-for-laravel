@@ -1264,9 +1264,12 @@ return [
              *
              * A run that hangs off the end of every deploy has one survival condition: it must not
              * be something people wait for. A gate that visibly delays a deploy gets configured
-             * away in the first sprint, and a gate nobody runs has helped nobody -- so the number
-             * is held by a test (`tests/Performance/PostdeployBudgetTest.php`) rather than by an
-             * intention.
+             * away in the first sprint, and a gate nobody runs has helped nobody -- so this number
+             * is held by a timing test in the package's own suite rather than by an intention.
+             *
+             * That suite is NOT in your vendor tree -- the package's test directory never ships --
+             * which is why no file is named here. A path you cannot open reads as a promise you
+             * could check, and this one you cannot.
              *
              * ⚠️ Milliseconds, matching `preflight.budget_ms` and the `--budget` flag on both
              * commands. Two sibling gates measuring the same thing in different units is a reader

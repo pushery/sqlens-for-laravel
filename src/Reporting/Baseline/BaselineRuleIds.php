@@ -44,9 +44,15 @@ final readonly class BaselineRuleIds
      * naming a tool rule has to stay valid on a machine where the tool is absent.
      *
      * @param  array<string, Rule>  $rules  every rule of every driver, for the near-miss suggestion
+     * @param  list<string>  $openNamespaces  the tools' finding-id prefixes. A baseline is WRITTEN
+     *                                        by this package from what a run found, so it can
+     *                                        legitimately carry a tool id the shipped map does
+     *                                        not describe — refusing it here would make the
+     *                                        baseline command produce a file the next run
+     *                                        rejects.
      * @return list<ConfigViolation>
      */
-    public static function violations(BaselineFile $baseline, array $rules): array
+    public static function violations(BaselineFile $baseline, array $rules, array $openNamespaces = []): array
     {
         $emittable = EmittableIds::shipped();
 
@@ -76,7 +82,7 @@ final readonly class BaselineRuleIds
 
         // The rules are still passed as the registry, so a near miss on a RULE id gets its "did you
         // mean" suggestion — the shipped set is the wider net, not a replacement for the closer one.
-        return new RuleIdValidator(RuleRegistry::fromRules($rules), $emittable->all())
+        return new RuleIdValidator(RuleRegistry::fromRules($rules), $emittable->all(), $openNamespaces)
             ->unknown($references);
     }
 }

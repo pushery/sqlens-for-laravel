@@ -8,8 +8,8 @@ use Illuminate\Contracts\Config\Repository;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Categories\CategoryFilter;
 use Pushery\SQLens\Categories\CategorySelection;
+use Pushery\SQLens\Config\ConfigIgnoreReferences;
 use Pushery\SQLens\Config\ConfigViolation;
-use Pushery\SQLens\Config\RuleIdReference;
 use Pushery\SQLens\Config\RuleIdValidator;
 use Pushery\SQLens\Contracts\Driver;
 use Pushery\SQLens\Contracts\Rule;
@@ -216,17 +216,18 @@ final readonly class ActiveRuleResolver
             return [];
         }
 
-        $references = [];
+        // The references come from the shared reader, so the lint run and this one cannot end up
+        // with different opinions about the same file.
+        $references = ConfigIgnoreReferences::of($configured);
         $ignored = [];
 
-        foreach (array_values($configured) as $index => $entry) {
+        foreach (array_values($configured) as $entry) {
             if (! is_array($entry)) {
                 continue;
             }
             if (! is_string($entry['rule'] ?? null)) {
                 continue;
             }
-            $references[] = RuleIdReference::inConfigIgnore($entry['rule'], $index);
 
             if (($entry['paths'] ?? []) === [] && ($entry['suites'] ?? []) === []) {
                 $ignored[] = $entry['rule'];
@@ -236,6 +237,10 @@ final readonly class ActiveRuleResolver
         $violations = new RuleIdValidator(
             RuleRegistry::fromRules($this->everyRule()),
             EmittableIds::shipped()->all(),
+            // The tools' namespaces, derived. A catalog built for an agent must not refuse a
+            // configuration a lint run accepts — two commands reading one file and disagreeing
+            // about it is the drift this whole seam exists to prevent.
+            $this->drivers->everyToolPrefix(),
         )->unknown($references);
 
         if ($violations !== []) {

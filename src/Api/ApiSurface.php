@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Api;
 
 use Pushery\SQLens\Console\ExitCode;
 use Pushery\SQLens\Contracts\ChecksServerSetting;
+use Pushery\SQLens\Contracts\DeclaresConfigurationReach;
 use Pushery\SQLens\Contracts\DeclaresJudgedObjectTypes;
 use Pushery\SQLens\Contracts\DeclaresSecurityPosture;
 use Pushery\SQLens\Contracts\DerivesDowntimeClass;
@@ -106,6 +107,7 @@ final readonly class ApiSurface
      */
     public const array EXTENSION_CONTRACTS = [
         ChecksServerSetting::class,
+        DeclaresConfigurationReach::class,
         DeclaresJudgedObjectTypes::class,
         DeclaresSecurityPosture::class,
         DerivesDowntimeClass::class,

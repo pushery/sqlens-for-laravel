@@ -30,7 +30,10 @@ use Pushery\SQLens\Capture\SingleFileResolver;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Categories\CategoryFilter;
 use Pushery\SQLens\Categories\CategorySelection;
+use Pushery\SQLens\Config\ConfigIgnoreReferences;
 use Pushery\SQLens\Config\ConfigViolation;
+use Pushery\SQLens\Config\RuleIdReference;
+use Pushery\SQLens\Config\RuleIdValidator;
 use Pushery\SQLens\Console\ExitCode;
 use Pushery\SQLens\Console\ExitCodeResolver;
 use Pushery\SQLens\Contracts\Captor;
@@ -66,12 +69,14 @@ use Pushery\SQLens\Reporting\Baseline\BaselineEntry;
 use Pushery\SQLens\Reporting\Baseline\BaselineFile;
 use Pushery\SQLens\Reporting\Baseline\BaselineRuleIds;
 use Pushery\SQLens\Reporting\Baseline\ConfiguredBaseline;
+use Pushery\SQLens\Reporting\Baseline\EmittableIds;
 use Pushery\SQLens\Reporting\Baseline\FindingFingerprint;
 use Pushery\SQLens\Reporting\Baseline\StaleBaselinePolicy;
 use Pushery\SQLens\Reporting\CaptureMode as ReportingCaptureMode;
 use Pushery\SQLens\Reporting\ConfigRunContextCollector;
 use Pushery\SQLens\Reporting\ReportedServerVersion;
 use Pushery\SQLens\Reporting\RunContext;
+use Pushery\SQLens\Reporting\Suppression\AnnotationSuppressionSource;
 use Pushery\SQLens\Reporting\Suppression\SuppressionCandidate;
 use Pushery\SQLens\Reporting\Suppression\SuppressionResolver;
 use Pushery\SQLens\Reporting\VersionSource;
@@ -264,7 +269,13 @@ final readonly class LintRunner implements LintRuns
         // PROJECT's own files, true whatever engine the connection points at — and because a check
         // that sits behind an engine refusal is a check no test on an unsupported engine can reach,
         // which is exactly how the previous attempt at this ended up vacuous.
-        $configViolations = $applyBaseline ? $this->baselineViolations() : [];
+        // The ignore list is checked whatever the baseline flag says: the two are different files
+        // answering different questions, and `--no-baseline` is an exit from the baseline, not a
+        // license to stop reading `sqlens.ignore`.
+        $configViolations = [
+            ...$applyBaseline ? $this->baselineViolations() : [],
+            ...$this->ignoreViolations(),
+        ];
 
         if ($configViolations !== []) {
             $configured = $this->config->get("database.connections.{$connectionName}.driver");
@@ -528,6 +539,18 @@ final readonly class LintRunner implements LintRuns
         if ($resolution->migrations === []) {
             $findings[] = $this->noMigrationsReadFinding($connectionName, $migrationPaths, $subjectContext);
         }
+
+        // The rule ids the migrations' own `#[SqlensIgnore]` annotations name. Reachable only here,
+        // after capture: an annotation is read by reflection off a LOADED migration class, so
+        // nothing earlier in the run can see one.
+        $annotationReferences = $this->annotationReferences($run);
+
+        $findings = [
+            ...$findings,
+            ...$this->annotationNotices($annotationReferences, $connectionName, $subjectContext),
+            ...$this->deprecatedSuppressionNotices($annotationReferences, $connectionName, $subjectContext),
+            ...$this->undescribedToolRuleNotices($annotationReferences, $connectionName, $subjectContext),
+        ];
 
         // A pin that disagreed with the connected server is its own finding — the
         // result reflects the pin, not the live instance, and that drift is reported.
@@ -821,7 +844,232 @@ final readonly class LintRunner implements LintRuns
             return [];
         }
 
-        return BaselineRuleIds::violations($baseline, $this->drivers->everyRule());
+        return BaselineRuleIds::violations($baseline, $this->drivers->everyRule(), $this->drivers->everyToolPrefix());
+    }
+
+    /**
+     * A rule id an `#[SqlensIgnore]` annotation names that no rule of any driver carries.
+     *
+     * ## Why this is a notice and its config-file twin is a refusal
+     *
+     * An ignore list is edited by whoever runs the tool today. An annotation sits in a migration
+     * that shipped years ago and will never be touched again — so refusing a run over a rule that
+     * has since been renamed would turn every project's history into a timer, and the older the
+     * migration the likelier it names something gone. It is said, and the run continues.
+     *
+     * ## What the silence used to cost
+     *
+     * Nothing validated this form at all. The annotation carries a MANDATORY reason, so it reads
+     * as a weighed decision for as long as nobody checks — while suppressing nothing, which is the
+     * shape `ConfigIgnoreRule` warns about: an entry that matches nothing produces exactly what a
+     * matching entry produces once the code is fixed.
+     *
+     * @param  list<RuleIdReference>  $references  what {@see annotationReferences()} collected
+     * @return list<Finding>
+     */
+    private function annotationNotices(array $references, string $connectionName, SubjectContext $subjectContext): array
+    {
+        if ($references === []) {
+            return [];
+        }
+
+        $violations = $this->ruleIdValidator()->unknown($references);
+
+        return array_map(
+            fn (ConfigViolation $violation): Finding => Finding::undetermined(
+                RunnerNotice::AnnotationUnknownRule->value,
+                RunnerNotice::MESSAGE_PREFIX,
+                $violation->message().' The annotation carries a reason, so it reads as a decision '
+                    .'somebody weighed — and it suppresses nothing. The run continues: a migration that '
+                    .'shipped years ago must not fail a run because a rule was renamed since.',
+                UndeterminedReason::NotConfigured,
+                Location::inCallsite('annotation', 0, 'connection '.$connectionName, $this->projectRoot()),
+                RunnerNotice::AnnotationUnknownRule->category(),
+                RunnerNotice::AnnotationUnknownRule->level(),
+                RunnerNotice::AnnotationUnknownRule->stability(),
+                RunnerNotice::AnnotationUnknownRule->documentationUrl(),
+                $subjectContext,
+            ),
+            $violations,
+        );
+    }
+
+    /**
+     * The rule ids the captured migrations' own annotations name.
+     *
+     * Split out from the notice so the same list feeds two questions — does the id exist, and is it
+     * on its way out — without reading the attributes twice.
+     *
+     * @return list<RuleIdReference>
+     */
+    private function annotationReferences(CaptureRun $run): array
+    {
+        // Constructed here rather than injected: the class is stateless and readonly, and this is
+        // the same way `SuppressionResolver` reaches for it.
+        $annotations = new AnnotationSuppressionSource;
+        $references = [];
+
+        foreach ($run->results as $result) {
+            foreach ($annotations->forClass($result->annotationClass) as $annotation) {
+                foreach ($annotation->rules as $ruleId) {
+                    // The migration CLASS, not the file: that is what the reference form takes, and
+                    // it is what a reader greps for once the notice sends them looking.
+                    $references[] = RuleIdReference::inAnnotation($ruleId, (string) $result->annotationClass);
+                }
+            }
+        }
+
+        return $references;
+    }
+
+    /**
+     * A suppression that names a rule on its way out, with the id that replaced it.
+     *
+     * ## What this says that nothing else does
+     *
+     * The audit suite reports a deprecated RULE — every one of them, whether or not a project
+     * mentions it. What it cannot say is which line of your configuration named it, and that is the
+     * line somebody has to edit. This one points at the entry.
+     *
+     * It also reaches a suite the other notice does not: nothing in a lint run says anything about
+     * deprecation today, and lint is the suite that fires on every migration.
+     *
+     * ## Never an error
+     *
+     * Governance says rules are deprecated and never deleted, so the entry still means something —
+     * it points at a check that will stop checking. Refusing over it would make a correct
+     * configuration fail for having been written earlier.
+     *
+     * ⚠️ The BASELINE form is deliberately not covered here. Its references are built inside
+     * {@see BaselineRuleIds} and exposing them is a change to that seam rather than to this one; a
+     * baseline naming a deprecated rule is worth the same notice and is its own piece of work.
+     *
+     * @param  list<RuleIdReference>  $annotationReferences
+     * @return list<Finding>
+     */
+    private function deprecatedSuppressionNotices(array $annotationReferences, string $connectionName, SubjectContext $subjectContext): array
+    {
+        $references = [
+            ...ConfigIgnoreReferences::of($this->config->get('sqlens.ignore')),
+            ...$annotationReferences,
+        ];
+
+        if ($references === []) {
+            return [];
+        }
+
+        $notices = $this->ruleIdValidator()->deprecationNotices($references);
+
+        return array_map(
+            fn (string $notice): Finding => Finding::undetermined(
+                RunnerNotice::SuppressionDeprecatedRule->value,
+                RunnerNotice::MESSAGE_PREFIX,
+                $notice,
+                UndeterminedReason::NotConfigured,
+                Location::inCallsite('suppression', 0, 'connection '.$connectionName, $this->projectRoot()),
+                RunnerNotice::SuppressionDeprecatedRule->category(),
+                RunnerNotice::SuppressionDeprecatedRule->level(),
+                RunnerNotice::SuppressionDeprecatedRule->stability(),
+                RunnerNotice::SuppressionDeprecatedRule->documentationUrl(),
+                $subjectContext,
+            ),
+            $notices,
+        );
+    }
+
+    /**
+     * The validator every suppression check in this runner asks.
+     *
+     * Built once here rather than at each call site, so the three questions — does the id exist, is
+     * it deprecated, is it a tool rule this build does not describe — are answered against the same
+     * population. Three constructions would agree until somebody widened one of them.
+     *
+     * The tool namespaces are DERIVED from the drivers' own adapters, never listed: a written list
+     * is right on the day it is written and blind on the day a driver package brings a third tool,
+     * and it fails in the direction that reads as a typo.
+     */
+    private function ruleIdValidator(): RuleIdValidator
+    {
+        return new RuleIdValidator(
+            RuleRegistry::fromRules($this->drivers->everyRule()),
+            EmittableIds::shipped()->all(),
+            $this->drivers->everyToolPrefix(),
+        );
+    }
+
+    /**
+     * A suppression naming a tool rule this build does not describe — accepted, and said.
+     *
+     * The capability a consumer asked for: `sqlens.ignore` may name `SQUAWK.<rule>` or
+     * `PGLS.<rule>` even when the shipped map has no row for it, so a project can silence one
+     * known finding without waiting for a release here — and without the only lever it had before,
+     * which frees the entire `tool_rule_unmapped` bucket, including the locking rules the tool is
+     * installed for.
+     *
+     * Reported rather than accepted silently, because a tool namespace is where a typo is likeliest
+     * and nothing here can spell-check somebody else's ids.
+     *
+     * @param  list<RuleIdReference>  $annotationReferences
+     * @return list<Finding>
+     */
+    private function undescribedToolRuleNotices(array $annotationReferences, string $connectionName, SubjectContext $subjectContext): array
+    {
+        $references = [
+            ...ConfigIgnoreReferences::of($this->config->get('sqlens.ignore')),
+            ...$annotationReferences,
+        ];
+
+        if ($references === []) {
+            return [];
+        }
+
+        return array_map(
+            fn (string $notice): Finding => Finding::undetermined(
+                RunnerNotice::SuppressionToolRuleUndescribed->value,
+                RunnerNotice::MESSAGE_PREFIX,
+                $notice,
+                UndeterminedReason::NotConfigured,
+                Location::inCallsite('suppression', 0, 'connection '.$connectionName, $this->projectRoot()),
+                RunnerNotice::SuppressionToolRuleUndescribed->category(),
+                RunnerNotice::SuppressionToolRuleUndescribed->level(),
+                RunnerNotice::SuppressionToolRuleUndescribed->stability(),
+                RunnerNotice::SuppressionToolRuleUndescribed->documentationUrl(),
+                $subjectContext,
+            ),
+            $this->ruleIdValidator()->undescribedToolRules($references),
+        );
+    }
+
+    /**
+     * The rule ids `sqlens.ignore` names that no rule of any driver carries.
+     *
+     * ## Why this had to be added rather than merely moved
+     *
+     * `RuleIdValidator` opens by saying it checks "the ignore list, the baseline, and the
+     * `#[SqlensIgnore]` annotations". Measured, this form was reached by `sqlens:agent-rules` and
+     * by nothing else — a command a project may never run. So in the suite that fires on every
+     * migration, a typo here suppressed nothing and said nothing, which is the failure that same
+     * docblock calls the single most expensive misconfiguration there is.
+     *
+     * ## Read through the shared reader, never a second copy
+     *
+     * {@see ConfigIgnoreReferences} is the one place that turns the configured list into
+     * references, so this run and the catalog build cannot form different opinions about the same
+     * file. What to DO about a violation stays here; what the file says does not.
+     *
+     * ## Checked against every driver's rules, and against the shipped emittable ids
+     *
+     * Every driver, for the reason the audit half gives: an id that names a real MySQL rule is a
+     * different mistake from an id that names nothing, and validating against one engine would
+     * collapse the two. The emittable set is the wider net beside it — a project may legitimately
+     * ignore a `CAP.L0.*` or a `SQUAWK.*` id, and neither is a `Rule` object.
+     *
+     * @return list<ConfigViolation>
+     */
+    private function ignoreViolations(): array
+    {
+        return $this->ruleIdValidator()
+            ->unknown(ConfigIgnoreReferences::of($this->config->get('sqlens.ignore')));
     }
 
     /**

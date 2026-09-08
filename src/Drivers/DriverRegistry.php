@@ -180,6 +180,37 @@ final class DriverRegistry implements DebtStandingResolvers, SessionDefenses
     }
 
     /**
+     * The finding-id prefix of every tool any registered driver ships — `SQUAWK.`, `PGLS.`, and
+     * whatever a driver package adds next.
+     *
+     * ## Derived, never listed
+     *
+     * A written list of prefixes is right on the day it is written and blind on the day a driver
+     * package brings a third adapter — and it fails in the direction that reads as a typo: a
+     * suppression naming the new tool's rule is refused as unknown, so somebody goes looking for a
+     * misspelling instead of for a missing list entry. Walking `Driver::tools()` cannot go stale.
+     *
+     * Here rather than on the manager because three callers need it and only two hold a manager.
+     *
+     * @return list<string> sorted by byte, so a message built from it reads the same everywhere
+     */
+    public function everyToolPrefix(): array
+    {
+        $prefixes = [];
+
+        foreach ($this->all() as $driver) {
+            foreach ($driver->tools() as $tool) {
+                $prefixes[$tool->findingIdPrefix()] = true;
+            }
+        }
+
+        $sorted = array_keys($prefixes);
+        sort($sorted, SORT_STRING);
+
+        return $sorted;
+    }
+
+    /**
      * The usable strings in a configured list, and nothing else.
      *
      * A non-string entry names no column term and cannot mean anything, so it is dropped rather

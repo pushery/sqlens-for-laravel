@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Generation;
 
+use Pushery\SQLens\Contracts\DeclaresConfigurationReach;
 use Pushery\SQLens\Contracts\Rule;
 use Pushery\SQLens\Severity\Severity;
 
@@ -188,6 +189,18 @@ final readonly class RuleCatalogSnapshot
         $row['blocking'] = $severity instanceof Severity
             ? ($floor instanceof Severity && $severity->isAtLeast($floor))
             : true;
+
+        // The fifth state the four selection axes cannot express: admitted, constructed, asked —
+        // and unable to answer, because a switch in its own configuration is off. Only the rule
+        // knows, so only a rule that says so is asked; silence here means "not examined on this
+        // axis", never "reachable". See {@see DeclaresConfigurationReach}.
+        //
+        // Not a schema break. `version_dependent` and `blocking` were added the same way and for
+        // the same reason — they are this layer's answer rather than the artifact's — and
+        // SCHEMA_VERSION guards a shape a reader could MISREAD, which an added key is not.
+        $row['silenced_by_configuration'] = $rule instanceof DeclaresConfigurationReach
+            ? $rule->silencedByConfiguration()
+            : null;
 
         return $row;
     }

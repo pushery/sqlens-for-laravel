@@ -14,7 +14,7 @@
             "parity_status": "intentionally_not_covered",
             "excludable": true,
             "rationale": "Adding a column with a default rewrote the whole table before PostgreSQL 11 and has been metadata-only since. SQLens supports PostgreSQL 18 and up, so the risk this describes cannot occur on any server it runs against — a rule for it would report a hazard that the supported floor already rules out.",
-            "source_url": "https://squawkhq.com/docs/rules/adding-field-with-default"
+            "source_url": "https://squawkhq.com/docs/adding-field-with-default"
         },
         {
             "rule": "adding-foreign-key-constraint",
@@ -27,7 +27,7 @@
             "parity_status": "covered_differently",
             "excludable": true,
             "rationale": "Both are about a constraint that validates existing rows while holding a lock. SQLens reasons about the NOT VALID / VALIDATE split for constraints generally rather than foreign keys specifically, so the ground is the same and the shape is not.",
-            "source_url": "https://squawkhq.com/docs/rules/adding-foreign-key-constraint"
+            "source_url": "https://squawkhq.com/docs/adding-foreign-key-constraint"
         },
         {
             "rule": "adding-not-nullable-field",
@@ -40,7 +40,7 @@
             "parity_status": "covered_differently",
             "excludable": true,
             "rationale": "The same table scan under a lock, reached from the other direction: this looks at the column being added, ours at the SET NOT NULL that scans.",
-            "source_url": "https://squawkhq.com/docs/rules/adding-not-nullable-field"
+            "source_url": "https://squawkhq.com/docs/adding-not-nullable-field"
         },
         {
             "rule": "adding-required-field",
@@ -53,7 +53,7 @@
             "parity_status": "covered_differently",
             "excludable": true,
             "rationale": "The neighboring case of the rule above, and it maps to the same SQLens rule for the same reason — which is also why the two share a de-duplication group.",
-            "source_url": "https://squawkhq.com/docs/rules/adding-required-field"
+            "source_url": "https://squawkhq.com/docs/adding-required-field"
         },
         {
             "rule": "adding-serial-primary-key-field",
@@ -66,7 +66,7 @@
             "parity_status": "covered_differently",
             "excludable": true,
             "rationale": "Both prefer identity columns over serial. Ours is about the choice wherever it appears; this one is about the primary key specifically.",
-            "source_url": "https://squawkhq.com/docs/rules/adding-serial-primary-key-field"
+            "source_url": "https://squawkhq.com/docs/adding-serial-primary-key-field"
         },
         {
             "rule": "ban-alter-domain-with-add-constraint",
@@ -79,7 +79,7 @@
             "parity_status": "mapped_only",
             "excludable": true,
             "rationale": "Adding a constraint to a domain validates every column of every table using it, under a lock on each. SQLens has no domain rules yet, so the tool's finding is surfaced under its own identifier rather than translated into one of ours.",
-            "source_url": "https://squawkhq.com/docs/rules/ban-alter-domain-with-add-constraint"
+            "source_url": "https://squawkhq.com/docs/ban-alter-domain-with-add-constraint"
         },
         {
             "rule": "ban-char-field",
@@ -92,7 +92,7 @@
             "parity_status": "mapped_only",
             "excludable": true,
             "rationale": "Blank-padded CHAR is a portability and comparison trap rather than a lock hazard. SQLens has no opinion on it today; the tool's does no harm surfaced as its own.",
-            "source_url": "https://squawkhq.com/docs/rules/ban-char-field"
+            "source_url": "https://squawkhq.com/docs/ban-char-field"
         },
         {
             "rule": "ban-concurrent-index-creation-in-transaction",
@@ -105,7 +105,7 @@
             "parity_status": "covered",
             "excludable": true,
             "rationale": "The same statement, the same failure: CONCURRENTLY cannot run inside a transaction block, and Laravel wraps migrations by default. Ours reaches the same verdict from the canonical transaction context, so the two findings are the same problem twice.",
-            "source_url": "https://squawkhq.com/docs/rules/ban-concurrent-index-creation-in-transaction"
+            "source_url": "https://squawkhq.com/docs/ban-concurrent-index-creation-in-transaction"
         },
         {
             "rule": "ban-create-domain-with-constraint",
@@ -118,7 +118,7 @@
             "parity_status": "mapped_only",
             "excludable": true,
             "rationale": "A style position about where constraints belong. No SQLens rule; surfaced as the tool's.",
-            "source_url": "https://squawkhq.com/docs/rules/ban-create-domain-with-constraint"
+            "source_url": "https://squawkhq.com/docs/ban-create-domain-with-constraint"
         },
         {
             "rule": "ban-drop-column",
@@ -131,7 +131,7 @@
             "parity_status": "covered",
             "excludable": true,
             "rationale": "Dropping a column breaks readers that still select it, and both rules say so at the same point in a migration.",
-            "source_url": "https://squawkhq.com/docs/rules/ban-drop-column"
+            "source_url": "https://squawkhq.com/docs/ban-drop-column"
         },
         {
             "rule": "ban-drop-database",
@@ -144,7 +144,7 @@
             "parity_status": "mapped_only",
             "excludable": true,
             "rationale": "SQLens has no rule for it because a migration that drops a database is outside the schema-change vocabulary its rules are written in. The downtime class is left null rather than guessed: it is not a table operation, and none of the three classes describes it.",
-            "source_url": "https://squawkhq.com/docs/rules/ban-drop-database"
+            "source_url": "https://squawkhq.com/docs/ban-drop-database"
         },
         {
             "rule": "ban-drop-not-null",
@@ -157,7 +157,7 @@
             "parity_status": "mapped_only",
             "excludable": true,
             "rationale": "Relaxing NOT NULL is metadata-only, so it costs no lock — but every reader that assumed the guarantee is now wrong. A real finding with no SQLens equivalent yet.",
-            "source_url": "https://squawkhq.com/docs/rules/ban-drop-not-null"
+            "source_url": "https://squawkhq.com/docs/ban-drop-not-null"
         },
         {
             "rule": "ban-drop-table",
@@ -170,7 +170,7 @@
             "parity_status": "covered",
             "excludable": true,
             "rationale": "Identical ground: a table that goes away while something still reads it.",
-            "source_url": "https://squawkhq.com/docs/rules/ban-drop-table"
+            "source_url": "https://squawkhq.com/docs/ban-drop-table"
         },
         {
             "rule": "ban-truncate-cascade",
@@ -183,7 +183,7 @@
             "parity_status": "covered_differently",
             "excludable": true,
             "rationale": "Ours is about TRUNCATE at all; this one is about the CASCADE that silently reaches further than the statement names. The same statement triggers both, so they group.",
-            "source_url": "https://squawkhq.com/docs/rules/ban-truncate-cascade"
+            "source_url": "https://squawkhq.com/docs/ban-truncate-cascade"
         },
         {
             "rule": "ban-uncommitted-transaction",
@@ -196,7 +196,7 @@
             "parity_status": "mapped_only",
             "excludable": true,
             "rationale": "A file that opens a transaction and never closes it. SQLens reads the transaction context rather than judging the file's shape, so it has no equivalent finding.",
-            "source_url": "https://squawkhq.com/docs/rules/ban-uncommitted-transaction"
+            "source_url": "https://squawkhq.com/docs/ban-uncommitted-transaction"
         },
         {
             "rule": "changing-column-type",
@@ -209,7 +209,7 @@
             "parity_status": "covered",
             "excludable": true,
             "rationale": "The same rewrite under an exclusive lock. Ours additionally classifies which type changes avoid it, which is a refinement of the same finding rather than a different one.",
-            "source_url": "https://squawkhq.com/docs/rules/changing-column-type"
+            "source_url": "https://squawkhq.com/docs/changing-column-type"
         },
         {
             "rule": "constraint-missing-not-valid",
@@ -222,7 +222,7 @@
             "parity_status": "covered",
             "excludable": true,
             "rationale": "The direct counterpart of our rule: add the constraint NOT VALID, validate it afterwards.",
-            "source_url": "https://squawkhq.com/docs/rules/constraint-missing-not-valid"
+            "source_url": "https://squawkhq.com/docs/constraint-missing-not-valid"
         },
         {
             "rule": "disallowed-unique-constraint",
@@ -235,7 +235,7 @@
             "parity_status": "mapped_only",
             "excludable": true,
             "rationale": "Adding a unique constraint builds its index without CONCURRENTLY and holds an exclusive lock while it does. Close to our index rule but not the same statement, so it is surfaced rather than folded in — folding it in would report the wrong fix.",
-            "source_url": "https://squawkhq.com/docs/rules/disallowed-unique-constraint"
+            "source_url": "https://squawkhq.com/docs/disallowed-unique-constraint"
         },
         {
             "rule": "identifier-too-long",
@@ -248,7 +248,7 @@
             "parity_status": "mapped_only",
             "excludable": true,
             "rationale": "PostgreSQL truncates identifiers past 63 bytes silently, which turns two distinct names into one. No lock, no downtime, and a genuinely surprising failure.",
-            "source_url": "https://squawkhq.com/docs/rules/identifier-too-long"
+            "source_url": "https://squawkhq.com/docs/identifier-too-long"
         },
         {
             "rule": "prefer-bigint-over-int",
@@ -261,7 +261,7 @@
             "parity_status": "covered_differently",
             "excludable": true,
             "rationale": "Ours is about primary keys specifically, where running out of range is unrecoverable without a rewrite. This one applies the same reasoning to any integer column.",
-            "source_url": "https://squawkhq.com/docs/rules/prefer-bigint-over-int"
+            "source_url": "https://squawkhq.com/docs/prefer-bigint-over-int"
         },
         {
             "rule": "prefer-bigint-over-smallint",
@@ -274,7 +274,7 @@
             "parity_status": "covered_differently",
             "excludable": true,
             "rationale": "The same position one width down, and the same relationship to our primary-key rule.",
-            "source_url": "https://squawkhq.com/docs/rules/prefer-bigint-over-smallint"
+            "source_url": "https://squawkhq.com/docs/prefer-bigint-over-smallint"
         },
         {
             "rule": "prefer-identity",
@@ -287,7 +287,7 @@
             "parity_status": "covered",
             "excludable": true,
             "rationale": "The same recommendation with the same reasoning: identity columns are standard SQL and carry their sequence ownership explicitly.",
-            "source_url": "https://squawkhq.com/docs/rules/prefer-identity"
+            "source_url": "https://squawkhq.com/docs/prefer-identity"
         },
         {
             "rule": "prefer-repack",
@@ -300,7 +300,7 @@
             "parity_status": "mapped_only",
             "excludable": true,
             "rationale": "A suggestion to use pg_repack instead of VACUUM FULL, which locks the table exclusively. SQLens has no maintenance-command rules; the tool's advice stands on its own.",
-            "source_url": "https://squawkhq.com/docs/rules/prefer-repack"
+            "source_url": "https://squawkhq.com/docs/prefer-repack"
         },
         {
             "rule": "prefer-robust-stmts",
@@ -313,7 +313,7 @@
             "parity_status": "intentionally_not_covered",
             "excludable": true,
             "rationale": "The position that every statement should be individually re-runnable through IF NOT EXISTS. SQLens deliberately does not hold it: Laravel records migrations as applied, so a re-run is the migrator's concern, and IF NOT EXISTS hides a real disagreement between the schema and the migration that a failed run would have surfaced.",
-            "source_url": "https://squawkhq.com/docs/rules/prefer-robust-stmts"
+            "source_url": "https://squawkhq.com/docs/prefer-robust-stmts"
         },
         {
             "rule": "prefer-text-field",
@@ -326,10 +326,10 @@
             "parity_status": "mapped_only",
             "excludable": true,
             "rationale": "VARCHAR(n) buys no storage benefit in PostgreSQL and makes a length change a schema change. A reasonable position SQLens has not taken a rule on.",
-            "source_url": "https://squawkhq.com/docs/rules/prefer-text-field"
+            "source_url": "https://squawkhq.com/docs/prefer-text-field"
         },
         {
-            "rule": "prefer-timestamptz",
+            "rule": "prefer-timestamp-tz",
             "sqlens_rule": "PG.L6.TIMESTAMP_NO_TZ",
             "category": "idiom",
             "level": 6,
@@ -339,7 +339,7 @@
             "parity_status": "covered",
             "excludable": true,
             "rationale": "The same finding: a timestamp without a time zone silently means whatever the session was set to when it was written.",
-            "source_url": "https://squawkhq.com/docs/rules/prefer-timestamptz"
+            "source_url": "https://squawkhq.com/docs/prefer-timestamptz"
         },
         {
             "rule": "renaming-column",
@@ -352,7 +352,7 @@
             "parity_status": "mapped_only",
             "excludable": true,
             "rationale": "A rename breaks every reader that has not been deployed yet, which is the ordinary state of affairs during a rolling deploy. SQLens has no rename rule yet.",
-            "source_url": "https://squawkhq.com/docs/rules/renaming-column"
+            "source_url": "https://squawkhq.com/docs/renaming-column"
         },
         {
             "rule": "renaming-table",
@@ -365,7 +365,7 @@
             "parity_status": "mapped_only",
             "excludable": true,
             "rationale": "The same hazard one level up, and equally uncovered on our side.",
-            "source_url": "https://squawkhq.com/docs/rules/renaming-table"
+            "source_url": "https://squawkhq.com/docs/renaming-table"
         },
         {
             "rule": "require-concurrent-index-creation",
@@ -378,7 +378,7 @@
             "parity_status": "covered",
             "excludable": true,
             "rationale": "The same statement and the same fix. Ours knows about the transaction context that makes CONCURRENTLY impossible, which is a neighboring rule rather than a difference here.",
-            "source_url": "https://squawkhq.com/docs/rules/require-concurrent-index-creation"
+            "source_url": "https://squawkhq.com/docs/require-concurrent-index-creation"
         },
         {
             "rule": "require-concurrent-index-deletion",
@@ -391,7 +391,7 @@
             "parity_status": "covered",
             "excludable": true,
             "rationale": "The mirror of the rule above, on our side too.",
-            "source_url": "https://squawkhq.com/docs/rules/require-concurrent-index-deletion"
+            "source_url": "https://squawkhq.com/docs/require-concurrent-index-deletion"
         },
         {
             "rule": "require-concurrent-partition-detach",
@@ -404,7 +404,7 @@
             "parity_status": "mapped_only",
             "excludable": true,
             "rationale": "Detaching a partition without CONCURRENTLY holds an exclusive lock on the parent. SQLens has no partition rules yet, so this one is surfaced as the tool's.",
-            "source_url": "https://squawkhq.com/docs/rules/require-concurrent-partition-detach"
+            "source_url": "https://squawkhq.com/docs/require-concurrent-partition-detach"
         },
         {
             "rule": "require-concurrent-reindex",
@@ -417,7 +417,7 @@
             "parity_status": "mapped_only",
             "excludable": true,
             "rationale": "REINDEX without CONCURRENTLY blocks writes for the duration. Same gap, same treatment.",
-            "source_url": "https://squawkhq.com/docs/rules/require-concurrent-reindex"
+            "source_url": "https://squawkhq.com/docs/require-concurrent-reindex"
         },
         {
             "rule": "require-enum-value-ordering",
@@ -430,7 +430,7 @@
             "parity_status": "covered_differently",
             "excludable": true,
             "rationale": "Both concern adding an enum value. Ours is about the transaction restriction that used to apply and the readers that do not know the new value; this one is about specifying where in the ordering it goes.",
-            "source_url": "https://squawkhq.com/docs/rules/require-enum-value-ordering"
+            "source_url": "https://squawkhq.com/docs/require-enum-value-ordering"
         },
         {
             "rule": "require-lock-timeout",
@@ -443,7 +443,7 @@
             "parity_status": "covered",
             "excludable": true,
             "rationale": "The same requirement, and the reason SQLens holds it too: a migration that waits for a lock without a bound blocks everything queued behind it.",
-            "source_url": "https://squawkhq.com/docs/rules/require-lock-timeout"
+            "source_url": "https://squawkhq.com/docs/require-lock-timeout"
         },
         {
             "rule": "require-statement-timeout",
@@ -456,7 +456,7 @@
             "parity_status": "covered",
             "excludable": true,
             "rationale": "The companion bound, and the companion rule.",
-            "source_url": "https://squawkhq.com/docs/rules/require-statement-timeout"
+            "source_url": "https://squawkhq.com/docs/require-statement-timeout"
         },
         {
             "rule": "require-table-schema",
@@ -469,7 +469,7 @@
             "parity_status": "mapped_only",
             "excludable": true,
             "rationale": "Requires an explicit schema on every table so the result does not depend on search_path. Off by default upstream. SQLens has no rule for it.",
-            "source_url": "https://squawkhq.com/docs/rules/require-table-schema"
+            "source_url": "https://squawkhq.com/docs/require-table-schema"
         },
         {
             "rule": "require-timeout-settings",
@@ -482,7 +482,7 @@
             "parity_status": "mapped_only",
             "excludable": true,
             "rationale": "The combined form of the two timeout rules. It shares their de-duplication group rather than mapping to one of ours, because it can stand for either — and reporting it beside the two SQLens timeout findings would be the same advice three times.",
-            "source_url": "https://squawkhq.com/docs/rules/require-timeout-settings"
+            "source_url": "https://squawkhq.com/docs/require-timeout-settings"
         },
         {
             "rule": "syntax-error",
@@ -495,7 +495,7 @@
             "parity_status": "intentionally_not_covered",
             "excludable": false,
             "rationale": "Not a rule at all: it is how the tool reports SQL it could not parse, and it is the one name --exclude rejects while the reporter emits it anyway (both measured). SQLens turns it into a named undetermined for the whole run rather than a finding, because an analysis that stopped at a parse error did not check what came after it.",
-            "source_url": "https://squawkhq.com/docs/rules/syntax-error"
+            "source_url": "https://squawkhq.com/docs/syntax-error"
         },
         {
             "rule": "transaction-nesting",
@@ -508,7 +508,7 @@
             "parity_status": "mapped_only",
             "excludable": true,
             "rationale": "BEGIN inside a migration the migrator already wrapped. SQLens reads the resulting transaction context rather than reporting the nesting itself.",
-            "source_url": "https://squawkhq.com/docs/rules/transaction-nesting"
+            "source_url": "https://squawkhq.com/docs/transaction-nesting"
         }
     ]
 }
