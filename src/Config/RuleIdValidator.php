@@ -13,6 +13,17 @@ use Pushery\SQLens\Rules\RuleRegistry;
  * baseline, and the `#[SqlensIgnore]` annotations — against the rules that
  * actually exist.
  *
+ * ⚠️ That sentence was a PROMISE rather than a description until 2026-09-08, and the gap ran the
+ * expensive way. Measured then: `inConfigIgnore` was reached by `sqlens:agent-rules` alone — a
+ * command a project may never run — and `inAnnotation` by nothing at all. So in a lint run, the
+ * suite that fires on every migration, two of the three forms went unchecked.
+ *
+ * All three are checked now, and the ANSWER differs by form because the text lives in different
+ * places. An ignore list and a baseline are edited by whoever runs the tool today, so an unknown id
+ * there is a refusal. An annotation sits in a migration that shipped years ago and will never be
+ * touched again — refusing over a rule renamed since would turn a project's history into a timer,
+ * so that form is reported as a notice and the run continues.
+ *
  * This closes the single most expensive misconfiguration there is. A typo in an
  * ignored rule id means the rule keeps firing while the user believes it is off;
  * they then read past its findings for months. So an id no rule answers to is an
@@ -39,10 +50,17 @@ final readonly class RuleIdValidator
      *                                   not installed, is switched off, or has no build for the
      *                                   platform. Reading the binary would make a correct
      *                                   configuration a misconfiguration on a laptop.
+     * @param  list<string>  $openNamespaces  finding-id prefixes owned by an external tool, DERIVED
+     *                                        from `Driver::tools()` rather than listed. An id under
+     *                                        one of them is accepted even when this build does not
+     *                                        describe the rule — and reported, never silently. See
+     *                                        {@see undescribedToolRules()} for why both halves are
+     *                                        needed.
      */
     public function __construct(
         private RuleRegistry $registry,
         private array $alsoKnown = [],
+        private array $openNamespaces = [],
     ) {}
 
     /**
@@ -60,6 +78,14 @@ final readonly class RuleIdValidator
             if (in_array($reference->ruleId, $this->alsoKnown, true)) {
                 continue;
             }
+            // An id inside a tool's own namespace is ACCEPTED here and reported by
+            // {@see undescribedToolRules()} instead. A project must be able to name a rule its
+            // installed binary emits without waiting for a release of this package to describe it
+            // — and the alternative it had was freeing the whole `tool_rule_unmapped` bucket,
+            // which also frees the locking rules the tool is installed for.
+            if ($this->inOpenNamespace($reference->ruleId)) {
+                continue;
+            }
             $violations[] = ConfigViolation::unknownRuleId(
                 $reference->describe(),
                 $reference->ruleId,
@@ -68,6 +94,70 @@ final readonly class RuleIdValidator
         }
 
         return $violations;
+    }
+
+    /**
+     * The references naming a tool rule this build does not describe — accepted, and SAID.
+     *
+     * ## Why accepting silently would have been the wrong fix
+     *
+     * The refusal this replaces exists against the most expensive misconfiguration there is: a typo
+     * that leaves the rule firing while somebody believes it is off. Simply letting every
+     * `SQUAWK.*` string through would hand that failure back under a friendlier name — and a tool
+     * namespace is exactly where a typo is likeliest, because the ids are somebody else's and this
+     * build cannot spell-check them.
+     *
+     * So the third state this package uses everywhere else: not valid, not refused, but accepted
+     * and named. The notice fires on every run and deterministically — it needs no run that would
+     * have produced the finding, which makes it stronger than an "this ignore never matched"
+     * report could be.
+     *
+     * ## The set is exactly what `unknown()` stopped flagging
+     *
+     * The two partitions are complementary by construction: an id is either described, or inside a
+     * tool namespace and reported here, or unknown and refused there. Nothing falls between them,
+     * and nothing is counted twice.
+     *
+     * @param  list<RuleIdReference>  $references
+     * @return list<string> one human-readable notice per undescribed tool id
+     */
+    public function undescribedToolRules(array $references): array
+    {
+        $notices = [];
+
+        foreach ($references as $reference) {
+            if ($this->registry->get($reference->ruleId) instanceof Rule) {
+                continue;
+            }
+            if (in_array($reference->ruleId, $this->alsoKnown, true)) {
+                continue;
+            }
+            if (! $this->inOpenNamespace($reference->ruleId)) {
+                continue;
+            }
+
+            $notices[] = sprintf(
+                '%s names %s, a rule this build does not describe. It is accepted: the id belongs to '
+                .'an external tool, and a project must be able to name what its installed binary '
+                .'emits without waiting for a release here. It will match only if the tool reports '
+                .'that exact name — so if nothing changes, check the spelling against the tool.',
+                $reference->describe(),
+                $reference->ruleId,
+            );
+        }
+
+        return $notices;
+    }
+
+    /**
+     * Whether the id sits inside a namespace an external tool owns.
+     *
+     * A prefix match rather than an exact one, which is the entire capability: the point is to
+     * accept ids this build has never heard of.
+     */
+    private function inOpenNamespace(string $ruleId): bool
+    {
+        return array_any($this->openNamespaces, fn (string $namespace): bool => $namespace !== '' && str_starts_with($ruleId, $namespace));
     }
 
     /**

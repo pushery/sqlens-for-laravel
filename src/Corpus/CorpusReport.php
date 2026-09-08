@@ -45,9 +45,13 @@ final readonly class CorpusReport
      * Build the report body.
      *
      * @param  list<CorpusCollection>  $collections
+     * @param  list<string>|null  $ruleIds  the catalog this rate describes; null only for a caller
+     *                                      that has none to give. The HASH is derived here rather
+     *                                      than passed in, so the digest and the list it digests
+     *                                      cannot be written by two different callers and disagree
      * @return array<string, mixed>
      */
-    public static function of(CorpusMetrics $metrics, array $collections, ?string $ruleCatalogHash = null): array
+    public static function of(CorpusMetrics $metrics, array $collections, ?array $ruleIds = null): array
     {
         return [
             'schema_version' => self::SCHEMA_VERSION,
@@ -58,7 +62,17 @@ final readonly class CorpusReport
             //
             // Nullable only for a report written before this field existed; the release gate treats
             // its absence as "cannot be compared", which is red rather than green.
-            'rule_catalog' => $ruleCatalogHash === null ? null : ['hash' => $ruleCatalogHash],
+            //
+            // The IDS ride along beside the hash, and that is not redundancy. Two hashes cannot be
+            // diffed — a hash is built so they cannot — so a gate holding only digests can refuse a
+            // release and say nothing about what moved. The hash stays the comparison; the list is
+            // what turns the refusal into an instruction. An addition, so SCHEMA_VERSION does not
+            // move; a report written before this field is read as "the difference is unavailable",
+            // never as "nothing differs".
+            'rule_catalog' => $ruleIds === null ? null : [
+                'hash' => RuleCatalogFingerprint::of($ruleIds),
+                'rule_ids' => self::sortedIds($ruleIds),
+            ],
             'ground_set' => self::groundSet($collections),
             'summary' => [
                 // Null when nothing could be measured, and null is NOT zero: zero reads as "no
@@ -111,5 +125,24 @@ final readonly class CorpusReport
         usort($entries, static fn (array $a, array $b): int => strcmp((string) $a['path'], (string) $b['path']));
 
         return $entries;
+    }
+
+    /**
+     * The ids as the report carries them: sorted by BYTE, de-duplicated.
+     *
+     * The same normalization the fingerprint applies before hashing, so a reader who recomputes the
+     * digest from the recorded list gets the recorded digest. Two orderings of one catalog would
+     * otherwise produce a file whose own two fields disagree.
+     *
+     * @param  list<string>  $ruleIds
+     * @return list<string>
+     */
+    private static function sortedIds(array $ruleIds): array
+    {
+        $unique = array_values(array_unique($ruleIds));
+
+        sort($unique, SORT_STRING);
+
+        return $unique;
     }
 }

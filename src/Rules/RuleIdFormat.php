@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Rules;
 
+use Pushery\SQLens\Config\RuleIdValidator;
+
 /**
  * The machine form of the rule-id naming scheme documented in CONTRIBUTING.md.
  * Rule ids are public API from 1.0, so the scheme is fixed once, here, before the
@@ -106,6 +108,37 @@ final class RuleIdFormat
     public static function matches(string $ruleId): bool
     {
         return preg_match(self::PATTERN, $ruleId) === 1;
+    }
+
+    /**
+     * Whether a SUPPRESSION may name this id — a wider question than {@see matches()}, and the
+     * difference is whose naming scheme is being judged.
+     *
+     * ## Two questions that were answered by one predicate, and it cost the wrong one
+     *
+     * `matches()` says how a rule of THIS package may be called. It is the catalog's guard, it is
+     * public API from 1.0, and it must stay exactly as strict as it is.
+     *
+     * A suppression names something else entirely: it may name a rule an EXTERNAL TOOL emits, and
+     * those ids follow the tool's scheme, not ours. Squawk prints `prefer-timestamp-tz` — lowercase,
+     * hyphenated — and the Postgres Language Server prints its own shapes. Judging those against our
+     * scheme refuses them all.
+     *
+     * Measured before this existed: `SQUAWK.ban-drop-table`, a rule the SHIPPED MAP describes, was
+     * refused by the configuration schema before any run started — while `PG.L1.NO_RULE_ANSWERS_TO_THIS`,
+     * a pure typo in our own scheme, was admitted. The two answers were exactly the wrong way round.
+     *
+     * ## What this checks, and what it deliberately leaves to the validator
+     *
+     * SHAPE only: a namespace segment in our own casing, a dot, and a non-empty remainder that
+     * carries no whitespace. Whether anything answers to the id — and whether its namespace belongs
+     * to a tool this build ships an adapter for — is {@see RuleIdValidator}'s
+     * question, because only it can see the drivers. A shape check that tried to know the tools
+     * would be a second list of them, going stale on its own schedule.
+     */
+    public static function matchesSuppressionTarget(string $ruleId): bool
+    {
+        return self::matches($ruleId) || preg_match('/^[A-Z][A-Z0-9_]*\.[^\s]+$/', $ruleId) === 1;
     }
 
     /**

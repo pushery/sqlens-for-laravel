@@ -39,8 +39,21 @@ final readonly class AnnotationSuppressionSource
         // class and silently suppress nothing, which is the no-op this package refuses
         // everywhere else. PHP's mangled anonymous-class name reflects fine while the
         // instance is loaded, which it is by the time a finding exists.
-        $class = $subject->annotationClass;
+        return $this->forClass($subject->annotationClass);
+    }
 
+    /**
+     * The same reading, from a class name rather than a subject.
+     *
+     * The lint run validates the rule ids these annotations name, and it holds `CaptureResult`s
+     * rather than subjects at that point. Reading the attributes a second time there would be a
+     * second answer to "what does this migration annotate" — and the two would agree until the
+     * day one of them learned about a new attribute target.
+     *
+     * @return list<SqlensIgnore>
+     */
+    public function forClass(?string $class): array
+    {
         if ($class === null || ! class_exists($class, autoload: false)) {
             return [];
         }

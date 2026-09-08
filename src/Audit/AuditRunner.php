@@ -1194,8 +1194,16 @@ final readonly class AuditRunner implements AuditRuns
         // from the shipped map rather than from a running binary: a suppression naming a tool rule
         // has to stay valid on a machine where the tool is absent, disabled, or unbuildable, or a
         // correct configuration would fail on a laptop and pass in CI.
-        $violations = new RuleIdValidator(RuleRegistry::fromRules($all), SquawkRuleIds::suppressible())
-            ->unknown($references);
+        // …and the tools' own namespaces, DERIVED from the drivers rather than listed. Until this
+        // was threaded through, `PGLS.*` was refused everywhere: the `alsoKnown` set carried
+        // squawk's mapped ids alone, so a pgls rule could not be named in a suppression at all.
+        $validator = new RuleIdValidator(
+            RuleRegistry::fromRules($all),
+            SquawkRuleIds::suppressible(),
+            $this->drivers->everyToolPrefix(),
+        );
+
+        $violations = $validator->unknown($references);
 
         foreach ($references as $reference) {
             $rule = $all[$reference->ruleId] ?? null;

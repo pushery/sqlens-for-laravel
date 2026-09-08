@@ -2,6 +2,46 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-09-08
+
+### Added
+
+- **A suppression may name a rule an external tool emits.** `sqlens.ignore` takes `SQUAWK.<rule>` and `PGLS.<rule>` now, including ids the shipped map has no row for — so you can silence one finding your installed binary reports without waiting for a release here. Before this, the only lever was `suppression.allow_undetermined: ['tool_rule_unmapped']`, which frees every unmapped tool finding at once, including the locking rules the tool is installed for.
+
+  ⚠️ **No tool id was nameable before, not even a described one.** `ignore.rule` was checked against this package's own naming scheme, so `SQUAWK.ban-drop-table` — a rule the map does describe — was refused for its shape, while `PG.L1.NO_RULE_ANSWERS_TO_THIS`, a plain typo, was accepted. Two questions had one answer; they are separate now. How a rule of this package may be **called** is unchanged and just as strict.
+
+  An id inside a tool's namespace that this build cannot describe reports `LINT.SUPPRESSION_TOOL_RULE_UNDESCRIBED` and the run continues. It is accepted, not waved through: nothing here can spell-check somebody else's ids, so the notice is what keeps a typo from silently un-suppressing nothing. An id outside every tool namespace is still refused.
+
+- **`sqlens:lint` reports a suppression that names a deprecated rule, with the id that replaced it** — `LINT.SUPPRESSION_DEPRECATED_RULE`. Never an error: rules here are deprecated and never deleted, so the entry is still correct; it points at a check that will stop checking. The audit suite already named deprecated rules, but not which line of your configuration named one, and that line is the one you edit.
+
+- **A rule can declare that your configuration has silenced it, through `DeclaresConfigurationReach`** — a new interface in the extension API. The level, category, stability and version gates decide whether a rule is in the set at all; this covers a fifth state they cannot express: the rule is admitted, it runs, and it can report nothing because a switch it reads is off. Only the rule that reads the switch can know, so only a rule that says so is asked — silence means "not examined on this axis", never "reachable".
+
+### Fixed
+
+- **`sqlens:lint` checks the rule ids in `sqlens.ignore`.** It did not. That form was validated by `sqlens:agent-rules` alone, a command a project may never run — so in the suite that fires on every migration, a typo silently suppressed nothing while the rule kept firing. A run now refuses an id no rule answers to, the same way audit always has.
+
+  ⚠️ **Breaking for a project whose ignore list already carries a typo:** that run refuses instead of quietly linting. It is the direction the check exists for.
+
+- **An `#[SqlensIgnore]` naming a rule that does not exist says so** — `LINT.ANNOTATION_UNKNOWN_RULE`. Nothing checked this form at all. The attribute takes a mandatory reason, which is what makes a broken one indistinguishable from a working one: it reads as a decision somebody weighed while suppressing nothing.
+
+  Reported, and the run continues. Its config-file twin refuses, and the difference is where the text lives — an annotation sits in a migration that shipped years ago and will never be touched again, so refusing over a rule renamed since would turn your history into a timer.
+
+- **Every `prefer-timestamp-tz` finding Squawk reports is mapped again.** All of them fell through as `tool_rule_unmapped`, at level 0, where a green run does not put them in front of you — measured in a consuming project at 47 of 47, with `0 fail` in the summary. The shipped map carried the rule under `prefer-timestamptz`, and the mapper joins on the name the binary **prints**. Squawk's own documentation page uses one spelling and its output the other, and it accepts both as an `--exclude` value, which is why nothing noticed.
+
+  ⚠️ **A project that wrote `SQUAWK.prefer-timestamptz` into `sqlens.ignore` will now be refused.** That entry never suppressed anything, because the id could not appear in a report. The replacement is `SQUAWK.prefer-timestamp-tz`.
+
+- **Every rule link on the published Squawk parity page reaches a page — all 39 were 404.** The map used `https://squawkhq.com/docs/rules/<rule>`; squawk documents one rule per page directly under `/docs/<rule>`. One link deliberately does not match its rule name: `prefer-timestamp-tz` points at `/docs/prefer-timestamptz`, because upstream's documentation slug and its printed id really do differ.
+
+- **The published `config/sqlens.php` no longer names a test file you cannot open.** The comment on `deploy.postdeploy.budget_ms` said the number *is held by a test*, and named a path under the package's test directory — which never ships. It read as an assurance: raise the number and a red arm will stop you. None will, in your repository. The reasoning stays; the path is gone, and the comment says why.
+
+- **The generated agent block no longer claims the catalog is what a run enforces.** It opened with *the rules this project actually enforces — what a run will check* over a single number. There is no single run: the catalog spans several suites and each command evaluates its own, so a consumer read **102 in force** while the linter in its gate checked **37**. And a rule can sit in that list unable to report at all — `PG.L9.DOC_MISSING_COMMENT` is admitted by the level gate and silenced by `audit.documentation.require_table_comments`, a contradiction inside the configuration that `--check` cannot see, because the artifact and the config agree with each other.
+
+  The count now reads **Rules configured**. A **By suite** line says how many each suite carries, and says out loud that a rule in two suites is counted in both, so the numbers deliberately do not sum. Suite names rather than command names: `deploy` is reached through `sqlens:predeploy` and `sqlens:postdeploy`, so a command would have been invented. And a rule your own configuration has switched off says so on its own line, naming the key.
+
+- **`DeclaresConfigurationReach` is named in the declared extension API**, where a third-party rule author can read it: in `ApiSurface::EXTENSION_CONTRACTS`, in the published API snapshot, and on the public API page. Without that it would have been a promise the breaking-change gate enforces and nobody could look up.
+
+- **The shipped registry holds 230 entries.** By category: 139 safety, 58 security, 17 idiom, 7 performance, 6 convention and 3 privacy. By maturity: 225 stable, 3 preview, 2 experimental. **151** answer to the level gate rather than to a severity axis of their own; the other **79** carry a severity — 7 critical, 32 high, 28 medium, 8 low and 4 info. A `downtime_class` is a narrower promise than the rest: 58 entries carry one, split 38 online, 18 blocking and 2 rewrite. The remainder are run notices and catalog-only rules, which the question does not apply to.
+
 ## [0.7.0] - 2026-09-06
 
 ### Added

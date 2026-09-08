@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Drivers\Pgsql\Rules\L9;
 
 use Pushery\SQLens\Categories\Category;
+use Pushery\SQLens\Contracts\DeclaresConfigurationReach;
 use Pushery\SQLens\Contracts\DeclaresJudgedObjectTypes;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
@@ -47,7 +48,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * comment in the catalog and in no pending migration, so a lint half would report almost every
  * table in the schema as undocumented — a rule that is wrong on the schemas it was written for.
  */
-final class MissingCommentRule extends AbstractCatalogRule implements DeclaresJudgedObjectTypes
+final class MissingCommentRule extends AbstractCatalogRule implements DeclaresConfigurationReach, DeclaresJudgedObjectTypes
 {
     /**
      * @param  DocumentationPolicy  $policy  what the project asked for, built once by the registry
@@ -61,6 +62,25 @@ final class MissingCommentRule extends AbstractCatalogRule implements DeclaresJu
         parent::__construct($projectRoot);
 
         $this->policy = $policy ?? DocumentationPolicy::shipped();
+    }
+
+    /**
+     * Off unless the project turned one of the two switches on — the state this rule ships in.
+     *
+     * EITHER switch is enough to make it reachable, because the two are independent halves: a
+     * project that requires table comments and not column ones still gets findings, and reporting
+     * that rule as silenced would be wrong in the direction that matters least visibly.
+     *
+     * The phrase names the keys rather than describing the state, so the reader of a generated
+     * context file can go and change one instead of going to look for it.
+     */
+    public function silencedByConfiguration(): ?string
+    {
+        if ($this->policy->requireTableComments || $this->policy->requireColumnComments) {
+            return null;
+        }
+
+        return 'both `audit.documentation.require_table_comments` and `require_column_comments` are off';
     }
 
     /** @return non-empty-list<SchemaObjectType> */

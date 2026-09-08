@@ -12,7 +12,6 @@ use Pushery\SQLens\Corpus\CorpusLoadFailure;
 use Pushery\SQLens\Corpus\CorpusMetrics;
 use Pushery\SQLens\Corpus\CorpusReport;
 use Pushery\SQLens\Corpus\CorpusRun;
-use Pushery\SQLens\Corpus\RuleCatalogFingerprint;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Lint\LintRunner;
 use Pushery\SQLens\Subjects\CaptureMode;
@@ -92,7 +91,7 @@ final class CorpusMeasureCommand extends Command
 
         // The catalog this rate describes, recorded WITH it. Without the pair, a rate and a catalog
         // drift apart silently and the release gate has nothing to compare.
-        $report = CorpusReport::of($metrics, $collections, RuleCatalogFingerprint::of($ruleIds));
+        $report = CorpusReport::of($metrics, $collections, $ruleIds);
 
         $this->write($repositoryRoot.'/'.$out, $report);
 

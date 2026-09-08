@@ -59,6 +59,29 @@ final readonly class DriverManager
     }
 
     /**
+     * The finding-id prefix of every tool any driver ships — `SQUAWK.`, `PGLS.`, and whatever a
+     * driver package adds next.
+     *
+     * ## Derived, never listed
+     *
+     * The derivation lives on the registry, because three callers need it and only two hold a
+     * manager. This is the door for the ones that do — same reason {@see everyRule()} above exists
+     * here rather than handing callers the registry.
+     *
+     * ## Why the manager offers it rather than the registry
+     *
+     * Same reason as `everyRule()`: a caller that held the registry could resolve a concrete driver
+     * from it, and driver isolation is what this class exists to keep. A configuration check needs
+     * the namespace SET, never a particular engine's.
+     *
+     * @return list<string> sorted by byte, so a message built from it reads the same everywhere
+     */
+    public function everyToolPrefix(): array
+    {
+        return $this->registry->everyToolPrefix();
+    }
+
+    /**
      * The connection name a suite resolves when none is given explicitly:
      * `sqlens.connection` if set, otherwise the host's default connection
      * (`database.default`). `null` for `sqlens.connection` means "the host

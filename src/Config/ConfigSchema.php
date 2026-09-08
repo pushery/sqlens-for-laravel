@@ -604,7 +604,7 @@ final readonly class ConfigSchema
             'suppression.allow_undetermined-item' => 'one of: '.$this->enumValues(UndeterminedReason::class),
             'ignore' => 'a list of ignore entries, each an array with the keys: rule, reason and optionally paths, suites',
             'ignore-entry' => 'an ignore entry array with the keys: rule, reason and optionally paths, suites',
-            'ignore.rule' => 'a rule id matching the documented scheme, like "PG.L2.NAME"',
+            'ignore.rule' => 'a rule id — this package\'s scheme like "PG.L2.NAME", or an external tool\'s namespaced id like "SQUAWK.prefer-timestamp-tz"',
             'ignore.reason' => 'a non-empty reason string (why this rule is ignored here)',
             'ignore.paths' => 'a list of repo-relative path globs',
             'ignore.paths-item' => 'a repo-relative path glob (absolute paths are not portable across machines)',
@@ -1245,7 +1245,7 @@ final readonly class ConfigSchema
     {
         return match ($field) {
             'rule' => is_string($value)
-                ? (RuleIdFormat::matches($value) ? [] : [ConfigViolation::outOfRange($path, $this->expectation('ignore.rule'), $value)])
+                ? (RuleIdFormat::matchesSuppressionTarget($value) ? [] : [ConfigViolation::outOfRange($path, $this->expectation('ignore.rule'), $value)])
                 : [ConfigViolation::wrongType($path, $this->expectation('ignore.rule'), $value)],
             'reason' => is_string($value)
                 ? ($value !== '' ? [] : [ConfigViolation::outOfRange($path, $this->expectation('ignore.reason'), $value)])

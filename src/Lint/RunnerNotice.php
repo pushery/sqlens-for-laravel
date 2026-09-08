@@ -143,6 +143,44 @@ enum RunnerNotice: string implements RunNotice
      */
     case InvalidConfigReference = 'LINT.INVALID_CONFIG_REFERENCE';
 
+    /**
+     * An `#[SqlensIgnore]` annotation names a rule id that no rule of any driver carries.
+     *
+     * A NOTICE rather than the refusal its config-file twin gets, and the difference is where the
+     * text lives. An ignore list is edited by whoever runs the tool today; an annotation sits in a
+     * migration that shipped years ago and will never be touched again. Refusing a run over a rule
+     * that has since been renamed would turn every project's history into a timer — the older the
+     * migration, the likelier it names something gone.
+     *
+     * So it is said and the run continues. The annotation still suppresses nothing, and that is
+     * exactly what a reader needs to hear: it carries a mandatory reason, so it reads as a weighed
+     * decision for as long as nobody checks.
+     */
+    case AnnotationUnknownRule = 'LINT.ANNOTATION_UNKNOWN_RULE';
+
+    /**
+     * A suppression names a rule that still exists and is on its way out.
+     *
+     * Never an error: governance says rules are deprecated and never deleted, so the entry is still
+     * meaningful — it points at something that will stop checking. What the notice adds is the
+     * successor, which is the part a reader needs and the part no other message carries: the audit
+     * suite reports a deprecated RULE, and says nothing about which line of your configuration
+     * named it.
+     */
+    case SuppressionDeprecatedRule = 'LINT.SUPPRESSION_DEPRECATED_RULE';
+
+    /**
+     * A suppression names a rule inside an external tool's namespace that this build does not
+     * describe.
+     *
+     * Accepted rather than refused, and reported rather than silent — the third state, because the
+     * two obvious answers are both wrong here. Refusing makes a project wait for a release of this
+     * package before it can name a rule its own installed binary emits. Accepting quietly hands
+     * back the failure the refusal exists against, and a tool namespace is exactly where a typo is
+     * likeliest: the ids are somebody else's and nothing here can spell-check them.
+     */
+    case SuppressionToolRuleUndescribed = 'LINT.SUPPRESSION_TOOL_RULE_UNDESCRIBED';
+
     /** The message prefix every runner notice reports under — the runner, not a rule. */
     public const string MESSAGE_PREFIX = 'sqlens.lint';
 
