@@ -28,6 +28,7 @@
         "composer-runtime-api": "^2.0",
         "ext-ctype": "*",
         "ext-filter": "*",
+        "ext-hash": "*",
         "ext-json": "*",
         "ext-mbstring": "*",
         "ext-pdo": "*",

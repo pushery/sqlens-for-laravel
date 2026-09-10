@@ -110,9 +110,10 @@ final readonly class FindingEscalation
                 return $this->escalator->escalate(
                     $finding,
                     $operation,
-                    $table instanceof TableStatistics
-                        ? StatisticsContext::of($table->rows, $table->totalBytes)
-                        : null,
+                    // ONE LINE, and the shape is load-bearing: a standalone `: null,` compiles to no
+                    // opcode of its own, pcov never records it, PHPUnit counts it as executable, and a
+                    // 100% floor is then permanently red on a line no test can reach.
+                    $table instanceof TableStatistics ? StatisticsContext::of($table->rows, $table->totalBytes) : null,
                 );
             },
             $findings,

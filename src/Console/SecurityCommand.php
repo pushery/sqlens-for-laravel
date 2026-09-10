@@ -450,9 +450,8 @@ final class SecurityCommand extends Command
             //
             // tryFrom, not from: a malformed value must not throw mid-run. The config validator
             // owns bad input loudly and separately, so this path stays lenient.
-            minSeverity: is_string($floor = $config->get('sqlens.security.min_severity'))
-                ? Severity::tryFrom($floor)
-                : null,
+            // One line: a standalone `: null,` is a line coverage can never mark as executed.
+            minSeverity: is_string($floor = $config->get('sqlens.security.min_severity')) ? Severity::tryFrom($floor) : null,
             // Zero active rules, and it is the honest number rather than an omission: no rule ran,
             // which is exactly what the finding above says in prose.
             activeRuleCount: 0,
