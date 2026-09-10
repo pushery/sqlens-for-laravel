@@ -2,6 +2,14 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-09-10
+
+### Changed
+
+- **`ext-hash` is now declared in the manifest.** The shipped code calls into it and nothing required it, directly or transitively. The splits this package depends on do declare extensions — `illuminate/support` names ctype, filter and mbstring, `illuminate/http` names filter, `illuminate/database` names pdo — and every one of those was already in our manifest too. `ext-hash` is the one nothing carried: it is declared by `illuminate/routing`, `illuminate/auth` and `illuminate/cookie`, and this package depends on none of the three. That is why this is a single line rather than a list.
+
+  **Nothing about who can install this package changes.** `hash` has been compiled in and not disableable since PHP 7.4, so the set of installations this entry excludes is empty. It is declared because the code uses it, not to restrict anything. A contract test now holds both directions: an extension the shipped code calls must be declared, and a declared extension must have a call site.
+
 ## [0.9.0] - 2026-09-08
 
 ### Added

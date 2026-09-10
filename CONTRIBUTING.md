@@ -237,6 +237,24 @@ A merge or rebase merge does not have that problem: the range the check walks is
 branch's original commits, which are still authored locally and still carry the matching
 sign-off.
 
+**So the squash button is switched off for this repository, and that is the decision rather
+than a note about one.** `allow_squash_merge` is `false` here since 2026-09-09. The paragraph
+above explains a failure that can only be met by choosing an option this repository has no use
+for: the fleet's branch model merges, the DCO check's range is built for a merge commit, and a
+squash produces a commit the repository's own gate then refuses. Leaving the button there and
+writing "please do not press it" is the shape that gets pressed anyway, at the end of a long
+day, by whoever did not read this far.
+
+⚠️ **It is off HERE and nowhere else, deliberately.** Squash merging is not harmful in general
+and the rest of the fleet keeps it; this is the one repository with a DCO gate, so it is the one
+repository where that button produces a commit its own CI rejects.
+
+The two heavier remedies stay unbuilt on purpose. Aligning `git config user.email` with the
+GitHub account's commit address would fix it and would also rewrite the identity on every other
+repository's future history. Teaching the check to accept the account address as a second
+identity changes **whom a security check trusts**, which is a decision worth making
+deliberately or not at all — and neither is needed once the option that triggers it is gone.
+
 ## Licensing policy
 
 SQLens is MIT licensed, and every dependency it pulls in has to be compatible with

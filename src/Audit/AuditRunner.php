@@ -1683,9 +1683,8 @@ final readonly class AuditRunner implements AuditRuns
             // tryFrom, not from: an unrecognized value must not throw mid-run. The config validator
             // owns malformed input loudly and separately, so this path stays lenient and a bad key
             // can never turn a report into a crash.
-            minSeverity: is_string($floor = $this->config->get('sqlens.security.min_severity'))
-                ? Severity::tryFrom($floor)
-                : null,
+            // One line: a standalone `: null,` is a line coverage can never mark as executed.
+            minSeverity: is_string($floor = $this->config->get('sqlens.security.min_severity')) ? Severity::tryFrom($floor) : null,
             activeRuleCount: $activeRules,
             // How many audit rules this run did NOT apply. The audit never passed this at all, so
             // every report it has ever produced said `hidden-rules=0` — while the level, the
@@ -1705,9 +1704,8 @@ final readonly class AuditRunner implements AuditRuns
             activeCategories: $activeCategories,
             instance: $target instanceof InstanceTarget ? $this->reportedInstance($target) : null,
             skips: $skips,
-            tenant: is_string($tenant = $this->config->get('sqlens.audit.tenancy.reference')) && trim($tenant) !== ''
-                ? $tenant
-                : null,
+            // One line: a standalone `: null,` is a line coverage can never mark as executed.
+            tenant: is_string($tenant = $this->config->get('sqlens.audit.tenancy.reference')) && trim($tenant) !== '' ? $tenant : null,
             // WHICH rules got a subject, beside the count of the ones that were selected. The count
             // is fixed before anything is read and cannot tell a run over a full catalog from one
             // whose reader came back empty; the set can. Null on the refusal paths, which never
