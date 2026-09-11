@@ -177,6 +177,25 @@ final class RlsDisabledRule extends AbstractSchemaObjectSecurityRule implements 
             return [];
         }
 
+        // The project answered, and the answer was that the application separates its tenants.
+        // Distinct from `off` in the way that matters to a reader: there the database separates
+        // nothing, here it separates through code the audit cannot read. The project's own sentence
+        // is quoted rather than summarized -- it is what a reader of the audit needs, and the
+        // config refuses the mode without it.
+        $separation = $object->getString('rls_application_separation');
+
+        if ($separation !== null && trim($separation) !== '') {
+            return [RuleVerdict::notApplicable(
+                'this project has set sqlens.security.rls.mode to application, which says that '
+                .'tenants are separated outside the database, and gave its reason: '.trim($separation)
+                .' Row-level security is therefore not what keeps them apart here, and nothing in '
+                .'the database can be judged for it. If that changes — separation moves into '
+                .'PostgreSQL — name the tables in sqlens.security.rls.tables or switch the mode to '
+                .'heuristic, and the SEC.RLS.* checks come back.',
+                NotApplicableReason::DeclinedByProject,
+            )];
+        }
+
         // The project ANSWERED. `security.rls.mode = off` is the answer this rule's own remediation
         // offers, and until it produced a different report than silence the sentence was an
         // instruction that changed nothing: a project that followed it kept the same undetermined, at

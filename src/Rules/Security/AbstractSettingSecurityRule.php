@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Rules\Security;
 
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\DeclaresSecurityPosture;
+use Pushery\SQLens\Contracts\JudgesTheServerItRunsOn;
 use Pushery\SQLens\Rules\Settings\AbstractServerSettingRule;
 
 /**
@@ -22,7 +23,7 @@ use Pushery\SQLens\Rules\Settings\AbstractServerSettingRule;
  * quietly file itself elsewhere, `severity()` comes from the rule, and `limitations()` defaults to
  * empty until a rule has something honest to put there.
  */
-abstract class AbstractSettingSecurityRule extends AbstractServerSettingRule implements DeclaresSecurityPosture
+abstract class AbstractSettingSecurityRule extends AbstractServerSettingRule implements DeclaresSecurityPosture, JudgesTheServerItRunsOn
 {
     /**
      * Every rule under this base is a security rule, and none of them may say otherwise.
@@ -30,6 +31,23 @@ abstract class AbstractSettingSecurityRule extends AbstractServerSettingRule imp
     final public function category(): Category
     {
         return Category::Security;
+    }
+
+    /**
+     * A server SETTING is the server, by definition of this base — so the whole family declares it
+     * here rather than rule by rule.
+     *
+     * ⚠️ Deliberately not on {@see AbstractServerSettingRule}, one level up, even though every rule
+     * there also reads a setting. That base is category-neutral and the privacy suite sits on it
+     * too; declaring it there would hand the same withholding to rules nobody measured and nobody
+     * asked about. The line is drawn where the security meaning is, which is here.
+     *
+     * The variable is named rather than described generically, because the point of the sentence is
+     * to send a reader to the right place on the host that will actually be operated.
+     */
+    public function serverSubjectJudged(): string
+    {
+        return sprintf("this server's `%s` setting", $this->settingVariable());
     }
 
     /**

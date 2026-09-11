@@ -51,12 +51,18 @@ final readonly class ProfileSelector
      * var was unset, the config key was missing). An empty string is NOT null — it
      * is a value the user provided, and an empty value is rejected.
      */
-    public function select(?string $flag, ?string $env, ?string $config): ProfileSelection
+    public function select(?string $flag, ?string $env, ?string $config, ?string $commandDefault = null): ProfileSelection
     {
         [$value, $source] = match (true) {
             $flag !== null => [$flag, 'flag'],
             $env !== null => [$env, 'env'],
             $config !== null => [$config, 'config'],
+            // A command that exists for ONE place answers for that place when nobody said
+            // otherwise: `sqlens:predeploy` runs on a deploy host, and falling back to the profile
+            // of a developer laptop there is how a gate ends up lenient on the one server where it
+            // matters. It sits BELOW all three user-set sources, so a flag, the environment and a
+            // configured profile still win in that order.
+            $commandDefault !== null => [$commandDefault, 'command default'],
             default => [self::BUILT_IN_DEFAULT, 'default'],
         };
 

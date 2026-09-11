@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Rules;
 
 use Pushery\SQLens\Agent\Remediation\RemediationValidator;
+use Pushery\SQLens\Audit\ServerLifetime;
 use Pushery\SQLens\Contracts\JudgesSchemaObjects;
+use Pushery\SQLens\Contracts\JudgesTheServerItRunsOn;
 use Pushery\SQLens\Contracts\ProvidesSchemaObjectRemediation;
 use Pushery\SQLens\Contracts\Rule;
 use Pushery\SQLens\Findings\DowntimeClass;
@@ -38,6 +40,8 @@ final readonly class CatalogVerdicts
      */
     public static function toFindings(array $verdicts, Rule $rule, SchemaObject $object): array
     {
+        $verdicts = self::withoutTheFixturesVerdict($verdicts, $rule, $object);
+
         // Asked ONCE per object rather than once per verdict: the material is about the object, and
         // a rule that flags twice attaches the same template twice rather than building it twice.
         $payload = self::remediationFor($rule, $object);
@@ -46,6 +50,73 @@ final readonly class CatalogVerdicts
             static fn (RuleVerdict $verdict): Finding => self::withMaterial(self::finding($verdict, $rule, $object), $payload),
             $verdicts,
         );
+    }
+
+    /**
+     * A flag about a server the project declared disposable, answered as not applicable instead.
+     *
+     * ## Why here and not inside the rules
+     *
+     * This is the one place that holds all three facts at once — the verdicts, the rule that reached
+     * them, and the subject carrying the project's declaration. Pushed into the rules it would be
+     * the same five lines in four base classes, and the interesting thing about those five lines is
+     * that they must agree; four copies of a predicate that decides whether a security check speaks
+     * is the shape {@see TouchedTables} exists to prevent one directory over.
+     *
+     * ## Only a FLAG is rewritten, and the three other outcomes are left alone
+     *
+     * An undetermined verdict about a disposable server is still undetermined — the reading failed,
+     * and saying "not applicable" would answer a question nobody managed to ask. A pass stays a
+     * pass. And a rule that said nothing gets nothing added: twenty lines announcing checks that
+     * found nothing anyway is the noise this package's own authentication family already refuses
+     * ("six rules repeating one fact is five repetitions of it").
+     *
+     * That last one is a real trade and not a free one, so it is written down rather than left to be
+     * rediscovered: on a disposable server a reader cannot tell a check that passed from one that
+     * did not apply, UNLESS it would have flagged. Where it would have, the finding says so in full.
+     * Where it would not, nothing is withheld from the reader that the check itself established.
+     *
+     * @param  list<RuleVerdict>  $verdicts
+     * @return list<RuleVerdict>
+     */
+    private static function withoutTheFixturesVerdict(array $verdicts, Rule $rule, SchemaObject $object): array
+    {
+        if (! $rule instanceof JudgesTheServerItRunsOn) {
+            return $verdicts;
+        }
+
+        if (! ServerLifetime::declared($object->context()->serverLifetime)->isDisposable()) {
+            return $verdicts;
+        }
+
+        return array_map(
+            static fn (RuleVerdict $verdict): RuleVerdict => self::isFlag($verdict)
+                ? RuleVerdict::notApplicable(
+                    sprintf(
+                        'this project declared sqlens.security.server.lifetime as disposable, so %s describes a '
+                        .'fixture this job creates and destroys rather than a deployment anybody operates. The '
+                        .'schema is judged here exactly as it would be anywhere; this server fact is judged by '
+                        .'sqlens:predeploy, on the host that will actually be operated.',
+                        $rule->serverSubjectJudged(),
+                    ),
+                    NotApplicableReason::ServerIsDisposable,
+                )
+                : $verdict,
+            $verdicts,
+        );
+    }
+
+    /**
+     * Whether this verdict is the one that would BLOCK — a report of something wrong.
+     *
+     * Spelled as the absence of the other three rather than as a field, because that is how
+     * {@see RuleVerdict} is built: a flag is the verdict with no reason attached and no pass flag
+     * set. Asking it here keeps the knowledge in one place instead of widening the verdict's public
+     * surface for one caller.
+     */
+    private static function isFlag(RuleVerdict $verdict): bool
+    {
+        return ! $verdict->isPass && ! $verdict->isUndetermined() && ! $verdict->isNotApplicable();
     }
 
     /**

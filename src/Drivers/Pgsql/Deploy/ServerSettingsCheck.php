@@ -16,6 +16,7 @@ use Pushery\SQLens\Findings\Confidence;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
+use Pushery\SQLens\Findings\NotApplicableReason;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
@@ -114,6 +115,11 @@ final readonly class ServerSettingsCheck implements PreflightCheck
         $findings = [];
         $unreadable = [];
 
+        // Whether anything is actually about to run. Read ONCE, here, rather than per judgment: the
+        // four messages argue from the same fact, and two readings of one fact is two chances for a
+        // report to contradict itself.
+        $pending = ! $context->pending->isEmpty();
+
         foreach ($this->judgments() as $name => $judge) {
             $setting = $reading->get($name);
 
@@ -127,10 +133,10 @@ final readonly class ServerSettingsCheck implements PreflightCheck
 
             // Narrowed for the analyzer by the guard above: `unreadableReason()` returns a string
             // for every state in which either of these is null.
-            $finding = $judge((string) $setting?->serverValue(), $context);
+            $verdict = $judge((string) $setting?->serverValue());
 
-            if ($finding instanceof Finding) {
-                $findings[] = $finding;
+            if ($verdict !== null) {
+                $findings[] = $this->finding($context, $verdict, $pending);
             }
         }
 
@@ -146,8 +152,11 @@ final readonly class ServerSettingsCheck implements PreflightCheck
             );
         }
 
-        return $findings === []
-            ? CheckResult::pass(self::ID)
+        // With nothing pending the findings are not-applicable notices rather than failures, so they
+        // travel with a passing result: the settings are still named and their values still read,
+        // and the gate stops nothing over a change that is not happening.
+        return $findings === [] || ! $pending
+            ? CheckResult::pass(self::ID, $findings)
             : CheckResult::fail(self::ID, $findings);
     }
 
@@ -188,83 +197,115 @@ final readonly class ServerSettingsCheck implements PreflightCheck
      * adding an entry. Order is the map's order, which makes two runs against one server produce the
      * findings in one sequence — a set iterated in container order would diff as a change.
      *
-     * @return array<string, callable(string, PreflightContext): ?Finding>
+     * ## Each message is in two halves, and the reason is a false sentence somebody read
+     *
+     * The first half says what the setting IS and what it does. The second says what that means for
+     * the change about to run — and only the second is true when a change is actually pending. A
+     * consumer ran this gate after a deploy, with nothing pending, and read three findings arguing
+     * from "a migration is about to run" in the same report whose first line said no migration was
+     * read at all. A gate that refutes its own premise teaches a reader to treat the next real red
+     * as noise.
+     *
+     * So with nothing pending the halves come apart: the state is reported as not-applicable, and
+     * the premise sentence is left unsaid rather than asserted.
+     *
+     * @return array<string, callable(string): ?array{id: string, setting: string, state: string, pending: string, severity: Severity, downtime: DowntimeClass, confidence: Confidence}>
      */
     private function judgments(): array
     {
         return [
-            'lock_timeout' => fn (string $value, PreflightContext $context): ?Finding => $value !== '0' ? null : $this->finding(
-                $context,
-                'LOCK_TIMEOUT_UNBOUNDED',
-                'lock_timeout',
-                'The server runs with `lock_timeout = 0`, and a migration is about to run. A DDL '
-                .'statement blocked behind a long-running transaction will wait indefinitely — and '
-                .'because `ALTER TABLE` queues an ACCESS EXCLUSIVE request, every read arriving '
-                .'behind it queues too. The table stops answering while nothing looks broken.',
-                Severity::High,
-                DowntimeClass::Blocking,
-            ),
-            'idle_in_transaction_session_timeout' => fn (string $value, PreflightContext $context): ?Finding => $value !== '0' ? null : $this->finding(
-                $context,
-                'IDLE_IN_TRANSACTION_UNBOUNDED',
-                'idle_in_transaction_session_timeout',
-                'The server runs with `idle_in_transaction_session_timeout = 0`. A session that '
-                .'opened a transaction and went away holds its locks forever, and that is the single '
-                .'most common thing a migration blocks behind. Nothing here says one exists — only '
-                .'that if one does, nothing will end it.',
-                Severity::Medium,
-                DowntimeClass::Blocking,
-            ),
-            'statement_timeout' => fn (string $value, PreflightContext $context): ?Finding => $value !== '0' ? null : $this->finding(
-                $context,
-                'STATEMENT_TIMEOUT_UNBOUNDED',
-                'statement_timeout',
-                'The server runs with `statement_timeout = 0`. This is a common and defensible '
-                .'setting, and it is reported rather than judged: it means a migration statement '
-                .'that turns out to be far more expensive than expected has no upper bound of its '
-                .'own, so the deploy ends when it ends.',
-                Severity::Low,
-                DowntimeClass::Online,
-            ),
-            'max_wal_size' => fn (string $value, PreflightContext $context): ?Finding => ! ctype_digit($value) || (int) $value > self::DEFAULT_MAX_WAL_SIZE_MB ? null : $this->finding(
-                $context,
-                'MAX_WAL_SIZE_AT_DEFAULT',
-                'max_wal_size',
-                sprintf(
-                    'The server is still on the shipped `max_wal_size` (%s MB) while a schema change '
-                    .'is pending. A table rewrite generates far more WAL than that, which forces '
-                    .'checkpoints throughout — the rewrite takes longer and the I/O spike lands on '
-                    .'everything else. Nothing here has measured your tables; this is the default '
-                    .'being reported, not a computed need.',
+            'lock_timeout' => fn (string $value): ?array => $value !== '0' ? null : [
+                'id' => 'DEPLOY.CONTEXT.SETTING.LOCK_TIMEOUT_UNBOUNDED',
+                'setting' => 'lock_timeout',
+                'state' => 'The server runs with `lock_timeout = 0`. A DDL statement blocked behind a '
+                    .'long-running transaction will wait indefinitely — and because `ALTER TABLE` queues '
+                    .'an ACCESS EXCLUSIVE request, every read arriving behind it queues too. The table '
+                    .'stops answering while nothing looks broken.',
+                'pending' => ' A migration is about to run under it.',
+                'severity' => Severity::High,
+                'downtime' => DowntimeClass::Blocking,
+                'confidence' => Confidence::Deterministic,
+            ],
+            'idle_in_transaction_session_timeout' => fn (string $value): ?array => $value !== '0' ? null : [
+                'id' => 'DEPLOY.CONTEXT.SETTING.IDLE_IN_TRANSACTION_UNBOUNDED',
+                'setting' => 'idle_in_transaction_session_timeout',
+                'state' => 'The server runs with `idle_in_transaction_session_timeout = 0`. A session '
+                    .'that opened a transaction and went away holds its locks forever, and that is the '
+                    .'single most common thing a migration blocks behind. Nothing here says one exists '
+                    .'— only that if one does, nothing will end it.',
+                'pending' => ' A migration is about to run behind whatever is holding.',
+                'severity' => Severity::Medium,
+                'downtime' => DowntimeClass::Blocking,
+                'confidence' => Confidence::Deterministic,
+            ],
+            'statement_timeout' => fn (string $value): ?array => $value !== '0' ? null : [
+                'id' => 'DEPLOY.CONTEXT.SETTING.STATEMENT_TIMEOUT_UNBOUNDED',
+                'setting' => 'statement_timeout',
+                'state' => 'The server runs with `statement_timeout = 0`. This is a common and '
+                    .'defensible setting, and it is reported rather than judged: it means a statement '
+                    .'that turns out to be far more expensive than expected has no upper bound of its '
+                    .'own.',
+                'pending' => ' For the migration about to run, that means the deploy ends when it ends.',
+                'severity' => Severity::Low,
+                'downtime' => DowntimeClass::Online,
+                'confidence' => Confidence::Deterministic,
+            ],
+            'max_wal_size' => fn (string $value): ?array => ! ctype_digit($value) || (int) $value > self::DEFAULT_MAX_WAL_SIZE_MB ? null : [
+                'id' => 'DEPLOY.CONTEXT.SETTING.MAX_WAL_SIZE_AT_DEFAULT',
+                'setting' => 'max_wal_size',
+                'state' => sprintf(
+                    'The server is still on the shipped `max_wal_size` (%s MB). A table rewrite '
+                    .'generates far more WAL than that, which forces checkpoints throughout — the '
+                    .'rewrite takes longer and the I/O spike lands on everything else. Nothing here has '
+                    .'measured your tables; this is the default being reported, not a computed need.',
                     $value,
                 ),
-                Severity::Low,
-                DowntimeClass::Online,
-                Confidence::Heuristic,
-            ),
+                'pending' => ' A schema change is pending against it.',
+                'severity' => Severity::Low,
+                'downtime' => DowntimeClass::Online,
+                'confidence' => Confidence::Heuristic,
+            ],
         ];
     }
 
-    private function finding(
-        PreflightContext $context,
-        string $suffix,
-        string $setting,
-        string $message,
-        Severity $severity,
-        DowntimeClass $downtimeClass,
-        Confidence $confidence = Confidence::Deterministic,
-    ): Finding {
-        return Finding::fail(
-            ruleId: self::ID.'.'.$suffix,
-            messagePrefix: DeployNotice::MESSAGE_PREFIX,
-            message: $message,
-            location: Location::inCatalog($context->driver, $context->connection, $setting, SchemaObjectType::Setting),
-            category: Category::Safety,
-            level: Level::Capturable,
-            stability: StabilityTier::Stable,
-            documentationUrl: RuleDocumentationUrl::for(self::ID.'.'.$suffix),
-            context: new SubjectContext(driver: $context->driver, profile: $context->profile, strictTools: false),
-            severity: $severity,
-        )->withDowntimeClass($downtimeClass)->withConfidence($confidence);
+    /**
+     * One finding for a setting, either a failure or a not-applicable notice.
+     *
+     * @param  array{id: string, setting: string, state: string, pending: string, severity: Severity, downtime: DowntimeClass, confidence: Confidence}  $verdict
+     */
+    private function finding(PreflightContext $context, array $verdict, bool $pending): Finding
+    {
+        $ruleId = $verdict['id'];
+        $location = Location::inCatalog($context->driver, $context->connection, $verdict['setting'], SchemaObjectType::Setting);
+        $subject = new SubjectContext(driver: $context->driver, profile: $context->profile, strictTools: false);
+
+        $finding = $pending
+            ? Finding::fail(
+                ruleId: $ruleId,
+                messagePrefix: DeployNotice::MESSAGE_PREFIX,
+                message: $verdict['state'].$verdict['pending'],
+                location: $location,
+                category: Category::Safety,
+                level: Level::Capturable,
+                stability: StabilityTier::Stable,
+                documentationUrl: RuleDocumentationUrl::for($ruleId),
+                context: $subject,
+                severity: $verdict['severity'],
+            )
+            : Finding::notApplicable(
+                ruleId: $ruleId,
+                messagePrefix: DeployNotice::MESSAGE_PREFIX,
+                message: $verdict['state'],
+                reason: NotApplicableReason::NothingPending,
+                location: $location,
+                category: Category::Safety,
+                level: Level::Capturable,
+                stability: StabilityTier::Stable,
+                documentationUrl: RuleDocumentationUrl::for($ruleId),
+                context: $subject,
+                severity: $verdict['severity'],
+            );
+
+        return $finding->withDowntimeClass($verdict['downtime'])->withConfidence($verdict['confidence']);
     }
 }

@@ -9,6 +9,7 @@ use DateTimeImmutable;
 use DateTimeZone;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Database\DatabaseManager;
+use Pushery\SQLens\Attributes\RawSql;
 use Pushery\SQLens\Capture\Shadow\ShadowSession;
 use Pushery\SQLens\Contracts\ShadowProvisioner;
 use Pushery\SQLens\Exceptions\ShadowProvisioningUndetermined;
@@ -112,6 +113,7 @@ final readonly class MysqlShadowProvisioner implements ShadowProvisioner
      * statement that fails drops the half-built database and makes the run
      * undetermined — never a lint against a schema that only partially rebuilt.
      */
+    #[RawSql(reason: 'replays the project\'s own `schema:dump` output, which is a file of DDL statements and not something any builder has a verb for; it runs on the PDO handle so no mysql client binary is needed, and PDO\'s exception error mode turns a bad statement into the throwable this method catches')]
     private function replay(string $name, SchemaDumpPlan $plan): void
     {
         // Replay the dump's statements directly on the PDO handle: they are trusted

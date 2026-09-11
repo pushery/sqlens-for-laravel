@@ -67,4 +67,45 @@ final readonly class NarrowIntegerPrimaryKey
             ? ['column' => $column, 'type' => $type]
             : null;
     }
+
+    /**
+     * Whether this table is the framework's own migrations ledger.
+     *
+     * Laravel creates it from `DatabaseMigrationRepository::createRepository()` with
+     * `increments('id')`, on every `migrate:install` and regardless of what the application would
+     * prefer. Every Laravel application on PostgreSQL therefore carries a narrow key there, and
+     * none of them can act on the advice: the table belongs to the framework, and the remediation
+     * would mean writing against its own default on a table the application does not own.
+     *
+     * Matched on the UNQUALIFIED name, because that is the shape `database.migrations.table` has —
+     * it names a table, never a schema. A same-named table in a second schema is exempt too, which
+     * is the honest trade for not inventing a schema the setting does not carry.
+     *
+     * An empty name exempts nothing: a project that cleared the setting has said nothing about a
+     * table, and "" would otherwise match every unqualified name in some spellings.
+     */
+    public static function isFrameworkMigrationsTable(SchemaObject $table, string $migrationsTable): bool
+    {
+        if (trim($migrationsTable) === '') {
+            return false;
+        }
+
+        $qualified = $table->qualifiedName;
+        $separator = strrpos($qualified, '.');
+        $unqualified = $separator === false ? $qualified : substr($qualified, $separator + 1);
+
+        return strtolower(trim($unqualified, '"')) === strtolower(trim($migrationsTable));
+    }
+
+    /**
+     * `a` or `an` for a type name, because the message reads it aloud to somebody.
+     *
+     * Written from the type's own first letter rather than a list: the engines spell these in both
+     * cases (`integer`, `INT`), and the article follows the letter either way. It was `a integer`
+     * in every PostgreSQL finding until a consumer quoted it back.
+     */
+    public static function article(string $type): string
+    {
+        return in_array(strtolower(substr(trim($type), 0, 1)), ['a', 'e', 'i', 'o', 'u'], true) ? 'an' : 'a';
+    }
 }

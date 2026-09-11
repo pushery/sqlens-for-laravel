@@ -279,7 +279,37 @@ final class ConfigValidator
             }
         }
 
-        return $violations;
+        return [...$violations, ...$this->crossKeyViolations($section, $value)];
+    }
+
+    /**
+     * The checks that need TWO keys of one section in hand at once.
+     *
+     * Deliberately here and not in the schema: a leaf rule is asked about one value and cannot see
+     * its neighbor, and giving it the whole section would make every rule able to reach anywhere.
+     * There is one such rule today, and it exists because the value it guards is the entire point
+     * of the mode it belongs to.
+     *
+     * @param  array<array-key, mixed>  $value
+     * @return list<ConfigViolation>
+     */
+    private function crossKeyViolations(string $section, array $value): array
+    {
+        if ($section !== 'security.rls' || ($value['mode'] ?? null) !== 'application') {
+            return [];
+        }
+
+        $reason = $value['reason'] ?? null;
+
+        // `application` says separation happens somewhere this package cannot read. The sentence IS
+        // the answer — without it the mode would be a way to silence the check while saying nothing,
+        // which is the one thing the whole SEC.RLS family refuses.
+        return is_string($reason) && trim($reason) !== ''
+            ? []
+            : [ConfigViolation::missingKey(
+                'sqlens.security.rls.reason',
+                'a sentence saying how separation is enforced, because the mode is `application`',
+            )];
     }
 
     /** @return list<ConfigViolation> */

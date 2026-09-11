@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Catalog;
 
 use Pushery\SQLens\Catalog\Understanding\IndexComprehension;
 use Pushery\SQLens\Catalog\Understanding\IndexPredicate;
+use Pushery\SQLens\Rules\Indexes\RedundantIndex;
 use Pushery\SQLens\Subjects\SchemaObject;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
@@ -71,6 +72,12 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *   survive it; and because they answer two questions — which indexes, and which of them belong
  *   together. An index absent from both is either unconditional, or alone under its condition, or
  *   carries a predicate shape the reading refuses. See {@see self::samePredicate()}.
+ * - `same_method_indexes` and `index_method_groups` — the same pair one attribute along, for the
+ *   indexes whose ACCESS METHOD is what kept them out of `comparable_indexes`: a GIN, a GiST, a
+ *   FULLTEXT. Grouped by method AND operator class, because inside one of those both cancel the way
+ *   a shared predicate does. ⚠️ What may be concluded inside such a group is WEAKER than inside a
+ *   predicate group — identity only, never a prefix — and that belongs to the rule rather than to
+ *   this projection; see {@see RedundantIndex}. See {@see self::accessMethodKey()}.
  * - `unique_null_treatment` — whether each unique index counts two NULLs as the same value. Three-
  *   valued by construction: an index absent from the list had the flag unread, which a rule must not
  *   confuse with either answer. See {@see self::nullTreatment()}.
@@ -136,11 +143,14 @@ final readonly class TableMembers
         $ownedSequences = [];
         $sequenceDefaults = [];
 
-        /** @var array{fk: array<string, list<SchemaObject>>, index: array<string, list<SchemaObject>>, primary: array<string, list<SchemaObject>>, unique: array<string, list<SchemaObject>>, comparable: array<string, list<SchemaObject>>, partial: array<string, list<SchemaObject>>} $members */
-        $members = ['fk' => [], 'index' => [], 'primary' => [], 'unique' => [], 'comparable' => [], 'partial' => []];
+        /** @var array{fk: array<string, list<SchemaObject>>, index: array<string, list<SchemaObject>>, primary: array<string, list<SchemaObject>>, unique: array<string, list<SchemaObject>>, comparable: array<string, list<SchemaObject>>, partial: array<string, list<SchemaObject>>, exotic: array<string, list<SchemaObject>>} $members */
+        $members = ['fk' => [], 'index' => [], 'primary' => [], 'unique' => [], 'comparable' => [], 'partial' => [], 'exotic' => []];
 
         /** @var array<string, string> $predicates index qualified name => its normalized predicate */
         $predicates = [];
+
+        /** @var array<string, string> $accessMethods index qualified name => its method and class */
+        $accessMethods = [];
 
         foreach ($objects as $object) {
             $parent = $object->parent ?? '';
@@ -260,6 +270,17 @@ final readonly class TableMembers
                     $members['partial'][$parent][] = $object;
                     $predicates[$object->qualifiedName] = $reading;
                 }
+
+                // An index whose ACCESS METHOD is what kept it out of `comparable` — a GIN, a GiST,
+                // a FULLTEXT. Same move as the line above, one attribute along: it is collected
+                // under the method it shares, for the one comparison that needs no knowledge of how
+                // that method searches. See {@see self::accessMethodKey()}.
+                $methodKey = self::accessMethodKey($object);
+
+                if ($methodKey !== null) {
+                    $members['exotic'][$parent][] = $object;
+                    $accessMethods[$object->qualifiedName] = $methodKey;
+                }
             }
         }
 
@@ -272,6 +293,8 @@ final readonly class TableMembers
         $comparable = self::encodeMembers($members['comparable'], $spelling);
         $sharedPredicate = self::samePredicate($members['partial'], $predicates);
         $samePredicateIndexes = self::encodeMembers($sharedPredicate['indexes'], $spelling);
+        $sharedMethod = self::universesBy($members['exotic'], $accessMethods);
+        $sameMethodIndexes = self::encodeMembers($sharedMethod['indexes'], $spelling);
 
         $edges = self::edges($foreignKeyEdges, $columnCollation, $spelling, skipUnknownLocal: true);
         // The same edges over TYPES, and the one flag between them is load-bearing. A column
@@ -309,6 +332,8 @@ final readonly class TableMembers
                 'payload_indexes' => self::encode($payload[$name] ?? []),
                 'same_predicate_indexes' => self::encode($samePredicateIndexes[$name] ?? []),
                 'index_predicate_groups' => self::encode($sharedPredicate['groups'][$name] ?? []),
+                'same_method_indexes' => self::encode($sameMethodIndexes[$name] ?? []),
+                'index_method_groups' => self::encode($sharedMethod['groups'][$name] ?? []),
                 'identity_columns' => self::encode($identity[$name] ?? []),
                 'sequence_owned_columns' => self::encode($ownedSequences[$name] ?? []),
                 'sequence_default_columns' => self::encode($sequenceDefaults[$name] ?? []),
@@ -617,6 +642,54 @@ final readonly class TableMembers
     }
 
     /**
+     * The access method and operator class this index groups under, or null when it does not group.
+     *
+     * ## Why a GIN index gets a universe and not a verdict
+     *
+     * `comparable_indexes` holds what may be compared against a b-tree's column list, and a GIN
+     * index is correctly absent from it: it answers a different question, and the prefix arithmetic
+     * that serves b-tree does not describe it. Measured on PostgreSQL 18.4 — a GIN index on
+     * `(tags, doc)` serves a query touching `doc` ALONE, with nothing said about `tags`, because
+     * multicolumn GIN matches any SUBSET of its columns rather than a leading run.
+     *
+     * That measurement is the reason this returns a group rather than admitting the index to the
+     * existing one. Inside the group the method cancels, exactly as a shared predicate does — but
+     * the arithmetic that survives is weaker, and the caller is the one that knows it: prefix is
+     * sound for GIN and wrong for an access method nobody here has measured, so only EQUALITY
+     * concludes anything. An extension can add an access method with any semantics it likes, and
+     * "two indexes of the same method, class and columns are the same index" holds for all of them.
+     *
+     * ## The operator class is part of the KEY, not a refusal
+     *
+     * `text_pattern_ops` serves `LIKE 'foo%'` and the default class does not, so two indexes on one
+     * column with different classes are two different indexes — which is why the class cannot be
+     * ignored. Inside one class it cancels like the method does. Measured on the same server: a GIN
+     * index over an array reports NO non-default class, because `array_ops` is gin's default, so the
+     * class stays orthogonal to the method rather than duplicating it.
+     *
+     * Null for everything a b-tree comparison already covers, and for every index whose reading was
+     * not complete enough to compare at all — see
+     * {@see IndexComprehension::comparableApartFromItsMethod()}, which is the same set of questions
+     * `of()` asks before it ever reaches the method.
+     */
+    private static function accessMethodKey(SchemaObject $index): ?string
+    {
+        $method = $index->getString('method');
+
+        if (IndexComprehension::comparesByPrefix($method)) {
+            return null;
+        }
+
+        if (! IndexComprehension::comparableApartFromItsMethod($index)) {
+            return null;
+        }
+
+        // The class joins the key rather than the method alone, so `doc jsonb_path_ops` and a
+        // default-class GIN on `doc` never land in one universe.
+        return $method.'|'.($index->getString('operator_classes') ?? '');
+    }
+
+    /**
      * The partial indexes that share a condition with another partial index on the same table.
      *
      * ## The one inference that holds without implication
@@ -652,22 +725,47 @@ final readonly class TableMembers
      */
     private static function samePredicate(array $partial, array $predicates): array
     {
+        return self::universesBy($partial, $predicates);
+    }
+
+    /**
+     * One index bucket split into comparison universes by a shared attribute.
+     *
+     * ## What a universe is, and why two different attributes build one the same way
+     *
+     * An attribute that makes an index incomparable IN GENERAL still cancels between two indexes
+     * that share it. A predicate does — two partial indexes under the same condition cover the same
+     * rows, so the condition drops out and the columns decide. An access method does too: two GIN
+     * indexes are not comparable against a b-tree, and they are perfectly comparable against each
+     * other. The grouping is identical in both cases; what differs is the attribute and, crucially,
+     * what the caller is then allowed to CONCLUDE inside a group — see the two readers in
+     * {@see RedundantIndex}, which use different arithmetic.
+     *
+     * A group of one is dropped, and that is not tidiness: a token in the projection that no
+     * comparison can use invites a reader to think something was compared.
+     *
+     * @param  array<string, list<SchemaObject>>  $bucket  table => the indexes eligible for grouping
+     * @param  array<string, string>  $keys  index qualified name => the attribute it groups on
+     * @return array{indexes: array<string, list<SchemaObject>>, groups: array<string, list<string>>}
+     */
+    private static function universesBy(array $bucket, array $keys): array
+    {
         $indexes = [];
         $groups = [];
 
-        foreach ($partial as $parent => $objects) {
-            $byPredicate = [];
+        foreach ($bucket as $parent => $objects) {
+            $byKey = [];
 
             foreach ($objects as $index) {
-                $byPredicate[$predicates[$index->qualifiedName] ?? ''][] = $index;
+                $byKey[$keys[$index->qualifiedName] ?? ''][] = $index;
             }
 
             // Sorted so the token a group gets depends on the schema and not on the order the
             // reader happened to walk it in.
-            ksort($byPredicate, SORT_STRING);
+            ksort($byKey, SORT_STRING);
             $token = 0;
 
-            foreach ($byPredicate as $members) {
+            foreach ($byKey as $members) {
                 if (count($members) < 2) {
                     continue;
                 }

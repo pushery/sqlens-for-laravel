@@ -8,6 +8,7 @@ use Pushery\SQLens\Audit\AuditOutcome;
 use Pushery\SQLens\Audit\AuditRuns;
 use Pushery\SQLens\Console\ExitCode;
 use Pushery\SQLens\Drivers\DriverResolutionFailure;
+use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Lint\LintOutcome;
 use Pushery\SQLens\Lint\LintRuns;
 use Pushery\SQLens\Reporting\RunContext;
@@ -95,11 +96,59 @@ final readonly class SecurityRunner
             // output by LOCATION, which is how a migration or a schema is read — and concatenating
             // two sorted lists is not a sorted list. A security report is triaged instead of read
             // top to bottom, so the aggregate carries its own order: worst first.
-            SecurityFindingOrder::sorted([...$audit->findings, ...$lint->findings, ...$analyse->findings]),
+            SecurityFindingOrder::sorted($this->carryingTheRun(
+                [...$audit->findings, ...$lint->findings, ...$analyse->findings],
+                $audit->context ?? $lint->context,
+            )),
             $audit->context,
             $audit->reached,
             $lint->reached,
             $analyse->reached,
+        );
+    }
+
+    /**
+     * Every finding carrying the profile and strict-tools setting this RUN had.
+     *
+     * ## The contradiction it removes
+     *
+     * A consumer read `"driver":"unknown"` and `"strict_tools":false` in the context of a
+     * `SEC.SKIPPED.NOTHING_CHECKED` finding, under a header that said `driver=pgsql` and
+     * `strict-tools=on`. Two of those three are the defect, and the third is not.
+     *
+     * The notices are built INSIDE `audit()` and `lint()`, at the moment that half failed — the
+     * other half has not run yet, so no profile is established and the values were literals. Here
+     * is the first point where an answer exists: one half may have reached a context even when the
+     * other did not, which is the same borrow `analyse()` above already makes.
+     *
+     * ## What does NOT travel, and why the driver is the third value
+     *
+     * `driver` stays as the notice set it. A finding saying "this half examined nothing" names no
+     * engine, and taking `pgsql` from the half that did run would attach it to a sentence that
+     * reads identically on MySQL. That is the argument `analyse()` makes for its own `unknown`,
+     * and it is why {@see SubjectContext::withRunFlags()} carries two fields rather than a whole
+     * context.
+     *
+     * ## When neither half reached one
+     *
+     * Nothing is stamped, and the notices keep the values they were built with. That is the honest
+     * answer rather than a worse one: a run where both live halves failed established no profile,
+     * and inventing one here would be the same defect pointing inward.
+     *
+     * @param  list<Finding>  $findings
+     * @return list<Finding>
+     */
+    private function carryingTheRun(array $findings, ?RunContext $context): array
+    {
+        if (! $context instanceof RunContext) {
+            return $findings;
+        }
+
+        return array_map(
+            static fn (Finding $finding): Finding => $finding->withContext(
+                $finding->context->withRunFlags($context->profile->value, $context->strictTools),
+            ),
+            $findings,
         );
     }
 

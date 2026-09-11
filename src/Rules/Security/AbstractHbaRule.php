@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Rules\Security;
 
 use Pushery\SQLens\Catalog\Objects\ReadabilityState;
 use Pushery\SQLens\Contracts\DeclaresJudgedObjectTypes;
+use Pushery\SQLens\Contracts\JudgesTheServerItRunsOn;
 use Pushery\SQLens\Findings\NotApplicableReason;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
@@ -51,8 +52,21 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * the rule, so `trust` over the network and `trust` on a Unix socket are two ids, not one id with a
  * conditional.
  */
-abstract class AbstractHbaRule extends AbstractSchemaObjectSecurityRule implements DeclaresJudgedObjectTypes
+abstract class AbstractHbaRule extends AbstractSchemaObjectSecurityRule implements DeclaresJudgedObjectTypes, JudgesTheServerItRunsOn
 {
+    /**
+     * The authentication file belongs to the server, and on a disposable one it belongs to whoever
+     * wrote the service block.
+     *
+     * This family produced four of the six blockers measured in the consumer report that asked for
+     * the declaration — `trust` on a container whose port nothing outside the job can reach. On a
+     * host somebody operates it is the most serious line this package can print, and it stays that.
+     */
+    public function serverSubjectJudged(): string
+    {
+        return "this server's host-based authentication file";
+    }
+
     /**
      * Two, and the second is not an oversight: the family judges the LINES, and one member also reads
      * the reading's own state off a role subject to report a reading that came back empty.

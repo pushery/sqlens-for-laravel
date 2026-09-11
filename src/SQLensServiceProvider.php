@@ -240,6 +240,12 @@ final class SQLensServiceProvider extends ServiceProvider
                     $app->make(Repository::class),
                     new ProductionConnectionDetector($app->make(Repository::class)),
                 ),
+                // Laravel's own migrations ledger, forwarded raw like every value above: the
+                // registry is the one place allowed to narrow it, and the two shapes this setting
+                // has are its business rather than the provider's. It is the framework's key, not
+                // one of ours -- the table it names is created by the framework whatever the
+                // application would prefer, which is exactly why a rule has to know it.
+                $app->make(Repository::class)->get('database.migrations'),
             ),
         );
 

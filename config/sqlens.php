@@ -790,6 +790,44 @@ return [
          * somebody wiring a least-privilege role at the end of a day.
          */
         'audit_connection' => null,
+
+        /*
+         * Whether the server this run examines OUTLIVES the run.
+         *
+         * 'persistent' — the shipped answer, and the safe one. Somebody deploys onto this server,
+         * operates it, and connects to it from outside whatever produced the report. Its
+         * authentication file, its transport security and the attributes of the role SQLens
+         * connects as are a deployment, and they are judged as one.
+         *
+         * 'disposable' — the pipeline creates this server and destroys it. A Woodpecker or GitHub
+         * Actions `postgres` service is the case: nothing outside the job can reach it, nothing in
+         * it survives the job, and its settings were chosen by whoever wrote the service block
+         * rather than by whoever will operate the database. `POSTGRES_USER: postgres` makes the
+         * connection role a superuser by construction, `ssl` is off because no wire leaves the
+         * container, and `trust` is what the image ships.
+         *
+         * Under 'disposable' the checks whose subject is the SERVER or the CONNECTING ROLE answer
+         * `not_applicable` with that reason, naming what went unjudged and pointing at
+         * `sqlens:predeploy` — the command that reads the same facts on the host that will actually
+         * be operated. Which rules those are is declared by the rules themselves, never by a prefix
+         * list here: `SEC.PRIV.ROLE_SUPERUSER` is an attribute of the connecting role and is
+         * withheld, while `SEC.PRIV.GRANT_TO_PUBLIC` is a grant on a table this project's own
+         * migrations created and reports exactly as it would anywhere.
+         *
+         * ⚠️ It withholds a verdict about the SERVER and about nothing else. Every finding about
+         * the SCHEMA — the thing the pipeline is there to judge, and the thing that will be
+         * deployed onto a real host — is unaffected. This is not a way to make a red run green; a
+         * declaration that could do that would be a different feature, and a worse one.
+         *
+         * There is no detection behind this and there deliberately is none: a container and a
+         * production server answer every query identically, and the difference is what somebody
+         * INTENDS. So it is declared, an absent declaration means 'persistent', and a value that is
+         * neither is a misconfiguration naming the legal set rather than a quiet fall back — the
+         * same contract every other named mode in this file holds to.
+         */
+        'server' => [
+            'lifetime' => 'persistent',
+        ],
         'min_severity' => 'high',
 
         /*
@@ -878,9 +916,14 @@ return [
          * same role, every SQL injection that reaches the database reaches it with DDL rights — and
          * a dropped table is a very different incident from a leaked row.
          *
-         * Leave both null when the application genuinely runs on one connection. That is a real
-         * answer rather than a missing one: SQLens then reports the state as a finding instead of
-         * guessing which of your connections was meant to be the safe one.
+         * Null is "nobody has said", and it reads that way: the check reports `undetermined` with
+         * the reason `not_configured`, because nothing here can tell an application that genuinely
+         * runs on one connection from one that never answered the question — and guessing which of
+         * your connections was meant to be the safe one is exactly what this package will not do.
+         *
+         * So SAY IT, even when the answer is "one connection": set both keys to the same name. That
+         * turns a shrug into a statement, the check judges it, and the finding tells you what it
+         * means — which is what the finding's own remediation asks for.
          *
          * https://docs.pushery.com/sqlens-for-laravel/rules/sec-priv-runtime-ddl/
          */
@@ -942,6 +985,21 @@ return [
             'mode' => 'listed',
             'tables' => [],
             'tenant_column' => 'tenant_id',
+
+            /*
+             * How separation is enforced, when it is not the database enforcing it.
+             *
+             * Required for `mode => 'application'` and null for every other mode. That mode is for
+             * the ordinary case row-level security has no answer for: the data belongs to a user or
+             * a tenant, and what keeps them apart is policies and scopes in the application rather
+             * than policies in PostgreSQL. `off` would say this database separates nothing, which
+             * is a different and false statement; the heuristic would report every table as a gap
+             * until RLS exists, which describes a plan rather than the state.
+             *
+             * The sentence you write here travels into the report, so write it for whoever reads
+             * the audit next: what enforces the separation, and where it lives.
+             */
+            'reason' => null,
         ],
 
         /*

@@ -12,6 +12,7 @@ use Pushery\SQLens\Contracts\DeclaresSecurityPosture;
 use Pushery\SQLens\Contracts\DerivesDowntimeClass;
 use Pushery\SQLens\Contracts\JudgesMigrationStatements;
 use Pushery\SQLens\Contracts\JudgesSchemaObjects;
+use Pushery\SQLens\Contracts\JudgesTheServerItRunsOn;
 use Pushery\SQLens\Contracts\ProvidesRemediation;
 use Pushery\SQLens\Contracts\ProvidesSchemaObjectRemediation;
 use Pushery\SQLens\Contracts\Rule;
@@ -113,6 +114,7 @@ final readonly class ApiSurface
         DerivesDowntimeClass::class,
         JudgesMigrationStatements::class,
         JudgesSchemaObjects::class,
+        JudgesTheServerItRunsOn::class,
         ProvidesRemediation::class,
         ProvidesSchemaObjectRemediation::class,
         Rule::class,

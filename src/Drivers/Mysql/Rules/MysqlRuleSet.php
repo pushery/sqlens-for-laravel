@@ -104,12 +104,12 @@ final readonly class MysqlRuleSet
      *
      * @param  array<string, mixed>  $expect  what the project stated it wants, from `sqlens.audit.expect`
      */
-    public static function shipped(string $projectRoot, array $expect = [], ?MoneyColumnDictionary $moneyColumns = null, ?int $unusedIndexMinDays = null, ?NamingConvention $naming = null, ?DocumentationPolicy $documentation = null): self
+    public static function shipped(string $projectRoot, array $expect = [], ?MoneyColumnDictionary $moneyColumns = null, ?int $unusedIndexMinDays = null, ?NamingConvention $naming = null, ?DocumentationPolicy $documentation = null, ?string $migrationsTable = null): self
     {
         $lowerCaseTableNames = $expect['lower_case_table_names'] ?? null;
 
         return new self([
-            new NarrowIntegerPrimaryKeyRule($projectRoot),
+            new NarrowIntegerPrimaryKeyRule($projectRoot, $migrationsTable ?? 'migrations'),
             new CharsetNotUtf8mb4Rule($projectRoot),
             new MixedCollationRule($projectRoot),
             new FloatForMoneyRule($projectRoot, $moneyColumns),

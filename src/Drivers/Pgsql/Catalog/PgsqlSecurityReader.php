@@ -378,8 +378,23 @@ final readonly class PgsqlSecurityReader implements SecurityReader
         // into the same empty list an unconfigured project produces, and from there nothing
         // downstream could tell the two apart — so a project that had done what the finding asked of
         // it got the finding again, at severity high, on every run.
-        if ($this->config->get('sqlens.security.rls.mode') === 'off') {
+        $mode = $this->config->get('sqlens.security.rls.mode');
+
+        if ($mode === 'off') {
             return RlsReading::declinedByConfig();
+        }
+
+        // The project answered that separation lives in the application. Read before the scope for
+        // the same reason `off` is: collecting first collapses it into the empty list an
+        // unconfigured project produces, and from there nothing downstream can tell an answer from
+        // a silence. The reason is guaranteed non-empty by the config validator, which refuses this
+        // mode without one -- the sentence IS the answer.
+        if ($mode === 'application') {
+            $reason = $this->config->get('sqlens.security.rls.reason');
+
+            if (is_string($reason) && trim($reason) !== '') {
+                return RlsReading::separatedInApplication(trim($reason));
+            }
         }
 
         $tables = $this->rlsScope();

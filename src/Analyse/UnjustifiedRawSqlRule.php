@@ -119,6 +119,11 @@ final readonly class UnjustifiedRawSqlRule implements Rule
         $sources = [
             RawSqlCallCollector::class => 'DB::',
             RawSqlConnectionCallCollector::class => '$connection->',
+            // The third spelling of the same decision, and the one a connector reaches for because
+            // no Laravel connection exists there yet. A consumer moved a statement onto the PDO
+            // underneath and the reason on it went stale, which is the wrong half to lose -- the
+            // statement had not gone anywhere.
+            RawSqlPdoCallCollector::class => '$pdo->',
         ];
 
         foreach ($sources as $collector => $prefix) {

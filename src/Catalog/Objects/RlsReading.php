@@ -62,6 +62,20 @@ final readonly class RlsReading
          * nonsense — declined AND configured — is unreachable by construction rather than by rule.
          */
         public bool $declined = false,
+        /**
+         * How separation is enforced, when the project answered that the database does not do it.
+         *
+         * The fourth state, and the one `declined` could not carry: `mode => off` says this database
+         * separates NOTHING, and `mode => application` says it separates in the application — two
+         * different statements, and only one of them is true of a project whose every row belongs to
+         * a user. Told to choose between them, a consumer picked the finding's own suggestion and
+         * configured something false about its database.
+         *
+         * A sentence rather than a flag, because it travels into the report: a reader of the audit
+         * sees what enforces the separation instead of an absence with a shrug beside it. The config
+         * validator refuses `application` without one, so an empty answer cannot reach here.
+         */
+        public ?string $applicationSeparation = null,
     ) {}
 
     /**
@@ -116,6 +130,19 @@ final readonly class RlsReading
     public static function declinedByConfig(): self
     {
         return new self([], CatalogCompleteness::Complete, [], false, true, true);
+    }
+
+    /**
+     * The project separates its tenants, and not in the database.
+     *
+     * Read nothing, like {@see self::declinedByConfig()}, and says something different: there policies
+     * in PostgreSQL are not how this problem is solved because there is no problem to solve here;
+     * here they are not how it is solved because the application solves it. The reason travels, so
+     * the report carries the project's own sentence rather than a category.
+     */
+    public static function separatedInApplication(string $reason): self
+    {
+        return new self([], CatalogCompleteness::Complete, [], false, true, true, $reason);
     }
 
     public function isComplete(): bool

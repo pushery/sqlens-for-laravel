@@ -2566,6 +2566,9 @@
         "Pushery\\SQLens\\Contracts\\JudgesSchemaObjects": {
             "judgeSchemaObject": "(Pushery\\SQLens\\Subjects\\SchemaObject $object): array"
         },
+        "Pushery\\SQLens\\Contracts\\JudgesTheServerItRunsOn": {
+            "serverSubjectJudged": "(): string"
+        },
         "Pushery\\SQLens\\Contracts\\ProvidesRemediation": {
             "remediationFor": "(Pushery\\SQLens\\Subjects\\MigrationStatementView $statement): ?Pushery\\SQLens\\Findings\\RemediationPayload"
         },

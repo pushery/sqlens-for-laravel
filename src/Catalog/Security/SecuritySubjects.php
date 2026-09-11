@@ -465,6 +465,10 @@ final readonly class SecuritySubjects
                 // that set the mode to `off` answered the question, and answering it must not produce
                 // the same line as never having been asked.
                 'rls_declined' => $rls->declined,
+                // …and WHY, when the answer was "the application separates them". A sentence rather
+                // than a fourth boolean: the rule quotes it, so the report carries the project's own
+                // words instead of a category nobody can act on.
+                'rls_application_separation' => $rls->applicationSeparation,
                 // The HBA reading's two states, on the same subject and for the same reason. A refused
                 // reading produces NO hba subjects, so a rule that had to say "this server's
                 // authentication rules could not be read" would have nothing to attach it to — and an

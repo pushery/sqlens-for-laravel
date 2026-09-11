@@ -92,7 +92,13 @@ final readonly class MysqlDriver implements Driver
          * convention beside it: two engines share one comment rule, and a rule that read
          * configuration would have a verdict its own tests cannot see.
          */
-        private ?DocumentationPolicy $documentation = null) {}
+        private ?DocumentationPolicy $documentation = null,
+        /**
+         * The application's `database.migrations.table`, so the one table Laravel creates for
+         * itself is not judged by a rule an application cannot act on. Null reads as Laravel's own
+         * default, which is what an unconfigured project has anyway.
+         */
+        private ?string $migrationsTable = null) {}
 
     public function key(): string
     {
@@ -129,7 +135,7 @@ final readonly class MysqlDriver implements Driver
     public function rules(): iterable
     {
         return [
-            ...MysqlRuleSet::shipped($this->projectRoot, $this->auditExpect, $this->moneyColumns, $this->unusedIndexMinDays, $this->naming, $this->documentation)->all(),
+            ...MysqlRuleSet::shipped($this->projectRoot, $this->auditExpect, $this->moneyColumns, $this->unusedIndexMinDays, $this->naming, $this->documentation, $this->migrationsTable)->all(),
             ...LifecycleRuleSet::forProjectRoot($this->projectRoot)->all(),
             // …and the security family, the same Core source the PostgreSQL driver composes. It is
             // registered here even though its only rule today has nothing to say on MySQL: the rule
