@@ -84,7 +84,7 @@ says where it stops.
 composer require pushery/sqlens-for-laravel
 ```
 
-PHP 8.4+, Laravel 13, PostgreSQL 18+ or MySQL 8.4+. The service provider registers
+PHP 8.4+, Laravel 12 or 13, PostgreSQL 18+ or MySQL 8.4+. The service provider registers
 itself through package discovery, and there is nothing to migrate: SQLens ships no
 tables and adds nothing to your schema.
 
