@@ -2,6 +2,14 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-09-11
+
+### Added
+
+- **SQLens installs on Laravel 12.** Every `illuminate/*` split asked for `^13.0`, and `symfony/console` and `symfony/process` for `^8.0`, so Composer refused the package on any Laravel 12 application, although nothing in it needs 13: its subject is the database, not the framework. The constraints are now `^12.0 || ^13.0` and `^7.0 || ^8.0`. The Symfony floor sits at the base of its major like every other entry here; Laravel 12's own components already require 7.2 or later, so the wider end admits nothing Laravel would not refuse first.
+
+  **What proves the Laravel 12 side is not the test suite, and that is stated rather than implied.** The suite's toolchain cannot be installed next to Laravel 12: Testbench 11 requires 13, and the rest of the dev dependencies do not resolve beside Testbench 10. The proof is `just framework-floors`, which requires the package into a fresh Laravel tree through a path repository, the way an application would, boots it there, checks that all eleven commands are registered, and lints a migration without opening a database connection: an index built on an existing table is reported as `PG.L2.INDEX_NOT_CONCURRENT`, and a migration that builds none is not. It passes on Laravel 12.69.2 and 13.31.0, and with `PROBE_LOWEST=1` on the oldest tree Composer will build for 12 today: 12.61.1 with Symfony 7.2, because every older 12.x release carries a security advisory and Composer refuses to load it. Nothing in this manifest keeps those releases out; the probe simply cannot install them. Separately, a Laravel 12.69.1 application ran `doctor`, `lint`, `audit`, `security`, `predeploy`, `postdeploy`, `drift` and `format` against PostgreSQL 18 on a copy of 0.9.1 with only these constraints widened, all without an error.
+
 ## [0.9.1] - 2026-09-10
 
 ### Changed
