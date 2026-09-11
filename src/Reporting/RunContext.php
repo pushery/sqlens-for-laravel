@@ -59,8 +59,20 @@ final readonly class RunContext
         // drifting apart again. Why each rule is missing is not lost with it: the
         // version gate and the statistics axis each report their own named
         // undetermined finding.
-        public int $activeRuleCount = 0,
-        public int $hiddenRuleCount = 0,
+        //
+        // ⚠️ NULL AND ZERO ARE DIFFERENT ANSWERS, and the difference is the whole reason this is
+        // nullable. `0` says the run selected rules and selected none -- the security command
+        // passes it deliberately, and its own comment says why. `null` says the run does not
+        // select rules AT ALL: `sqlens:predeploy` runs checks, so a rule count is not a number
+        // that is wrong there, it is a question that does not arise.
+        //
+        // Until this was nullable a consumer read `active-rules=0 hidden-rules=0` over seven
+        // predeploy results and had no way to tell which of the two it was. That is the same
+        // distinction the contracts page already draws for `evaluated_rules` one line below:
+        // `null` when the producing suite does not report it, `[]` when it really evaluated
+        // nothing.
+        public ?int $activeRuleCount = null,
+        public ?int $hiddenRuleCount = null,
         // The categories this run was narrowed to — the second, orthogonal filter
         // axis. Empty means "no filter": every category is active, exactly as an
         // empty `sqlens.categories` config means all. Reported so a run that was
@@ -503,8 +515,8 @@ final readonly class RunContext
      *     mode: string,
      *     profile: string,
      *     level: int,
-     *     active_rules: int,
-     *     hidden_rules: int,
+     *     active_rules: int|null,
+     *     hidden_rules: int|null,
      *     evaluated_rules: list<string>|null,
      *     session_timeouts: array<string, int|null>|null,
      *     check_timings: string|null,

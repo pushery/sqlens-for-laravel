@@ -118,7 +118,7 @@ final class DriverRegistry implements DebtStandingResolvers, SessionDefenses
      * @param  mixed  $uuidGeneratedBy  the raw `sqlens.audit.uuid_generated_by` value — `app`,
      *                                  `server`, or anything else, which reads as "not said".
      */
-    public function __construct(private readonly string $projectRoot = '', mixed $pgsqlExpectedTimeouts = null, mixed $pgsqlMaxLocksPerTransaction = null, mixed $auditExpect = null, mixed $uuidGeneratedBy = null, mixed $moneyColumns = null, mixed $unusedIndex = null, mixed $naming = null, mixed $documentationConfig = null, private readonly ?EolRepository $advisories = null, private readonly ?string $today = null, private readonly ?UnencryptedColumnEvaluator $privacyColumns = null, private readonly ?RunEnvironment $environment = null)
+    public function __construct(private readonly string $projectRoot = '', mixed $pgsqlExpectedTimeouts = null, mixed $pgsqlMaxLocksPerTransaction = null, mixed $auditExpect = null, mixed $uuidGeneratedBy = null, mixed $moneyColumns = null, mixed $unusedIndex = null, mixed $naming = null, mixed $documentationConfig = null, private readonly ?EolRepository $advisories = null, private readonly ?string $today = null, private readonly ?UnencryptedColumnEvaluator $privacyColumns = null, private readonly ?RunEnvironment $environment = null, mixed $migrationsTable = null)
     {
         // Built ONCE here and handed to both drivers, rather than each rule reading the config for
         // itself. A rule that read configuration would be a rule whose verdict depends on something
@@ -163,7 +163,14 @@ final class DriverRegistry implements DebtStandingResolvers, SessionDefenses
                 ? $unusedIndexDays
                 : null;
 
-        $this->register('pgsql', fn (): Driver => new PgsqlDriver($this->projectRoot, $expectedTimeouts, $maxLocks, $uuid, $dictionary, $days, $this->advisories, $this->today, $this->environment, $this->privacyColumns, $convention, $documentation));
+        // Laravel's own migrations table, and the shape is two: `database.migrations` is either
+        // the name itself (the historical form) or an array carrying it under `table` (Laravel 11
+        // and later). Anything else -- absent, a number, a list -- reads as "not said", and the
+        // rules fall back to the framework's default rather than exempting a table nobody named.
+        $ledger = is_array($migrationsTable) ? ($migrationsTable['table'] ?? null) : $migrationsTable;
+        $ledger = is_string($ledger) && trim($ledger) !== '' ? trim($ledger) : null;
+
+        $this->register('pgsql', fn (): Driver => new PgsqlDriver($this->projectRoot, $expectedTimeouts, $maxLocks, $uuid, $dictionary, $days, $this->advisories, $this->today, $this->environment, $this->privacyColumns, $convention, $documentation, $ledger));
         // Narrowed to string keys rather than asserted: `is_array()` admits a LIST, and the
         // driver's contract is a keyed map. A numerically-keyed entry under `audit.expect` names no
         // setting and cannot mean anything, so dropping it is the honest reading — and the config
@@ -176,7 +183,7 @@ final class DriverRegistry implements DebtStandingResolvers, SessionDefenses
             }
         }
 
-        $this->register('mysql', fn (): Driver => new MysqlDriver($this->projectRoot, $expect, $dictionary, $days, $this->advisories, $this->today, $this->environment, $this->privacyColumns, $convention, $documentation));
+        $this->register('mysql', fn (): Driver => new MysqlDriver($this->projectRoot, $expect, $dictionary, $days, $this->advisories, $this->today, $this->environment, $this->privacyColumns, $convention, $documentation, $ledger));
     }
 
     /**

@@ -1099,6 +1099,13 @@ final readonly class AuditRunner implements AuditRuns
             // one finding and acts on it never saw the header, and the role is part of what that
             // finding means rather than context for the run around it.
             instanceRole: $target->role()->value,
+            // …and for the same reason, the project's declaration about what this server IS. Read
+            // once here rather than by each rule: a rule that reached for the container would be a
+            // rule no unit test could put in a state, which is the argument every other run fact on
+            // this context was moved here by.
+            serverLifetime: ServerLifetime::declared(
+                is_string($lifetime = $this->config->get('sqlens.security.server.lifetime')) ? $lifetime : null,
+            )->value,
         );
     }
 
@@ -1569,6 +1576,7 @@ final readonly class AuditRunner implements AuditRuns
             $skips,
             max(0, $this->auditRuleCount($target) - $activeRules),
             $evaluatedRuleIds,
+            ToolDiagnostic::versionsOf($diagnostics),
         );
 
         // A baseline entry that matched nothing is ALWAYS carried into the result above; this is the
@@ -1623,6 +1631,7 @@ final readonly class AuditRunner implements AuditRuns
      * @param  list<string>  $activeCategories  the scope this run was narrowed to; empty means all
      * @param  list<ReportedSkip>  $skips
      * @param  list<string>|null  $evaluatedRuleIds  which rules got a subject; null when no dispatch happened
+     * @param  array<string, string>  $toolVersions  the tools this run located; empty when it never looked
      */
     private function runContext(
         int $level,
@@ -1633,6 +1642,7 @@ final readonly class AuditRunner implements AuditRuns
         array $skips = [],
         int $hiddenRules = 0,
         ?array $evaluatedRuleIds = null,
+        array $toolVersions = [],
     ): RunContext {
         $profile = $this->config->get('sqlens.profile');
         // Named apart from the package version below, which used to reuse this name. It worked
@@ -1656,7 +1666,15 @@ final readonly class AuditRunner implements AuditRuns
             serverVersions: $target instanceof InstanceTarget
                 ? $this->reportedVersions($target, $serverVersion, $this->config->get('sqlens.assume_server_version'))
                 : [],
-            toolVersions: [],
+            // The tools this run LOCATED, not a placeholder. It was a hard-coded empty array, and
+            // an audit that found squawk and pgls, reasoned with both and reported their findings
+            // still printed `tools=none` over them — a report wrong about itself rather than about
+            // the database, which makes every line under it doubtful.
+            //
+            // Empty on the paths that never looked: a refusal that stopped before tool discovery
+            // has no tools to name, and inventing a list there would be the same defect pointing
+            // the other way.
+            toolVersions: $toolVersions,
             // Static: an audit reads a catalog and captures no migration, so neither capture mode
             // describes it. Saying "pretend" would claim a migration was simulated.
             mode: ReportingCaptureMode::Static,
@@ -1702,6 +1720,17 @@ final readonly class AuditRunner implements AuditRuns
             // indistinguishable from a complete one, whether the scope came from the flag or, as of
             // now, from `sqlens.categories`.
             activeCategories: $activeCategories,
+            // The maturity tiers this run ADMITTED, read from the same class and the same key that
+            // narrowed the rule list fifty lines into selection -- so the header cannot disagree
+            // with the selection it describes. It was left at the default empty list, which the
+            // console prints as `stability=none`: two runs of the identical configuration said
+            // `none` from the audit and `stable` from predeploy, and a reader comparing them has no
+            // way to tell which one is lying about the other.
+            //
+            // Reading the config twice rather than threading the gate down is deliberate:
+            // StabilityGate is pure and built from one key, so the two reads cannot disagree, and
+            // threading it would put a parameter on every path that never selects a rule at all.
+            admittedStability: StabilityGate::fromConfig($this->config->get('sqlens.stability'))->admittedNames(),
             instance: $target instanceof InstanceTarget ? $this->reportedInstance($target) : null,
             skips: $skips,
             // One line: a standalone `: null,` is a line coverage can never mark as executed.

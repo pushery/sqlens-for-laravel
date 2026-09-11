@@ -1234,15 +1234,9 @@ final readonly class LintRunner implements LintRuns
      */
     private function toolVersions(array $diagnostics): array
     {
-        $versions = [];
-
-        foreach ($diagnostics as $diagnostic) {
-            if ($diagnostic->isAvailable() && is_string($diagnostic->version)) {
-                $versions[$diagnostic->tool->name()] = $diagnostic->version;
-            }
-        }
-
-        return $versions;
+        // The derivation moved to ToolDiagnostic, so the audit route can reach it too. This stays as
+        // the named call site because the argument list at buildContext() reads better for it.
+        return ToolDiagnostic::versionsOf($diagnostics);
     }
 
     /**

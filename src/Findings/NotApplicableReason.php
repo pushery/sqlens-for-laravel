@@ -60,13 +60,52 @@ enum NotApplicableReason: string
      */
     case DeclinedByProject = 'declined_by_project';
 
+    /**
+     * Nothing is pending, so there is no change for this check to judge the state against.
+     *
+     * The deploy-context checks are the case: `lock_timeout = 0` matters BECAUSE a migration is
+     * about to run behind whatever is holding a lock, and with nothing pending that sentence is
+     * false. A consumer ran the gate after a deploy and read three findings arguing from a
+     * migration in the same report whose first line said none had been read — a gate that refutes
+     * its own premise teaches a reader to take the next real red for noise.
+     *
+     * The state is still reported, with its value; what is withheld is the verdict.
+     */
+    case NothingPending = 'nothing_pending';
+
+    /**
+     * The project declared that this server does not outlive the run, so its own configuration is a
+     * fixture rather than a deployment.
+     *
+     * The case a pipeline needs, and the one that had a lane deciding which of this package's blocks
+     * count. Measured before it existed: `sqlens:audit --profile=ci` against a freshly migrated
+     * schema ended at exit 3 on four `SEC.AUTH.HBA_TRUST`, one `SEC.PRIV.ROLE_SUPERUSER` and one
+     * `SEC.CFG.TLS_DISABLED` — every one of them about a container the job creates and destroys,
+     * none of them about the application the job is there to judge.
+     *
+     * ⚠️ **It withholds a verdict about the SERVER and nothing else.** Every schema finding reports
+     * unchanged, because the schema is what gets deployed onto a real host and the declaration says
+     * nothing about it. And the withheld checks are not dropped: they are what `sqlens:predeploy`
+     * runs against the target host, where the same facts are real — so the finding names that
+     * command rather than merely going quiet.
+     *
+     * Not {@see DeclinedByProject}, though both come from configuration, and the difference is worth
+     * the second case: that one says "this construct is not how we solve the problem", an answer
+     * about the DESIGN that holds wherever the code runs. This one says "the thing you are looking
+     * at is not the thing that will be operated", an answer about THIS RUN — the identical project,
+     * audited on its target host, gets the verdict back.
+     */
+    case ServerIsDisposable = 'server_is_disposable';
+
     /** What a reader is told, in the report, about what was not checked here. */
     public function description(): string
     {
         return match ($this) {
             self::EngineLacksConstruct => 'This engine has no such concept, so there is nothing here for the check to look at; the rule is reported rather than left silent, because silence reads as a pass.',
             self::ProviderEnforced => 'The platform decides this above the server, so the server\'s own setting cannot answer the question; what the provider enforces is outside what this run can read.',
+            self::NothingPending => 'No migration is pending in this run, so there is no change for this to be judged against; the setting and its value are reported, and the verdict is not — the same run would judge it the moment something is actually about to run.',
             self::DeclinedByProject => 'The project declared in its configuration that this construct is not how it solves the problem, so there is nothing here to judge; reported rather than left silent, because a question that was answered should read differently from one that was never asked.',
+            self::ServerIsDisposable => 'The project declared that this server does not outlive the run, so its own configuration describes a fixture rather than a deployment; the schema is judged exactly as it would be anywhere, and the server facts this withholds are the ones sqlens:predeploy reads on the host that will actually be operated.',
         };
     }
 }

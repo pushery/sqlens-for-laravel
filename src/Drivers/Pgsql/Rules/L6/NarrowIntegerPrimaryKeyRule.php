@@ -44,6 +44,17 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
 final class NarrowIntegerPrimaryKeyRule extends AbstractCatalogRule implements DeclaresJudgedObjectTypes
 {
     /**
+     * @param  string  $migrationsTable  the application's `database.migrations.table`, handed down
+     *                                   rather than read here, like every other setting a rule
+     *                                   judges by. The shipped default is Laravel's own name, so
+     *                                   a driver built without it still exempts the ledger.
+     */
+    public function __construct(string $projectRoot, private readonly string $migrationsTable = 'migrations')
+    {
+        parent::__construct($projectRoot);
+    }
+
+    /**
      * Tables only — a run that read none produced no subject for this rule, and the report has to be
      * able to say so rather than let the silence read as a clean answer.
      *
@@ -82,6 +93,22 @@ final class NarrowIntegerPrimaryKeyRule extends AbstractCatalogRule implements D
             return [];
         }
 
+        // The framework's own migrations table is exempt, and it is the only table this rule
+        // treats that way. Laravel creates it with `increments('id')` from
+        // DatabaseMigrationRepository on every `migrate:install`, so every Laravel application on
+        // PostgreSQL carries an integer key there — and none of them can act on the advice: the
+        // table belongs to the framework, not to the application, and rewriting it would mean
+        // writing against the framework's own default on a table the application does not own.
+        // A finding nobody can resolve is noise in every report forever.
+        //
+        // Matched on the UNQUALIFIED name, because that is the shape the setting has: Laravel's
+        // `database.migrations.table` names a table, never a schema. A second table of that name
+        // in another schema is exempt too, and that is the honest trade for not inventing a
+        // schema the setting does not carry.
+        if (NarrowIntegerPrimaryKey::isFrameworkMigrationsTable($object, $this->migrationsTable)) {
+            return [];
+        }
+
         $narrow = NarrowIntegerPrimaryKey::of($object);
 
         if ($narrow === null) {
@@ -89,7 +116,7 @@ final class NarrowIntegerPrimaryKeyRule extends AbstractCatalogRule implements D
         }
 
         return [RuleVerdict::flag(sprintf(
-            '%s has a %s primary key on %s. A signed integer runs out at 2,147,483,647 and a smallint at '
+            '%s has %s %s primary key on %s. A signed integer runs out at 2,147,483,647 and a smallint at '
             .'32,767 — with no warning on the way there: the first symptom is an INSERT failing on a table '
             .'that has worked for years. The fix is due exactly when it costs most, because widening the key '
             .'rewrites the table and every index over it, under a lock, on your largest table. Chosen now it '
@@ -97,6 +124,7 @@ final class NarrowIntegerPrimaryKeyRule extends AbstractCatalogRule implements D
             .'in the same change — they live on other tables, so this finding cannot list them, and a key '
             .'widened without them stops matching.',
             $object->qualifiedName,
+            NarrowIntegerPrimaryKey::article($narrow['type']),
             $narrow['type'],
             $narrow['column'],
         ))];

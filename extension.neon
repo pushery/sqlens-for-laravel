@@ -122,6 +122,13 @@ services:
         class: Pushery\SQLens\Analyse\RawSqlConnectionCallCollector
         tags:
             - phpstan.collector
+    # The same decision reached on a bare PDO handle, which is what a connector has
+    # before a Laravel connection exists. Its receiver fence is stricter than the one above --
+    # see the class docblock for why a name-based fallback is deliberately absent.
+    -
+        class: Pushery\SQLens\Analyse\RawSqlPdoCallCollector
+        tags:
+            - phpstan.collector
     -
         class: Pushery\SQLens\Analyse\RawSqlExpressionCollector
         tags:

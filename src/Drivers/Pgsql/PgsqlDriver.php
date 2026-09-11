@@ -91,7 +91,13 @@ final readonly class PgsqlDriver implements Driver
          * convention beside it: two engines share one comment rule, and a rule that read
          * configuration would have a verdict its own tests cannot see.
          */
-        private ?DocumentationPolicy $documentation = null) {}
+        private ?DocumentationPolicy $documentation = null,
+        /**
+         * The application's `database.migrations.table`, so the one table Laravel creates for
+         * itself is not judged by a rule an application cannot act on. Null reads as Laravel's own
+         * default, which is what an unconfigured project has anyway.
+         */
+        private ?string $migrationsTable = null) {}
 
     public function key(): string
     {
@@ -124,7 +130,7 @@ final readonly class PgsqlDriver implements Driver
         // appended from their single Core source — the same composition the fixture suite
         // judges against, so production and the tests run the very same objects.
         return [
-            ...PgsqlRuleSet::forProjectRoot($this->projectRoot, $this->expectedTimeouts, $this->maxLocksPerTransaction, $this->uuidGeneratedBy, $this->moneyColumns, $this->unusedIndexMinDays, $this->naming, $this->documentation)->all(),
+            ...PgsqlRuleSet::forProjectRoot($this->projectRoot, $this->expectedTimeouts, $this->maxLocksPerTransaction, $this->uuidGeneratedBy, $this->moneyColumns, $this->unusedIndexMinDays, $this->naming, $this->documentation, $this->migrationsTable)->all(),
             ...LifecycleRuleSet::forProjectRoot($this->projectRoot)->all(),
             // …and the security family, from the same kind of single Core source. It is appended here
             // rather than folded into the pack above because a security rule is weighed on the

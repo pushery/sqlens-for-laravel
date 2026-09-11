@@ -69,6 +69,7 @@ final readonly class StaleRawSqlReasonRule implements Rule
     private const array CALL_SITES = [
         RawSqlCallCollector::class,
         RawSqlConnectionCallCollector::class,
+        RawSqlPdoCallCollector::class,
         RawSqlFragmentCollector::class,
         RawSqlExpressionCollector::class,
         DynamicIdentifierCollector::class,

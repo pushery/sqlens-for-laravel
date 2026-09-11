@@ -279,7 +279,7 @@ final readonly class ConsoleReporter implements Reporter
 
         // The level gate's effect: the active level, and how many rules it admitted
         // versus hid — a hidden rule is a counted, visible choice, never a silent pass.
-        $out->writeln('  level<='.$context->level.' active-rules='.$context->activeRuleCount.' hidden-rules='.$context->hiddenRuleCount.' evaluated-rules='.$this->evaluatedRules($context));
+        $out->writeln('  level<='.$context->level.' active-rules='.$this->ruleCount($context->activeRuleCount).' hidden-rules='.$this->ruleCount($context->hiddenRuleCount).' evaluated-rules='.$this->evaluatedRules($context));
 
         // The severity axis, on its OWN line — the two gates (level = strictness
         // appetite, severity = risk) are orthogonal, so the header keeps them visibly
@@ -718,6 +718,19 @@ final readonly class ConsoleReporter implements Reporter
         $evaluated = $context->sortedEvaluatedRuleIds();
 
         return $evaluated === null ? 'n/a' : (string) count($evaluated);
+    }
+
+    /**
+     * A rule count, or `n/a` for a run that does not select rules at all.
+     *
+     * The same spelling {@see evaluatedRules()} above already uses, and for the same reason: `0`
+     * and "this question does not arise" are two different answers, and a reader of
+     * `sqlens:predeploy` -- which runs checks rather than rules -- got the first over seven
+     * results with no way to tell.
+     */
+    private function ruleCount(?int $count): string
+    {
+        return $count === null ? 'n/a' : (string) $count;
     }
 
     /** @param  array<array-key, int>  $counts */

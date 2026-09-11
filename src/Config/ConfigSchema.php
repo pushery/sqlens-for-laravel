@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Config;
 
 use BackedEnum;
+use Pushery\SQLens\Audit\ServerLifetime;
 use Pushery\SQLens\Capture\PreScan\IndirectCallDetector;
 use Pushery\SQLens\Capture\PreScan\SideEffectFacadeDetector;
 use Pushery\SQLens\Catalog\PrefixScope;
@@ -144,8 +145,9 @@ final readonly class ConfigSchema
         'audit.documentation' => ['require_table_comments', 'require_column_comments', 'exempt'],
         'audit.expect' => ['lower_case_table_names'],
         'pgsql' => ['expected_timeouts', 'max_locks_per_transaction'],
-        'security' => ['audit_connection', 'min_severity', 'include_vendor_migrations', 'advisories', 'runtime_connection', 'migration_connection', 'analyse', 'rls', 'privacy'],
-        'security.rls' => ['mode', 'tables', 'tenant_column'],
+        'security' => ['audit_connection', 'server', 'min_severity', 'include_vendor_migrations', 'advisories', 'runtime_connection', 'migration_connection', 'analyse', 'rls', 'privacy'],
+        'security.server' => ['lifetime'],
+        'security.rls' => ['mode', 'tables', 'tenant_column', 'reason'],
         'security.privacy' => ['enabled', 'dictionary', 'extra_terms', 'ignore_columns'],
         'security.analyse' => ['mode', 'result_path'],
         'security.advisories' => ['path', 'source'],
@@ -501,7 +503,9 @@ final readonly class ConfigSchema
             'security.advisories' => 'an array with the keys: path, source',
             'security.advisories.source' => 'an https URL serving a document in this package\'s advisory format, or null — no default ships',
             'security.advisories.path' => 'an absolute path to an end-of-life data file, or null to use the published or bundled copy',
-            'security.rls' => 'an array with the keys: mode, tables, tenant_column',
+            'security.rls' => 'an array with the keys: mode, tables, tenant_column, reason',
+            'security.server' => 'an array with the key: lifetime',
+            'security.server.lifetime' => "one of: 'persistent' (somebody deploys onto this server and operates it, so its own configuration is judged) or 'disposable' (the job creates and destroys it, so the checks whose subject is the server or the connecting role answer not_applicable and point at sqlens:predeploy). Declared, never detected: a container and a production server answer every query identically",
             'security.privacy' => 'an array with the keys: enabled, dictionary, extra_terms, ignore_columns',
             'security.analyse' => 'an array with the keys: mode, result_path',
             'security.analyse.mode' => 'one of: '.AnalyseMode::names().'. `off` is the shipped state and a real answer rather than an omission — the run reports that the injection half examined nothing, instead of returning an empty list that reads as a clean bill of health. `read` takes a result PHPStan has already written',
@@ -510,7 +514,8 @@ final readonly class ConfigSchema
             'security.privacy.dictionary' => 'a repository-relative path to a dictionary replacing the bundled one, or null to use the bundled one (absolute is refused: it pins a configuration to one machine)',
             'security.privacy.extra_terms' => 'a list of terms to ADD to whichever dictionary is in force, or an empty list',
             'security.privacy.ignore_columns' => 'a list of QUALIFIED column names this project has looked at and decided about, or an empty list — unqualified would silence a column somebody never considered',
-            'security.rls.mode' => "one of: 'listed' (only the tables you name), 'heuristic' (every table carrying the tenant column), 'off'",
+            'security.rls.mode' => "one of: 'listed' (only the tables you name), 'heuristic' (every table carrying the tenant column), 'off' (this database separates nothing), 'application' (it separates, in the application rather than in the database — `reason` then says how)",
+            'security.rls.reason' => 'a sentence saying how separation is enforced, required when the mode is `application` and null otherwise — the report carries it, so a reader sees the decision rather than a gap',
             'security.rls.tables' => 'a list of table names, qualified or not, or an empty list',
             'security.rls.tenant_column' => 'a column name, or null when the heuristic is not used',
             'security.runtime_connection' => 'a connection name from config/database.php, or null when the application uses one connection for everything',
@@ -985,9 +990,18 @@ final readonly class ConfigSchema
             'security.audit_connection', 'security.runtime_connection', 'security.migration_connection', 'preflight.connection' => $value === null || (is_string($value) && $value !== '')
                 ? []
                 : [ConfigViolation::wrongType($path, $expected, $value)],
-            'security.rls.mode' => is_string($value) && in_array($value, ['listed', 'heuristic', 'off'], true)
+            'security.rls.mode' => is_string($value) && in_array($value, ['listed', 'heuristic', 'off', 'application'], true)
                 ? []
                 : [ConfigViolation::outOfRange($path, $expected, $value)],
+            // Read off the enum rather than repeated here, for the reason the comment below
+            // this block already gives about a second copy going stale quietly.
+            'security.server.lifetime' => $this->enumLeaf($path, $expected, ServerLifetime::class, $value),
+            // Null or a sentence. Whether it is REQUIRED depends on the mode beside it, and that is
+            // a question about the section rather than about this key — the validator asks it where
+            // both values are in hand.
+            'security.rls.reason' => $value === null || (is_string($value) && trim($value) !== '')
+                ? []
+                : [ConfigViolation::wrongType($path, $expected, $value)],
             // Read off the enum rather than repeated as a literal list. A second copy would go stale
             // the day a mode is added, and it would go stale QUIETLY — the config would refuse a
             // value the code accepts, which reads to a user as their own typo.

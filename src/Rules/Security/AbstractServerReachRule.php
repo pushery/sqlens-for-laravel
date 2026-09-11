@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Rules\Security;
 
 use Pushery\SQLens\Contracts\DeclaresJudgedObjectTypes;
+use Pushery\SQLens\Contracts\JudgesTheServerItRunsOn;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleVerdict;
 use Pushery\SQLens\Rules\Suite;
@@ -41,7 +42,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * grant is a tool nobody trusts twice — so the exclusion is part of the rule rather than a note in
  * the docs.
  */
-abstract class AbstractServerReachRule extends AbstractSchemaObjectSecurityRule implements DeclaresJudgedObjectTypes
+abstract class AbstractServerReachRule extends AbstractSchemaObjectSecurityRule implements DeclaresJudgedObjectTypes, JudgesTheServerItRunsOn
 {
     /**
      * Grants only — the family judges how far a privilege reaches, and a privilege is held by a grant.
@@ -51,6 +52,20 @@ abstract class AbstractServerReachRule extends AbstractSchemaObjectSecurityRule 
     public function judgedObjectTypes(): array
     {
         return [SchemaObjectType::Grant];
+    }
+
+    /**
+     * The name says it: a privilege that reaches past the DATABASE to the server is a fact about the
+     * server, whoever holds it.
+     *
+     * ⚠️ And this is the family that shows why the declaration belongs to the rule rather than to a
+     * prefix list. Its ids sit under `SEC.PRIV.*` alongside {@see GrantToPublicRule}, which judges a
+     * grant on a table this project's own migrations created — as real inside a container as on any
+     * host, and not withheld here. Same prefix, opposite answer.
+     */
+    public function serverSubjectJudged(): string
+    {
+        return 'a privilege that reaches the whole server rather than this database';
     }
 
     public function level(): Level

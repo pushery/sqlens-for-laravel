@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Subjects;
 
+use Pushery\SQLens\Audit\ServerLifetime;
+use Pushery\SQLens\Contracts\JudgesTheServerItRunsOn;
 use Pushery\SQLens\Engine\ResolvedServerVersion;
 use Pushery\SQLens\Rules\ServerVersion;
 use Pushery\SQLens\Security\OriginBinding;
@@ -83,6 +85,28 @@ final readonly class SubjectContext
          * is the honest answer rather than a silent pass.
          */
         public ?PathBinding $pathBinding = null,
+        /**
+         * Whether the server this run read from outlives the run — `persistent` or `disposable`.
+         *
+         * A RUN fact for the same reason `instanceRole` above is one, and a string for the same
+         * reason too: the enum lives in the audit suite, and this class is the driver-neutral core
+         * every rule sees. The audit stamps the value; the core carries it.
+         *
+         * It changes what a SERVER finding means, not whether one is reported. A pipeline's database
+         * is a container the job creates and destroys, so its authentication file, its transport
+         * security and the attributes of its connection role describe a fixture — while the identical
+         * facts on a host somebody operates are among the most serious things this package reports.
+         * Which rules that applies to is declared by the rules themselves, through
+         * {@see JudgesTheServerItRunsOn}; everything about the schema is
+         * judged here exactly as it would be anywhere.
+         *
+         * Never null and never undetermined, unlike the role beside it: there is no cheap fact that
+         * tells a container from a production server — both answer every query identically — so this
+         * is DECLARED, and an absent declaration is `persistent`. That direction is the only safe
+         * one: reading silence as "probably a container" would turn the strictest checks in the
+         * package off for every project that never heard of the key.
+         */
+        public string $serverLifetime = ServerLifetime::Persistent->value,
     ) {
         $this->serverVersion = $resolvedServerVersion?->version;
     }
@@ -97,7 +121,7 @@ final readonly class SubjectContext
      */
     public function withResolvedServerVersion(?ResolvedServerVersion $resolvedServerVersion): self
     {
-        return new self($this->driver, $this->profile, $this->strictTools, $resolvedServerVersion, $this->connection, $this->instanceRole, $this->pathBinding);
+        return new self($this->driver, $this->profile, $this->strictTools, $resolvedServerVersion, $this->connection, $this->instanceRole, $this->pathBinding, $this->serverLifetime);
     }
 
     /**
@@ -109,7 +133,7 @@ final readonly class SubjectContext
      */
     public function withConnection(string $connection): self
     {
-        return new self($this->driver, $this->profile, $this->strictTools, $this->resolvedServerVersion, $connection, $this->instanceRole, $this->pathBinding);
+        return new self($this->driver, $this->profile, $this->strictTools, $this->resolvedServerVersion, $connection, $this->instanceRole, $this->pathBinding, $this->serverLifetime);
     }
 
     /**
@@ -121,7 +145,26 @@ final readonly class SubjectContext
      */
     public function withInstanceRole(?string $instanceRole): self
     {
-        return new self($this->driver, $this->profile, $this->strictTools, $this->resolvedServerVersion, $this->connection, $instanceRole, $this->pathBinding);
+        return new self($this->driver, $this->profile, $this->strictTools, $this->resolvedServerVersion, $this->connection, $instanceRole, $this->pathBinding, $this->serverLifetime);
+    }
+
+    /**
+     * The same context, carrying the run's OWN profile and strict-tools setting.
+     *
+     * For a finding built before either was known. The security suite's "this half examined
+     * nothing" notices are the case: they are produced INSIDE the audit or lint half, at a moment
+     * when that half has just failed and the other has not run yet — so the only profile available
+     * to them is a placeholder, and a placeholder in a notice whose whole purpose is to speak
+     * honestly about the run is a contradiction a consumer reads in the JSON.
+     *
+     * The driver is deliberately NOT taken along. A notice saying "this half examined nothing"
+     * names no engine, and borrowing `pgsql` from the half that did run would attach it to a
+     * sentence that would read identically on MySQL — the same argument the analyse half already
+     * makes for its own `unknown`.
+     */
+    public function withRunFlags(string $profile, bool $strictTools): self
+    {
+        return new self($this->driver, $profile, $strictTools, $this->resolvedServerVersion, $this->connection, $this->instanceRole, $this->pathBinding, $this->serverLifetime);
     }
 
     /**

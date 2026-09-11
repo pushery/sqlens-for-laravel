@@ -67,9 +67,20 @@ enum ConstraintShape
             return null;
         }
 
-        // Locks nothing live only when every table this constraint touches is born in this
-        // migration — for a foreign key that means the referenced table too.
-        if (TouchedTables::allCreatedHere($statement)) {
+        // Two carve-outs, and they answer two different questions.
+        //
+        // The first: nothing live is locked at all, because every table this constraint names was
+        // born in this migration. True whatever rows the migration put into them — nobody is
+        // waiting on a table that did not exist a moment ago.
+        //
+        // The second: the altered table is born EMPTY here, so the validating scan that separates
+        // this form from `NOT VALID` has nothing to scan. The referenced table may well be live,
+        // and its lock is real — but it is the same lock the recommended form takes, held for the
+        // same instant, so the advice would split one migration into two and shorten nothing. That
+        // case is the ordinary `Schema::create()` with `foreignId()->constrained()`, which used to
+        // make every new related table red from level 2 up; a consumer read it back to us after
+        // seeing the index rule stay silent on the very same migration.
+        if (TouchedTables::allCreatedHere($statement) || TouchedTables::subjectBornEmptyHere($statement)) {
             return null;
         }
 

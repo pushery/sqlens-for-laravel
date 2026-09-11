@@ -149,10 +149,20 @@ enum SkipReason: string
      * to be machine-indistinguishable. The audit flattened every incomplete reading onto
      * `catalog_read_failed`, and the mapping that knew better sat in a class nobody called.
      *
-     * That distinction is worth the most to the people who hit it most: a managed database — RDS,
-     * Cloud SQL, Neon — withholds catalog privileges by design, and `managed_database_restriction`
-     * is the reason that exists to say so. Told `catalog_read_failed`, an operator goes looking for
-     * a fault where there is a platform.
+     * That distinction is worth the most to the people who hit it most: told `catalog_read_failed`,
+     * an operator goes looking for a fault where there is none.
+     *
+     * A refused read is a missing privilege wherever it happens. It used to map to
+     * `managed_database_restriction`, which reads as "your platform withholds this, there is
+     * nothing to do" — and a consumer met that sentence on a self-hosted PostgreSQL on the app
+     * server's own loopback, four times in one report, for privileges a single GRANT would have
+     * given (`pg_read_all_settings`, `pg_read_all_stats`). In the same run the identical lack was
+     * called `missing_privilege` elsewhere, which is the accurate name: what is missing is a
+     * privilege, and whether it can be granted is the platform's answer rather than this reading's.
+     * The sentence the reader gets names both the grant and that case.
+     *
+     * `managed_database_restriction` keeps every case that really is the platform deciding above
+     * the server — a topology a managed provider imposes, a host it will not disclose.
      *
      * `unexpected_error` keeps the catch-all deliberately: an error nobody anticipated is exactly
      * what a named reason cannot describe, and inventing a specific one would be a worse answer
@@ -161,7 +171,7 @@ enum SkipReason: string
     public function undeterminedReason(): UndeterminedReason
     {
         return match ($this) {
-            self::InsufficientPrivilege => UndeterminedReason::ManagedDatabaseRestriction,
+            self::InsufficientPrivilege => UndeterminedReason::MissingPrivilege,
             self::NotReadable => UndeterminedReason::StructurallyNotApplicable,
             self::BudgetExceeded => UndeterminedReason::CatalogReadBudgetExceeded,
             self::PrefixMatchedNothing => UndeterminedReason::ConfiguredPrefixMatchedNothing,

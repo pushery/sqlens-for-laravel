@@ -69,6 +69,7 @@ final readonly class PgsqlVirginTemplateBuilder
      *
      * @throws ShadowProvisioningUndetermined when the dump is unreadable or unusable, or the name is taken
      */
+    #[RawSql(reason: 'replays the project\'s own schema dump into a freshly created database, the same way the MySQL provisioner does -- one established path rather than a second one. The text is a file of DDL statements, which no builder has a verb for, and a bad statement becomes the throwable this method catches before dropping the half-built database')]
     public function build(): VirginTemplate
     {
         $sql = $this->readDump();

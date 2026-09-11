@@ -39,15 +39,21 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  *    FK or CHECK already marked `NOT VALID` does; firing on it would cry wolf on the
  *    very fix this rule recommends.
  *
- * **The same-migration exception, correctly scoped.** A constraint added to a table
- * the migration just created locks nothing live — but for a foreign key that holds
- * only when the REFERENCED table is fresh too. An FK from a new table to an existing,
- * live one still locks that existing one, which is precisely the incident above. So
- * the exception applies only when EVERY table the statement touches was created in
- * this migration, read from the classified targets rather than the SQL text — through
- * {@see TouchedTables}, the one reading of that predicate, which
- * {@see ForeignKeyWithoutIndexRule} shares for a
- * different reason.
+ * **The same-migration exceptions, and there are two.** A constraint added to a table
+ * the migration just created locks nothing live, so a statement whose tables are all
+ * new is beneath notice. The second is narrower and is what the incident above turns
+ * on: this form differs from `NOT VALID` in exactly one thing, the scan of rows
+ * ALREADY in the altered table. A table born empty in this migration has none, so the
+ * locks — including the one on a live referenced table — are taken and released
+ * identically either way, and the advice would split one migration into two without
+ * shortening anything. `Schema::create()` with `foreignId()->constrained()` is that
+ * shape, and it was red from level 2 up until a consumer read it back to us.
+ *
+ * Born empty means created here, not created from a query, and not written into
+ * earlier in the same migration — the create-then-backfill shape keeps its finding,
+ * because there the scan is real. Both predicates are read from the classified targets
+ * rather than the SQL text, through {@see TouchedTables}, the one reading of them,
+ * which {@see ForeignKeyWithoutIndexRule} shares for a different reason.
  *
  * **The classification lives in {@see ConstraintShape}, not here.** Which of the two
  * remediations applies decides both the WORDING of this finding and the SEQUENCE the

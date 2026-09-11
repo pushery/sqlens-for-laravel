@@ -107,7 +107,7 @@ final readonly class PgsqlRuleSet
      * the shipped values, so the driver passes the project's configured ones and the
      * fixture suite gets the strict defaults without wiring config.
      */
-    public static function forProjectRoot(string $projectRoot, ?ExpectedTimeouts $expectedTimeouts = null, int $maxLocksPerTransaction = 1, ?string $uuidGeneratedBy = null, ?MoneyColumnDictionary $moneyColumns = null, ?int $unusedIndexMinDays = null, ?NamingConvention $naming = null, ?DocumentationPolicy $documentation = null): self
+    public static function forProjectRoot(string $projectRoot, ?ExpectedTimeouts $expectedTimeouts = null, int $maxLocksPerTransaction = 1, ?string $uuidGeneratedBy = null, ?MoneyColumnDictionary $moneyColumns = null, ?int $unusedIndexMinDays = null, ?NamingConvention $naming = null, ?DocumentationPolicy $documentation = null, ?string $migrationsTable = null): self
     {
         $expectedTimeouts ??= ExpectedTimeouts::all();
 
@@ -139,7 +139,7 @@ final readonly class PgsqlRuleSet
             new NullableForeignKeyInUniqueRule($projectRoot),
             new CollationVersionMismatchRule($projectRoot),
             new JsonNotJsonbRule($projectRoot),
-            new NarrowIntegerPrimaryKeyRule($projectRoot),
+            new NarrowIntegerPrimaryKeyRule($projectRoot, $migrationsTable ?? 'migrations'),
             new SerialNotIdentityRule($projectRoot),
             new TimestampWithoutTimeZoneRule($projectRoot),
             new UuidV4PrimaryKeyRule($projectRoot, $uuidGeneratedBy),

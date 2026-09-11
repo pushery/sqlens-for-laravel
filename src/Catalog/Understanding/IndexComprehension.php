@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Catalog\Understanding;
 
 use Pushery\SQLens\Catalog\CatalogSkip;
 use Pushery\SQLens\Catalog\SkipReason;
+use Pushery\SQLens\Catalog\TableMembers;
 use Pushery\SQLens\Subjects\SchemaObject;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
@@ -25,10 +26,16 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * - **A partial index** carries a predicate, and `(email) WHERE note IS NOT NULL` does not cover
  *   what `(email)` covers. v1 does not compare predicates — a deliberate limit, not a gap — so the
  *   only honest answer about redundancy here is that there isn't one.
- * - **An expression index** indexes `lower(email)`, not `email`. A reader that saw the column list
- *   would call it a duplicate of `(email)` and be wrong in the direction that loses an index.
+ * - **An expression index** indexes `lower(email)`, not `email` — and this one was narrowed after it
+ *   was measured. The fear is a reader that sees the COLUMN and calls the index a duplicate of
+ *   `(email)`; the PostgreSQL reading does not see the column, it sees `lower(email)`, because it
+ *   asks `pg_get_indexdef()` per key position. So the refusal now covers the three ways the
+ *   expression fails to ARRIVE rather than the fact that there is one — see
+ *   {@see self::expressionLostOnTheWay()}.
  * - **A method other than b-tree** answers different questions entirely. A GIN index over an array
  *   column is not a slower b-tree; the redundancy question is only meaningful inside one method.
+ *   Incomparable here means incomparable against a b-tree's column list — not incomparable against
+ *   another index of its own kind, which is a narrower question the projection now asks separately.
  * - **A non-default operator class** changes what the index answers: `text_pattern_ops` serves
  *   `LIKE 'foo%'` and the default class does not. Two indexes on the same column with different
  *   classes are two different indexes. It is read AFTER the method, because a class only decides
@@ -96,7 +103,13 @@ final readonly class IndexComprehension
         $expression = $index->getString('expression');
 
         if ($expression !== null && $expression !== '') {
-            return new self(false, 'expression index — the indexed value is not the column: '.$expression);
+            $lost = self::expressionLostOnTheWay($index, $expression);
+
+            // Carried intact, so the comparison is against the expression rather than against the
+            // column underneath it, and there is nothing left to refuse. See the method below.
+            if ($lost !== null) {
+                return new self(false, $lost);
+            }
         }
 
         // The METHOD before the operator class, and the order is the finding rather than a tidy-up.
@@ -138,6 +151,157 @@ final readonly class IndexComprehension
         }
 
         return self::complete();
+    }
+
+    /**
+     * Whether every comprehension question EXCEPT the access method and its class is answered yes.
+     *
+     * The two left out are the two that can be made to cancel: an index is compared against others
+     * of its own method and class, where both drop out of the question. Everything else here is a
+     * gap that no grouping repairs — a predicate this cannot read, an expression that did not arrive,
+     * a MySQL prefix-length key whose column list lies about what it indexes, and an index the server
+     * itself marked invalid, which the planner ignores and which must never be offered as a cover.
+     *
+     * Deliberately NOT `! isFullyUnderstood()` plus a reason-string comparison. Reading which arm of
+     * `of()` fired out of its sentence would make the projection depend on prose somebody will
+     * reword, and the whole point of that sentence is that it can be reworded.
+     */
+    public static function comparableApartFromItsMethod(SchemaObject $index): bool
+    {
+        if ($index->type !== SchemaObjectType::Index) {
+            return false;
+        }
+
+        if ($index->getBool('valid') === false || $index->getBool('prefixed_columns') === true) {
+            return false;
+        }
+
+        $predicate = $index->getString('predicate');
+
+        if ($predicate !== null && $predicate !== '') {
+            return false;
+        }
+
+        $expression = $index->getString('expression');
+
+        return $expression === null
+            || $expression === ''
+            || self::expressionLostOnTheWay($index, $expression) === null;
+    }
+
+    /**
+     * Whether a redundancy question inside this access method may be answered by a LEFT PREFIX.
+     *
+     * B-tree alone, and a method nobody named counts as one — an engine that does not report the
+     * access method must not have every index treated as exotic by a field it never fills.
+     *
+     * Public because the grouping in {@see TableMembers} asks the same
+     * question from the other side: an index this returns false for is not incomparable, it is
+     * comparable only against indexes of its own method. One fact, one owner, two readers.
+     */
+    public static function comparesByPrefix(?string $method): bool
+    {
+        return $method === null || $method === '' || in_array($method, self::COMPARABLE_METHODS, true);
+    }
+
+    /**
+     * Why this expression index cannot be compared after all, or null when it can be.
+     *
+     * ## The blanket refusal was too wide, and the measurement says by how much
+     *
+     * It was written against a reader that sees the COLUMN — one that would call `(lower(email))` a
+     * duplicate of `(email)` and drop the wrong one. That is the right fear about the wrong reader.
+     * The PostgreSQL reading asks `pg_get_indexdef()` per key position, which yields the expression
+     * itself, so `(lower(email))` arrives spelled `lower(email)` and compares against `(email)` as
+     * the different thing it is. Measured on 18.4, and the server normalizes the spelling on the way
+     * out: `LOWER(Email)` and `lower(email)` both come back as `lower(email)`, so two indexes
+     * written differently for the same expression are recognizably the same index without this
+     * package normalizing anything.
+     *
+     * What that leaves is not a general doubt but three specific ways the expression fails to arrive
+     * intact, each of which really does make the comparison meaningless:
+     *
+     * - **It never reached the key columns.** MySQL's `information_schema` reports a functional index
+     *   with a null `COLUMN_NAME`, and the reading records the expression beside the index rather
+     *   than inside its column list. So `(lower(a))` and `(lower(b))` would both arrive as an EMPTY
+     *   list and compare equal, and a functional index would look like a duplicate of a plain one.
+     *   This is the arm that keeps the widening PostgreSQL-only without a driver name in it.
+     * - **It carries the character that separates two indexes.** The projection is flat
+     *   `name(cols); name(cols)`, so an expression containing `;` — measured, `(email || ';' || note)`
+     *   is a legal index — takes its index's NAME apart, not just its columns.
+     * - **It carries the character that separates two key positions.** `COALESCE(email, note)` is one
+     *   key position that arrives as two, `COALESCE(email` and `note)`, and neither is a thing any
+     *   arithmetic downstream may treat as a column.
+     *
+     * ⚠️ **The obvious test for the first one — does the expression text appear among the key
+     * columns — is WRONG, and it took a real reading to show it.** The two facts come from two
+     * different deparsers, and on PostgreSQL 18.4 they disagree: `pg_get_expr(indexprs)` renders
+     * `lower((display_name)::text)` where `pg_get_indexdef()` per position renders
+     * `lower(display_name::text)`. A string comparison therefore fails on every expression carrying
+     * a cast, and the widening would have shipped doing nothing. What is asked instead is whether an
+     * expression is VISIBLE in the list at all, beside the driver's own declaration that it dropped
+     * one.
+     *
+     * The last two are not detected by looking for the character in the expression either, and that
+     * is the same class of subtlety: the reading joins several expressions with the same comma, so
+     * `(lower(a), upper(b))` is indistinguishable from `(coalesce(a, b))` by counting separators. It
+     * is detected by asking whether every key position that comes out is a COMPLETE one — see
+     * {@see self::isOneKeyPosition()}.
+     */
+    private static function expressionLostOnTheWay(SchemaObject $index, string $expression): ?string
+    {
+        $keyColumns = $index->getString('key_columns') ?? '';
+        $tokens = explode(',', $keyColumns);
+
+        // Two ways of establishing the same thing, and both are wanted. The flag is the reading's
+        // own statement that it put the expression somewhere else; the search is the fail-closed
+        // half, for a future driver that drops one without saying so. Measured on 18.4 over five
+        // shapes — a cast, a concatenation, a negation, a JSON arrow and a function call — every
+        // deparsed expression carries a parenthesis, either the call's own or the pair PostgreSQL
+        // wraps a bare expression in. An unquoted column name never can.
+        if ($index->getBool('functional') === true || ! self::anExpressionIsVisibleAmong($tokens)) {
+            return 'expression index — the expression is recorded beside the index rather than among its key columns, so comparing this index would compare the columns it does NOT index: '.$expression;
+        }
+
+        if (str_contains($keyColumns, ';')) {
+            return 'expression index — the expression contains the character that separates one index from the next, so it cannot be carried without taking the index apart: '.$expression;
+        }
+
+        foreach ($tokens as $token) {
+            if (! self::isOneKeyPosition($token)) {
+                return 'expression index — the expression spans the character that separates one key position from the next, so it arrives as pieces that are not key positions: '.$expression;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Whether at least one of these key positions is an expression rather than a column name.
+     *
+     * @param  list<string>  $tokens
+     */
+    private static function anExpressionIsVisibleAmong(array $tokens): bool
+    {
+        return array_any($tokens, fn (string $token): bool => str_contains($token, '('));
+    }
+
+    /**
+     * Whether this token is a WHOLE key position rather than a piece of one.
+     *
+     * Balance, on both the parentheses and the double quotes, and nothing cleverer: a complete
+     * expression closes everything it opens, and a piece of one cut at a comma does not. It is the
+     * property the arithmetic downstream actually needs — every token it compares has to be one key
+     * position — rather than a guess about which expressions are safe.
+     *
+     * The quotes are here for the same reason and catch a different case: PostgreSQL allows a column
+     * literally named `a,b`, which `pg_get_indexdef()` renders as `"a,b"` and the projection splits
+     * into `"a` and `b"`. Neither carries an even number of quotes.
+     */
+    private static function isOneKeyPosition(string $token): bool
+    {
+        return substr_count($token, '(') === substr_count($token, ')')
+            && substr_count($token, '"') % 2 === 0;
     }
 
     /**

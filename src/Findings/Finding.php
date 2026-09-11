@@ -142,6 +142,7 @@ final readonly class Finding
         ?string $remediationRefusal = null,
         ?DebtContext $debt = null,
         bool $clearRemediation = false,
+        ?SubjectContext $context = null,
     ): self {
         return new self(
             $this->ruleId,
@@ -153,7 +154,7 @@ final readonly class Finding
             $this->level,
             $this->stability,
             $this->documentationUrl,
-            $this->context,
+            $context ?? $this->context,
             $severity ?? $this->severity,
             $downtimeClass ?? $this->downtimeClass,
             $statistics ?? $this->statistics,
@@ -367,6 +368,24 @@ final readonly class Finding
     public function withStatistics(StatisticsContext $statistics): self
     {
         return $this->copy(statistics: $statistics);
+    }
+
+    /**
+     * The same finding, carrying a context the run established after the finding was built.
+     *
+     * ⚠️ The narrow case, and it is narrow on purpose. Almost every finding is born with the
+     * context of the subject it judged, and replacing that would be a report describing the wrong
+     * thing. This exists for a finding that has no subject: the security suite's "this half
+     * examined nothing" notices are produced INSIDE a half that has just failed, at a moment when
+     * the other half has not run and no profile is established -- so they carry a placeholder,
+     * which a consumer then reads in the JSON beside a header saying something else.
+     *
+     * Paired with {@see SubjectContext::withRunFlags()}, which is what keeps it narrow: the driver
+     * does not travel, so a notice cannot pick up an engine it never judged.
+     */
+    public function withContext(SubjectContext $context): self
+    {
+        return $this->copy(context: $context);
     }
 
     /**

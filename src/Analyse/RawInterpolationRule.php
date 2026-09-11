@@ -97,7 +97,7 @@ final class RawInterpolationRule implements Rule
         // An annotation is at the call site, carries the sentence, and covers what it sits on.
         $justified = JustificationCoverage::interpolation($node);
 
-        foreach ([RawSqlCallCollector::class, RawSqlFragmentCollector::class, RawSqlConnectionCallCollector::class, RawSqlExpressionCollector::class] as $collector) {
+        foreach ([RawSqlCallCollector::class, RawSqlFragmentCollector::class, RawSqlConnectionCallCollector::class, RawSqlPdoCallCollector::class, RawSqlExpressionCollector::class] as $collector) {
             foreach ($node->get($collector) as $file => $calls) {
                 foreach ($calls as $call) {
                     if ($call['signal'] !== ParametrizationSignal::Interpolated->value) {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Rules\Indexes;
 
+use Closure;
 use Pushery\SQLens\Catalog\TableMembers;
 use Pushery\SQLens\Catalog\Understanding\IndexComprehension;
 use Pushery\SQLens\Rules\Coverage\ForeignKeyIndexCoverage;
@@ -94,24 +95,69 @@ final readonly class RedundantIndex
             $redundant = [...$redundant, ...self::within($group, $protected)];
         }
 
+        // The same universes one attribute along — a group of GIN indexes, of GiST indexes, of
+        // FULLTEXT indexes. They are kept in their own loop because what may be CONCLUDED inside
+        // one is weaker: only an identical column list, never a prefix. See self::identicalWithin().
+        foreach (self::methodGroups($table) as $group) {
+            $redundant = [...$redundant, ...self::identicalWithin($group, $protected)];
+        }
+
         ksort($redundant);
 
         return $redundant;
     }
 
     /**
-     * The redundant indexes inside one comparison universe.
+     * The redundant indexes inside one comparison universe, judged by LEFT PREFIX.
      *
      * A universe is a set of indexes that cover the same rows as each other — every unconditional
      * comparable index, or one group of partial indexes carrying the same condition. Whether the
      * membership was earned by having no predicate or by sharing one is settled before this runs;
      * here they are simply column lists.
      *
+     * Every member of such a universe is a b-tree, which is what makes the prefix relation a
+     * statement about coverage rather than about ordering. {@see self::identicalWithin()} is the
+     * same sweep for a universe where that is not true.
+     *
      * @param  array<string, list<string>>  $universe
      * @param  list<string>  $protected
      * @return array<string, string>
      */
     private static function within(array $universe, array $protected): array
+    {
+        return self::pairsIn($universe, $protected, self::covers(...));
+    }
+
+    /**
+     * The redundant indexes inside a universe where only IDENTITY concludes anything.
+     *
+     * The members share an access method and an operator class and nothing else is known about how
+     * that method searches — so the pair that may be reported is the pair with the SAME column list,
+     * which is the same index written twice. A prefix here would be a claim about a structure this
+     * package has not measured, made in the direction that tells somebody to drop an index.
+     *
+     * @param  array<string, list<string>>  $universe
+     * @param  list<string>  $protected
+     * @return array<string, string>
+     */
+    private static function identicalWithin(array $universe, array $protected): array
+    {
+        return self::pairsIn($universe, $protected, self::isTheSameIndex(...));
+    }
+
+    /**
+     * One sweep over a universe, pairing each candidate with the first index that supersedes it.
+     *
+     * The sweep is shared and the JUDGMENT is passed in, which is the arrangement that matters: the
+     * bookkeeping — skip the protected, skip the empty, stop at the first cover, report deterministic
+     * pairs — is identical for every universe, and the arithmetic is exactly what is not.
+     *
+     * @param  array<string, list<string>>  $universe
+     * @param  list<string>  $protected
+     * @param  Closure(list<string>, list<string>, string, string): bool  $supersedes
+     * @return array<string, string>
+     */
+    private static function pairsIn(array $universe, array $protected, Closure $supersedes): array
     {
         $redundant = [];
 
@@ -126,7 +172,7 @@ final readonly class RedundantIndex
                 if ($cover === $candidate) {
                     continue;
                 }
-                if (! self::covers($columns, $coverColumns, $candidate, (string) $cover)) {
+                if (! $supersedes($columns, $coverColumns, (string) $candidate, (string) $cover)) {
                     continue;
                 }
                 $redundant[(string) $candidate] = (string) $cover;
@@ -155,8 +201,55 @@ final readonly class RedundantIndex
      */
     private static function predicateGroups(SchemaObject $table): array
     {
-        $columns = ForeignKeyIndexCoverage::parse($table->getString('same_predicate_indexes') ?? '');
-        $tokens = ForeignKeyIndexCoverage::parse($table->getString('index_predicate_groups') ?? '');
+        return self::universes($table, 'same_predicate_indexes', 'index_predicate_groups');
+    }
+
+    /**
+     * The indexes of this table that share an ACCESS METHOD and operator class, one set per pair.
+     *
+     * ## What the group buys, and the line it does not cross
+     *
+     * A GIN index is not comparable against a b-tree, and that stays true. It is comparable against
+     * another GIN index of the same operator class — and the only thing this rule concludes there is
+     * that an IDENTICAL column list means the same index twice. Nothing about coverage, nothing
+     * about prefixes: the caller {@see self::identicalWithin()} is the weaker arithmetic, and it is
+     * a separate method precisely so the stronger one cannot be reached from here by accident.
+     *
+     * ## Why not prefixes, when PostgreSQL would allow more
+     *
+     * Measured on 18.4: a GIN index on `(tags, doc)` serves a query touching `doc` alone, so GIN
+     * coverage is a SUBSET relation and the left prefix used above understates it. Both relations
+     * would be sound for GIN. Neither is knowable for an access method an extension brings with it,
+     * and this rule advises somebody to DROP an index — the direction where being wrong costs a
+     * sequential scan on production. Identity is the one claim that holds whatever the method does
+     * with its columns.
+     *
+     * The grouping itself is done by {@see TableMembers}, which also decides what never enters a
+     * group: a b-tree, an index whose reading was incomplete, one the server marked invalid, and one
+     * alone under its method.
+     *
+     * @return list<array<string, list<string>>>
+     */
+    private static function methodGroups(SchemaObject $table): array
+    {
+        return self::universes($table, 'same_method_indexes', 'index_method_groups');
+    }
+
+    /**
+     * One projection pair read back into comparison universes.
+     *
+     * Both groupings encode the same way — a member list and a parallel token list, joined by index
+     * name — because both answer the same question about a different attribute. An index named in
+     * one and not the other is dropped rather than guessed at.
+     *
+     * @param  string  $memberAttribute  the `name(cols)` projection of the grouped indexes
+     * @param  string  $tokenAttribute  the `name(gN)` projection saying which group each is in
+     * @return list<array<string, list<string>>>
+     */
+    private static function universes(SchemaObject $table, string $memberAttribute, string $tokenAttribute): array
+    {
+        $columns = ForeignKeyIndexCoverage::parse($table->getString($memberAttribute) ?? '');
+        $tokens = ForeignKeyIndexCoverage::parse($table->getString($tokenAttribute) ?? '');
         $grouped = [];
 
         foreach ($tokens as $index => $token) {
@@ -202,6 +295,22 @@ final readonly class RedundantIndex
         // Identical lists: report the later NAME against the earlier, so a pair produces one
         // finding rather than two mutually-accusing ones, and always the same one.
         return count($candidate) < count($cover) || $candidateName > $coverName;
+    }
+
+    /**
+     * Whether these two are the SAME index written twice — the only claim a shared method supports.
+     *
+     * Equal lists, in order, and the tie broken by name exactly as above so one finding comes out of
+     * a pair instead of two. Order is required rather than ignored: this cannot know whether the
+     * method treats `(a, b)` and `(b, a)` alike, and two indexes it cannot prove identical are two
+     * indexes.
+     *
+     * @param  list<string>  $candidate
+     * @param  list<string>  $cover
+     */
+    private static function isTheSameIndex(array $candidate, array $cover, string $candidateName, string $coverName): bool
+    {
+        return $candidate === $cover && $candidateName > $coverName;
     }
 
     /**

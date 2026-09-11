@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Rules\Security;
 use Pushery\SQLens\Catalog\Objects\ReadabilityState;
 use Pushery\SQLens\Catalog\Objects\RoleAttribute;
 use Pushery\SQLens\Contracts\DeclaresJudgedObjectTypes;
+use Pushery\SQLens\Contracts\JudgesTheServerItRunsOn;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Rules\RuleVerdict;
 use Pushery\SQLens\Rules\Suite;
@@ -33,7 +34,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *   attributes" are the same sentence to a reader who cannot tell them apart, and only one is good
  *   news.
  */
-abstract class AbstractRoleAttributeRule extends AbstractSchemaObjectSecurityRule implements DeclaresJudgedObjectTypes
+abstract class AbstractRoleAttributeRule extends AbstractSchemaObjectSecurityRule implements DeclaresJudgedObjectTypes, JudgesTheServerItRunsOn
 {
     /**
      * Accounts only, by definition: the family is named for the attribute it reads off one.
@@ -43,6 +44,19 @@ abstract class AbstractRoleAttributeRule extends AbstractSchemaObjectSecurityRul
     public function judgedObjectTypes(): array
     {
         return [SchemaObjectType::Role];
+    }
+
+    /**
+     * The connecting role's attributes are a property of the SERVER, not of the schema.
+     *
+     * `connection_role` above already narrows this family to the one account the audit authenticated
+     * as, and on a container that account is whatever the service block named — `POSTGRES_USER:
+     * postgres` in every Woodpecker lane of this fleet, which is a superuser by construction. The
+     * same attribute on a role somebody deploys with is one of the most serious things here.
+     */
+    public function serverSubjectJudged(): string
+    {
+        return 'the attributes of the role this audit connects as';
     }
 
     /** @return list<Suite> */

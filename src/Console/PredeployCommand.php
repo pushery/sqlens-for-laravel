@@ -38,9 +38,11 @@ use Symfony\Component\Console\Output\ConsoleOutputInterface;
  */
 final class PredeployCommand extends Command
 {
+    use ResolvesProfile;
+
     protected $signature = 'sqlens:predeploy
         {--connection= : The database connection to check; defaults to the resolved preflight connection}
-        {--profile=predeploy : The environment profile — predeploy is the default here, and it is the paranoid one}
+        {--profile= : The environment profile — local, ci or predeploy. Unset, this command uses predeploy; SQLENS_PROFILE and a configured profile still win over that}
         {--format= : The report format — console, json, github, sarif, or agent (defaults to the configured format)}
         {--budget= : The whole run\'s time budget in milliseconds; the default is configured}
         {--allow-undetermined : Proceed when a check could not answer. Fail-closed is the default, and this is the deliberate way out}';
@@ -55,9 +57,28 @@ final class PredeployCommand extends Command
         $requested = $this->option('connection');
         $budget = $this->option('budget');
 
+        // The same resolution every other suite command uses -- flag over SQLENS_PROFILE over the
+        // configured profile -- with `predeploy` underneath as this command's own default rather
+        // than as an option default.
+        //
+        // AS AN OPTION DEFAULT IT WAS ALWAYS THE FLAG, and that had two consequences. The
+        // environment could not speak: `SQLENS_PROFILE=ci sqlens:predeploy` ran as predeploy, with
+        // nothing saying so. And the name never became the SETTINGS: this command did not resolve
+        // a profile at all, so the run announced `profile=predeploy` in its header while gating
+        // with whatever the base config said. A consumer measured the second half on a production
+        // host -- twelve `high` findings, none of them reaching the exit code, because the
+        // severity floor was still the lenient one.
+        $profile = $this->resolveProfile($config, 'predeploy');
+
+        if (! $profile->isValid()) {
+            $this->outputErrorLine($this->profileRejectionMessage($profile));
+
+            return ExitCode::Misconfiguration->value;
+        }
+
         $outcome = $preflight->run(
             connection: is_string($requested) && $requested !== '' ? $requested : null,
-            profile: is_string($profile = $this->option('profile')) ? $profile : null,
+            profile: $profile->profile,
             budgetMs: is_string($budget) && ctype_digit($budget) ? (int) $budget : null,
         );
 

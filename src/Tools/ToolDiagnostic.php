@@ -28,6 +28,34 @@ final readonly class ToolDiagnostic
         return $this->resolution->isAvailable();
     }
 
+    /**
+     * The header's tool line, derived from a run's own diagnostics.
+     *
+     * Here rather than in each runner, and that is the whole point of moving it: the lint route had
+     * this and the audit route had a hard-coded empty array, so an audit that located squawk and
+     * pgls, reasoned with both and reported their findings printed `tools=none` over them. A reader
+     * takes that to mean the external rules did not run, which makes every line under it doubtful —
+     * and the report was wrong about itself rather than about the database.
+     *
+     * The sentence on {@see isAvailable()} above already said where the version belongs; it just had
+     * no single place that put it there.
+     *
+     * @param  list<self>  $diagnostics
+     * @return array<string, string>
+     */
+    public static function versionsOf(array $diagnostics): array
+    {
+        $versions = [];
+
+        foreach ($diagnostics as $diagnostic) {
+            if ($diagnostic->isAvailable() && is_string($diagnostic->version)) {
+                $versions[$diagnostic->tool->name()] = $diagnostic->version;
+            }
+        }
+
+        return $versions;
+    }
+
     /** A fixable absence that a strict run must treat as an error. */
     public function failsStrict(): bool
     {

@@ -30,7 +30,7 @@ trait ResolvesProfile
      * turn an invalid one into a misconfiguration; a valid one has already been
      * written to config by the time this returns.
      */
-    private function resolveProfile(Repository $config): ProfileSelection
+    private function resolveProfile(Repository $config, ?string $commandDefault = null): ProfileSelection
     {
         $flag = $this->option('profile');
         $env = getenv('SQLENS_PROFILE');
@@ -40,6 +40,9 @@ trait ResolvesProfile
             is_string($flag) ? $flag : null,
             $env === false ? null : $env,
             is_string($configured) ? $configured : null,
+            // Below the three user-set sources, and only a command that exists for one place
+            // passes one -- see the selector.
+            $commandDefault,
         );
 
         if ($selection->isValid()) {

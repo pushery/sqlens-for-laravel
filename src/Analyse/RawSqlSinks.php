@@ -167,6 +167,28 @@ final readonly class RawSqlSinks
     ];
 
     /**
+     * The three methods a bare PDO handle offers for running a statement.
+     *
+     * ⚠️ THESE ARE NOT IN `STATEMENT_SINKS`, AND THAT SEPARATION IS THE WHOLE POINT. Every name in
+     * that list is evidence on its own or close to it — nobody writes `->unprepared()` on anything
+     * but a connection. `prepare`, `query` and `exec` are the opposite: a repository, a cache, an
+     * HTTP client and a template engine may all declare them. Putting them in the same list would
+     * make the fence around an unresolved receiver ({@see CONNECTION_ONLY_SINKS}) decide a question
+     * it cannot answer here, and the suite would report ordinary code in every project.
+     *
+     * So they live apart and are matched ONLY against a receiver that resolves to `PDO`. The
+     * collector that reads them says the same thing in its own words, because the two have to
+     * agree and the reason is not obvious from either side alone.
+     *
+     * @var list<string>
+     */
+    public const array PDO_STATEMENT_SINKS = [
+        'exec',
+        'prepare',
+        'query',
+    ];
+
+    /**
      * Names that LOOK like sinks and are not — recorded so nobody adds them back by reading a method
      * list and matching on `Raw`.
      *
