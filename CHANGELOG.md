@@ -2,6 +2,14 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.2] - 2026-09-12
+
+### Fixed
+
+- **A skipped object is reported under the kind it actually is, instead of as a table.** Every notice about something the catalog or the security reading could not cover carried `object_type: "table"` — an index, a role, a routine, all of them. A consuming application read sixteen index skips in one report and found the one axis that would have let it group them at a glance saying the same word sixteen times. The information was never missing: the skip model has carried its `SchemaObjectType` since it was written, and its own docblock calls it "the axis a reader groups by"; the notice builder replaced it with `table` on the way out. Run-level notices are unchanged — those are about the connection rather than about one object, and their name is the connection's.
+
+**Upgrade:** nothing to do unless something downstream matches on `object_type` for these notices. A consumer that filtered them as `table` was filtering on a placeholder, and the values it sees now are the ones the reading always knew.
+
 ## [0.11.1] - 2026-09-12
 
 ### Fixed
