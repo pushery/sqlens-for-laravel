@@ -30,13 +30,15 @@ enum PendingSkipReason: string
     case EmptyMigrationPath = 'empty_migration_path';
 
     /**
-     * Every migration a path holds lives inside `vendor/`, and this run does not judge those.
+     * Migrations are pending, and every one of them lives inside `vendor/`, which this run does not
+     * judge.
      *
-     * Its own case rather than {@see self::EmptyMigrationPath}, because the two send a reader to
-     * different places: the path is not empty, and somebody told that it was would go and look at a
-     * directory with files in it. It is also the shape this enum exists to refuse — a run that
-     * judged nothing must never read as a run that found nothing wrong — and here the emptiness is
-     * produced by a setting rather than by the tree, which makes naming it the only honest option.
+     * Its own case rather than an empty pending list or {@see self::EmptyMigrationPath}, because each
+     * sends a reader somewhere else: an empty list says nothing is waiting to run, and an empty path
+     * says there is nothing to look at, while here a package's migration is waiting in a directory
+     * with files in it. It is also the shape this enum exists to refuse — a run that judged nothing
+     * must never read as a run that found nothing wrong — and here the emptiness is produced by a
+     * setting rather than by the tree, which makes naming it the only honest option.
      */
     case OnlyVendorMigrations = 'only_vendor_migrations';
 

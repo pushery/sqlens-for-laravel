@@ -2,6 +2,12 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1] - 2026-09-12
+
+### Fixed
+
+- **`sqlens:lint` says it skipped a package's pending migration instead of saying it read nothing.** With `security.include_vendor_migrations` at its default of `false`, a run whose only pending migration came from a package reported `LINT.NO_MIGRATIONS_READ` — "no migration was read, so the run judged nothing" — and listed that package's directory among the paths it had searched. In a CI log that reads exactly like a tree with nothing pending, while a migration was waiting to run. The skip meant for this case, `LINT.SKIPPED.ONLY_VENDOR_MIGRATIONS`, names the setting and the `--path` way around it, but it was reached only by an application with no migrations of its own: it asked whether every migration file on disk belonged to a package, and an application's own files, long since run, always answered no. It now asks that of the pending set. A run with nothing pending at all still reports `LINT.NO_MIGRATIONS_READ`, and `sqlens:predeploy`, which judges package migrations on purpose, is unchanged.
+
 ## [0.11.0] - 2026-09-11
 
 ### Added

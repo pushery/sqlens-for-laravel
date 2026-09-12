@@ -90,16 +90,6 @@ final readonly class PendingMigrationResolver implements PendingResolver
             return PendingResolution::skipped(PendingSkipReason::EmptyMigrationPath);
         }
 
-        $files = $this->vendorFiltered($files);
-
-        // Every discovered file was a package's. That is a different fact from "no migration path
-        // holds a file", and it gets its own skip rather than being folded into that one: the run
-        // really did see migrations and really is not judging them, and a reader told the path was
-        // empty would go and look at a directory that is not.
-        if ($files === []) {
-            return PendingResolution::skipped(PendingSkipReason::OnlyVendorMigrations);
-        }
-
         // The already-run migrations and the last batch, read from the WRITE side so a
         // lagging replica cannot make a recorded migration look pending.
         $ran = [];
@@ -113,7 +103,21 @@ final readonly class PendingMigrationResolver implements PendingResolver
         $maxBatch = $target->table($this->migrationsTable)->useWritePdo()->max('batch');
         $batch = (is_numeric($maxBatch) ? (int) $maxBatch : 0) + 1;
 
-        $pending = array_diff_key($files, array_flip($ran));
+        $outstanding = array_diff_key($files, array_flip($ran));
+        $pending = $this->vendorFiltered($outstanding);
+
+        // Something was waiting to run, and every one of those migrations was a package's. That is
+        // a different fact from "nothing is pending", and it gets its own skip rather than an empty
+        // list: the run really did find migrations to judge and really is not judging them, and a
+        // reader told that nothing was read would stop looking while a package's migration waits.
+        //
+        // The question is asked of the pending set, not of the files on disk. An application's own
+        // migrations have normally all run, so "was every discovered file a package's" is answered
+        // no by files that will never run again, and the skip was only reached by an application
+        // with no migrations of its own.
+        if ($outstanding !== [] && $pending === []) {
+            return PendingResolution::skipped(PendingSkipReason::OnlyVendorMigrations);
+        }
 
         $migrations = [];
         $index = 0;
