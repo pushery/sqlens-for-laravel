@@ -175,6 +175,11 @@ final readonly class AuditNotices
             // Every reason shares one page: what a reader needs to know is the same in all of them,
             // and a page per reason would be one sentence written seven times and maintained none.
             CatalogNotice::CatalogUnread->documentationUrl(),
+            null,
+            // The kind the skip itself names. It was dropped here, so an index that went unread
+            // reported as a table -- and the reader who found sixteen of them had no way to see
+            // that they were all indexes without opening each one.
+            $skip->type,
         );
     }
 
@@ -210,6 +215,8 @@ final readonly class AuditNotices
             // same for every area, and a page per catalog would be one sentence written eight times.
             SecurityNotice::SecuritySkipped->documentationUrl(),
             Category::Security,
+            // Same as the catalog skip above: the reading knows what it could not cover.
+            $skip->type,
         );
     }
 
@@ -780,6 +787,16 @@ final readonly class AuditNotices
         // do that without also silencing gaps in the schema reading, which is a different problem
         // with a different fix, and the category is what makes those two separable.
         ?Category $category = null,
+        // What KIND of object this is about, when the caller knows. Null means the notice is about
+        // the RUN rather than about one object -- there the name is the connection, and `Table` is
+        // the placeholder those notices have always carried.
+        //
+        // A caller that DOES know used to lose it here: `CatalogSkip` has carried its
+        // `SchemaObjectType` from the start, described in its own docblock as "the axis a reader
+        // groups by", and this method replaced it with `Table` for every skip. A consumer read
+        // sixteen index skips reported as tables, which is the one axis that would have let them
+        // group the report at a glance.
+        ?SchemaObjectType $objectType = null,
     ): Finding {
         return Finding::undetermined(
             $ruleId,
@@ -790,7 +807,7 @@ final readonly class AuditNotices
                 $target->driver,
                 $target->connection,
                 $objectName ?? $target->connection,
-                SchemaObjectType::Table,
+                $objectType ?? SchemaObjectType::Table,
             ),
             $category ?? Category::Safety,
             Level::Capturable,
