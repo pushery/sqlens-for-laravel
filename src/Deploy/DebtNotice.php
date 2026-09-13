@@ -88,7 +88,7 @@ enum DebtNotice: string implements RunNotice
      *
      * The one place where the recording side and the collecting side answer the same observation
      * OPPOSITELY. A repository run may read an absent file as an empty account, because nothing has
-     * been recorded yet. Here it is the expected artefact: not deployed, or a path resolving
+     * been recorded yet. Here it is the expected artifact: not deployed, or a path resolving
      * against a different working directory, is the likely case — and "no open debts" would be the
      * most comfortable possible wrong answer.
      */

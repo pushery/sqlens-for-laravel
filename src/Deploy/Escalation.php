@@ -18,7 +18,7 @@ use Pushery\SQLens\Severity\Severity;
  *
  * That distinction is also what keeps the escalation honest under review. The threshold that fired
  * travels with the finding, so "why is this critical" has an answer that does not require reading
- * the shipped artefact and guessing which step matched.
+ * the shipped artifact and guessing which step matched.
  *
  * ## Why the base severity is kept
  *

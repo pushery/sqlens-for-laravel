@@ -363,7 +363,7 @@ final class PostdeployCommand extends Command
         if ($resolution->skip instanceof PendingSkipReason) {
             // Not an empty migration set. Treating it as empty would make the expectation side "the
             // database as provisioned", against which every object the migrations added reads as
-            // unexpected drift — hundreds of findings, all of them artefacts, and the orphan
+            // unexpected drift — hundreds of findings, all of them artifacts, and the orphan
             // promotion above would fire on every one of them.
             return ExpectationReport::unavailable('the pending migrations could not be resolved: '
                 .$resolution->skip->value);

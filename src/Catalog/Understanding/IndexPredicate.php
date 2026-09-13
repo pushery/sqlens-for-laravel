@@ -31,7 +31,7 @@ namespace Pushery\SQLens\Catalog\Understanding;
  * indrelid)` back — the same expression the PostgreSQL catalog reader stores in an index object's
  * `predicate`. That reader is named in prose rather than as a class reference on purpose: this file
  * stays in the core package and the reader would move to a driver one, so naming it would be the
- * coupling the topology arm refuses. Four kinds, and the surprise is that several of them have TWO
+ * coupling the topology arm refuses. Seven kinds, and the surprise is that several of them have TWO
  * spellings for one condition:
  *
  * | written | `pg_get_expr` prints | kind |
@@ -43,26 +43,39 @@ namespace Pushery\SQLens\Catalog\Understanding;
  * | `status = ANY (ARRAY['pending','failed'])` | `((status)::text = ANY (ARRAY['pending'::text, 'failed'::text]))` | set |
  * | `status IN ('pending','failed')` | `((status)::text = ANY ((ARRAY['pending'::character varying, …])::text[]))` | set |
  * | `consumed_at IS NULL` | `(consumed_at IS NULL)` | null |
+ * | `status = 'live'` | `((status)::text = 'live'::text)` | equality |
+ * | `status IN ('live')` | `((status)::text = 'live'::text)` | equality |
+ * | `status NOT IN ('pending','failed')` | `((status)::text <> ALL ((ARRAY['pending'::character varying, …])::text[]))` | exclusion |
+ * | `is_active AND notes IS NULL` | `(is_active AND (notes IS NULL))` | conjunction |
  *
- * **The last two rows are the reason normalization is not decoration.** `IN (…)` and
+ * **The two set rows are the reason normalization is not decoration.** `IN (…)` and
  * `= ANY (ARRAY[…])` select identical rows and print differently — different literal casts, and an
  * extra parenthesis layer around the array. Compared as text they are two conditions; compared here
  * they are one. The same holds for `is_active` against `is_active = true`.
  *
  * **`!=` is deliberately not handled, and that is a measurement.** PostgreSQL rewrites it: an index
  * created `WHERE status != 'processed'` prints back with `<>`. A branch for it would be code no
- * server can reach.
+ * server can reach. The same holds for a one-member `IN` list, which the server prints as the plain
+ * equality above; only `= ANY (ARRAY['live'])` keeps its array, and it reads as that equality too.
+ *
+ * **An `AND` is read as the set of its parts, and only whole.** The server flattens a nested
+ * conjunction into one level, so `(is_active AND notes IS NULL) AND consumed_at IS NULL` prints with
+ * three parts side by side and a part is never a conjunction itself. The parts are ordered by their
+ * normal form, so `notes IS NULL AND is_active` groups with `is_active AND notes IS NULL`, and a part
+ * written twice counts once.
  *
  * ## The refusal, and why it is the feature
  *
- * Anything outside those shapes returns null — a compound `AND`/`OR`, a range test, a function call,
- * a comparison against a non-literal. A parser that guessed would produce a confident normal form
- * for a condition it misread, and two indexes would then be called identical on the strength of the
- * misreading. Measured, `WHERE status <> 'processed' AND consumed_at IS NULL` prints as
- * `(((status)::text <> 'processed'::text) AND (consumed_at IS NULL))`, which contains both an
- * inequality and a NULL test as substrings: a reader willing to match loosely would report it as
- * either half and be wrong about which rows the index covers. **The cost of refusing a shape is a
- * vaguer sentence; the cost of guessing is a wrong verdict about which index to drop.**
+ * Anything outside those shapes returns null — an `OR`, a range test, a function call, a comparison
+ * against a non-literal, and an `AND` with any such part. A parser that guessed would produce a
+ * confident normal form for a condition it misread, and two indexes would then be called identical on
+ * the strength of the misreading. Measured, `WHERE status <> 'processed' AND consumed_at IS NULL`
+ * prints as `(((status)::text <> 'processed'::text) AND (consumed_at IS NULL))`, which contains both
+ * an inequality and a NULL test as substrings: a reader willing to match loosely would report it as
+ * either half and be wrong about which rows the index covers. It is read as both halves at once, and
+ * an `AND` with one part this class does not know is refused whole, because the parts it could read
+ * describe more rows than the index covers. **The cost of refusing a shape is a vaguer sentence; the
+ * cost of guessing is a wrong verdict about which index to drop.**
  */
 final readonly class IndexPredicate
 {
@@ -75,6 +88,14 @@ final readonly class IndexPredicate
     private const string IDENTIFIER = '(?:[a-z_][a-z0-9_]*|"[^"]+")';
 
     /**
+     * A quoted literal as `pg_get_expr` prints one, a doubled quote inside it included.
+     *
+     * `'it''s'` is one literal. A pattern that stopped at the first quote would find `'it'` followed by
+     * `'s'`, and the anchored arms below would refuse a condition they know.
+     */
+    private const string LITERAL = "'(?:[^']|'')*'";
+
+    /**
      * The SQL type names that contain a space, listed rather than matched loosely.
      *
      * A pattern like `[a-z ]+` after `::` would swallow a following ` AND` — under `/i` the keyword
@@ -83,21 +104,35 @@ final readonly class IndexPredicate
      */
     private const string MULTI_WORD_TYPES = 'character varying|bit varying|double precision|(?:timestamp|time) with(?:out)? time zone';
 
+    /**
+     * @param  list<self>  $parts  the conditions a conjunction holds, in normal-form order; empty for every other kind
+     */
     private function __construct(
         /** The condition in a spelling two predicates can be compared in. */
         public string $normalized,
-        /** What kind of condition it is: `inequality`, `boolean`, `set` or `null`. */
+        /** What kind of condition it is: `null`, `boolean`, `equality`, `inequality`, `set`, `exclusion` or `conjunction`. */
         public string $kind,
-        /** The column the condition is about, as the server spells it. */
+        /** The column the condition is about, as the server spells it; for a conjunction, each column its parts name. */
         public string $column,
+        private array $parts = [],
     ) {}
 
     /**
-     * Read one `pg_get_expr` predicate, or null when its shape is not one of the four.
+     * Read one `pg_get_expr` predicate, or null when its shape is not one of the seven.
      */
     public static function parse(string $predicate): ?self
     {
         $bare = self::withoutCasts($predicate);
+        $conjuncts = self::conjuncts($bare);
+
+        return $conjuncts === null ? self::single($bare) : self::conjunction($conjuncts);
+    }
+
+    /**
+     * One condition that is not a conjunction, or null when its shape is not one this class knows.
+     */
+    private static function single(string $bare): ?self
+    {
         $ident = self::IDENTIFIER;
 
         // The NULL test first: it carries no operator the other arms look for, and testing it later
@@ -124,22 +159,168 @@ final readonly class IndexPredicate
         }
 
         // `\(+` and `\)+` rather than one each: `IN (…)` prints an extra parenthesis layer around
-        // the array that `= ANY (ARRAY[…])` does not, and the two mean the same thing.
-        if (preg_match('/^\(?\s*('.$ident.')\s*=\s*ANY\s*\(+\s*ARRAY\[(.+?)\]\s*\)+$/is', $bare, $m) === 1) {
-            $values = self::sortedLiterals($m[2]);
-
-            return $values === null
-                ? null
-                : new self($m[1].' = ANY (ARRAY['.implode(', ', $values).'])', 'set', $m[1]);
+        // the array that `= ANY (ARRAY[…])` does not, and the two mean the same thing. `NOT IN (…)`
+        // prints as `<> ALL` with the same layer, so one pattern reads both directions.
+        if (preg_match('/^\(?\s*('.$ident.')\s*(=\s*ANY|<>\s*ALL)\s*\(+\s*ARRAY\[(.+?)\]\s*\)+$/is', $bare, $m) === 1) {
+            return self::fromSet($m[1], stripos($m[2], 'ALL') !== false, $m[3]);
         }
 
-        // Inequality LAST: nothing above can reach it, and putting it first would cost a reader a
-        // second of wondering whether `<>` could shadow the `=` forms.
-        if (preg_match('/^\(?('.$ident.")\s*<>\s*('[^']*')\)?$/i", $bare, $m) === 1) {
-            return new self($m[1].' <> '.$m[2], 'inequality', $m[1]);
+        // A comparison with one literal LAST: nothing above can reach it, and putting it first would
+        // cost a reader a second of wondering whether `=` could shadow `= ANY` or `= true`.
+        if (preg_match('/^\(?('.$ident.')\s*(=|<>)\s*('.self::LITERAL.')\)?$/i', $bare, $m) === 1) {
+            return self::compared($m[1], $m[2], $m[3]);
         }
 
         return null;
+    }
+
+    /**
+     * A fixed set of literals, or null when one member is not a literal.
+     *
+     * One member is one value: `= ANY (ARRAY['live'])` selects the rows `= 'live'` selects, and the
+     * server prints `IN ('live')` as exactly that equality, so the two have to meet in one form.
+     */
+    private static function fromSet(string $column, bool $excluded, string $members): ?self
+    {
+        $values = self::sortedLiterals($members);
+
+        if ($values === null) {
+            return null;
+        }
+
+        if (count($values) === 1) {
+            return self::compared($column, $excluded ? '<>' : '=', $values[0]);
+        }
+
+        $array = 'ARRAY['.implode(', ', $values).']';
+
+        return $excluded
+            ? new self($column.' <> ALL ('.$array.')', 'exclusion', $column)
+            : new self($column.' = ANY ('.$array.')', 'set', $column);
+    }
+
+    /** A column compared with one literal, for either operator the server prints. */
+    private static function compared(string $column, string $operator, string $literal): self
+    {
+        return $operator === '='
+            ? new self($column.' = '.$literal, 'equality', $column)
+            : new self($column.' <> '.$literal, 'inequality', $column);
+    }
+
+    /**
+     * The parts of a top-level `AND`, or null when the text is not one.
+     *
+     * Split where the keyword stands outside every parenthesis and every literal, so neither
+     * `(a AND b) OR c` nor `notes = 'x AND y'` is cut in the wrong place. A top-level `OR` beside an
+     * `AND` cannot come from the server, which parenthesizes a mix, and if one ever did its part would
+     * be refused below rather than read.
+     *
+     * @return list<string>|null
+     */
+    private static function conjuncts(string $bare): ?array
+    {
+        $text = $bare;
+
+        while (str_starts_with($text, '(') && self::enclosesEverything($text)) {
+            $text = trim(substr($text, 1, -1));
+        }
+
+        $parts = [];
+        $depth = 0;
+        $quoted = false;
+        $start = 0;
+        $length = strlen($text);
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $text[$i];
+
+            if ($char === "'") {
+                $quoted = ! $quoted;
+            } elseif ($quoted) {
+                continue;
+            } elseif ($char === '(') {
+                $depth++;
+            } elseif ($char === ')') {
+                $depth--;
+            } elseif ($depth === 0 && $char === ' ' && preg_match('/\G\s+AND\s+/i', $text, $keyword, 0, $i) === 1) {
+                $parts[] = trim(substr($text, $start, $i - $start));
+                $i += strlen($keyword[0]) - 1;
+                $start = $i + 1;
+            }
+        }
+
+        if ($parts === []) {
+            return null;
+        }
+
+        $parts[] = trim(substr($text, $start));
+
+        return $parts;
+    }
+
+    /**
+     * Whether the opening parenthesis closes on the last character, so the pair encloses everything.
+     *
+     * `(a AND b)` loses the pair and `(a) AND (b)` keeps both, because stripping those would join
+     * `a) AND (b` into one part. Text whose parentheses never balance answers false and stays whole.
+     */
+    private static function enclosesEverything(string $text): bool
+    {
+        $depth = 0;
+        $quoted = false;
+        $last = strlen($text) - 1;
+
+        foreach (str_split($text) as $i => $char) {
+            if ($char === "'") {
+                $quoted = ! $quoted;
+            } elseif (! $quoted && $char === '(') {
+                $depth++;
+            } elseif (! $quoted && $char === ')' && --$depth === 0) {
+                return $i === $last;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * An `AND` read as the ordered set of its parts, or null when one part is not readable.
+     *
+     * Whole or not at all: the parts SQLens can read describe more rows than the index covers when
+     * another part narrows them further, and a comparison over that larger set would be wrong about
+     * which index to drop.
+     *
+     * @param  list<string>  $conjuncts
+     */
+    private static function conjunction(array $conjuncts): ?self
+    {
+        $readings = [];
+
+        foreach ($conjuncts as $conjunct) {
+            $reading = self::single($conjunct);
+
+            if (! $reading instanceof self) {
+                return null;
+            }
+
+            $readings[$reading->normalized] = $reading;
+        }
+
+        ksort($readings, SORT_STRING);
+        $parts = array_values($readings);
+
+        // `is_active AND is_active = true` is one condition written twice, and it groups with the
+        // index that wrote it once.
+        if (count($parts) === 1) {
+            return $parts[0];
+        }
+
+        return new self(
+            implode(' AND ', array_map(static fn (self $part): string => $part->normalized, $parts)),
+            'conjunction',
+            implode(', ', array_values(array_unique(array_map(static fn (self $part): string => $part->column, $parts)))),
+            $parts,
+        );
     }
 
     /**
@@ -156,8 +337,24 @@ final readonly class IndexPredicate
                 : sprintf('the rows where %s is null', $this->column),
             'boolean' => sprintf('the rows where %s is %s', $this->column, str_ends_with($this->normalized, 'true') ? 'true' : 'false'),
             'set' => sprintf('the rows whose %s is one of a fixed set', $this->column),
+            'exclusion' => sprintf('the rows whose %s is none of a fixed set', $this->column),
+            'equality' => sprintf('the rows whose %s is one value', $this->column),
+            'conjunction' => 'the rows '.$this->joined(array_map(
+                static fn (self $part): string => substr($part->describe(), strlen('the rows ')),
+                $this->parts,
+            )),
             default => sprintf('the rows whose %s differs from one value', $this->column),
         };
+    }
+
+    /**
+     * Two or more clauses as one English list: `a and b`, `a, b and c`.
+     *
+     * @param  list<string>  $clauses
+     */
+    private function joined(array $clauses): string
+    {
+        return implode(', ', array_slice($clauses, 0, -1)).' and '.implode('', array_slice($clauses, -1));
     }
 
     /**
@@ -205,7 +402,7 @@ final readonly class IndexPredicate
         $literals = [];
 
         foreach (array_map(trim(...), explode(',', $inner)) as $part) {
-            if (preg_match("/^'[^']*'$/", $part) !== 1) {
+            if (preg_match('/^'.self::LITERAL.'$/', $part) !== 1) {
                 return null;
             }
 

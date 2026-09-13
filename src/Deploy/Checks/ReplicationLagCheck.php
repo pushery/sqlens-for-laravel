@@ -41,7 +41,7 @@ use Throwable;
  *
  * ## Why the threshold is a declared constant here
  *
- * The escalation-thresholds artefact keys on OPERATION classes and answers a different question:
+ * The escalation-thresholds artifact keys on OPERATION classes and answers a different question:
  * how large an object must be before an existing finding is worth more attention. A replication lag
  * creates a finding rather than raising one, and it is measured in seconds rather than in rows or
  * bytes. Putting it there would mean one file answering two questions with one shape.
