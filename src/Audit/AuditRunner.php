@@ -25,6 +25,7 @@ use Pushery\SQLens\Catalog\Security\SecuritySubjects;
 use Pushery\SQLens\Catalog\SettingCrossFacts;
 use Pushery\SQLens\Catalog\SettingsReading;
 use Pushery\SQLens\Catalog\SettingSubjects;
+use Pushery\SQLens\Catalog\SkipReason;
 use Pushery\SQLens\Catalog\Usage\IndexUsageProjection;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Categories\CategoryFilter;
@@ -627,10 +628,22 @@ final readonly class AuditRunner implements AuditRuns
      * to tell a run that found nothing from one that could not look, and the second is the one
      * that needs a grant fixed. The duplication is the point rather than an oversight.
      *
+     * ⚠️ A `not_comparable` boundary is NOT one of them. The header lists what a run could not read,
+     * and that object was read completely: its notice reports as `not_applicable`, under
+     * `AUDIT.CATALOG.NOT_COMPARED` rather than the unread family. Carried here, it made the header
+     * disagree with the findings about how much went unread — measured on PostgreSQL, two header
+     * skips over one unread finding — and it put every schema with an ordinary partial index in
+     * front of a reader as a partial reading, which is the misreading that id exists to end.
+     *
      * @return list<ReportedSkip>
      */
     private function reportedSkips(CatalogSnapshot $snapshot): array
     {
+        $unread = array_values(array_filter(
+            $snapshot->skips,
+            static fn (CatalogSkip $skip): bool => $skip->reason !== SkipReason::NotComparable,
+        ));
+
         return array_map(
             static fn (CatalogSkip $skip): ReportedSkip => new ReportedSkip(
                 area: $skip->type->value.' '.$skip->reference,
@@ -639,7 +652,7 @@ final readonly class AuditRunner implements AuditRuns
                 // none, and the reader's own words are the better detail.
                 detail: $skip->errorCode ?? $skip->detail,
             ),
-            $snapshot->skips,
+            $unread,
         );
     }
 

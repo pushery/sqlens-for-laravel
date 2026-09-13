@@ -63,6 +63,10 @@ final readonly class IndexComprehension
     private function __construct(
         public bool $fullyUnderstood,
         public ?string $reason,
+        // Which of the two things an incomparable index can be, decided by the arm that said so and
+        // never read back out of the sentence: a part that did not arrive (`not_understood`), or a
+        // comparison left out on purpose (`not_comparable`). Null exactly when the index is complete.
+        public ?SkipReason $skipReason = null,
     ) {}
 
     /** An index whose shape a rule can compare against another's. */
@@ -95,9 +99,9 @@ final readonly class IndexComprehension
             // says so by producing the bare line, which is worth reading as a signal.
             $reading = IndexPredicate::parse($predicate);
 
-            return new self(false, $reading instanceof IndexPredicate
-                ? sprintf('partial index predicate not compared — it selects %s: %s', $reading->describe(), $predicate)
-                : 'partial index predicate not compared: '.$predicate);
+            return $reading instanceof IndexPredicate
+                ? new self(false, sprintf('partial index predicate not compared — it selects %s: %s', $reading->describe(), $predicate), SkipReason::NotComparable)
+                : new self(false, 'partial index predicate not compared: '.$predicate, SkipReason::NotUnderstood);
         }
 
         $expression = $index->getString('expression');
@@ -108,7 +112,7 @@ final readonly class IndexComprehension
             // Carried intact, so the comparison is against the expression rather than against the
             // column underneath it, and there is nothing left to refuse. See the method below.
             if ($lost !== null) {
-                return new self(false, $lost);
+                return new self(false, $lost, SkipReason::NotUnderstood);
             }
         }
 
@@ -128,13 +132,13 @@ final readonly class IndexComprehension
         $method = $index->getString('method');
 
         if ($method !== null && ! in_array($method, self::COMPARABLE_METHODS, true)) {
-            return new self(false, sprintf('%s index is not compared against b-tree indexes', $method));
+            return new self(false, sprintf('%s index is not compared against b-tree indexes', $method), SkipReason::NotComparable);
         }
 
         $opclasses = $index->getString('operator_classes');
 
         if ($opclasses !== null && $opclasses !== '') {
-            return new self(false, 'non-default operator class: '.$opclasses);
+            return new self(false, 'non-default operator class: '.$opclasses, SkipReason::NotComparable);
         }
 
         // A MySQL PREFIX-LENGTH key — `KEY (email(20))` — indexes the first 20 bytes rather than
@@ -147,7 +151,7 @@ final readonly class IndexComprehension
         // false positive that corpus exists to catch. PostgreSQL has no counterpart, so the flag is
         // simply absent there and this arm never fires.
         if ($index->getBool('prefixed_columns') === true) {
-            return new self(false, 'prefix-length key — it indexes the first bytes of a column, not the column');
+            return new self(false, 'prefix-length key — it indexes the first bytes of a column, not the column', SkipReason::NotComparable);
         }
 
         return self::complete();
@@ -190,6 +194,53 @@ final readonly class IndexComprehension
     }
 
     /**
+     * Whether every comprehension question EXCEPT the index's condition is answered yes.
+     *
+     * The mirror of {@see self::comparableApartFromItsMethod()}, for the other attribute that can be
+     * made to cancel. Two partial indexes under one condition cover the same rows, so the condition
+     * drops out of the question, and nothing else does. What survives is compared by LEFT PREFIX,
+     * which is b-tree arithmetic over plain key positions, so every other reason an index cannot be
+     * compared still has to be absent: an access method other than b-tree, a non-default operator
+     * class, an expression that did not arrive, a prefix-length key, an index the server marked
+     * invalid.
+     *
+     * ## The operator class is the one that bit
+     *
+     * `pg_get_indexdef(oid, n, true)` prints a key position WITHOUT its operator class. Measured on
+     * PostgreSQL 18.0: `(email text_pattern_ops) WHERE state IN ('closed', 'void')` and `(email)`
+     * under the same condition both arrive as `email`, so a grouping that asked only whether the
+     * condition could be read put them in one universe with identical column lists, and the rule
+     * reported one of two different indexes as a duplicate of the other. `text_pattern_ops` serves
+     * `LIKE 'foo%'` and the default class does not; dropping either loses something.
+     */
+    public static function comparableApartFromItsPredicate(SchemaObject $index): bool
+    {
+        if ($index->type !== SchemaObjectType::Index) {
+            return false;
+        }
+
+        if ($index->getBool('valid') === false || $index->getBool('prefixed_columns') === true) {
+            return false;
+        }
+
+        if (! self::comparesByPrefix($index->getString('method'))) {
+            return false;
+        }
+
+        $opclasses = $index->getString('operator_classes');
+
+        if ($opclasses !== null && $opclasses !== '') {
+            return false;
+        }
+
+        $expression = $index->getString('expression');
+
+        return $expression === null
+            || $expression === ''
+            || self::expressionLostOnTheWay($index, $expression) === null;
+    }
+
+    /**
      * Whether a redundancy question inside this access method may be answered by a LEFT PREFIX.
      *
      * B-tree alone, and a method nobody named counts as one — an engine that does not report the
@@ -218,7 +269,7 @@ final readonly class IndexComprehension
      * written differently for the same expression are recognizably the same index without this
      * package normalizing anything.
      *
-     * What that leaves is not a general doubt but three specific ways the expression fails to arrive
+     * What that leaves is not a general doubt but two specific ways the expression fails to arrive
      * intact, each of which really does make the comparison meaningless:
      *
      * - **It never reached the key columns.** MySQL's `information_schema` reports a functional index
@@ -226,14 +277,21 @@ final readonly class IndexComprehension
      *   than inside its column list. So `(lower(a))` and `(lower(b))` would both arrive as an EMPTY
      *   list and compare equal, and a functional index would look like a duplicate of a plain one.
      *   This is the arm that keeps the widening PostgreSQL-only without a driver name in it.
-     * - **It carries the character that separates two indexes.** The projection is flat
-     *   `name(cols); name(cols)`, so an expression containing `;` — measured, `(email || ';' || note)`
-     *   is a legal index — takes its index's NAME apart, not just its columns.
-     * - **It carries the character that separates two key positions.** `COALESCE(email, note)` is one
-     *   key position that arrives as two, `COALESCE(email` and `note)`, and neither is a thing any
-     *   arithmetic downstream may treat as a column.
+     * - **Its key positions do not balance.** A reading whose positions cannot be told apart from
+     *   pieces of one another is not a list anything downstream may compare, and it is refused rather
+     *   than repaired — see {@see self::isOneKeyPosition()}.
      *
-     * ⚠️ **The obvious test for the first one — does the expression text appear among the key
+     * ## Two refusals that were retired, because the separators stopped being a problem
+     *
+     * An expression holding the character that separates key positions used to arrive as pieces:
+     * `COALESCE(heading, '')` is one position with a comma inside. One holding the character that
+     * separates members — a `';'` literal is legal in an index expression — took the member list
+     * apart. Both were refused. Both lists are now split only at their TOP level, outside parentheses
+     * and quotes ({@see TopLevelList}), so these expressions arrive whole and are compared like any
+     * other. A consumer's search index over `title || ' ' || COALESCE(heading, '')` measured what the
+     * old refusal cost: an ordinary index, reported as not understood on every run.
+     *
+     * ⚠️ **The obvious test for the first arm — does the expression text appear among the key
      * columns — is WRONG, and it took a real reading to show it.** The two facts come from two
      * different deparsers, and on PostgreSQL 18.4 they disagree: `pg_get_expr(indexprs)` renders
      * `lower((display_name)::text)` where `pg_get_indexdef()` per position renders
@@ -241,17 +299,10 @@ final readonly class IndexComprehension
      * a cast, and the widening would have shipped doing nothing. What is asked instead is whether an
      * expression is VISIBLE in the list at all, beside the driver's own declaration that it dropped
      * one.
-     *
-     * The last two are not detected by looking for the character in the expression either, and that
-     * is the same class of subtlety: the reading joins several expressions with the same comma, so
-     * `(lower(a), upper(b))` is indistinguishable from `(coalesce(a, b))` by counting separators. It
-     * is detected by asking whether every key position that comes out is a COMPLETE one — see
-     * {@see self::isOneKeyPosition()}.
      */
     private static function expressionLostOnTheWay(SchemaObject $index, string $expression): ?string
     {
-        $keyColumns = $index->getString('key_columns') ?? '';
-        $tokens = explode(',', $keyColumns);
+        $tokens = TopLevelList::split($index->getString('key_columns') ?? '', ',');
 
         // Two ways of establishing the same thing, and both are wanted. The flag is the reading's
         // own statement that it put the expression somewhere else; the search is the fail-closed
@@ -263,13 +314,9 @@ final readonly class IndexComprehension
             return 'expression index — the expression is recorded beside the index rather than among its key columns, so comparing this index would compare the columns it does NOT index: '.$expression;
         }
 
-        if (str_contains($keyColumns, ';')) {
-            return 'expression index — the expression contains the character that separates one index from the next, so it cannot be carried without taking the index apart: '.$expression;
-        }
-
         foreach ($tokens as $token) {
             if (! self::isOneKeyPosition($token)) {
-                return 'expression index — the expression spans the character that separates one key position from the next, so it arrives as pieces that are not key positions: '.$expression;
+                return 'expression index — its key positions do not balance, so they cannot be told apart from pieces of one another: '.$expression;
             }
         }
 
@@ -289,27 +336,44 @@ final readonly class IndexComprehension
     /**
      * Whether this token is a WHOLE key position rather than a piece of one.
      *
-     * Balance, on both the parentheses and the double quotes, and nothing cleverer: a complete
-     * expression closes everything it opens, and a piece of one cut at a comma does not. It is the
-     * property the arithmetic downstream actually needs — every token it compares has to be one key
-     * position — rather than a guess about which expressions are safe.
-     *
-     * The quotes are here for the same reason and catch a different case: PostgreSQL allows a column
-     * literally named `a,b`, which `pg_get_indexdef()` renders as `"a,b"` and the projection splits
-     * into `"a` and `b"`. Neither carries an even number of quotes.
+     * Balance on the parentheses and on both kinds of quote, and nothing cleverer: a complete
+     * expression closes everything it opens. The list is already split only at its top level, so a
+     * balanced reading never produces a piece that fails here. What does is a reading that was itself
+     * cut or truncated, which {@see TopLevelList} hands back split flat so that this check refuses it
+     * instead of every later position being swallowed into one.
      */
     private static function isOneKeyPosition(string $token): bool
     {
         return substr_count($token, '(') === substr_count($token, ')')
-            && substr_count($token, '"') % 2 === 0;
+            && substr_count($token, '"') % 2 === 0
+            && substr_count($token, "'") % 2 === 0;
     }
 
     /**
-     * Every object with its comprehension recorded, and each gap named in the skips.
+     * Every object with its comprehension recorded, and each index a comparison MISSED named in the skips.
      *
      * The object STAYS in the reading — it was read, and a rule that only needs to know the index
-     * exists is entitled to it. What the skip adds is that the reading is not a complete basis for
-     * every question, which is what keeps an undetermined from disappearing into a green run.
+     * exists is entitled to it.
+     *
+     * ## A skip says a comparison did not happen, not that the index is unusual
+     *
+     * The verdict recorded on the index is unchanged: a GIN index, a partial index and one under a
+     * non-default operator class are still not comparable against a b-tree's column list, and
+     * `isFullyUnderstood()` still says so. The SKIP answers a narrower question — did a redundancy
+     * comparison that means something go unmade for this index — and for two shapes the answer used
+     * to be yes when it was no:
+     *
+     * - An index of another access method, read intact, is compared against the indexes of its own
+     *   method and operator class. Alone in that universe it has nothing to be a duplicate of, and
+     *   "not compared against b-tree indexes" names a comparison with no meaning.
+     * - A partial index, read intact, is compared against every index under its own condition, and
+     *   never against an unconditional one, which is a decision rather than a gap. The comparison
+     *   that genuinely does not happen is against a partial index under a DIFFERENT condition, which
+     *   would need an implication rule, so the skip is recorded when its table carries one, and only
+     *   then.
+     *
+     * Reported from a consumer's schema where both sat alone and read "unknown, not fine" on every
+     * run, which a strict pipeline turned into a permanent red.
      *
      * @param  list<SchemaObject>  $objects
      * @param  list<CatalogSkip>  $skips
@@ -317,6 +381,7 @@ final readonly class IndexComprehension
      */
     public static function classify(array $objects, array &$skips): array
     {
+        $conditions = self::groupableConditionsByTable($objects);
         $classified = [];
 
         foreach ($objects as $object) {
@@ -336,17 +401,103 @@ final readonly class IndexComprehension
             if (! $comprehension->fullyUnderstood) {
                 $attributes['not_understood'] = (string) $comprehension->reason;
 
-                $skips[] = CatalogSkip::for(
-                    SchemaObjectType::Index,
-                    $object->qualifiedName,
-                    SkipReason::NotUnderstood,
-                    $comprehension->reason,
-                );
+                $missed = self::comparisonMissed($object, $comprehension, $conditions[$object->parent ?? ''] ?? []);
+
+                if ($missed !== null) {
+                    $skips[] = CatalogSkip::for(
+                        SchemaObjectType::Index,
+                        $object->qualifiedName,
+                        $missed[0],
+                        $missed[1],
+                    );
+                }
             }
 
             $classified[] = $object->withAttributes($attributes);
         }
 
         return $classified;
+    }
+
+    /**
+     * The comparison that went unmade for this index — why, and in which sentence — or null when none that means anything did.
+     *
+     * The reason is decided by the arm that stopped the comparison, not by the index's first reason:
+     * a partial index that stays out of its group because of an expression that did not arrive is
+     * `not_understood`, however readable its condition, because the expression is what a reader has
+     * to look at.
+     *
+     * @param  list<string>  $conditionsOnItsTable  the conditions its table's partial indexes are grouped under
+     * @return array{SkipReason, string}|null
+     */
+    private static function comparisonMissed(SchemaObject $index, self $comprehension, array $conditionsOnItsTable): ?array
+    {
+        $reason = (string) $comprehension->reason;
+        $predicate = $index->getString('predicate');
+
+        if ($predicate !== null && $predicate !== '') {
+            $reading = IndexPredicate::parse($predicate);
+
+            // A condition nobody could read is never grouped, so nothing about this index was compared.
+            if (! $reading instanceof IndexPredicate) {
+                return [SkipReason::NotUnderstood, $reason];
+            }
+
+            // Something besides the condition keeps it out of its group, and the sentence names that
+            // something: the condition is not what a reader has to act on here. An index the server
+            // marked invalid has no other arm to name, and is left out on purpose.
+            if (! self::comparableApartFromItsPredicate($index)) {
+                $apart = self::of($index->withAttributes(['predicate' => null]));
+
+                return [$apart->skipReason ?? SkipReason::NotComparable, $apart->reason ?? $reason];
+            }
+
+            $others = count(array_diff($conditionsOnItsTable, [$reading->normalized]));
+
+            return $others === 0 ? null : [SkipReason::NotComparable, sprintf(
+                'partial index compared only against the indexes under its own condition — it selects %s; %s on this table would need an implication rule, and none is built: %s',
+                $reading->describe(),
+                $others === 1 ? 'one other condition' : $others.' other conditions',
+                $predicate,
+            )];
+        }
+
+        if (! self::comparesByPrefix($index->getString('method')) && self::comparableApartFromItsMethod($index)) {
+            // Compared inside its method and operator class, or alone there with nothing to duplicate.
+            return null;
+        }
+
+        return [$comprehension->skipReason ?? SkipReason::NotComparable, $reason];
+    }
+
+    /**
+     * The distinct conditions each table's partial indexes are grouped under.
+     *
+     * The same admission {@see TableMembers} makes for its condition groups: a readable condition on an
+     * index nothing else keeps apart. A condition on an index that cannot be grouped decides nothing
+     * about which comparisons its neighbors miss.
+     *
+     * @param  list<SchemaObject>  $objects
+     * @return array<string, list<string>> table => its conditions
+     */
+    private static function groupableConditionsByTable(array $objects): array
+    {
+        $conditions = [];
+
+        foreach ($objects as $object) {
+            $predicate = $object->getString('predicate');
+
+            if ($predicate === null || $predicate === '' || ! self::comparableApartFromItsPredicate($object)) {
+                continue;
+            }
+
+            $normalized = IndexPredicate::parse($predicate)?->normalized;
+
+            if ($normalized !== null) {
+                $conditions[$object->parent ?? ''][] = $normalized;
+            }
+        }
+
+        return array_map(static fn (array $found): array => array_values(array_unique($found)), $conditions);
     }
 }

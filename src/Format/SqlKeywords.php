@@ -39,8 +39,46 @@ final readonly class SqlKeywords
         'SELECT', 'FROM', 'WHERE', 'GROUP', 'HAVING', 'ORDER', 'LIMIT', 'OFFSET',
         'INSERT', 'UPDATE', 'DELETE', 'VALUES', 'SET', 'RETURNING',
         'JOIN', 'INNER', 'LEFT', 'RIGHT', 'FULL', 'CROSS', 'ON', 'USING',
-        'UNION', 'INTERSECT', 'EXCEPT', 'WITH',
+        'UNION', 'INTERSECT', 'EXCEPT', 'WITH', 'NATURAL',
         'CREATE', 'ALTER', 'DROP', 'TRUNCATE', 'COMMENT',
+    ];
+
+    /**
+     * The words of ALL that MySQL does not reserve, and which therefore can name a table unquoted.
+     *
+     * On MySQL they keep the case they were written in. A table name there is compared by case on
+     * Linux (`lower_case_table_names=0`, the server default), so `from comment` upper-cased is
+     * `FROM COMMENT`, a different table. On PostgreSQL an unquoted identifier folds to lower case, and
+     * the question does not arise.
+     *
+     * Measured, not recalled: `information_schema.KEYWORDS` on MySQL 8.4.10 marks 18 of these as
+     * non-reserved, and ILIKE, JSONB and UUID are no MySQL keywords at all. The MySQL lane holds this
+     * list against the server it runs on.
+     *
+     * @var list<string>
+     */
+    public const array MYSQL_UNRESERVED = [
+        'ANY', 'BEGIN', 'BOOLEAN', 'COMMENT', 'COMMIT', 'DATE', 'END', 'FULL', 'ILIKE', 'JSON', 'JSONB',
+        'OFFSET', 'RETURNING', 'ROLLBACK', 'TEXT', 'TIME', 'TIMESTAMP', 'TRANSACTION', 'TRUNCATE', 'UUID',
+        'VIEW',
+    ];
+
+    /**
+     * A clause keyword that CONTINUES the clause the word before it opened, keyed by that keyword.
+     *
+     * Every word in CLAUSE_STARTERS breaks a line on its own, and several of them are the second
+     * word of one clause. Measured before this list existed: `INNER` and `JOIN` on two lines,
+     * `LEFT outer` over `JOIN`, `DELETE` over `FROM t`, a foreign key's `ON` over `DELETE CASCADE`,
+     * `do` over `UPDATE` in an upsert, `for` over `UPDATE`, `COMMENT` over `ON TABLE`.
+     *
+     * @var array<string, list<string>>
+     */
+    public const array CLAUSE_CONTINUATIONS = [
+        'JOIN' => ['INNER', 'LEFT', 'RIGHT', 'FULL', 'CROSS', 'OUTER', 'NATURAL'],
+        'FROM' => ['DELETE'],
+        'DELETE' => ['ON'],
+        'UPDATE' => ['ON', 'DO', 'FOR'],
+        'ON' => ['COMMENT'],
     ];
 
     /**
@@ -58,7 +96,7 @@ final readonly class SqlKeywords
         'AS', 'DISTINCT', 'ALL', 'ANY', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END',
         'ASC', 'DESC', 'BY', 'INTO', 'TABLE', 'INDEX', 'VIEW', 'COLUMN', 'CONSTRAINT',
         'PRIMARY', 'FOREIGN', 'KEY', 'UNIQUE', 'CHECK', 'DEFAULT', 'REFERENCES',
-        'CASCADE', 'RESTRICT', 'ADD', 'RENAME', 'TO', 'IF',
+        'CASCADE', 'RESTRICT', 'ADD', 'RENAME', 'TO', 'IF', 'OUTER', 'FOR',
         'BEGIN', 'COMMIT', 'ROLLBACK', 'TRANSACTION',
         'INT', 'INTEGER', 'BIGINT', 'SMALLINT', 'TEXT', 'VARCHAR', 'CHAR', 'BOOLEAN',
         'TIMESTAMP', 'DATE', 'TIME', 'NUMERIC', 'DECIMAL', 'JSON', 'JSONB', 'UUID',

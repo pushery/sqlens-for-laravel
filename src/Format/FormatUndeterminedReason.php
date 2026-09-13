@@ -48,6 +48,18 @@ enum FormatUndeterminedReason: string
     /** It ran, failed, and said why in a way this adapter passes through rather than interprets. */
     case ToolRefused = 'format_tool_refused';
 
+    /**
+     * It ran and answered, and the answer was not used: it no longer reads as the statement it was
+     * given.
+     *
+     * Its own case rather than {@see self::ToolRefused}, because the two send a reader to different
+     * places. A refusal is the tool's verdict about the SQL, in the tool's words. This is sqlens's
+     * verdict about the TOOL: pgFormatter 5.11 was measured writing `U&'d\0061t'` as `U & 'd\0061t'`,
+     * and SQLFluff 4.3.0 on MySQL moving `--1` in front of a `SELECT`. The SQL was fine; the output
+     * would have been a different statement, and the detail names the first token that changed.
+     */
+    case ToolOutputRejected = 'format_tool_output_rejected';
+
     /** The statement could not be parsed, so no formatting of it would be trustworthy. */
     case Unparsable = 'format_unparsable';
 

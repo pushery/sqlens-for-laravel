@@ -10,6 +10,7 @@ use Pushery\SQLens\Catalog\Degradation\CatalogNotice;
 use Pushery\SQLens\Catalog\InstanceIdentity;
 use Pushery\SQLens\Catalog\PoolerReading;
 use Pushery\SQLens\Catalog\Security\SecurityNotice;
+use Pushery\SQLens\Catalog\SkipReason;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Config\ConfigViolation;
 use Pushery\SQLens\Contracts\Rule;
@@ -17,6 +18,7 @@ use Pushery\SQLens\Drivers\DriverResolutionFailure;
 use Pushery\SQLens\Drivers\DriverResolutionReason;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
+use Pushery\SQLens\Findings\NotApplicableReason;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Reporting\RunContext;
@@ -152,6 +154,10 @@ final readonly class AuditNotices
      */
     public static function skipped(CatalogSkip $skip, InstanceTarget $target, SubjectContext $context): Finding
     {
+        if ($skip->reason === SkipReason::NotComparable) {
+            return self::notCompared($skip, $target, $context);
+        }
+
         return self::notice(
             // The REGISTERED family, `AUDIT.CATALOG.UNREAD.<reason>`, rather than the bare literal
             // `CAP.L0.CATALOG_SKIPPED` this used to write. That literal appeared in one file, was in
@@ -180,6 +186,36 @@ final readonly class AuditNotices
             // reported as a table -- and the reader who found sixteen of them had no way to see
             // that they were all indexes without opening each one.
             $skip->type,
+        );
+    }
+
+    /**
+     * An object read completely and left out of a comparison on purpose, carried into the report.
+     *
+     * Not an undetermined, and the difference is the whole reason this has its own method: nothing
+     * about the object went unread or unanswered, so `--strict` has nothing to escalate. The notice
+     * still appears, because a boundary nobody can see reads like a comparison that happened, and it
+     * names the comparison that was not made in the sentence the reading already wrote.
+     */
+    private static function notCompared(CatalogSkip $skip, InstanceTarget $target, SubjectContext $context): Finding
+    {
+        return Finding::notApplicable(
+            CatalogNotice::idFor($skip->reason),
+            self::PREFIX,
+            sprintf(
+                '%s was read, and it lies outside the comparisons this build makes (%s)%s. Nothing about it '
+                .'went unread; the boundary is deliberate, and the rule that draws it names it on its page.',
+                $skip->reference,
+                $skip->reason->value,
+                $skip->detail === null ? '' : ': '.$skip->detail,
+            ),
+            NotApplicableReason::NotComparable,
+            Location::inCatalog($target->driver, $target->connection, $skip->reference, $skip->type),
+            Category::Safety,
+            Level::Capturable,
+            StabilityTier::Stable,
+            CatalogNotice::forReason($skip->reason)->documentationUrl(),
+            $context,
         );
     }
 

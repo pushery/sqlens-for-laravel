@@ -55,7 +55,7 @@ final readonly class JsonEnvelope
      * published number would depend on the order they merged in — and every other
      * change's pin test would be red until it rebased. One version, one source.
      */
-    public const int SCHEMA_VERSION = 5;
+    public const int SCHEMA_VERSION = 6;
 
     /**
      * The RUN-level fields version 4 introduces.
@@ -202,6 +202,28 @@ final readonly class JsonEnvelope
         // Null for every producer without a budget, which is every lint and audit run — and null
         // rather than 0, because 0 ms is a claim about a run that happened.
         'time_budget_ms_consumed',
+    ];
+
+    /**
+     * The run fields version 6 introduces.
+     *
+     * Version 5 shipped with 0.1.0, so this register opens a sixth rather than joining it: a field
+     * added to a version consumers already hold would tell them they had it all along, which is the
+     * silent contract change these lists exist to prevent. The contract binds such a bump to a minor
+     * release, and 0.12.0 is that release.
+     *
+     * @var list<string>
+     */
+    public const array RUN_FIELDS_ADDED_IN_V6 = [
+        // How many subjects the run judged — the denominator behind every count in `summary`. Null
+        // on a producer that does not state one, which an audit reading a catalog rather than a file
+        // list is: a different answer from zero.
+        //
+        // The console has printed it since the run that exposed the blind spot, "0 fail over 32
+        // migrations" on a tree that held 298 more in a nested directory. A machine consumer gating
+        // on `fail == 0` had the identical blind spot and no number to see it by, and the run that
+        // most needs this field is the one with no terminal attached.
+        'subject_count',
     ];
 
     /**

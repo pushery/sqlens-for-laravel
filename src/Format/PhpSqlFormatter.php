@@ -30,10 +30,11 @@ use Pushery\SQLens\PackageVersion;
  *
  * ## It is dialect-aware only where the dialects differ
  *
- * Which is: hardly anywhere, for these four decisions. Backtick-quoted identifiers are MySQL's and
- * double-quoted ones are PostgreSQL's, and both are already preserved verbatim by the tokenizer. So
- * this backend supports both dialects and says so, rather than declaring a difference it does not
- * have.
+ * The layout is the same in both. Two things are not, and each is a difference between the servers
+ * rather than a style: where a token ends, which the tokenizer reads the way each server's lexer does
+ * (MySQL's backslash escapes, `#` comments, `<=>`), and the case of a keyword MySQL does not reserve,
+ * which stays as written there because it can name a table (SqlKeywords::MYSQL_UNRESERVED). So this
+ * backend supports both dialects and says so.
  */
 final readonly class PhpSqlFormatter implements SqlFormatter
 {
@@ -65,9 +66,8 @@ final readonly class PhpSqlFormatter implements SqlFormatter
 
     public function supports(Dialect $dialect): bool
     {
-        // BOTH, and the reason is in the class docblock: the four decisions this backend makes are
-        // the same in either dialect, and the one place they differ — identifier quoting — is a kind
-        // of token it never touches.
+        // BOTH, and the reason is in the class docblock: the layout is the same in either dialect,
+        // and the two differences are the servers', not the style's.
         return true;
     }
 
@@ -95,25 +95,16 @@ final readonly class PhpSqlFormatter implements SqlFormatter
             $sql = substr($sql, strlen(self::BYTE_ORDER_MARK));
         }
 
-        // Checked BEFORE any work, the way the external backends check theirs, and conditional for
-        // the reason PgFormatterBackend states about the same option: a core that refused every run
-        // because it cannot bound a line would be a core nobody can use, and the shipped default is
-        // a value nobody chose.
-        //
-        // ⚠️ Until this existed, `line_width` was read from config, validated, and folded into the
-        // style FINGERPRINT — and then ignored. Measured: 20, 100 and 400 gave byte-identical
-        // output. A project that set it saw its report claim a different style and its files come
-        // back the same, which is precisely the silent drop {@see FormatUndeterminedReason::StyleNotExpressible}
-        // exists to prevent. Wrapping to a column is a real feature and may arrive later; saying
-        // nothing was never an option.
-        if ($style->lineWidth !== new FormatStyle()->lineWidth) {
+        // Checked BEFORE any work, from the same answer `auto` chooses by. See unexpressible().
+        $unexpressible = $this->unexpressible($style);
+
+        if ($unexpressible !== []) {
             return FormatResult::undetermined(
                 FormatUndeterminedReason::StyleNotExpressible,
                 $this->name(),
                 $dialect,
                 $style,
-                'this backend cannot express: line_width (it breaks on structure, not on a column; '
-                    .'use the pgformatter or sqlfluff backend if you need a width)',
+                'this backend cannot express: '.implode(', ', $unexpressible),
             );
         }
 
@@ -142,7 +133,7 @@ final readonly class PhpSqlFormatter implements SqlFormatter
         // Dropping them is safe precisely because this formatter writes every space in its output
         // itself, which is also what makes the result idempotent.
         $tokens = array_values(array_filter(
-            SqlTokenizer::tokenize($trimmed),
+            SqlTokenizer::tokenize($trimmed, $dialect),
             static fn (SqlToken $token): bool => $token->kind !== SqlTokenKind::Whitespace,
         ));
 
@@ -171,7 +162,7 @@ final readonly class PhpSqlFormatter implements SqlFormatter
                 $out .= ' ';
             }
 
-            $out .= $this->render($token, $style);
+            $out .= $this->render($token, $style, $dialect);
             $atLineStart = false;
             $previous = $token;
 
@@ -184,6 +175,29 @@ final readonly class PhpSqlFormatter implements SqlFormatter
     }
 
     /**
+     * `line_width`, when a project set it to anything but the shipped default. Nothing else.
+     *
+     * Checked BEFORE any work, the way the external backends check theirs, and conditional for the
+     * reason PgFormatterBackend states about the same option: a core that refused every run because it
+     * cannot bound a line would be a core nobody can use, and the shipped default is a value nobody
+     * chose.
+     *
+     * ⚠️ Until this existed, `line_width` was read from config, validated, and folded into the style
+     * FINGERPRINT — and then ignored. Measured: 20, 100 and 400 gave byte-identical output. A project
+     * that set it saw its report claim a different style and its files come back the same, which is
+     * precisely the silent drop {@see FormatUndeterminedReason::StyleNotExpressible} exists to prevent.
+     * Wrapping to a column is a real feature and may arrive later; saying nothing was never an option.
+     *
+     * @return list<string>
+     */
+    public function unexpressible(FormatStyle $style): array
+    {
+        return $style->lineWidth !== new FormatStyle()->lineWidth
+            ? ['line_width (it breaks on structure, not on a column; use the sqlfluff backend if you need a width)']
+            : [];
+    }
+
+    /**
      * How a token is written out — the ONLY place casing changes.
      *
      * Guarded twice over: `isKeyword()` is false for anything that is not a bare word, and this
@@ -191,13 +205,13 @@ final readonly class PhpSqlFormatter implements SqlFormatter
      * formatter that upper-cases the inside of a string literal has corrupted data, and that is the
      * one bug this class must not have.
      */
-    private function render(SqlToken $token, FormatStyle $style): string
+    private function render(SqlToken $token, FormatStyle $style, Dialect $dialect): string
     {
         if ($token->kind->isVerbatim()) {
             return $token->text;
         }
 
-        return $style->uppercaseKeywords && $token->isKeyword() ? strtoupper($token->text) : $token->text;
+        return $style->uppercaseKeywords && $token->mayUpperCaseIn($dialect) ? strtoupper($token->text) : $token->text;
     }
 
     /**
@@ -211,7 +225,23 @@ final readonly class PhpSqlFormatter implements SqlFormatter
      */
     private function breaksBefore(SqlToken $token, array $tokens, int $index, FormatStyle $style): bool
     {
-        if ($token->startsClause()) {
+        $previous = $tokens[$index - 1] ?? null;
+
+        // ⚠️ AFTER a line comment, always. The rule below only broke BEFORE one, so whatever
+        // followed a `-- note` on the next line was joined onto the comment's line and commented
+        // out: `where x = 1 -- note` over `and y = 2` came back as `-- note AND y = 2`, a condition
+        // gone from an UPDATE. The one arm about it put the comment before FROM, which breaks anyway.
+        if ($previous instanceof SqlToken && $previous->isLineComment()) {
+            return true;
+        }
+
+        // Two string constants in a row are one string on PostgreSQL only when a newline separates
+        // them; on one line they are a syntax error. So they keep a line each, which MySQL accepts too.
+        if ($previous instanceof SqlToken && $previous->kind === SqlTokenKind::String && $token->kind === SqlTokenKind::String) {
+            return true;
+        }
+
+        if ($token->startsClause() && ! $token->continuesClauseAfter($previous)) {
             return true;
         }
 
@@ -219,7 +249,7 @@ final readonly class PhpSqlFormatter implements SqlFormatter
             return true;
         }
 
-        if (! $style->leadingCommas && ($tokens[$index - 1] ?? null)?->text === ',') {
+        if (! $style->leadingCommas && $previous?->text === ',') {
             return true;
         }
 
@@ -241,6 +271,13 @@ final readonly class PhpSqlFormatter implements SqlFormatter
     private function spaceBefore(SqlToken $token, SqlToken $previous): bool
     {
         if (in_array($token->text, [',', ';', ')'], true)) {
+            return false;
+        }
+
+        // Tight where the author's SQL is tight in every style guide and where a space reads as a
+        // different construct: `price::numeric`, `schema."Table"`, `tags[1]`.
+        if (in_array($token->text, ['::', '[', ']'], true) || in_array($previous->text, ['::', '['], true)
+            || str_starts_with($token->text, '.') || str_ends_with($previous->text, '.')) {
             return false;
         }
 

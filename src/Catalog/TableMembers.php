@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Catalog;
 
 use Pushery\SQLens\Catalog\Understanding\IndexComprehension;
 use Pushery\SQLens\Catalog\Understanding\IndexPredicate;
+use Pushery\SQLens\Catalog\Understanding\TopLevelList;
 use Pushery\SQLens\Rules\Indexes\RedundantIndex;
 use Pushery\SQLens\Subjects\SchemaObject;
 use Pushery\SQLens\Subjects\SchemaObjectType;
@@ -626,15 +627,26 @@ final readonly class TableMembers
     /**
      * One partial index's predicate in normalized form, or null when there is nothing to group on.
      *
-     * Null covers two different states on purpose, because the caller treats them the same: the
-     * index carries no predicate at all, or it carries one whose shape {@see IndexPredicate} refuses
-     * to read. Both mean "this index cannot be grouped by condition", and neither is a defect.
+     * Null covers three different states on purpose, because the caller treats them the same: the
+     * index carries no predicate at all, it carries one whose shape {@see IndexPredicate} refuses to
+     * read, or something OTHER than its condition keeps it from being compared — see
+     * {@see IndexComprehension::comparableApartFromItsPredicate()}. All three mean "this index cannot
+     * be grouped by condition".
+     *
+     * The third state was missing, and its absence was a false positive in the direction that costs
+     * most: a shared condition cancels the condition and nothing else, so an index under a
+     * non-default operator class landed beside a default-class twin with the identical column list,
+     * and the rule advised dropping one of two different indexes.
      */
     private static function partialPredicate(SchemaObject $index): ?string
     {
         $predicate = $index->getString('predicate');
 
         if ($predicate === null || $predicate === '') {
+            return null;
+        }
+
+        if (! IndexComprehension::comparableApartFromItsPredicate($index)) {
             return null;
         }
 
@@ -850,9 +862,11 @@ final readonly class TableMembers
      */
     private static function entry(SchemaObject $object, array $spelling): string
     {
+        // Split at the TOP level only. An expression key position may hold a comma inside a call,
+        // `COALESCE(heading, '')`, and split flat it became two tokens that are not key positions.
         $columns = array_map(
             static fn (string $column): string => self::spell($column, $spelling),
-            array_map(trim(...), explode(',', (string) $object->getString('key_columns'))),
+            TopLevelList::split((string) $object->getString('key_columns'), ','),
         );
 
         return self::shortName($object).'('.implode(', ', $columns).')';

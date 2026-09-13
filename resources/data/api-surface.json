@@ -2,6 +2,17 @@
     "schema_version": 1,
     "rules": [
         {
+            "id": "AUDIT.CATALOG.NOT_COMPARED",
+            "category": "safety",
+            "level": 0,
+            "severity": null,
+            "stability": "stable",
+            "message_prefix": "sqlens.audit",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/audit-catalog-not-compared/",
+            "deprecated_since": null,
+            "replaced_by": null
+        },
+        {
             "id": "AUDIT.CATALOG.UNREAD",
             "category": "safety",
             "level": 0,
@@ -2539,7 +2550,7 @@
         "UndeterminedInStrictMode": 3
     },
     "baseline_schema_version": 2,
-    "report_schema_version": 5,
+    "report_schema_version": 6,
     "remediation_schema_version": 3,
     "remediation_schema_stability": "preview",
     "extension_contracts": {

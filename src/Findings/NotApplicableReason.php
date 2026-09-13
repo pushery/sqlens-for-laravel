@@ -97,6 +97,22 @@ enum NotApplicableReason: string
      */
     case ServerIsDisposable = 'server_is_disposable';
 
+    /**
+     * The object was read completely and understood, and it lies outside a comparison this package
+     * deliberately does not make.
+     *
+     * An index is the case: a b-tree under a non-default operator class is compared against nothing,
+     * and a partial index is compared only against the indexes sharing its condition. The pairs that
+     * leaves unjudged are boundaries drawn on purpose, each named on the rule's page, so a notice
+     * about them is a statement of scope rather than an answer somebody still owes.
+     *
+     * Not {@see UndeterminedReason::StructurallyNotApplicable}, which is where these notices used to
+     * land, and the difference is the one this enum is built on: an undetermined is a check that
+     * wanted to run and could not, and `--strict` escalates it. A boundary the package drew is not
+     * that, and escalating it turned every schema with an ordinary partial index into a permanent red.
+     */
+    case NotComparable = 'not_comparable';
+
     /** What a reader is told, in the report, about what was not checked here. */
     public function description(): string
     {
@@ -105,6 +121,7 @@ enum NotApplicableReason: string
             self::ProviderEnforced => 'The platform decides this above the server, so the server\'s own setting cannot answer the question; what the provider enforces is outside what this run can read.',
             self::NothingPending => 'No migration is pending in this run, so there is no change for this to be judged against; the setting and its value are reported, and the verdict is not — the same run would judge it the moment something is actually about to run.',
             self::DeclinedByProject => 'The project declared in its configuration that this construct is not how it solves the problem, so there is nothing here to judge; reported rather than left silent, because a question that was answered should read differently from one that was never asked.',
+            self::NotComparable => 'The object was read completely and understood; the comparison a rule would make with it is one this package deliberately does not make, and the rule\'s page names that boundary. Reported so the scope is visible, and not as undetermined, because nothing here was left unanswered.',
             self::ServerIsDisposable => 'The project declared that this server does not outlive the run, so its own configuration describes a fixture rather than a deployment; the schema is judged exactly as it would be anywhere, and the server facts this withholds are the ones sqlens:predeploy reads on the host that will actually be operated.',
         };
     }

@@ -331,6 +331,25 @@ final readonly class BreakingChangeDetector
                 continue;
             }
 
+            // The REPORT version may rise in a minor, and only rise. The published contract says
+            // adding a key bumps it in a minor release, and every version names the fields it added
+            // in a register the envelope's own tests hold against the number, so a rise is an
+            // addition by construction. Refusing it as a major contradicted that contract and would
+            // have blocked the very release it names. A number that falls, or a baseline format
+            // that moves at all, still waits for a major: a consumer holds files in those formats.
+            if ($key === 'report_schema_version' && self::rose($released[$key] ?? null, $candidate[$key] ?? null)) {
+                $changes[] = new SurfaceChange(
+                    SurfaceChangeClass::AllowedInMinor,
+                    $key,
+                    '',
+                    sprintf('%s rose from %s to %s', $key, self::render($released[$key] ?? null), self::render($candidate[$key] ?? null)),
+                    'an added key, announced: the register for the new version names it, and the changelog '
+                    .'says what a consumer still on the old version does not see.',
+                );
+
+                continue;
+            }
+
             $changes[] = new SurfaceChange(
                 SurfaceChangeClass::ForbiddenWithoutMajor,
                 $key,
@@ -486,6 +505,12 @@ final readonly class BreakingChangeDetector
         $position = array_search($severity, $order, true);
 
         return $position === false ? 0 : $position + 1;
+    }
+
+    /** Whether a version number went UP — compared as integers, never as text, and never when either side is missing. */
+    private static function rose(mixed $from, mixed $to): bool
+    {
+        return is_int($from) && is_int($to) && $to > $from;
     }
 
     private static function render(mixed $value): string

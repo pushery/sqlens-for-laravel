@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Format;
 use Pushery\SQLens\Contracts\SqlFormatter;
 use Pushery\SQLens\Tools\ProcessRunner;
 use Pushery\SQLens\Tools\ToolRunOutcome;
+use Pushery\SQLens\Tools\ToolRunResult;
 
 /**
  * The shared half of every external formatter backend: run a binary, and never let it take the run
@@ -74,7 +75,7 @@ abstract readonly class ExternalSqlFormatter implements SqlFormatter
             );
         }
 
-        $unexpressible = $this->unexpressibleOptions($style);
+        $unexpressible = $this->unexpressible($style);
 
         if ($unexpressible !== []) {
             // REPORTED, never silently dropped. A backend that quietly ignored `leading_commas`
@@ -110,7 +111,7 @@ abstract readonly class ExternalSqlFormatter implements SqlFormatter
             // On STDIN rather than in a temp file. A file is a side effect: it needs a location, a
             // cleanup path that also runs when the run fails, and it puts a machine-specific
             // absolute path into whatever the tool reports back.
-            $sql,
+            $this->input($sql, $dialect, $style),
         );
 
         if ($run->outcome === ToolRunOutcome::TimedOut) {
@@ -133,7 +134,7 @@ abstract readonly class ExternalSqlFormatter implements SqlFormatter
             );
         }
 
-        if ($run->exitCode !== 0) {
+        if (! $this->completed($run)) {
             return FormatResult::undetermined(
                 FormatUndeterminedReason::ToolRefused,
                 $this->name(),
@@ -145,7 +146,63 @@ abstract readonly class ExternalSqlFormatter implements SqlFormatter
             );
         }
 
-        return FormatResult::formatted($run->stdout, $this->name(), $dialect, $style, $this->processes->version($path));
+        $formatted = $this->output($run->stdout, $dialect, $style);
+
+        if ($formatted === null) {
+            return FormatResult::undetermined(
+                FormatUndeterminedReason::ToolOutputRejected,
+                $this->name(),
+                $dialect,
+                $style,
+                'the formatter did not hand the statement back in the shape it was given, so its output is not used',
+            );
+        }
+
+        // Exit 0 is the tool's claim that it formatted, not proof that it kept the statement. Both
+        // external backends were measured writing a different one (see StatementIdentity), and what
+        // passes here is what lands in the file.
+        $changed = StatementIdentity::firstDifference($sql, $formatted, $dialect);
+
+        if ($changed !== null) {
+            return FormatResult::undetermined(
+                FormatUndeterminedReason::ToolOutputRejected,
+                $this->name(),
+                $dialect,
+                $style,
+                sprintf('the output no longer reads as the same statement, so it is not used: %s', $changed),
+            );
+        }
+
+        return FormatResult::formatted($formatted, $this->name(), $dialect, $style, $this->processes->version($path));
+    }
+
+    /**
+     * Whether a finished run carries a formatted statement. Exit 0, unless a backend knows better.
+     */
+    protected function completed(ToolRunResult $run): bool
+    {
+        return $run->exitCode === 0;
+    }
+
+    /**
+     * What the tool reads on STDIN: the statement, unless a backend has to carry a setting inside it.
+     *
+     * A backend whose command line cannot express a style value may still accept it in the text, the
+     * way SQLFluff reads configuration from a comment. Kept beside {@see self::output()}, because
+     * whatever goes in this way has to come back out before the result is used.
+     */
+    protected function input(string $sql, Dialect $dialect, FormatStyle $style): string
+    {
+        return $sql;
+    }
+
+    /**
+     * The formatted statement taken back out of what the tool wrote, or null when that output is not
+     * the statement it was handed.
+     */
+    protected function output(string $stdout, Dialect $dialect, FormatStyle $style): ?string
+    {
+        return $stdout;
     }
 
     /**
@@ -164,5 +221,5 @@ abstract readonly class ExternalSqlFormatter implements SqlFormatter
      *
      * @return list<string>
      */
-    abstract protected function unexpressibleOptions(FormatStyle $style): array;
+    abstract public function unexpressible(FormatStyle $style): array;
 }

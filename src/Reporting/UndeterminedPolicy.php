@@ -27,6 +27,14 @@ use Pushery\SQLens\Findings\Result;
  * The `--allow-undetermined` escape hatch (a pre-deploy override that tolerates
  * undetermined even under strict mode) is only a contract here — its wiring lands
  * with the deploy lifecycle, and this policy is where it will attach.
+ *
+ * What it does NOT escalate is decided upstream, by the outcome, and never here by a
+ * list of rule ids: a `not_applicable` result is a check with nothing to run against,
+ * not one that could not run. That is where a boundary the package draws on purpose
+ * belongs — an index read completely and left out of a comparison by design reports
+ * as `not_applicable`, and a strict run stays green over it. Measured before that
+ * split: under `--profile=ci` a consumer's run failed with 15 of its 18 escalated
+ * results being such index notices, which no project can fix.
  */
 final readonly class UndeterminedPolicy
 {

@@ -86,6 +86,21 @@ interface SqlFormatter
      */
     public function version(): ?string;
 
+    /**
+     * The style options this backend cannot express, named; empty when it can express the whole style.
+     *
+     * Asked WITHOUT formatting, like `supports()` and `isAvailable()`, because `auto` has to choose
+     * before a file is read. It used to choose on dialect and machine alone: with `leading_commas`
+     * set and pgFormatter installed, it picked pgFormatter, and every file came back
+     * `format_style_not_expressible` while the core, which does leading commas, sat further down
+     * the list.
+     *
+     * `format()` refuses from this same answer, so the choice and the refusal cannot disagree.
+     *
+     * @return list<string>
+     */
+    public function unexpressible(FormatStyle $style): array;
+
     /** Format one statement, or say why not. Never throws. */
     public function format(string $sql, Dialect $dialect, FormatStyle $style): FormatResult;
 }
