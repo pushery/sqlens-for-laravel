@@ -93,7 +93,7 @@ final readonly class CatalogVerdicts
             static fn (RuleVerdict $verdict): RuleVerdict => self::isFlag($verdict)
                 ? RuleVerdict::notApplicable(
                     sprintf(
-                        'this project declared sqlens.security.server.lifetime as disposable, so %s describes a '
+                        'this project declared sqlens.security.server.lifetime (SQLENS_SERVER_LIFETIME) as disposable, so %s describes a '
                         .'fixture this job creates and destroys rather than a deployment anybody operates. The '
                         .'schema is judged here exactly as it would be anywhere; this server fact is judged by '
                         .'sqlens:predeploy, on the host that will actually be operated.',

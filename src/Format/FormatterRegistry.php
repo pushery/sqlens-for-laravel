@@ -122,6 +122,11 @@ final readonly class FormatterRegistry
         // failure; an ordinary run states it and carries on.
         $passedOver = [];
 
+        // The first backend that is installed and handles the dialect but cannot express the style.
+        // Kept rather than returned: something further down may express it. Used only when nothing
+        // does, so the run still reports the option by name instead of refusing to pick at all.
+        $fallback = null;
+
         foreach (self::AUTO_ORDER as $name) {
             $candidate = $this->byName($name);
 
@@ -133,20 +138,40 @@ final readonly class FormatterRegistry
                 continue;
             }
 
+            if (! $candidate instanceof SqlFormatter || ! $candidate->supports($dialect)) {
+                continue;
+            }
+
+            // ⚠️ THE STYLE, as well as dialect and machine. Without it `auto` picked pgFormatter for a
+            // project with `leading_commas`, and every file came back `format_style_not_expressible`
+            // while the core, which does leading commas, sat further down the list. Measured with
+            // both binaries installed.
+            $expresses = $candidate->unexpressible($style) === [];
+
             // AVAILABILITY as well as dialect support, and the second half is what `auto` means.
             // Without it the best backend for the dialect is chosen whether or not it is installed,
             // and every file comes back `format_tool_missing` while the core that would have worked
             // sits one line down the list. Measured, on a machine without pgFormatter.
-            if ($candidate instanceof SqlFormatter && $candidate->supports($dialect)) {
-                if ($candidate->isAvailable()) {
+            if ($candidate->isAvailable()) {
+                if ($expresses) {
                     return FormatterResolution::of($candidate, $passedOver);
                 }
 
-                // Supported here and not installed — the one case worth naming. A backend that
-                // cannot handle this dialect was never a candidate, and reporting it as a loss
-                // would state a gap no install on this project could close.
+                $fallback ??= $candidate;
+
+                continue;
+            }
+
+            // Missing, and able to express this style: the one case worth naming. A backend that
+            // could not have served the project's style is no loss, whether or not it is installed,
+            // and strict tool mode must not fail a build over it.
+            if ($expresses) {
                 $passedOver[] = $name;
             }
+        }
+
+        if ($fallback instanceof SqlFormatter) {
+            return FormatterResolution::of($fallback, $passedOver);
         }
 
         // Unreachable while the built-in core is registered, and NOT written as an assumption: a

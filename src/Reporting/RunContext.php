@@ -304,13 +304,10 @@ final readonly class RunContext
          * misconfiguration of this shape visible at the place a reader already looks, which is worth
          * more than a check against the one that was reported.
          *
-         * ⚠️ It is NOT in {@see self::toArray()}, and the omission is deliberate rather than
-         * forgotten. A machine consumer gating on `fail == 0` has exactly the same blind spot a
-         * human reader does, so the field belongs there too — but adding a key to the report
-         * envelope bumps `schema_version`, and the published contract binds that to a MINOR release
-         * (`.docs-portal/docs/contracts.md`). Putting it in a patch would either break that rule or
-         * decide the next version number on the way past. The JSON half is an owner decision that
-         * travels with the release, not a line to slip in here.
+         * In {@see self::toArray()} as `subject_count` since schema version 6. It was held out of the
+         * JSON header until then on purpose: a machine consumer gating on `fail == 0` has exactly the
+         * blind spot a human reader does, but adding a key to the envelope bumps `schema_version`,
+         * and the contract binds that to a minor release, so the JSON half waited for one.
          */
         public ?int $subjectCount = null,
     ) {}
@@ -646,6 +643,10 @@ final readonly class RunContext
             //
             // Null on a producer with no time budget — not 0, which is a claim about a run that ran.
             'time_budget_ms_consumed' => $this->timeBudgetMsConsumed,
+            // The denominator behind every count above, in the header since schema version 6 and
+            // AFTER every version-5 field, because the registers pin the key order. Null where the
+            // producer states none, which is not zero: zero is a run that judged nothing.
+            'subject_count' => $this->subjectCount,
         ];
     }
 }

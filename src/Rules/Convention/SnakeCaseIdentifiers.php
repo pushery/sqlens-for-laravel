@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Rules\Convention;
 
+use Pushery\SQLens\Catalog\Understanding\TopLevelList;
 use Pushery\SQLens\Exceptions\InvalidNamingPattern;
 use Pushery\SQLens\Subjects\SchemaObject;
 use Pushery\SQLens\Subjects\SchemaObjectType;
@@ -150,8 +151,9 @@ final readonly class SnakeCaseIdentifiers
     {
         $names = [];
 
-        foreach (explode(';', $encoded) as $entry) {
-            $entry = trim($entry);
+        // Split at the TOP level only: a member's columns may hold an index expression, and an
+        // expression may hold a semicolon inside a string literal.
+        foreach (TopLevelList::split($encoded, ';') as $entry) {
             $open = mb_strpos($entry, '(');
             $name = $open === false ? $entry : trim(mb_substr($entry, 0, $open));
 

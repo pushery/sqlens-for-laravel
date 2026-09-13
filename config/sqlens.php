@@ -824,9 +824,16 @@ return [
          * INTENDS. So it is declared, an absent declaration means 'persistent', and a value that is
          * neither is a misconfiguration naming the legal set rather than a quiet fall back — the
          * same contract every other named mode in this file holds to.
+         *
+         * Read from `SQLENS_SERVER_LIFETIME`, because the declaration belongs to the ENVIRONMENT
+         * rather than to the project: this one file serves the pipeline, where the server is a
+         * container, and the host, where it is not. Unset means 'persistent'. An environment that
+         * says 'disposable' on a real host withholds the server checks of `sqlens:audit` there, and
+         * each withheld finding names this key; `sqlens:predeploy` does not read it at all, so the
+         * verdict about the host a deploy walks into cannot be switched off from an environment file.
          */
         'server' => [
-            'lifetime' => 'persistent',
+            'lifetime' => env('SQLENS_SERVER_LIFETIME', 'persistent'),
         ],
         'min_severity' => 'high',
 

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Rules\Coverage;
 
+use Pushery\SQLens\Catalog\Understanding\TopLevelList;
+
 /**
  * Whether an index covers a foreign key — the one question, decided in one place.
  *
@@ -53,13 +55,18 @@ final readonly class ForeignKeyIndexCoverage
      * JSON. Parsing it here rather than in each rule keeps one reading of that shape — two would be
      * free to disagree about whitespace, and the one that disagreed would report a phantom.
      *
+     * Both separators are honored only at the TOP level ({@see TopLevelList}). An expression index
+     * carries its expression as a key position, and an expression may hold a comma inside a call or
+     * a semicolon inside a string literal; split flat, one index became several members with names
+     * and columns nobody wrote.
+     *
      * @return array<string, list<string>> member name => its columns, in order
      */
     public static function parse(string $encoded): array
     {
         $members = [];
 
-        foreach (explode(';', $encoded) as $entry) {
+        foreach (TopLevelList::split($encoded, ';') as $entry) {
             $entry = trim($entry);
             if ($entry === '') {
                 continue;
@@ -82,7 +89,7 @@ final readonly class ForeignKeyIndexCoverage
             }
 
             $members[$name] = array_values(array_filter(
-                array_map(trim(...), explode(',', $columns)),
+                TopLevelList::split($columns, ','),
                 static fn (string $column): bool => $column !== '',
             ));
         }

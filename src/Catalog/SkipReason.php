@@ -40,14 +40,41 @@ enum SkipReason: string
     case InsufficientPrivilege = 'insufficient_privilege';
 
     /**
-     * The object was read but not UNDERSTOOD well enough to reason about — an expression index, a
-     * partial index whose predicate was not compared, a materialized view's definition.
+     * The object was read, and part of it did not arrive in a form a rule can reason about: an
+     * expression the reading records beside an index rather than among its key positions, a
+     * condition whose shape the predicate reading does not recognize, key positions that do not
+     * balance.
      *
      * This is the reason the whole enum exists. The alternative to an honest skip here is a
      * redundancy heuristic that guesses, and a guess about an index is wrong in exactly the way
      * that makes a team stop believing the tool.
+     *
+     * ⚠️ **It used to carry a second meaning, and that is why {@see self::NotComparable} exists.** A
+     * partial index and a GIN index were reported here although nothing about them was unclear — both
+     * were read completely, and what they lacked was a comparison this build deliberately does not
+     * make. A consumer read four such notices as a backlog, "unknown, not fine", on exactly the
+     * indexes a statement would have been worth the most on. The two facts need opposite reactions:
+     * this one may be a gap worth closing, the other one is the construction.
      */
     case NotUnderstood = 'not_understood';
+
+    /**
+     * The object was read completely and understood, and it lies outside the comparisons this build
+     * makes, by design rather than by accident.
+     *
+     * A b-tree under a non-default operator class is compared against nothing, because
+     * `text_pattern_ops` and the default class answer different queries over the same key positions.
+     * A partial index is compared only against the indexes under its own condition, so on a table
+     * that carries another condition the pair between them stays unjudged: deciding whether one
+     * condition implies the other is not built. A MySQL prefix-length key indexes the first bytes of
+     * a column, which no column list can express.
+     *
+     * Not undetermined, and that is the load-bearing half. Nothing was left unanswered by the reading,
+     * so the notice for it reports as `not_applicable` and names the comparison that was not made. A
+     * strict run escalates what could not be determined; it does not escalate a boundary the package
+     * drew on purpose, which would turn every schema with an ordinary partial index red for good.
+     */
+    case NotComparable = 'not_comparable';
 
     /**
      * The object was deliberately left out by configuration or by a documented default — an
@@ -121,22 +148,24 @@ enum SkipReason: string
     /**
      * Whether this skip means something in scope went UNREAD.
      *
-     * Three classes, not two, and the middle one is the reason this method exists rather than a
+     * Four classes, not two, and the last two are the reason this method exists rather than a
      * `!== ExcludedByConfig` test at each call site:
      *
      * - **Unread** — a privilege, a budget, a driver gap, a prefix that matched nothing. The reading
      *   is not a complete statement about the schema, and silence in it cannot be trusted.
      * - **A decision** — `excluded_by_config`. Nothing went unread; a scope was chosen.
-     * - **Read but not comparable** — `not_understood`. The object IS in the snapshot, complete and
-     *   correct; what it cannot support is a rule REASONING about it, which is a question about the
-     *   rule and not about the reading. A partial index is ordinary, and letting one turn every
-     *   snapshot of an ordinary schema into a partial reading would make `isPartial()` mean nothing
-     *   — the mechanism a rule uses here is the per-object `isFullyUnderstood()` predicate.
+     * - **Read, not understood** — `not_understood`. The object IS in the snapshot; part of it did not
+     *   arrive in a form a rule can reason about, which is a question about the rule and not about
+     *   the reading — the mechanism a rule uses here is the per-object `isFullyUnderstood()`
+     *   predicate.
+     * - **Read, deliberately not compared** — `not_comparable`. Complete and understood, outside a
+     *   comparison by construction. A partial index is ordinary, and letting one turn every snapshot
+     *   of an ordinary schema into a partial reading would make `isPartial()` mean nothing.
      */
     public function leavesTheReadingIncomplete(): bool
     {
         return match ($this) {
-            self::ExcludedByConfig, self::NotUnderstood => false,
+            self::ExcludedByConfig, self::NotUnderstood, self::NotComparable => false,
             default => true,
         };
     }
@@ -189,7 +218,11 @@ enum SkipReason: string
             // A deliberate exclusion and a comprehension limit are not failures at all: the project
             // asked for the first, and the second belongs to the rule that met it. Neither leaves
             // the reading incomplete, so neither is a gap.
-            self::ExcludedByConfig, self::NotUnderstood => UndeterminedReason::StructurallyNotApplicable,
+            //
+            // `not_comparable` never reaches an undetermined in the first place: its notice reports
+            // as not_applicable, because nothing about it was undetermined. It is mapped here only
+            // because the match is exhaustive, and to the reason nearest in meaning.
+            self::ExcludedByConfig, self::NotUnderstood, self::NotComparable => UndeterminedReason::StructurallyNotApplicable,
             self::UnexpectedError => UndeterminedReason::CatalogReadFailed,
         };
     }
