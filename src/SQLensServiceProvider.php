@@ -399,7 +399,7 @@ final class SQLensServiceProvider extends ServiceProvider
         // that.
         $this->app->bind(PreflightRuns::class, PreflightService::class);
 
-        // The escalation table, built ONCE per run from the shipped artefact plus whatever the
+        // The escalation table, built ONCE per run from the shipped artifact plus whatever the
         // project overrode. A singleton because `load()` reads a file and parses it, and because two
         // instances would be two answers to "when is a rewrite critical" — free to differ the moment
         // somebody passes a path in one place and not the other.

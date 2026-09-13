@@ -2,6 +2,22 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-09-13
+
+### Fixed
+
+- **A server finding withheld on a disposable database now names a command that judges it.** Under `security.server.lifetime = disposable`, the not-applicable note said the server fact is judged by `sqlens:predeploy` on the host that will be operated, and `sqlens:predeploy` runs no `SEC.*` rule at all: a project that followed the note had its server security checked nowhere. The note now names `sqlens:security` and `sqlens:audit`, which run all twenty of these rules, against the host that is actually operated, and the security suite page says the same.
+
+- **The published `config/sqlens.php` writes US English.** A consuming application whose US-spelling guard reads its published config had to exempt the whole file over British spellings in its comments, and with the exemption its own comments in that file went unread too. The comments now say `artifact` and `analyzes`, the suite names are code-formatted where the prose lists them, and the same spelling reaches the shipped messages, the rule pages and the escalation register. The `analyse` key is unchanged: it is the suite's name and a public identifier.
+
+- **`sqlens:predeploy` runs under the `predeploy` profile when nothing selects one.** The shipped `config/sqlens.php` set `'profile' => 'local'`, and a configured profile outranks a command's own default, so every project had configured `local` without choosing it and the deploy gate ran with the lenient severity floor of a developer machine. The key now ships as `null`: `sqlens:predeploy` runs as `predeploy`, `sqlens:drift` labels its run with its own default `ci`, and every other command stays on `local`. A name in the key, `SQLENS_PROFILE` and `--profile` still win, in that rising order.
+
+  **Upgrade:** a project that published `config/sqlens.php` keeps its literal `'local'`, and with it the old behavior, until that line reads `'profile' => null`.
+
+- **A partial index whose condition compares a column with one value, excludes a fixed set, or joins readable conditions with `AND` is read, and `strict_undetermined` no longer fails a run over it.** A consuming application measured its thirteen partial indexes after 0.12.0, and eight were still `not_understood`: five compared a column with one value, where PostgreSQL prints a cast on both sides, and three joined conditions with `AND`, one of them with a `NOT IN` list. Each now reads as the condition it is. `IN ('live')` and `= ANY (ARRAY['live'])` meet the plain equality, `NOT IN` meets `<> ALL`, and an `AND` is compared as the set of its parts in whatever order it was written. An `AND` with any part SQLens cannot read is still refused whole, never read as the half it knows.
+
+  **Upgrade:** expect fewer `AUDIT.CATALOG.UNREAD.NOT_UNDERSTOOD` notices, and possibly a new `PG.L7.INDEX_REDUNDANT` finding where two partial indexes under the same condition really are redundant, because they are now compared.
+
 ## [0.12.0] - 2026-09-13
 
 ### Added

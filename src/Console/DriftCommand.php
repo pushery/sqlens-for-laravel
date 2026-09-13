@@ -141,7 +141,7 @@ final class DriftCommand extends Command
             // A migration set that could not be enumerated is not an empty one, and treating it as
             // empty would make the expectation side "the database as provisioned" — against which
             // every object the migrations added reads as unexpected drift. Hundreds of findings, all
-            // of them artefacts.
+            // of them artifacts.
             $this->outputErrorLine('sqlens:drift: the pending migrations could not be resolved: '
                 .($resolution->skip->value));
 

@@ -24,7 +24,7 @@ use Pushery\SQLens\Deploy\Contracts\ResolvesDebtStanding;
  * ## Why an absent account is not an empty one HERE
  *
  * On the recording side, a missing file means nothing has been recorded yet, and an empty account
- * is the honest reading. On the collecting side the file is the EXPECTED ARTEFACT: it not being
+ * is the honest reading. On the collecting side the file is the EXPECTED ARTIFACT: it not being
  * deployed, or `deploy.debt.path` resolving against the wrong working directory, is the likely
  * case — and "no open debts" would be the most comfortable possible wrong answer at exactly the
  * moment nobody can say. {@see DebtLedger::wasPresent()} carries that distinction out, and this is

@@ -173,9 +173,15 @@ return [
     | 'predeploy'. It appears in the run header so a reader knows whether a
     | result came from a lenient local run or a strict pre-deploy gate.
     |
+    | null, the shipped value, lets each command answer for the place it runs
+    | in: `sqlens:predeploy` runs as 'predeploy', `sqlens:drift` as 'ci', and
+    | every other command as 'local'. A name here outranks those defaults for
+    | every command, so set one only to pin all of them to it. SQLENS_PROFILE
+    | and the --profile flag outrank this key in turn.
+    |
     */
 
-    'profile' => 'local',
+    'profile' => null,
 
     /*
     |--------------------------------------------------------------------------
@@ -784,7 +790,7 @@ return [
          * default. Falling back would examine the wrong instance and report it as clean.
          *
          * Named `audit_connection` rather than `connection` on purpose: `runtime_connection` and
-         * `migration_connection` beside it name connections this suite ANALYSES — the read/write
+         * `migration_connection` beside it name connections this suite ANALYZES — the read/write
          * split it reasons about. This one is the connection the readers RUN ON. Three keys ending
          * in `connection` where one means something else would be read wrong exactly once, by
          * somebody wiring a least-privilege role at the end of a day.
@@ -955,7 +961,7 @@ return [
          *
          * The path is repository-relative like every other path here; an absolute one is accepted
          * too, because a CI step that knows its own workspace should not have to compute a way back
-         * to it. Diagnostics whose identifier belongs to no SQLens analyse rule are dropped — a
+         * to it. Diagnostics whose identifier belongs to no SQLens `analyse` rule are dropped — a
          * project runs PHPStan for its own reasons, and its own errors are not this suite's to relay.
          */
         'analyse' => [
@@ -1129,7 +1135,7 @@ return [
          *
          * Empty by default, which means the shipped table in `resources/data/escalation-thresholds.json`
          * decides. Set an operation here to replace ITS steps entirely — `rewrite`, `index_build`,
-         * `constraint_validation` and `backfill` are the four the artefact defines, and naming one it
+         * `constraint_validation` and `backfill` are the four the artifact defines, and naming one it
          * does not know is REFUSED rather than ignored, because a typo would otherwise mean the
          * escalation somebody configured silently never happens.
          *
@@ -1602,8 +1608,8 @@ return [
     | Suites (placeholder — not yet active)
     |--------------------------------------------------------------------------
     |
-    | Which of the suites run — lint, audit, analyse, format, guard, deploy,
-    | agent. Not active yet; the semantics arrive with the lint core.
+    | Which of the suites run — `lint`, `audit`, `analyse`, `format`, `guard`,
+    | `deploy`, `agent`. Not active yet; the semantics arrive with the lint core.
     |
     | 'suites' => ['lint', 'audit'],
     |

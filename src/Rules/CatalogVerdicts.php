@@ -89,6 +89,11 @@ final readonly class CatalogVerdicts
             return $verdicts;
         }
 
+        // The command the sentence sends a reader to has to be one that RUNS these rules. It named
+        // `sqlens:predeploy` until a consumer followed it into a deploy script: that command evaluates
+        // no `SEC.*` rule at all, so the server was checked nowhere while the report said where. Every
+        // server-bound rule sits in the audit suite, which `sqlens:security` and `sqlens:audit` both
+        // run, and DisposableServerTest holds that, so the sentence cannot drift from the rule set.
         return array_map(
             static fn (RuleVerdict $verdict): RuleVerdict => self::isFlag($verdict)
                 ? RuleVerdict::notApplicable(
@@ -96,7 +101,8 @@ final readonly class CatalogVerdicts
                         'this project declared sqlens.security.server.lifetime (SQLENS_SERVER_LIFETIME) as disposable, so %s describes a '
                         .'fixture this job creates and destroys rather than a deployment anybody operates. The '
                         .'schema is judged here exactly as it would be anywhere; this server fact is judged by '
-                        .'sqlens:predeploy, on the host that will actually be operated.',
+                        .'sqlens:security or sqlens:audit, run against the host that will actually be operated, '
+                        .'where the lifetime stays persistent.',
                         $rule->serverSubjectJudged(),
                     ),
                     NotApplicableReason::ServerIsDisposable,

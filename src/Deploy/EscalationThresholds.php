@@ -36,7 +36,7 @@ final readonly class EscalationThresholds
     private function __construct(private array $byOperation) {}
 
     /**
-     * Load the shipped artefact, with any project overrides folded in.
+     * Load the shipped artifact, with any project overrides folded in.
      *
      * @param  array<string, mixed>  $overrides  from `sqlens.preflight.thresholds`
      *

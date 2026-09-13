@@ -417,7 +417,7 @@ final readonly class ConfigSchema
             'security.privacy.ignore_columns-item' => 'a QUALIFIED column name — for example "orders.iban". Unqualified would silence every column with that name, including ones nobody looked at',
             'stability-item' => 'one of: '.$this->enumValues(StabilityTier::class),
             'mode' => 'one of: '.$this->enumValues(CaptureMode::class),
-            'profile' => 'one of: '.$this->enumValues(RunProfile::class),
+            'profile' => 'one of: '.$this->enumValues(RunProfile::class).', or null (each command then uses its own default)',
             'strict_tools', 'strict_undetermined' => 'a boolean',
             'allow_destructive' => 'a boolean — whether destructive operations are allowed project-wide (shown as a named suppression, never hidden)',
             'use_statistics' => 'a boolean — whether checks may reason about the server\'s table statistics',
@@ -525,7 +525,7 @@ final readonly class ConfigSchema
             'preflight' => 'an array with the keys: connection, budget_ms, long_running_ms, replication_lag_ms, thresholds',
             'preflight.long_running_ms' => "a positive integer number of milliseconds a session must have been running before the preflight treats it as something a deploy could collide with — zero is refused rather than read as 'report everything', because a preflight listing every session on a busy server is one nobody reads twice",
             'preflight.replication_lag_ms' => 'a positive integer number of milliseconds of replica lag at which the preflight reports. Measured on the TIME axis (`replay_lag`), which is deliberately not the byte one: a quiet primary keeps the time small however much WAL is outstanding, and both are reported',
-            'preflight.thresholds' => 'an array keyed by operation — rewrite, index_build, constraint_validation, backfill — replacing that operation\'s escalation steps entirely. An operation the shipped artefact does not define is REFUSED rather than ignored, because a typo would otherwise mean the escalation somebody configured silently never happens. These numbers only RAISE a severity and can neither create a finding nor remove one: a row estimate depends on when ANALYZE last ran, and a number that could silence a finding would make the same migration pass on Monday and fail on Friday',
+            'preflight.thresholds' => 'an array keyed by operation — rewrite, index_build, constraint_validation, backfill — replacing that operation\'s escalation steps entirely. An operation the shipped artifact does not define is REFUSED rather than ignored, because a typo would otherwise mean the escalation somebody configured silently never happens. These numbers only RAISE a severity and can neither create a finding nor remove one: a row estimate depends on when ANALYZE last ran, and a number that could silence a finding would make the same migration pass on Monday and fail on Friday',
             'preflight.budget_ms' => "a positive integer number of milliseconds the WHOLE preflight run may take before the checks it did not reach are reported undetermined — zero would mean 'no bound', and a gate that can delay a deploy indefinitely is the one that gets switched off",
             'preflight.connection' => 'a connection name from config/database.php for the deploy readers to use, or null. Null does NOT fall through to the default connection: that is the one running your migrations, and a preflight reading through it holds ALTER and DROP it never needs',
             'format' => 'an array with the keys: paths, exclude, extensions, backend, dialect, binaries, timeout, style',
@@ -653,9 +653,9 @@ final readonly class ConfigSchema
                     : ConfigViolation::wrongType($path, $expected, $value)],
             // SHAPE here, MEANING in the loader — the same split the host arm above documents, and
             // for the same reason. Which operation names exist is a fact about the shipped
-            // threshold artefact, and `EscalationThresholds::load()` already refuses an unknown one
+            // threshold artifact, and `EscalationThresholds::load()` already refuses an unknown one
             // by name. Repeating that list here would be a second authority on it, free to drift
-            // toward accepting a name the artefact dropped.
+            // toward accepting a name the artifact dropped.
             // An empty array is BOTH a list and the shipped default, so it has to pass; anything
             // else that is a list is a mistake — the steps go one level down, keyed by operation.
             'preflight.thresholds' => is_array($value) && ($value === [] || ! array_is_list($value))
@@ -694,7 +694,10 @@ final readonly class ConfigSchema
                 'migration_paths-item',
             ),
             'mode' => $this->enumLeaf($path, $expected, CaptureMode::class, $value),
-            'profile' => $this->enumLeaf($path, $expected, RunProfile::class, $value),
+            // null is the shipped value and means "nobody chose": a configured name outranks every
+            // command's own default, so shipping one made `sqlens:predeploy` run as `local` in every
+            // project that never picked a profile.
+            'profile' => $value === null ? [] : $this->enumLeaf($path, $expected, RunProfile::class, $value),
             'strict_tools', 'strict_undetermined', 'use_statistics', 'allow_destructive' => is_bool($value)
                 ? []
                 : [ConfigViolation::wrongType($path, $expected, $value)],
