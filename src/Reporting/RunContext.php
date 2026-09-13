@@ -25,7 +25,12 @@ final readonly class RunContext
 {
     /**
      * @param  list<ReportedServerVersion>  $serverVersions  one per addressed connection
-     * @param  array<string, string>  $toolVersions  external tool name => version (empty until tool discovery lands)
+     * @param  array<string, string>  $toolVersions  external tool name => version; empty means this run did not
+     *                                               ASK — a refusal that stopped before tool discovery, or a
+     *                                               producer that runs no external tool. It has not meant "the
+     *                                               feature is not built yet" since the audit route started
+     *                                               deriving them, and a reader who took it that way diagnosed
+     *                                               a missing capability instead of a run that never looked
      * @param  list<string>  $activeCategories  the categories this run was scoped to; empty means all
      * @param  list<string>  $admittedStability  the maturity tiers this run ADMITTED — what was allowed
      *                                           to run, never what reported

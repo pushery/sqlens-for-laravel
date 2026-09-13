@@ -2,6 +2,15 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.3] - 2026-09-12
+
+### Fixed
+
+- **The audit page now says what a category scope narrows.** A run scoped to `security` can report findings under `safety`, and nothing told a reader whether the scope had leaked. It hadn't: those findings are notices about parts of the catalog the run could not read, and a notice reports under the category it is about, whatever the run was scoped to. The scope selects rules, and a notice is not a rule finding. Reported from a consuming application that read `categories=security` over twenty `safety` findings.
+- **The `$toolVersions` docblock on the run context no longer describes tool discovery as unbuilt.** The audit route has reported tool versions since 0.11.0, so an empty list means a run that did not ask its tools, and the docblock now says so.
+
+**Upgrade:** nothing to do.
+
 ## [0.11.2] - 2026-09-12
 
 ### Fixed
