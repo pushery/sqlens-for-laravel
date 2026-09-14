@@ -23,6 +23,7 @@ use Pushery\SQLens\Drivers\Mysql\Rules\L4\IdentifierLengthRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L5\FloatForMoneyRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L5\MixedCollationRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L5\NullableForeignKeyInUniqueRule;
+use Pushery\SQLens\Drivers\Mysql\Rules\L5\PolymorphicPairWithoutIndexRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L5\SqlModeMissingErrorForDivisionByZeroRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L5\SqlModeMissingStrictTransTablesRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L6\CharacterSetServerNotUtf8mb4Rule;
@@ -114,6 +115,7 @@ final readonly class MysqlRuleSet
             new MixedCollationRule($projectRoot),
             new FloatForMoneyRule($projectRoot, $moneyColumns),
             new NullableForeignKeyInUniqueRule($projectRoot),
+            new PolymorphicPairWithoutIndexRule($projectRoot),
             new LegacyCollationRule($projectRoot),
             new DropColumnRule($projectRoot),
             new DropTableRule($projectRoot),

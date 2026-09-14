@@ -629,6 +629,17 @@
             "replaced_by": null
         },
         {
+            "id": "DEPLOY.PREFLIGHT.FREEZE_HORIZON",
+            "category": "safety",
+            "level": 0,
+            "severity": null,
+            "stability": "stable",
+            "message_prefix": "sqlens.deploy",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/deploy-preflight-freeze-horizon/",
+            "deprecated_since": null,
+            "replaced_by": null
+        },
+        {
             "id": "DEPLOY.PREFLIGHT.INACTIVE_REPLICATION_SLOT",
             "category": "safety",
             "level": 0,
@@ -1131,6 +1142,17 @@
             "stability": "stable",
             "message_prefix": "sqlens.lint",
             "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/my-l5-float-money/",
+            "deprecated_since": null,
+            "replaced_by": null
+        },
+        {
+            "id": "MY.L5.MORPHS_NO_INDEX",
+            "category": "performance",
+            "level": 5,
+            "severity": null,
+            "stability": "stable",
+            "message_prefix": "sqlens.lint",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/my-l5-morphs-no-index/",
             "deprecated_since": null,
             "replaced_by": null
         },
@@ -1659,6 +1681,17 @@
             "stability": "stable",
             "message_prefix": "sqlens.lint",
             "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l5-money-type/",
+            "deprecated_since": null,
+            "replaced_by": null
+        },
+        {
+            "id": "PG.L5.MORPHS_NO_INDEX",
+            "category": "performance",
+            "level": 5,
+            "severity": null,
+            "stability": "stable",
+            "message_prefix": "sqlens.lint",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l5-morphs-no-index/",
             "deprecated_since": null,
             "replaced_by": null
         },

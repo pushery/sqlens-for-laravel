@@ -320,12 +320,65 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
         $excluded = $this->reasonedPass($serverValue, $expectation, $object);
 
         if ($excluded !== null) {
-            return [RuleVerdict::pass($excluded)];
+            return [RuleVerdict::pass($excluded.$this->restartNote($object))];
         }
 
         $violation = $this->violation($serverValue, $expectation, $object);
 
-        return $violation === null ? [] : [RuleVerdict::flag($violation)];
+        if ($violation !== null) {
+            // A value that is already wrong stays wrong. The pending change rides along on the
+            // finding rather than replacing it: the problem is present-tense either way, and a
+            // reader who fixes the running value needs to know the file already says something else.
+            return [RuleVerdict::flag($violation.$this->restartNote($object))];
+        }
+
+        // A clean value with a change waiting is the case this rung exists for, and it is the one a
+        // pass would hide. `pending_restart` means somebody already changed the value, the server
+        // took the change, and it applies at the next restart — which happens at a minor upgrade or
+        // a failover, not at a moment anybody picked. Saying "fine" here is a green that expires.
+        //
+        // Reported as a GAP rather than as a flag, because the running value really is fine and the
+        // decided one is not readable from `pg_settings`: what the run cannot say is what comes
+        // after the restart, and that is exactly what an undetermined is for.
+        if ($object->getBool('pending_restart') === true) {
+            return [RuleVerdict::undetermined(
+                sprintf(
+                    '%s is %s on this server, which this check accepts — but the server carries a '
+                    .'change to it that applies at the next restart, so this answer expires the next '
+                    .'time it is restarted. The decided value is in the configuration file rather '
+                    .'than in the catalog, so this run can name the running one and not the one that '
+                    .'replaces it. Restart at a moment you choose and read it again, or check the '
+                    .'file.',
+                    $this->settingVariable(),
+                    $serverValue,
+                ),
+                UndeterminedReason::SettingChangePendingRestart,
+            )];
+        }
+
+        return [];
+    }
+
+    /**
+     * The sentence appended to a verdict about a setting whose change is waiting for a restart.
+     *
+     * Empty for the ordinary case, and empty on MySQL — `MysqlServerSettingsReader` reports `null`
+     * there rather than `false`, because the engine has no counterpart and answering `false` would
+     * claim a check nobody made. `getBool()` returns null for both, and only an explicit `true`
+     * earns the sentence.
+     */
+    private function restartNote(SchemaObject $object): string
+    {
+        if ($object->getBool('pending_restart') !== true) {
+            return '';
+        }
+
+        return sprintf(
+            ' This server also carries a change to %s that applies at the next restart, so the value '
+            .'judged here is the RUNNING one and a restart replaces it with something this run cannot '
+            .'read — the decided value lives in the configuration file, not in the catalog.',
+            $this->settingVariable(),
+        );
     }
 
     /**

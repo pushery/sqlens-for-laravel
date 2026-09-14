@@ -256,6 +256,26 @@
                 "note": "The manual's own worked example of floating-point comparison failing on values that display identically — the shape this rule exists to prevent."
             }
         ],
+        "MY.L5.MORPHS_NO_INDEX": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/multiple-column-indexes.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Why the TYPE column has to lead on this engine too: MySQL uses a multiple-column index for lookups that constrain a leftmost prefix of its columns, and for nothing else. The same reading excludes a prefix index over the type column, which stores a truncation and so cannot answer an equality on the whole value."
+            },
+            {
+                "type": "doc",
+                "url": "https://laravel.com/docs/13.x/eloquent-relationships",
+                "applies_to": "Laravel 13 and newer, on MySQL 8.4",
+                "note": "Why both columns are always constrained together: a polymorphic relation stores the related model's type beside its key, and the key is unique only within one type. The relation therefore cannot resolve a row from the id alone, which is what makes an index over the pair the only one that serves it."
+            },
+            {
+                "type": "doc",
+                "url": "https://laravel.com/docs/13.x/migrations",
+                "applies_to": "Laravel 13 and newer, on MySQL 8.4",
+                "note": "morphs() adds both columns AND the index over them, which is why a project that uses it never sees this finding. The shapes that do are hand-written columns, and what is left behind when a later migration replaces a nullableMorphs() with its two parts."
+            }
+        ],
         "MY.L5.SQL_MODE_DIVISION_BY_ZERO_SILENT": [
             {
                 "type": "doc",
@@ -800,6 +820,26 @@
                 "url": "https://www.postgresql.org/docs/18/datatype-money.html",
                 "applies_to": "PostgreSQL 18",
                 "note": "The money type's output depends on lc_monetary and input is interpreted under that same setting, so a value is locale-dependent; the documentation itself recommends numeric where that dependency is unwanted, and notes the fractional precision is determined by the locale."
+            }
+        ],
+        "PG.L5.MORPHS_NO_INDEX": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/indexes-multicolumn.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "Why the TYPE column has to lead: a multicolumn B-tree is usable for a query constraining its leading columns, and constraining only a later column leaves the index no better than a scan. An index on (commentable_type, commentable_id) therefore serves both the paired lookup a polymorphic relation makes and a type-only one; an index on (commentable_id, commentable_type) serves the pair too, and spends its first level on a column that never appears alone."
+            },
+            {
+                "type": "doc",
+                "url": "https://laravel.com/docs/13.x/eloquent-relationships",
+                "applies_to": "Laravel 13 and newer, on PostgreSQL 18",
+                "note": "Why both columns are always constrained together: a polymorphic relation stores the related model's type beside its key, and the key is unique only within one type. The relation therefore cannot resolve a row from the id alone, which is what makes an index over the pair the only one that serves it."
+            },
+            {
+                "type": "doc",
+                "url": "https://laravel.com/docs/13.x/migrations",
+                "applies_to": "Laravel 13 and newer, on PostgreSQL 18",
+                "note": "morphs() adds both columns AND the index over them, which is why a project that uses it never sees this finding. The shapes that do are hand-written columns, and what is left behind when a later migration replaces a nullableMorphs() with its two parts."
             }
         ],
         "PG.L5.NO_PRIMARY_KEY": [

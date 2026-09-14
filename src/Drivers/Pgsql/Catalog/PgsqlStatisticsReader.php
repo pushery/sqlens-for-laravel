@@ -128,7 +128,8 @@ final readonly class PgsqlStatisticsReader implements StatisticsReader
                         then (select coalesce(sum(pg_total_relation_size(t.relid)), 0) from pg_partition_tree(c.oid) t)
                         else pg_total_relation_size(c.oid) end as total_bytes,
                    s.last_analyze,
-                   s.last_autoanalyze
+                   s.last_autoanalyze,
+                   s.n_mod_since_analyze
               from pg_class c
               join pg_namespace n on n.oid = c.relnamespace
               left join pg_stat_all_tables s on s.relid = c.oid
@@ -266,7 +267,7 @@ final readonly class PgsqlStatisticsReader implements StatisticsReader
 
             $tables[] = new TableStatistics(
                 $requested,
-                $rowEstimate < 0 ? null : $this->rowCount((int) round($rowEstimate), $analyzedAt),
+                $rowEstimate < 0 ? null : $this->rowCount((int) round($rowEstimate), $analyzedAt, $this->number($row, 'n_mod_since_analyze')),
                 $this->bytes($row, 'table_bytes', EstimateSource::TableBytes),
                 $this->bytes($row, 'index_bytes', EstimateSource::IndexBytes),
                 $this->bytes($row, 'total_bytes', EstimateSource::TotalBytes),
@@ -321,11 +322,18 @@ final readonly class PgsqlStatisticsReader implements StatisticsReader
      * were reset or the statistics view is not answering — the age is unknown, which is not the same
      * as never collected, and the difference is whether an ANALYZE would help.
      */
-    private function rowCount(int $value, ?DateTimeImmutable $analyzedAt): Estimate
+    private function rowCount(int $value, ?DateTimeImmutable $analyzedAt, ?float $modifiedSince): Estimate
     {
+        // The DRIFT rides along with both, and it is the fact the timestamp cannot give: a statistic
+        // from a year ago on a table nobody wrote to is exactly right, and one from an hour ago on a
+        // table that doubled since is out by a factor of two. `n_mod_since_analyze` is what tells the
+        // two apart, and it is as useful on the unknown-age road as on the measured one — arguably
+        // more, since it is the only evidence left there.
+        $drift = $modifiedSince === null ? null : (int) round($modifiedSince);
+
         return $analyzedAt instanceof DateTimeImmutable
-            ? Estimate::measured($value, EstimateSource::RowCount, $analyzedAt)
-            : Estimate::freshnessUnknown($value, EstimateSource::RowCount);
+            ? Estimate::measured($value, EstimateSource::RowCount, $analyzedAt, $drift)
+            : Estimate::freshnessUnknown($value, EstimateSource::RowCount, $drift);
     }
 
     /**

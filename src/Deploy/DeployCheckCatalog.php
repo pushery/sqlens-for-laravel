@@ -54,6 +54,7 @@ final readonly class DeployCheckCatalog
             self::oscArtifact(),
             self::unenforcedConstraint(),
             self::diskHeadroom(),
+            self::freezeHorizon(),
             self::inactiveReplicationSlot(),
             self::lockBlocker(),
             self::metadataLockBlocker(),
@@ -457,6 +458,24 @@ final readonly class DeployCheckCatalog
             ],
             Attribution::Observed,
             DowntimeClass::Rewrite,
+        );
+    }
+
+    private static function freezeHorizon(): DeployCheckMetadata
+    {
+        return DeployCheckMetadata::derived(
+            'DEPLOY.PREFLIGHT.FREEZE_HORIZON',
+            self::deploy(),
+            [
+                'the thresholds come from the cluster, and a per-table reloptions override is not '
+                .'read — a table carrying its own autovacuum_freeze_max_age is judged against the '
+                .'wider setting, which over-reports rather than staying silent',
+                'the severity rises with how close the nearer of the two clocks is, and with '
+                .'whether a worker is already running, so the catalog names none',
+                'an anti-wraparound autovacuum that has not started yet MAY not start during this '
+                .'window; the finding says a worker can arrive, never that one will',
+            ],
+            Attribution::Observed,
         );
     }
 

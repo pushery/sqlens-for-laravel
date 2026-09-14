@@ -32,6 +32,7 @@ use Pushery\SQLens\Drivers\Pgsql\Rules\L5\FloatForMoneyRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L5\ForeignKeyWithoutIndexRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L5\MoneyTypeRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L5\NullableForeignKeyInUniqueRule;
+use Pushery\SQLens\Drivers\Pgsql\Rules\L5\PolymorphicPairWithoutIndexRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L5\TableWithoutPrimaryKeyRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L6\DefaultTransactionIsolationDriftRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L6\DefaultTransactionReadOnlyRule;
@@ -137,6 +138,7 @@ final readonly class PgsqlRuleSet
             new FloatForMoneyRule($projectRoot, $moneyColumns),
             new MoneyTypeRule($projectRoot),
             new NullableForeignKeyInUniqueRule($projectRoot),
+            new PolymorphicPairWithoutIndexRule($projectRoot),
             new CollationVersionMismatchRule($projectRoot),
             new JsonNotJsonbRule($projectRoot),
             new NarrowIntegerPrimaryKeyRule($projectRoot, $migrationsTable ?? 'migrations'),

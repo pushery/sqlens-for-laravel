@@ -61,6 +61,25 @@ final readonly class Estimate
          * differ by however far the two clocks have drifted.
          */
         public ?DateTimeImmutable $measuredAt,
+        /**
+         * How many rows the server has seen inserted, updated or deleted SINCE that refresh.
+         *
+         * The fact an age cannot give. A statistic from a year ago on a table nobody has written to
+         * is exactly right; one from an hour ago on a table that doubled since is out by a factor of
+         * two — and a timestamp reads the same in both cases. PostgreSQL counts it in
+         * `pg_stat_all_tables.n_mod_since_analyze`.
+         *
+         * Null wherever the engine does not count it, which is everywhere except a PostgreSQL row
+         * estimate: a size is computed while the server answers and has no statistics to drift from,
+         * and InnoDB keeps no counterpart figure at all. Null is therefore "not counted", never
+         * "nothing changed" — and it is why {@see self::drift()} is three-valued.
+         *
+         * It is deliberately NOT in {@see self::toArray()} or {@see self::describe()}. Those two are
+         * the wire format and the stable rendering a digest is taken over; a new key in either is a
+         * schema change and a new digest for every unchanged database. This is advisory prose for a
+         * reader, and it travels through the narrator.
+         */
+        public ?int $modifiedSince = null,
     ) {}
 
     /**
@@ -79,10 +98,17 @@ final readonly class Estimate
         return new self(self::nonNegative($value, $source), $source, EstimateFreshness::NotApplicable, null);
     }
 
-    /** An estimate whose statistics the server last refreshed at a known moment. */
-    public static function measured(int $value, EstimateSource $source, DateTimeImmutable $measuredAt): self
+    /**
+     * An estimate whose statistics the server last refreshed at a known moment.
+     *
+     * `$modifiedSince` is how many rows changed since that moment, where the engine counts it. It is
+     * optional because most callers have no such number — a size estimate never does — and defaulted
+     * to null rather than zero, because "not counted" and "nothing changed" are different answers
+     * and only one of them says the estimate still holds.
+     */
+    public static function measured(int $value, EstimateSource $source, DateTimeImmutable $measuredAt, ?int $modifiedSince = null): self
     {
-        return new self(self::nonNegative($value, $source), $source, EstimateFreshness::Measured, $measuredAt);
+        return new self(self::nonNegative($value, $source), $source, EstimateFreshness::Measured, $measuredAt, self::nonNegativeDrift($modifiedSince));
     }
 
     /**
@@ -111,9 +137,9 @@ final readonly class Estimate
      * built on: one of them is fixed by refreshing the statistics and the other cannot be fixed by
      * running anything.
      */
-    public static function freshnessUnknown(int $value, EstimateSource $source): self
+    public static function freshnessUnknown(int $value, EstimateSource $source, ?int $modifiedSince = null): self
     {
-        return new self(self::nonNegative($value, $source), $source, EstimateFreshness::Unknown, null);
+        return new self(self::nonNegative($value, $source), $source, EstimateFreshness::Unknown, null, self::nonNegativeDrift($modifiedSince));
     }
 
     /**
@@ -161,6 +187,31 @@ final readonly class Estimate
             EstimateFreshness::Measured, EstimateFreshness::NotApplicable => false,
             EstimateFreshness::Unknown => null,
         };
+    }
+
+    /**
+     * How far the table has moved since its statistics were taken, as a fraction of the estimate.
+     *
+     * `0.5` means half as many rows changed as the estimate claims the table holds; `2.0` means
+     * twice as many. Not a percentage and not clamped: a table that turned over three times since
+     * the last ANALYZE has a number worth seeing, and capping it at 1.0 would hide exactly the case
+     * that matters.
+     *
+     * Three-valued, like everything else about freshness here. Null means the engine does not count
+     * modifications, which is not the same as none having happened — and the difference decides
+     * whether a reader may trust the number in front of them.
+     *
+     * An estimate of ZERO rows with modifications against it answers `null` rather than dividing:
+     * the ratio has no meaning without a denominator, and any figure invented for one would be a
+     * number nobody measured. The modification count itself is still readable on the property.
+     */
+    public function drift(): ?float
+    {
+        if ($this->modifiedSince === null || $this->value <= 0) {
+            return null;
+        }
+
+        return $this->modifiedSince / $this->value;
     }
 
     /**
@@ -242,6 +293,18 @@ final readonly class Estimate
             'freshness' => $this->freshness->value,
             'measured_at' => $this->measuredAt?->setTimezone(new DateTimeZone('UTC'))->format(DateTimeInterface::ATOM),
         ];
+    }
+
+    /**
+     * A modification count the reading could not make sense of is dropped rather than carried.
+     *
+     * A negative one is not a smaller drift — it is a sentinel or a read that went wrong, and
+     * carrying it would put a number in a report that describes nothing. Null says the drift was not
+     * counted, which is the honest reading of a value nobody can interpret.
+     */
+    private static function nonNegativeDrift(?int $modifiedSince): ?int
+    {
+        return $modifiedSince === null || $modifiedSince < 0 ? null : $modifiedSince;
     }
 
     /** @throws InvalidEstimate when an engine's never-collected sentinel was forwarded as a value */

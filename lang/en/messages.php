@@ -106,6 +106,7 @@ return [
             'never_collected' => 'statistics never collected',
             'age_unknown' => 'statistics age unknown',
             'measured_at' => 'statistics from :timestamp',
+            'drift' => ':rows rows changed since, about :ratio of the estimate',
         ],
         'skip' => [
             'not_readable' => 'The catalog relation :reference could not be read on this server, so the objects it describes are missing from this reading. Not a permission problem — that is reported separately — and not a pass: what was not read is listed rather than assumed empty.',

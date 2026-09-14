@@ -89,6 +89,7 @@ use Pushery\SQLens\Drivers\Pgsql\Catalog\PgsqlServerSettingsReader;
 use Pushery\SQLens\Drivers\Pgsql\Catalog\PgsqlSessionDefense;
 use Pushery\SQLens\Drivers\Pgsql\Catalog\PgsqlSettingCrossFactCollector;
 use Pushery\SQLens\Drivers\Pgsql\Catalog\PgsqlStatisticsReader;
+use Pushery\SQLens\Drivers\Pgsql\Deploy\FreezeHorizonCheck;
 use Pushery\SQLens\Drivers\Pgsql\Deploy\GrantCheck;
 use Pushery\SQLens\Drivers\Pgsql\Deploy\InvalidIndexCheck;
 use Pushery\SQLens\Drivers\Pgsql\Deploy\LockBlockerCheck;
@@ -716,6 +717,11 @@ final class SQLensServiceProvider extends ServiceProvider
                     // migrations to know which locks are coming, and the live activity to know what
                     // holds them. It runs after everything that could refuse the run outright.
                     new LockBlockerCheck,
+                    // Immediately after it, and about the other half of the same question: the lock
+                    // check finds a holder it can NAME, and an anti-wraparound autovacuum is the one
+                    // that blocks without being nameable that way — a background worker that does
+                    // not yield, behind which the ALTER waits looking like a lock nobody holds.
+                    new FreezeHorizonCheck,
                     // Its MySQL counterpart. Same question, different lock vocabulary — and a
                     // different way of going quiet: `performance_schema` can be off, and an empty
                     // reading then means nothing rather than nothing-found.
