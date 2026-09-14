@@ -111,6 +111,20 @@ final class ReaderSession
             $this->connection->statement($statement);
         }
 
+        // Through Laravel's own `beginTransaction()`, never a raw `BEGIN TRANSACTION READ ONLY`
+        // over `statement()` — and that is a correctness requirement, not a style choice.
+        //
+        // `LostConnectionDetector` lists `SQLSTATE[25006]: Read only sql transaction: 7` among the
+        // strings that mean the connection died, and `Connection::handleQueryException()` rethrows
+        // only while `transactions >= 1`. Open the transaction where Laravel cannot see it, and a
+        // write this session refuses is read as a dead connection: the framework RECONNECTS and
+        // RUNS THE STATEMENT AGAIN, outside any transaction, where nothing refuses it.
+        //
+        // The statement that would be retried is the seal's own write probe below. The package
+        // would write into the database it promises never to write to — and only then report that
+        // the session is not sealed. Measured against a real server in
+        // tests/Postgres/ReaderSessionEffectiveTest.php, which also measures that MySQL does NOT
+        // retry, because the detector's needle is PostgreSQL's wording rather than the SQLSTATE.
         $this->connection->beginTransaction();
 
         try {

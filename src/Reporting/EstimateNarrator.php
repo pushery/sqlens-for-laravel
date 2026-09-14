@@ -48,14 +48,44 @@ final readonly class EstimateNarrator
     public function narrate(Estimate $estimate): string
     {
         return sprintf(
-            '%d %s (%s, %s, %s)',
+            '%d %s (%s, %s, %s%s)',
             $estimate->value,
             // Untranslated on purpose: identifiers, not prose.
             $estimate->unit()->value,
             $this->line($estimate->isExact() ? 'exact' : 'estimated'),
             $estimate->source->value,
             $this->freshness($estimate),
+            $this->drift($estimate),
         );
+    }
+
+    /**
+     * How far the table has moved since its statistics were taken — the fact the age cannot give.
+     *
+     * A statistic from a year ago on a table nobody wrote to is exactly right, and one from an hour
+     * ago on a table that doubled since is out by a factor of two. The timestamp above reads the same
+     * in both cases; this is the sentence that tells them apart.
+     *
+     * Empty where the engine does not count modifications — every size estimate, and every reading
+     * from an engine with no counterpart figure — because silence there says "not counted", and a
+     * zero would say "nothing changed". Only one of those is true, and only from a server that said so.
+     *
+     * The ratio is rendered with `number_format` at one decimal rather than as a percentage: a table
+     * that turned over three times since the last ANALYZE reads as `3.0x`, and a percentage would
+     * render that as 300 %, which a reader has to convert back before it means anything.
+     */
+    private function drift(Estimate $estimate): string
+    {
+        $drift = $estimate->drift();
+
+        if ($drift === null || $estimate->modifiedSince === null) {
+            return '';
+        }
+
+        return ', '.$this->line('drift', [
+            'rows' => (string) $estimate->modifiedSince,
+            'ratio' => number_format($drift, 1, '.', '').'x',
+        ]);
     }
 
     /**

@@ -305,6 +305,23 @@ enum UndeterminedReason: string
     case TransactionPooled = 'transaction_pooled';
 
     /**
+     * The setting this rule judged carries a change that takes effect at the next restart.
+     *
+     * `pending_restart` means somebody already changed the value, the server accepted the change, and
+     * it is waiting for a restart to apply it. From that moment the RUNNING value and the DECIDED
+     * value are two different things, and only the running one is readable here.
+     *
+     * A rule that judged the running value and said "fine" would be right until the next minor
+     * upgrade or failover — which is to say, until the moment nobody is watching. So a clean value
+     * with a change pending is reported as a gap rather than as a pass: what the run cannot say is
+     * whether the setting will still be fine afterwards.
+     *
+     * A value that is ALREADY wrong is still reported as wrong. The pending change is added to that
+     * finding rather than replacing it, because the problem is present-tense either way.
+     */
+    case SettingChangePendingRestart = 'setting_change_pending_restart';
+
+    /**
      * No pin was set and the addressed connection produced no readable version — the
      * ordinary shape of a run with nothing to ask, such as the single-file fast path.
      *
@@ -842,6 +859,7 @@ enum UndeterminedReason: string
             self::ValueOriginUnknown => 'The run could not tell whether a value in this statement was written into the file or supplied at the call site, and the two are the same text by the time a rule reads them.',
             self::NotConfigured => 'The check needs a setting this project has not made, and guessing it would name the wrong thing.',
             self::TransactionPooled => 'The connection multiplexes statements across server backends, so a reading cannot be attributed to one server.',
+            self::SettingChangePendingRestart => 'The server carries a change to this setting that applies at the next restart, so the value judged is the running one and this answer expires when it is restarted; the decided value is in the configuration file rather than in the catalog.',
             self::PinnedHostUnverifiable => 'The pinned host and the host the server named cannot be compared, so the identity of the audited instance is unconfirmed.',
             self::OnlineDdlMatrixUnavailable => 'The online-DDL matrix could not be read, so no operation could be classified; check the configured matrix path.',
             self::AdvisoryDataUnavailable => 'The end-of-life data could not be read, so the server version was compared against nothing; the reason names which file was tried.',
