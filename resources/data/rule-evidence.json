@@ -664,6 +664,26 @@
                 "note": "CREATE INDEX CONCURRENTLY cannot run inside a transaction block — PostgreSQL raises an error and does nothing. Laravel wraps a migration's up() in a transaction by default, so the concurrent build fails until the migration opts out with public $withinTransaction = false. The same restriction applies to DROP INDEX CONCURRENTLY and REINDEX CONCURRENTLY."
             }
         ],
+        "PG.L3.LOCK_TIMEOUT_INEFFECTIVE": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/runtime-config-client.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "Both clocks, defined a few paragraphs apart. statement_timeout aborts any statement that runs longer than the value; lock_timeout aborts one that waits longer than the value FOR A LOCK. The nesting is what this rule is about and the page states it plainly: the lock wait happens inside the statement, so a statement clock no larger than the lock clock ends the statement before the lock clock is reached."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-alterdatabase.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "Where a per-database setting goes, and with ALTER ROLE the reason the finding reads pg_db_role_setting rather than pg_settings.source: source describes the session doing the reading, and this tool sets both timeouts on its own session before it reads anything."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/view-pg-settings.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "reset_val is the value a RESET returns the parameter to — what the configuration file, the database and the role have settled between them, and therefore what a fresh deploy session inherits. It is the column this rule judges, for the reason above."
+            }
+        ],
         "PG.L3.MISSING_LOCK_TIMEOUT": [
             {
                 "type": "doc",
@@ -986,6 +1006,20 @@
                 "url": "https://www.postgresql.org/docs/18/sql-altersystem.html",
                 "applies_to": "PostgreSQL 18",
                 "note": "The remediation path, and why this rule reports no downtime: ALTER SYSTEM writes the value to a file the server reads, and a parameter of this class takes effect on a configuration reload rather than a restart. Sessions already open keep what they have, so the change reaches an application when its pool next reconnects."
+            }
+        ],
+        "PG.L7.AUTOVACUUM_DISABLED": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/routine-vacuuming.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "Why dead rows have to be reclaimed at all, and — in the section on preventing transaction-id wraparound — the fact that decides this rule: an anti-wraparound autovacuum runs on a table even when autovacuum is disabled for it. So the setting does not avoid the vacuum, it defers it to a moment nobody chose and makes the one that comes larger."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-createtable.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "Where `autovacuum_enabled` lives — a per-table storage parameter in `pg_class.reloptions`, absent on a table that runs under the cluster's setting. The same page carries the per-table thresholds this rule deliberately does not read: a threshold set so high it never fires is the same state written more quietly, and a separate question."
             }
         ],
         "PG.L7.DATA_CHECKSUMS_DISABLED": [

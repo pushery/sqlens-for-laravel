@@ -207,6 +207,18 @@
             "note": "On at the server level makes every write fail with 25006 — sometimes deliberate on a replica, which is why this is reported with the instance's role rather than judged alone."
         },
         {
+            "variable": "lock_timeout",
+            "driver": "pgsql",
+            "min_version": "18",
+            "max_version": null,
+            "vendor_default": "0",
+            "sqlens_expectation": null,
+            "scope": "instance",
+            "changeable": "session",
+            "source_url": "https://www.postgresql.org/docs/18/runtime-config-client.html",
+            "note": "No expectation on purpose, and for a reason a matrix structurally cannot hold: the right value is not a number, it is a RELATION -- lock_timeout has to be smaller than statement_timeout or it can never fire, because the lock wait happens inside the statement. A shipped file can say a value should be non-zero; it cannot say it should be below another setting whose value is only known on the instance. PG.L3.LOCK_TIMEOUT_INEFFECTIVE supplies that missing fact and judges the pair. Zero -- unbounded -- stays the subject of PG.L3.MISSING_LOCK_TIMEOUT, which reads a migration rather than the catalog."
+        },
+        {
             "variable": "log_connections",
             "driver": "pgsql",
             "min_version": "18",

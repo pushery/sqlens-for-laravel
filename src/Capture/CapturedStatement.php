@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Capture;
 
+use Pushery\SQLens\Canonical\ColumnDefinition;
 use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Canonical\StatementTarget;
 use Pushery\SQLens\Canonical\TransactionContext;
@@ -67,6 +68,17 @@ final readonly class CapturedStatement
          * @var list<string>
          */
         public array $keyColumns = [],
+        /**
+         * The columns this statement DEFINES with their canonical types, or null.
+         *
+         * Null is "nobody read a body here" — a statement that defines none, or one whose body the
+         * classifier declined to read as a whole. Never an empty list: a table with no columns is
+         * not a thing, so an empty list could only ever be a partial read wearing a complete
+         * answer's clothes.
+         *
+         * @var list<ColumnDefinition>|null
+         */
+        public ?array $columnDefinitions = null,
     ) {}
 
     /**
@@ -145,8 +157,9 @@ final readonly class CapturedStatement
      *
      * @param  list<StatementTarget>  $targets
      * @param  list<string>  $keyColumns
+     * @param  list<ColumnDefinition>|null  $columnDefinitions
      */
-    public function withClassification(StatementKind $statementKind, array $targets, array $keyColumns = []): self
+    public function withClassification(StatementKind $statementKind, array $targets, array $keyColumns = [], ?array $columnDefinitions = null): self
     {
         return new self(
             rawSql: $this->rawSql,
@@ -162,6 +175,7 @@ final readonly class CapturedStatement
             targets: $targets,
             transactionMode: $this->transactionMode,
             keyColumns: $keyColumns,
+            columnDefinitions: $columnDefinitions,
         );
     }
 

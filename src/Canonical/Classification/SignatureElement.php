@@ -28,11 +28,21 @@ final readonly class SignatureElement
          */
         public TargetRole $targetRole = TargetRole::Subject,
         /**
-         * For a BackfillTargets element: the keywords that legitimately END the `SET` clause.
+         * The keywords that END the run this element is reading. Two elements use it, and they use
+         * it for the same reason with different vocabularies.
          *
-         * Supplied by the driver, because they are engine vocabulary and this class is core. It is
-         * also what lets the element DECLINE instead of answering partially: a run that stops at a
-         * keyword outside this set stopped inside an expression, not at the end of the clause.
+         * For **BackfillTargets**: the keywords that legitimately end the `SET` clause. It is what
+         * lets the element DECLINE instead of answering partially — a run that stops at a keyword
+         * outside this set stopped inside an expression, not at the end of the clause.
+         *
+         * For **ColumnDefinitions**: the keywords that end a column's TYPE and begin its modifiers
+         * — `NOT`, `DEFAULT`, `PRIMARY`, `REFERENCES` and the rest. The list has to be the driver's
+         * and cannot be shared, and one pair shows why: `CHARACTER VARYING` is a type on PostgreSQL
+         * while `CHARACTER SET` is a modifier on MySQL. The same first word, opposite meanings, and
+         * only the engine's own list separates them.
+         *
+         * Supplied by the driver in both cases, because they are engine vocabulary and this class
+         * is core.
          *
          * @var list<string>
          */
@@ -69,6 +79,42 @@ final readonly class SignatureElement
     public static function columnList(): self
     {
         return new self(SignatureElementKind::ColumnList, null, null);
+    }
+
+    /**
+     * A parenthesized table body, read as name/type pairs.
+     *
+     * See {@see SignatureElementKind::ColumnDefinitions}.
+     *
+     * @param  list<string>  $typeTerminators  the keywords that end a column's type and begin its
+     *                                         modifiers, in the engine's own vocabulary
+     */
+    public static function columnDefinitions(array $typeTerminators): self
+    {
+        return new self(
+            SignatureElementKind::ColumnDefinitions,
+            null,
+            null,
+            clauseTerminators: array_map(mb_strtoupper(...), $typeTerminators),
+        );
+    }
+
+    /**
+     * The unparenthesized type following a column target.
+     *
+     * See {@see SignatureElementKind::TrailingColumnType}.
+     *
+     * @param  list<string>  $typeTerminators  the keywords that end the type, in the engine's own
+     *                                         vocabulary
+     */
+    public static function trailingColumnType(array $typeTerminators): self
+    {
+        return new self(
+            SignatureElementKind::TrailingColumnType,
+            null,
+            null,
+            clauseTerminators: array_map(mb_strtoupper(...), $typeTerminators),
+        );
     }
 
     /**

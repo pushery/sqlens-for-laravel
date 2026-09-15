@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Subjects;
 
+use Pushery\SQLens\Canonical\ColumnDefinition;
 use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Canonical\StatementTarget;
 use Pushery\SQLens\Canonical\TransactionMode;
@@ -77,6 +78,17 @@ final readonly class MigrationSql implements Subject
          */
         public array $keyColumns = [],
         /**
+         * The columns the classifier read off this statement, with their canonical types, or null.
+         *
+         * Carried on the subject for the same reason `keyColumns` is: to reach
+         * {@see canonicalView()}. The migration's OTHER statements offer theirs through the digest
+         * stream, and a rule comparing what it defines against what the migration already defined
+         * would otherwise have to re-read the canonical SQL for one of the two sides.
+         *
+         * @var list<ColumnDefinition>|null
+         */
+        public ?array $columnDefinitions = null,
+        /**
          * Where this statement's values came from, decided by the capture layer from the bindings
          * it already held. Undeterminable when nothing captured this — a synthetic subject, a
          * catalog row — which is what a secrets rule must read as "no answer available".
@@ -104,6 +116,7 @@ final readonly class MigrationSql implements Subject
             // second copy is a second thing to keep in step.
             $this->context->resolvedServerVersion,
             $this->keyColumns,
+            $this->columnDefinitions,
             // Decided HERE, once, from the run's own resolved paths — so every rule reads the same
             // answer and none of them has to know what a migration path looks like. A run that
             // never established them (a catalog subject, a synthetic one) yields Unknown, which is

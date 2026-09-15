@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Subjects;
 
+use Pushery\SQLens\Canonical\ColumnDefinition;
 use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Canonical\StatementTarget;
 use Pushery\SQLens\Canonical\TransactionMode;
@@ -61,6 +62,28 @@ final readonly class MigrationStatementDigest
          * @var list<string>
          */
         public array $keyColumns = [],
+        /**
+         * The columns this statement DEFINES, with the type it defines each as — or null.
+         *
+         * The answer to a question lint could not put before: the column list a `CREATE TABLE`
+         * writes never reached this layer, so every rule whose judgment needs a column TYPE was
+         * structurally audit-only. Not because that was right — the migration that introduces a
+         * wrong type is the cheapest moment to fix it, and the catalog only speaks once the table
+         * already stands — but because nothing here could be asked.
+         *
+         * Produced by the CLASSIFIER from the signature, never by a rule re-reading the canonical
+         * string, for the same reason every field above it is. The type goes through the SAME
+         * normalizer the catalog reader uses, so a lint verdict and an audit verdict about one
+         * column cannot disagree by construction.
+         *
+         * **Null means nobody read one here** — a statement that defines no columns, or a body the
+         * classifier declined as a whole. Never an empty list: there is no table without columns,
+         * so an empty list could only be a partial read that looks complete. See
+         * {@see ColumnDefinition} for the same distinction one level down, on a single type.
+         *
+         * @var list<ColumnDefinition>|null
+         */
+        public ?array $columnDefinitions = null,
     ) {}
 
     /** Whether this statement's transaction context could not be resolved. */

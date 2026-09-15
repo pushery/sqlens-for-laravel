@@ -12,6 +12,7 @@ use Pushery\SQLens\Contracts\Subject;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Subjects\MigrationSql;
+use Pushery\SQLens\Subjects\MigrationSubjectMap;
 use Pushery\SQLens\Subjects\SchemaObject;
 
 /**
@@ -71,6 +72,14 @@ abstract class AbstractCatalogRule implements JudgesSchemaObjects, Rule
     }
 
     /**
+     * The migration map for this project, built on first use.
+     *
+     * A property rather than a fresh map per call: the map parses every migration the first time it
+     * is asked, and a rule is asked about every object in the catalog.
+     */
+    private ?MigrationSubjectMap $subjectMap = null;
+
+    /**
      * The repo root. A catalog finding's location is an instance and an object name, not a file —
      * but the rule registries construct every rule the same way, and a base that refused the
      * argument would make this family the one exception a registration has to remember.
@@ -124,7 +133,15 @@ abstract class AbstractCatalogRule implements JudgesSchemaObjects, Rule
             return [];
         }
 
-        return CatalogVerdicts::toFindings($this->judgeSchemaObject($subject), $this, $subject);
+        // Built once per rule instance, the same idiom the driver notes beside it use: the map
+        // parses every migration on its first question, and a rule is asked about many objects.
+        return CatalogVerdicts::toFindings(
+            $this->judgeSchemaObject($subject),
+            $this,
+            $subject,
+            $this->subjectMap ??= MigrationSubjectMap::forProjectRoot($this->projectRoot),
+            $this->projectRoot,
+        );
     }
 
     /**

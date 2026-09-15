@@ -10,6 +10,7 @@ use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Subjects\MigrationSql;
 use Pushery\SQLens\Subjects\MigrationStatementView;
+use Pushery\SQLens\Subjects\MigrationSubjectMap;
 use Pushery\SQLens\Subjects\SchemaObject;
 
 /**
@@ -67,6 +68,14 @@ trait ReadsMigrationStatements
     {
         return InstanceScope::Instance;
     }
+
+    /**
+     * The migration map for this project, built on first use.
+     *
+     * A property rather than a fresh map per call: the map parses every migration the first time it
+     * is asked, and a rule is asked about every object in the catalog.
+     */
+    private ?MigrationSubjectMap $subjectMap = null;
 
     public function __construct(protected string $projectRoot, ?RuleDriverNotes $driverNotes = null)
     {
@@ -151,7 +160,15 @@ trait ReadsMigrationStatements
         if ($subject instanceof SchemaObject && $this instanceof JudgesSchemaObjects) {
             // Built by the shared factory, so a rule that reaches a catalog from this base and one
             // that reaches it from AbstractCatalogRule cannot produce differently-shaped findings.
-            return CatalogVerdicts::toFindings($this->judgeSchemaObject($subject), $this, $subject);
+            // Built once per rule instance, the same idiom the driver notes beside it use: the map
+            // parses every migration on its first question, and a rule is asked about many objects.
+            return CatalogVerdicts::toFindings(
+                $this->judgeSchemaObject($subject),
+                $this,
+                $subject,
+                $this->subjectMap ??= MigrationSubjectMap::forProjectRoot($this->projectRoot),
+                $this->projectRoot,
+            );
         }
 
         if (! $subject instanceof MigrationSql) {

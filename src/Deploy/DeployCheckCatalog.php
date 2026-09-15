@@ -55,6 +55,7 @@ final readonly class DeployCheckCatalog
             self::unenforcedConstraint(),
             self::diskHeadroom(),
             self::freezeHorizon(),
+            self::autovacuumDisabled(),
             self::inactiveReplicationSlot(),
             self::lockBlocker(),
             self::metadataLockBlocker(),
@@ -474,6 +475,30 @@ final readonly class DeployCheckCatalog
                 .'whether a worker is already running, so the catalog names none',
                 'an anti-wraparound autovacuum that has not started yet MAY not start during this '
                 .'window; the finding says a worker can arrive, never that one will',
+            ],
+            Attribution::Observed,
+        );
+    }
+
+    private static function autovacuumDisabled(): DeployCheckMetadata
+    {
+        return DeployCheckMetadata::fixed(
+            'DEPLOY.PREFLIGHT.AUTOVACUUM_DISABLED',
+            // Medium, and the axis earns it both ways. It does not stop a deploy, so reporting it
+            // beside a finding that does would teach a reader to discount both; but it changes what
+            // every other number in the report is worth for that table, which is more than
+            // housekeeping.
+            Severity::Medium,
+            self::deploy(),
+            [
+                'cannot tell a table vacuumed by hand on a schedule from a setting nobody '
+                .'revisited — the cron is not in the catalog, so a deliberate arrangement is '
+                .'exempted with an ignore entry and its reason rather than guessed at here',
+                'reads only autovacuum_enabled. Per-table thresholds tuned so high that autovacuum '
+                .'never fires are the same state in quieter form and are not reported under this id',
+                'says the estimates for this table are the least trustworthy in the report; it does '
+                .'not say by how much, because nothing in the catalog measures the dead rows it '
+                .'would take to answer that',
             ],
             Attribution::Observed,
         );

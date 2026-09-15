@@ -89,6 +89,7 @@ use Pushery\SQLens\Drivers\Pgsql\Catalog\PgsqlServerSettingsReader;
 use Pushery\SQLens\Drivers\Pgsql\Catalog\PgsqlSessionDefense;
 use Pushery\SQLens\Drivers\Pgsql\Catalog\PgsqlSettingCrossFactCollector;
 use Pushery\SQLens\Drivers\Pgsql\Catalog\PgsqlStatisticsReader;
+use Pushery\SQLens\Drivers\Pgsql\Deploy\AutovacuumDisabledCheck;
 use Pushery\SQLens\Drivers\Pgsql\Deploy\FreezeHorizonCheck;
 use Pushery\SQLens\Drivers\Pgsql\Deploy\GrantCheck;
 use Pushery\SQLens\Drivers\Pgsql\Deploy\InvalidIndexCheck;
@@ -722,6 +723,12 @@ final class SQLensServiceProvider extends ServiceProvider
                     // that blocks without being nameable that way — a background worker that does
                     // not yield, behind which the ALTER waits looking like a lock nobody holds.
                     new FreezeHorizonCheck,
+                    // Immediately after it, about how the table GOT near that horizon — and
+                    // about the other consequence, which is one this report makes rather than
+                    // finds: a table without autovacuum keeps its dead rows, so its size and
+                    // its row estimate are the two least trustworthy numbers in the report,
+                    // and everything stated about its duration is derived from them.
+                    new AutovacuumDisabledCheck,
                     // Its MySQL counterpart. Same question, different lock vocabulary — and a
                     // different way of going quiet: `performance_schema` can be off, and an empty
                     // reading then means nothing rather than nothing-found.

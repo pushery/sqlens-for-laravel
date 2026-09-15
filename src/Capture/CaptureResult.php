@@ -310,6 +310,7 @@ final readonly class CaptureResult
                     migration: $migration,
                     transactionMode: $statement->transactionMode,
                     keyColumns: $statement->keyColumns,
+                    columnDefinitions: $statement->columnDefinitions,
                     // Derived here, from the bindings the captured statement already carries. No
                     // new plumbing and no byte-range tracking: the fact a secrets rule needs is
                     // whether ANY value came from outside the file, and the empty bindings array is
@@ -479,6 +480,7 @@ final readonly class CaptureResult
                 $statement->targets ?? [],
                 $statement->transactionMode,
                 $statement->keyColumns,
+                $statement->columnDefinitions,
             );
         }
 

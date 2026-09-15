@@ -40,6 +40,17 @@ final readonly class CanonicalStatement
          * @var list<string>
          */
         public array $keyColumns = [],
+        /**
+         * The columns a statement DEFINES, with their canonical types — or null where it defines
+         * none, or where the body could not be read as a whole.
+         *
+         * Null rather than an empty list, and the difference is the whole point: every table has
+         * columns, so an empty list would be a claim nothing can make. Null says "nobody read one
+         * here", which a rule turns into silence or into `undetermined` — never into a conclusion.
+         *
+         * @var list<ColumnDefinition>|null
+         */
+        public ?array $columnDefinitions = null,
     ) {}
 
     /** Whether the classification slots are filled — false means the kind/targets are not yet known. */
@@ -54,8 +65,9 @@ final readonly class CanonicalStatement
      *
      * @param  list<StatementTarget>  $targets
      * @param  list<string>  $keyColumns
+     * @param  list<ColumnDefinition>|null  $columnDefinitions
      */
-    public function withClassification(StatementKind $statementKind, array $targets, array $keyColumns = []): self
+    public function withClassification(StatementKind $statementKind, array $targets, array $keyColumns = [], ?array $columnDefinitions = null): self
     {
         return new self(
             $this->canonicalSql,
@@ -65,6 +77,7 @@ final readonly class CanonicalStatement
             $statementKind,
             $targets,
             $keyColumns,
+            $columnDefinitions,
         );
     }
 }
