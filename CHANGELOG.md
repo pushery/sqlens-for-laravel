@@ -2,6 +2,12 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.3] - 2026-09-16
+
+### Fixed
+
+- **`sqlens:predeploy` stops a deploy only for a `high` server setting; the lower ones are reported beside a passing result.** Every finding of `DEPLOY.CONTEXT.SETTING` blocked, whatever its severity, and a consumer hit the cost on a managed PostgreSQL: a deploy with a pending migration was refused over `statement_timeout = 0`, which cannot be set server-wide without bounding the very migration the deploy runs, and over `max_wal_size` at its default, which such a host does not let anybody change. The rule's own page called both "reported rather than judged". Now `high` stops the deploy — `lock_timeout = 0` on PostgreSQL, and `lock_wait_timeout`, `foreign_key_checks` and `sql_mode` on MySQL — while `medium`, `low` and `info` travel as `pass` findings with their values and sentences. On MySQL that also ends a deploy stopped by nothing but the `info` note about a role that cannot read `performance_schema`. A `lock_timeout` set with `SET` inside a session still does not clear the finding, because the check reads what a fresh session gets; a role default does.
+
 ## [0.15.2] - 2026-09-15
 
 ### Fixed
