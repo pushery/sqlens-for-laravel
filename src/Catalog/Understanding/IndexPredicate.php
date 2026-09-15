@@ -96,6 +96,27 @@ final readonly class IndexPredicate
     private const string LITERAL = "'(?:[^']|'')*'";
 
     /**
+     * A numeric literal, which is as much a literal as a quoted one and was not treated as one.
+     *
+     * The class docblock lists "a comparison against a non-literal" among the shapes it refuses, and
+     * `LITERAL` above is quoted-only -- so `WHERE tenant_id = 1` fell under that sentence while meaning
+     * nothing of the kind. A number is exactly as unambiguous as a string here, and `tenant_id = 1` is
+     * the partial index of a multi-tenant schema: measured on a real server, it prints `(tenant_id = 1)`
+     * and came back unread.
+     *
+     * A RANGE TEST STAYS REFUSED, and that is the line this must not cross. `qty > 0` and the pair a
+     * `BETWEEN` prints are named in the docblock as shapes this class does not read, and they still are
+     * -- only `=` and `<>` and their set forms take a number.
+     *
+     * The sign is part of the literal because the server prints `(-1)` rather than a unary minus applied
+     * to `1`, and a pattern without it would read the parenthesis as the start of an expression.
+     */
+    private const string NUMBER = '-?\\d+(?:\\.\\d+)?';
+
+    /** Either kind of literal, for the arms that compare against one. */
+    private const string VALUE = '(?:'.self::LITERAL.'|'.self::NUMBER.')';
+
+    /**
      * The SQL type names that contain a space, listed rather than matched loosely.
      *
      * A pattern like `[a-z ]+` after `::` would swallow a following ` AND` — under `/i` the keyword
@@ -167,7 +188,9 @@ final readonly class IndexPredicate
 
         // A comparison with one literal LAST: nothing above can reach it, and putting it first would
         // cost a reader a second of wondering whether `=` could shadow `= ANY` or `= true`.
-        if (preg_match('/^\(?('.$ident.')\s*(=|<>)\s*('.self::LITERAL.')\)?$/i', $bare, $m) === 1) {
+        // Either kind of literal. A quoted one was always read; a number was not, and nothing about the
+        // reading differs -- `(tenant_id = 1)` is as unambiguous as `((status)::text = 'live'::text)`.
+        if (preg_match('/^\(?('.$ident.')\s*(=|<>)\s*('.self::VALUE.')\)?$/i', $bare, $m) === 1) {
             return self::compared($m[1], $m[2], $m[3]);
         }
 
@@ -380,7 +403,26 @@ final readonly class IndexPredicate
         // identifier `loweremail`, which the boolean arm below then reads as `loweremail = true`.
         // Measured — that is a confident reading of a function call as a column, and the arm named
         // "does not read a bare identifier out of a shape it refused" is what found it.
-        return trim(preg_replace('/(?<![a-z0-9_"])\(\s*('.self::IDENTIFIER.')\s*\)/i', '$1', $bare) ?? $bare);
+        $bare = preg_replace('/(?<![a-z0-9_"])\(\s*('.self::IDENTIFIER.')\s*\)/i', '$1', $bare) ?? $bare;
+
+        // And the same unwrap for a LITERAL, which the line above cannot do because a literal is not an
+        // identifier. `pg_get_expr` prints a cast on a literal inside an array as `('paid'::character
+        // varying)::text` -- two casts, and the parentheses belong to the inner one. Stripping the casts
+        // leaves `('paid')`, which is not a literal any more, so a set of them read as unparseable and the
+        // whole predicate came back not understood.
+        //
+        // It is the shape Postgres emits for the ordinary Laravel case: a `string` column and a
+        // `whereNotIn`. Measured against a consumer's index, where `(stripe_status)::text <> ALL (ARRAY[
+        // ('incomplete'::character varying)::text, …])` was refused while the same predicate without the
+        // inner cast was read -- so the refusal was about the printing, not about the predicate.
+        //
+        // ONE literal and nothing else between the parentheses. `('a' || 'b')` keeps them, because
+        // dropping them there would change what the text says -- the same rule the identifier unwrap
+        // above follows, and the same lookbehind, which keeps a function call like `coalesce('a')` from
+        // losing the parentheses around its argument.
+        // Either kind of literal, for the reason above: `(1)::bigint` is what the server prints for a
+        // number inside an array, and stripping the cast leaves `(1)` exactly as it leaves `('a')`.
+        return trim(preg_replace('/(?<![a-z0-9_"])\(\s*('.self::VALUE.')\s*\)/', '$1', $bare) ?? $bare);
     }
 
     /**
@@ -402,7 +444,11 @@ final readonly class IndexPredicate
         $literals = [];
 
         foreach (array_map(trim(...), explode(',', $inner)) as $part) {
-            if (preg_match('/^'.self::LITERAL.'$/', $part) !== 1) {
+            // A number counts, for the same reason it does in the equality arm one method up: `IN (1,2)`
+            // prints as `= ANY (ARRAY[(1)::bigint, (2)::bigint])`, and refusing it left a multi-tenant
+            // index unread. The sort below stays a STRING sort and that is deliberate -- it only has to
+            // be deterministic, so that two spellings of one set land on one normal form.
+            if (preg_match('/^'.self::VALUE.'$/', $part) !== 1) {
                 return null;
             }
 

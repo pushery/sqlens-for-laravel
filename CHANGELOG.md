@@ -2,6 +2,24 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.1] - 2026-09-15
+
+### Fixed
+
+- **A partial index on a number is read: `WHERE tenant_id = 1` was not.** The predicate model refuses *"a comparison against a non-literal"*, and its literal pattern was quoted-only — so an equality against a number fell under that sentence while meaning nothing of the kind. A number is exactly as unambiguous there as a string, and `tenant_id = 1` is the partial index of a multi-tenant schema. Under `--profile=ci` each one was an `undetermined`, which `strict_undetermined` turns into exit 3.
+
+  **Found before it was reported.** Twenty-two realistic partial indexes were created on a real PostgreSQL 18, their printed predicates read back and put through the parser: sixteen read, six refused — and only one of the six was a gap. The other five are refusals the model states on purpose: an ordering comparison, the pair a `BETWEEN` prints, an `OR`, and a jsonb operator.
+
+  Equality, inequality and their `ANY`/`ALL` set forms now take a number, in the parenthesised cast shape the server prints inside an array (`(1)::bigint`). **An ordering comparison stays refused**, and an arm holds that in four spellings — without it the widening would have traded the defect for its mirror image, because two indexes at `> 100` and `> 99` are not the same index and would now look it. Every new shape is in the corpus the PostgreSQL lane checks against a live server.
+
+- **A partial index whose excluded values carry their own cast is read instead of refused.** PostgreSQL prints the same `NOT IN` predicate two ways depending on how the migration wrote it: the cast on the whole array — `(ARRAY['a'::character varying])::text[]` — or on each member inside its own parentheses, `('a'::character varying)::text`. The first was read; the second was not. Stripping the casts left `('a')`, which is no longer a literal, so every member failed to parse and the whole predicate came back `not_understood`.
+
+  That is not a cosmetic refusal. Under `--profile=ci` the `strict_undetermined` policy escalates an undetermined verdict to exit 3, so a consuming application whose entitlement index carries this shape could not get a clean run — and the three ways out were all worse than the defect: suppressing the reason would have silenced **every** unreadable catalog row rather than this one, no per-rule configuration exists, and rewriting a correct index for a reader's benefit puts the tool above the thing it inspects.
+
+  The literal is now unwrapped the same way a parenthesised column reference already was, and for the same reason: the parentheses belong to a cast that has just been removed. One literal and nothing else between them — `('a' || 'b')` keeps its parentheses, because dropping them there would change what the text says.
+
+  **The shape was read back from a real server, not typed from a report.** The shared predicate corpus that both the unit suite and the PostgreSQL lane consume carries it now, so the day the server prints it differently the lane says so. The reported index appears in the regression set **twice**, once in each printing, because the pair is the finding: the refusal was about the printing, never about the predicate.
+
 ## [0.15.0] - 2026-09-15
 
 ### Added
