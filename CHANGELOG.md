@@ -2,6 +2,16 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.2] - 2026-09-15
+
+### Fixed
+
+- **The MCP handshake answers the one revision this build speaks, or it refuses — it never negotiates a third one.** A client asking for a revision SQLens does not implement was being served `2025-11-25` instead of a refusal naming `2025-06-18`, which is the quiet direction this pin exists against: the client gets a message shape it did not ask for, cannot check, and has no reason to doubt. The refusal is back, by name and with the supported revision in it, exactly as before. A revision substituted for the pinned one is now refused as well, rather than served — a server that announces a revision it does not implement is worse than one that will not start.
+
+### Changed
+
+- **The dev toolchain carries `laravel/mcp`, `laravel/ai` and `laravel/boost`.** They sit in `require-dev`, so nothing a consumer installs, calls or configures changes, and a Renovate rule keeps their constraints following each release.
+
 ## [0.15.1] - 2026-09-15
 
 ### Fixed

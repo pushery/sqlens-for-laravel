@@ -168,7 +168,7 @@ enum UndeterminedReason: string
      *
      * Distinct from {@see self::ModelNotFound}, and the distinction is what a reader acts on: the
      * first says "look for a model", the second says "this model is broken or needs something the
-     * inspection cannot give it". A constructor that reaches for a container binding, a trait boot
+     * inspection cannot give it". A constructor that reaches for a container binding, a boot hook
      * that touches a service, an abstract class picked up by the scan — all land here, and each is
      * a different thing to go and fix.
      */

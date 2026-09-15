@@ -496,7 +496,7 @@ final readonly class RuleRegistryExport
             downtimeClass: null,
             messagePrefix: $notice->messagePrefix(),
             suites: array_map(static fn (Suite $suite): string => $suite->value, $notice->suites()),
-            // Always `Observed`, through the trait every notice family uses. The slot is asked for
+            // Always `Observed`, through the shared concern every notice family uses. The slot is asked for
             // anyway: a family that answered by not being asked would be the one place this
             // classification means nothing.
             attribution: $notice->attribution(),

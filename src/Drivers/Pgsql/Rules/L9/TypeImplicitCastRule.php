@@ -221,7 +221,7 @@ final class TypeImplicitCastRule extends AbstractCatalogRule implements Declares
         // A table whose only mismatched pair had one end the catalog could not read is reported as
         // undetermined -- the question was asked and not answered. A considered `none` beside that
         // reads as "here is what to do about the thing I just said I could not decide", which is
-        // the one way a fix template is worse than none at all. The trait that serves every other
+        // the one way a fix template is worse than none at all. The concern that serves every other
         // catalog rule filters exactly this way; this rule builds its own payload and had to say so
         // itself. Found by the coverage floor rather than by a test, which is its own lesson.
         $flagged = array_filter(

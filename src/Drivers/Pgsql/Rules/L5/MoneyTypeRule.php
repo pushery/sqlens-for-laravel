@@ -70,7 +70,7 @@ final class MoneyTypeRule extends AbstractCatalogRule implements DeclaresJudgedO
      * is `numeric(19, 4)` with the currency in a column of its own, and moving a populated column
      * there decides how every existing value lands.
      *
-     * The trait decides WHEN this is attached — only where this rule itself flagged — so the rule
+     * The shared concern decides WHEN this is attached — only where this rule itself flagged — so the rule
      * only has to say what it concluded.
      */
     #[Override]

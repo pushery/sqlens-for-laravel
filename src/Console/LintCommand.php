@@ -165,7 +165,7 @@ final class LintCommand extends Command
             return ExitCode::Misconfiguration->value;
         }
 
-        // The severity floor, layered ON TOP of the profile the trait above already baked into the
+        // The severity floor, layered ON TOP of the profile the concern above already baked into the
         // config — which is what makes the precedence config → profile → flag hold without the
         // threshold traveling twice. Written to the key every reader consults rather than passed
         // as a parameter, for the same reason the resolved profile is.

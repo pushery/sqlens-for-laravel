@@ -40,7 +40,7 @@ use Pushery\SQLens\Contracts\Rule;
 abstract class AbstractSafetyRule implements Rule
 {
     // Everything about being asked about a migration. Extracted so the security family can share
-    // it — see the trait for why that could not be done by extending this class.
+    // it — see ReadsMigrationStatements for why that could not be done by extending this class.
     use ReadsMigrationStatements;
 
     /** Every rule in this family is a safety rule; that is what the family means. */

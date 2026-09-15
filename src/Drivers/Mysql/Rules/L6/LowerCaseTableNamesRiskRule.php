@@ -57,7 +57,7 @@ final class LowerCaseTableNamesRiskRule extends AbstractCatalogRule implements D
      * cannot be changed afterwards"*. It shares the answer with every initdb-scoped server setting,
      * and the shared key is the point — one fact, one sentence, however many rules meet it.
      *
-     * The trait decides WHEN this is attached — only where this rule itself flagged — so the rule
+     * The shared concern decides WHEN this is attached — only where this rule itself flagged — so the rule
      * only has to say what it concluded.
      */
     #[Override]
