@@ -17,6 +17,7 @@ use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
 use Pushery\SQLens\Findings\NotApplicableReason;
+use Pushery\SQLens\Findings\Outcome;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
@@ -54,6 +55,24 @@ use Pushery\SQLens\Subjects\SubjectContext;
  *
  * That is the whole reason these live in the deploy suite: the same value is fine on Tuesday and is
  * an outage at the moment a migration runs.
+ *
+ * ## Only a `high` finding stops the deploy — the rest travel beside a passing result
+ *
+ * The severities already draw the line, and the verdict follows it. `high` is the shape that ends
+ * badly on its own: a DDL statement waiting on a lock nothing will end, with every read queued behind
+ * it. `medium` and `low` make a bad day worse rather than making one, so they are `pass` findings —
+ * named, with their value and their sentence, and not a reason to stop.
+ *
+ * Every finding used to block, and a consumer measured what that cost on a managed PostgreSQL. The
+ * deploy stopped on `statement_timeout = 0`, which cannot be set server-wide without bounding the
+ * very migration the deploy is about to run, and on `max_wal_size` at its default, which such a host
+ * does not let anybody change. The messages below called both "reported rather than judged" the whole
+ * time; only the verdict said otherwise.
+ *
+ * `idle_in_transaction_session_timeout = 0` sits below the line for a reason of its own. Its danger
+ * reaches a migration only through a lock wait, and how long that wait may last is `lock_timeout`,
+ * judged on its own right above it. Whether a session is holding a lock at this moment is a separate
+ * reading, and a separate check.
  *
  * ## Reading it never changes it
  *
@@ -112,7 +131,11 @@ final readonly class ServerSettingsCheck implements PreflightCheck
             );
         }
 
-        $findings = [];
+        // Two lists rather than one, because they answer two questions: what stops this deploy, and
+        // what it proceeds with. The failures lead the report, each list keeps the map's order, so
+        // two runs against one server still produce one sequence.
+        $blocking = [];
+        $reported = [];
         $unreadable = [];
 
         // Whether anything is actually about to run. Read ONCE, here, rather than per judgment: the
@@ -135,8 +158,19 @@ final readonly class ServerSettingsCheck implements PreflightCheck
             // for every state in which either of these is null.
             $verdict = $judge((string) $setting?->serverValue());
 
-            if ($verdict !== null) {
-                $findings[] = $this->finding($context, $verdict, $pending);
+            if ($verdict === null) {
+                continue;
+            }
+
+            // Sorted by the outcome the finding already carries, never by a second reading of the
+            // severity: `finding()` decides once, and a list that re-derived it could disagree with
+            // the finding it holds.
+            $finding = $this->finding($context, $verdict, $pending);
+
+            if ($finding->status->outcome === Outcome::Fail) {
+                $blocking[] = $finding;
+            } else {
+                $reported[] = $finding;
             }
         }
 
@@ -148,16 +182,16 @@ final readonly class ServerSettingsCheck implements PreflightCheck
             return CheckResult::undetermined(
                 self::ID,
                 'setting_unreadable: '.implode('; ', $unreadable),
-                $findings,
+                [...$blocking, ...$reported],
             );
         }
 
-        // With nothing pending the findings are not-applicable notices rather than failures, so they
-        // travel with a passing result: the settings are still named and their values still read,
-        // and the gate stops nothing over a change that is not happening.
-        return $findings === [] || ! $pending
-            ? CheckResult::pass(self::ID, $findings)
-            : CheckResult::fail(self::ID, $findings);
+        // A pass may carry findings, and here it carries two kinds: the not-applicable notices of a
+        // run with nothing pending, and the settings below the line that a pending migration runs
+        // under anyway. Both are named with their values; neither stops anything.
+        return $blocking === []
+            ? CheckResult::pass(self::ID, $reported)
+            : CheckResult::fail(self::ID, [...$blocking, ...$reported]);
     }
 
     /**
@@ -194,8 +228,9 @@ final readonly class ServerSettingsCheck implements PreflightCheck
      * The settings this check judges, and what each verdict is.
      *
      * A map rather than a chain of methods, so the set is one readable list and adding a setting is
-     * adding an entry. Order is the map's order, which makes two runs against one server produce the
-     * findings in one sequence — a set iterated in container order would diff as a change.
+     * adding an entry. Order is the map's order within each outcome, failures first, which makes two
+     * runs against one server produce the findings in one sequence — a set iterated in container
+     * order would diff as a change.
      *
      * ## Each message is in two halves, and the reason is a false sentence somebody read
      *
@@ -233,7 +268,8 @@ final readonly class ServerSettingsCheck implements PreflightCheck
                     .'that opened a transaction and went away holds its locks forever, and that is the '
                     .'single most common thing a migration blocks behind. Nothing here says one exists '
                     .'— only that if one does, nothing will end it.',
-                'pending' => ' A migration is about to run behind whatever is holding.',
+                'pending' => ' A migration is about to run, and how long it may wait behind such a session '
+                    .'is `lock_timeout`, judged on its own.',
                 'severity' => Severity::Medium,
                 'downtime' => DowntimeClass::Blocking,
                 'confidence' => Confidence::Deterministic,
@@ -269,7 +305,11 @@ final readonly class ServerSettingsCheck implements PreflightCheck
     }
 
     /**
-     * One finding for a setting, either a failure or a not-applicable notice.
+     * One finding for a setting: a failure, a reported pass, or a not-applicable notice.
+     *
+     * Decided here and nowhere else. With nothing pending the setting is not applicable, whatever
+     * its severity. With a migration pending, `high` fails and everything below it is reported as a
+     * pass — see the class note for where the line comes from.
      *
      * @param  array{id: string, setting: string, state: string, pending: string, severity: Severity, downtime: DowntimeClass, confidence: Confidence}  $verdict
      */
@@ -279,8 +319,8 @@ final readonly class ServerSettingsCheck implements PreflightCheck
         $location = Location::inCatalog($context->driver, $context->connection, $verdict['setting'], SchemaObjectType::Setting);
         $subject = new SubjectContext(driver: $context->driver, profile: $context->profile, strictTools: false);
 
-        $finding = $pending
-            ? Finding::fail(
+        $finding = match (true) {
+            $pending && $verdict['severity']->isAtLeast(Severity::High) => Finding::fail(
                 ruleId: $ruleId,
                 messagePrefix: DeployNotice::MESSAGE_PREFIX,
                 message: $verdict['state'].$verdict['pending'],
@@ -291,8 +331,20 @@ final readonly class ServerSettingsCheck implements PreflightCheck
                 documentationUrl: RuleDocumentationUrl::for($ruleId),
                 context: $subject,
                 severity: $verdict['severity'],
-            )
-            : Finding::notApplicable(
+            ),
+            $pending => Finding::pass(
+                ruleId: $ruleId,
+                messagePrefix: DeployNotice::MESSAGE_PREFIX,
+                message: $verdict['state'].$verdict['pending'],
+                location: $location,
+                category: Category::Safety,
+                level: Level::Capturable,
+                stability: StabilityTier::Stable,
+                documentationUrl: RuleDocumentationUrl::for($ruleId),
+                context: $subject,
+                severity: $verdict['severity'],
+            ),
+            default => Finding::notApplicable(
                 ruleId: $ruleId,
                 messagePrefix: DeployNotice::MESSAGE_PREFIX,
                 message: $verdict['state'],
@@ -304,7 +356,8 @@ final readonly class ServerSettingsCheck implements PreflightCheck
                 documentationUrl: RuleDocumentationUrl::for($ruleId),
                 context: $subject,
                 severity: $verdict['severity'],
-            );
+            ),
+        };
 
         return $finding->withDowntimeClass($verdict['downtime'])->withConfidence($verdict['confidence']);
     }

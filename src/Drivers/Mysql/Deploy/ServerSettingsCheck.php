@@ -15,6 +15,7 @@ use Pushery\SQLens\Findings\Confidence;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
+use Pushery\SQLens\Findings\Outcome;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
@@ -48,6 +49,18 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * What IS reported is the loss of provenance, as its own finding. "Set in a config file" and "still
  * the compiled-in default" call for different actions, and a reading that cannot tell them apart has
  * to say so rather than let a missing source read as "nobody configured this".
+ *
+ * ## Only a `high` finding stops the deploy
+ *
+ * The same line as the PostgreSQL sibling, drawn by the same severities. The three `high` variables
+ * each end badly on their own: a wait nothing ends, a foreign key that validates nothing, a column
+ * narrow that truncates. The online-alter buffer at its default and the lost provenance are `medium`
+ * and `info` — a default being reported and a note about the reading — so they travel with a passing
+ * result as `pass` findings instead of stopping a deploy over nothing this check has measured.
+ *
+ * Every finding used to block here as well, and that included the provenance note: a server whose
+ * `performance_schema` this role cannot read stopped every deploy with nothing but an `info` beside
+ * it.
  *
  * ## Reading it never changes it
  *
@@ -151,13 +164,26 @@ final readonly class ServerSettingsCheck implements PreflightCheck
             );
         }
 
-        if ($unreadable !== []) {
-            return CheckResult::undetermined(self::ID, 'setting_unreadable: '.implode('; ', $unreadable), $findings);
+        // Sorted by the outcome each finding already carries — `finding()` decided it once — so the
+        // failures lead the report and each list keeps the order the findings arrived in.
+        $blocking = [];
+        $reported = [];
+
+        foreach ($findings as $finding) {
+            if ($finding->status->outcome === Outcome::Fail) {
+                $blocking[] = $finding;
+            } else {
+                $reported[] = $finding;
+            }
         }
 
-        return $findings === []
-            ? CheckResult::pass(self::ID)
-            : CheckResult::fail(self::ID, $findings);
+        if ($unreadable !== []) {
+            return CheckResult::undetermined(self::ID, 'setting_unreadable: '.implode('; ', $unreadable), [...$blocking, ...$reported]);
+        }
+
+        return $blocking === []
+            ? CheckResult::pass(self::ID, $reported)
+            : CheckResult::fail(self::ID, [...$blocking, ...$reported]);
     }
 
     /** Why this variable could not be judged, or null when it can be. */
@@ -251,6 +277,11 @@ final readonly class ServerSettingsCheck implements PreflightCheck
         return strtoupper($value) === 'ON' || $value === '1';
     }
 
+    /**
+     * One finding for a variable: a failure at `high` and above, a reported pass below it.
+     *
+     * Decided here and nowhere else — see the class note for where the line comes from.
+     */
     private function finding(
         PreflightContext $context,
         string $suffix,
@@ -260,17 +291,36 @@ final readonly class ServerSettingsCheck implements PreflightCheck
         DowntimeClass $downtimeClass,
         Confidence $confidence = Confidence::Deterministic,
     ): Finding {
-        return Finding::fail(
-            ruleId: self::ID.'.'.$suffix,
-            messagePrefix: DeployNotice::MESSAGE_PREFIX,
-            message: $message,
-            location: Location::inCatalog($context->driver, $context->connection, $setting, SchemaObjectType::Setting),
-            category: Category::Safety,
-            level: Level::Capturable,
-            stability: StabilityTier::Stable,
-            documentationUrl: RuleDocumentationUrl::for(self::ID.'.'.$suffix),
-            context: new SubjectContext(driver: $context->driver, profile: $context->profile, strictTools: false),
-            severity: $severity,
-        )->withDowntimeClass($downtimeClass)->withConfidence($confidence);
+        $ruleId = self::ID.'.'.$suffix;
+        $location = Location::inCatalog($context->driver, $context->connection, $setting, SchemaObjectType::Setting);
+        $subject = new SubjectContext(driver: $context->driver, profile: $context->profile, strictTools: false);
+
+        $finding = $severity->isAtLeast(Severity::High)
+            ? Finding::fail(
+                ruleId: $ruleId,
+                messagePrefix: DeployNotice::MESSAGE_PREFIX,
+                message: $message,
+                location: $location,
+                category: Category::Safety,
+                level: Level::Capturable,
+                stability: StabilityTier::Stable,
+                documentationUrl: RuleDocumentationUrl::for($ruleId),
+                context: $subject,
+                severity: $severity,
+            )
+            : Finding::pass(
+                ruleId: $ruleId,
+                messagePrefix: DeployNotice::MESSAGE_PREFIX,
+                message: $message,
+                location: $location,
+                category: Category::Safety,
+                level: Level::Capturable,
+                stability: StabilityTier::Stable,
+                documentationUrl: RuleDocumentationUrl::for($ruleId),
+                context: $subject,
+                severity: $severity,
+            );
+
+        return $finding->withDowntimeClass($downtimeClass)->withConfidence($confidence);
     }
 }
