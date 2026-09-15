@@ -56,6 +56,7 @@ final readonly class SquawkStatements
                 statementKind: $statement->statementKind,
                 targets: $statement->targets,
                 keyColumns: $statement->keyColumns,
+                columnDefinitions: $statement->columnDefinitions,
             );
         }
 

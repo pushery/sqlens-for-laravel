@@ -16,6 +16,7 @@ use Pushery\SQLens\Findings\Location;
 use Pushery\SQLens\Findings\NotApplicableReason;
 use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Findings\UndeterminedReason;
+use Pushery\SQLens\Subjects\MigrationSubjectMap;
 use Pushery\SQLens\Subjects\SchemaObject;
 
 /**
@@ -38,8 +39,13 @@ final readonly class CatalogVerdicts
      * @param  list<RuleVerdict>  $verdicts
      * @return list<Finding>
      */
-    public static function toFindings(array $verdicts, Rule $rule, SchemaObject $object): array
-    {
+    public static function toFindings(
+        array $verdicts,
+        Rule $rule,
+        SchemaObject $object,
+        ?MigrationSubjectMap $map = null,
+        string $projectRoot = '',
+    ): array {
         $verdicts = self::withoutTheFixturesVerdict($verdicts, $rule, $object);
 
         // Asked ONCE per object rather than once per verdict: the material is about the object, and
@@ -47,7 +53,7 @@ final readonly class CatalogVerdicts
         $payload = self::remediationFor($rule, $object);
 
         return array_map(
-            static fn (RuleVerdict $verdict): Finding => self::withMaterial(self::finding($verdict, $rule, $object), $payload),
+            static fn (RuleVerdict $verdict): Finding => self::withMaterial(self::finding($verdict, $rule, $object, $map, $projectRoot), $payload),
             $verdicts,
         );
     }
@@ -171,25 +177,34 @@ final readonly class CatalogVerdicts
     }
 
     /**
-     * Where a catalog finding points: an instance and an object, never a file and a line.
+     * Where a catalog finding points: an instance and an object — and, where one can be read, the
+     * migration that introduced it.
      *
      * Every catalog reader stamps the source connection onto the context at construction, so an
      * object that came from a reading always carries one. The driver name stands in only for a
      * context built by hand — a subject that came from no reading at all.
+     *
+     * ⚠️ THIS USED TO SAY "never a file and a line", AND THAT WAS TRUE UNTIL IT COST SOMETHING. A
+     * catalog finding says `public.orders.customer_id`; the person reading the pull request is
+     * looking at a migration diff. The database has never heard of the file, so the join has to be
+     * made by reading the migrations — and where it cannot be made, the finding is reported exactly
+     * as it was before. The anchor is presentation: it enters no fingerprint and changes no verdict.
      */
-    private static function location(SchemaObject $object): Location
+    private static function location(SchemaObject $object, ?MigrationSubjectMap $map, string $projectRoot): Location
     {
         return Location::inCatalog(
             $object->context()->driver,
             $object->context()->connection ?? $object->context()->driver,
             $object->qualifiedName,
             $object->type,
+            $map?->anchorFor($object->qualifiedName),
+            $projectRoot,
         );
     }
 
-    private static function finding(RuleVerdict $verdict, Rule $rule, SchemaObject $object): Finding
+    private static function finding(RuleVerdict $verdict, Rule $rule, SchemaObject $object, ?MigrationSubjectMap $map, string $projectRoot): Finding
     {
-        return self::stamped(self::bare($verdict, $rule, $object), $rule);
+        return self::stamped(self::bare($verdict, $rule, $object, $map, $projectRoot), $rule);
     }
 
     /**
@@ -210,10 +225,10 @@ final readonly class CatalogVerdicts
         return $class instanceof DowntimeClass ? $finding->withDowntimeClass($class) : $finding;
     }
 
-    private static function bare(RuleVerdict $verdict, Rule $rule, SchemaObject $object): Finding
+    private static function bare(RuleVerdict $verdict, Rule $rule, SchemaObject $object, ?MigrationSubjectMap $map, string $projectRoot): Finding
     {
         $reason = $verdict->undeterminedReason;
-        $location = self::location($object);
+        $location = self::location($object, $map, $projectRoot);
 
         if ($verdict->isPass) {
             // The one route from a catalog rule to a PASS finding. It exists because "the risk is

@@ -47,6 +47,55 @@ enum SignatureElementKind
     case ColumnList;
 
     /**
+     * The DEFINITIONS in a parenthesized table body — `(id bigint, name varchar(255), …)`.
+     *
+     * The sibling of {@see self::ColumnList} and deliberately not a widening of it. That one
+     * matches a PLAIN name list and declines everything else, which is right for an index key: a
+     * member carrying anything besides a comma is not a column a coverage question can use. A
+     * table body is the opposite case — every member carries a type and most carry modifiers —
+     * so a second element rather than a looser first one, and the strict one stays strict.
+     *
+     * ## Members that are not columns
+     *
+     * A body holds table constraints too: `PRIMARY KEY (…)`, `UNIQUE (…)`, `FOREIGN KEY (…)`,
+     * `CHECK (…)`, `EXCLUDE (…)`, `CONSTRAINT x …`, and PostgreSQL's `LIKE other_table`. Each
+     * begins with a keyword where a column begins with an identifier, and each is SKIPPED rather
+     * than read as a column named `PRIMARY`.
+     *
+     * ## All or nothing, because a partial list is the dangerous answer
+     *
+     * A member whose shape this element does not recognize makes the WHOLE list decline. A rule
+     * handed nine columns out of ten cannot tell that one is missing, and the finding it then makes
+     * — "no money column here" — is wrong in the silent direction and permanent. Declining leaves
+     * the statement classified and carrying no definitions, which every reader turns into "I cannot
+     * conclude", never into a wrong conclusion. That is the same trade {@see self::ColumnList}
+     * makes, one level of grammar up.
+     */
+    case ColumnDefinitions;
+
+    /**
+     * The type that follows a column TARGET, with no parentheses around it —
+     * `ALTER TABLE t ADD COLUMN c bigint NOT NULL`.
+     *
+     * The same fact as {@see self::ColumnDefinitions} in the other grammar a migration writes it
+     * in. A column added later is the same column a `CREATE TABLE` would have declared, one
+     * migration further on, and a type rule that saw only the create form would be silent on every
+     * column a project added after its first release — which is most of them.
+     *
+     * ## It pairs with the TARGET before it, and the signature is what says so
+     *
+     * The grammar puts the name immediately before the type, so the element reads the type and
+     * hangs it on the last target the signature captured. That ordering is the contract: an element
+     * placed anywhere else in a signature would pair a type with a name that is not its own, and
+     * this kind is only ever written directly after the column target it belongs to.
+     *
+     * Declines by producing nothing rather than by failing the match: `ALTER TABLE t ADD COLUMN c`
+     * is not valid SQL, but a form this reader cannot make a type out of leaves the statement
+     * classified and simply carries no definition — the same trade every element here makes.
+     */
+    case TrailingColumnType;
+
+    /**
      * Every column a `SET` clause writes FROM ANOTHER COLUMN, in order — the targets of a data MOVE.
      *
      * ## Why the targets and not every name in the clause

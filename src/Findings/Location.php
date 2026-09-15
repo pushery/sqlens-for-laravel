@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Findings;
 
+use Pushery\SQLens\Subjects\MigrationAnchor;
 use Pushery\SQLens\Subjects\MigrationDirection;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
@@ -74,9 +75,24 @@ final readonly class Location
         string $instance,
         string $objectName,
         SchemaObjectType $objectType,
+        /**
+         * The migration that introduced this object, when one could be read — PRESENTATION only.
+         *
+         * ⚠️ IT IS DELIBERATELY ABSENT FROM `sortKey()`, AND THAT IS THE WHOLE CONTRACT. A catalog
+         * finding's identity is the instance and the object; a renamed or deleted migration file
+         * must not invalidate a baseline entry, because the database it describes did not change
+         * when somebody moved a file. Adding it below would silently retire every suppressed
+         * catalog finding in every consuming project the first time a migration was tidied.
+         */
+        ?MigrationAnchor $anchor = null,
+        string $projectRoot = '',
     ): self {
         return new self(
             kind: LocationKind::Catalog,
+            // Repo-relative, the same way a callsite is: a reporter writes this path into SARIF,
+            // and an absolute path from somebody's machine is no use to a reader of a pull request.
+            file: $anchor instanceof MigrationAnchor ? self::relativize($anchor->file, $projectRoot) : null,
+            line: $anchor?->line,
             driver: $driver,
             instance: $instance,
             objectName: $objectName,

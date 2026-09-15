@@ -33,6 +33,26 @@ final class MysqlCanonicalization implements DriverCanonicalization
         return false;
     }
 
+    /**
+     * The keywords that END a column's type and begin its modifiers.
+     *
+     * MySQL's list, and it cannot be PostgreSQL's. `CHARACTER` is here because `CHARACTER SET
+     * utf8mb4` is a per-column MODIFIER on this engine; on PostgreSQL the same word opens the type
+     * `CHARACTER VARYING`, so a shared list would truncate one engine's types or swallow the
+     * other's modifiers. That pair is the reason this list belongs to the driver.
+     *
+     * `UNSIGNED` and `ZEROFILL` stay OUT on purpose: they are part of what the type IS, and the
+     * shared normalizer reads `unsigned` off the raw text to set its own flag. Terminating there
+     * would drop the distinction the flag exists for.
+     *
+     * @var list<string>
+     */
+    private const array COLUMN_TYPE_TERMINATORS = [
+        'NOT', 'NULL', 'DEFAULT', 'PRIMARY', 'UNIQUE', 'REFERENCES', 'CHECK', 'CONSTRAINT',
+        'COLLATE', 'COMMENT', 'GENERATED', 'AUTO_INCREMENT', 'CHARACTER', 'KEY', 'INVISIBLE',
+        'STORAGE', 'AS',
+    ];
+
     /** @return list<string> */
     public function keywords(): array
     {
@@ -188,11 +208,12 @@ final class MysqlCanonicalization implements DriverCanonicalization
                     SignatureElement::target($index),
                     SignatureElement::keyword('ON'), SignatureElement::target($table),
                 ]),
-                // CREATE TABLE [IF NOT EXISTS] <t>
+                // CREATE TABLE [IF NOT EXISTS] <t> (<column definitions>)
                 new StatementSignature(StatementKind::CreateTable, [
                     SignatureElement::keyword('CREATE'), SignatureElement::optionalModifiers(),
                     SignatureElement::keyword('TABLE'), SignatureElement::optionalModifiers(),
                     SignatureElement::target($table),
+                    SignatureElement::columnDefinitions(self::COLUMN_TYPE_TERMINATORS),
                 ]),
                 // DROP INDEX <i> ON <t>
                 new StatementSignature(StatementKind::DropIndex, [
@@ -328,6 +349,9 @@ final class MysqlCanonicalization implements DriverCanonicalization
                     SignatureElement::optionalModifiers(), SignatureElement::target($table),
                     SignatureElement::keyword('ADD'), SignatureElement::keyword('COLUMN'),
                     SignatureElement::optionalModifiers(), SignatureElement::target($column),
+                    // The type the column is added AS. Directly after the target, which is what
+                    // pairs the two — see SignatureElementKind::TrailingColumnType.
+                    SignatureElement::trailingColumnType(self::COLUMN_TYPE_TERMINATORS),
                 ]),
                 // ALTER TABLE <t> DROP PRIMARY KEY  (Laravel's dropPrimary; carries no name)
                 new StatementSignature(StatementKind::DropConstraint, [
@@ -365,6 +389,9 @@ final class MysqlCanonicalization implements DriverCanonicalization
                     SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
                     SignatureElement::optionalModifiers(), SignatureElement::target($table),
                     SignatureElement::keyword('ADD'), SignatureElement::target($column),
+                    // And here more than on the spelled-out form above: this is the shape Laravel
+                    // actually emits, so it is the one nearly every added column arrives in.
+                    SignatureElement::trailingColumnType(self::COLUMN_TYPE_TERMINATORS),
                 ]),
                 // ALTER TABLE <t> DROP <c>  — the BARE form, and the one Laravel actually emits for
                 // dropColumn(). It must stay LAST of the DROP shapes: every specific one above

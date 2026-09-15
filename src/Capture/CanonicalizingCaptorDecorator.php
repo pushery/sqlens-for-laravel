@@ -184,7 +184,7 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
         $kind = $canonical->statementKind;
 
         return $kind instanceof StatementKind && $canonical->targets !== null
-            ? $enriched->withClassification($kind, $canonical->targets, $canonical->keyColumns)
+            ? $enriched->withClassification($kind, $canonical->targets, $canonical->keyColumns, $canonical->columnDefinitions)
             : $enriched;
     }
 }

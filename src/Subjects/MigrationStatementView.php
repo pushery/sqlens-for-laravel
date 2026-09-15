@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Subjects;
 
+use Pushery\SQLens\Canonical\ColumnDefinition;
 use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Canonical\StatementTarget;
 use Pushery\SQLens\Canonical\TransactionMode;
@@ -100,6 +101,22 @@ final readonly class MigrationStatementView
          * @var list<string>
          */
         public array $keyColumns = [],
+        /**
+         * The columns THIS statement defines, with their canonical types — or null.
+         *
+         * The same fact {@see MigrationStatementDigest::$columnDefinitions} carries for another
+         * statement, carried here for the one being judged, and for the same reason `keyColumns`
+         * travels both ways: a rule comparing what it creates against what the migration already
+         * created needs one of each, and reading its own out of the canonical string would put
+         * grammar back into a rule.
+         *
+         * **Null is "not read", never "none"** — see {@see ColumnDefinition}. A rule that finds
+         * null must stay silent or report undetermined; it must not conclude the columns are
+         * absent.
+         *
+         * @var list<ColumnDefinition>|null
+         */
+        public ?array $columnDefinitions = null,
         /**
          * Where this statement came from — migration, not a migration, or unknown.
          *

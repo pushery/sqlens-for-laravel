@@ -31,6 +31,24 @@ final class PgsqlCanonicalization implements DriverCanonicalization
         return true;
     }
 
+    /**
+     * The keywords that END a column's type and begin its modifiers.
+     *
+     * PostgreSQL's list, and it cannot be shared with MySQL's: `CHARACTER VARYING` is a TYPE here
+     * while `CHARACTER SET` is a modifier there. The same first word, opposite meanings, and only
+     * an engine's own list separates them.
+     *
+     * Everything a type is made of stays OUT deliberately — `WITHOUT TIME ZONE`, `WITH TIME ZONE`,
+     * `PRECISION` — so `timestamp without time zone` arrives whole rather than truncated at its
+     * second word.
+     *
+     * @var list<string>
+     */
+    private const array COLUMN_TYPE_TERMINATORS = [
+        'NOT', 'NULL', 'DEFAULT', 'PRIMARY', 'UNIQUE', 'REFERENCES', 'CHECK', 'CONSTRAINT',
+        'COLLATE', 'IDENTITY', 'COMMENT', 'GENERATED',
+    ];
+
     /** @return list<string> */
     public function keywords(): array
     {
@@ -196,11 +214,19 @@ final class PgsqlCanonicalization implements DriverCanonicalization
                     SignatureElement::target($index),
                     SignatureElement::keyword('ON'), SignatureElement::target($table),
                 ]),
-                // CREATE TABLE [IF NOT EXISTS] <t>
+                // CREATE TABLE [IF NOT EXISTS] <t> (<column definitions>)
+                //
+                // The body is read where it is written. Before this element the column list a
+                // migration creates never reached the digest, so every rule whose judgment needs a
+                // column TYPE was structurally audit-only — the catalog reports it once the table
+                // already stands, and the migration that introduces it is the cheapest moment to
+                // fix it. The element declines as a whole rather than answering partially; a
+                // `CREATE TABLE … AS SELECT` names no body and simply carries none.
                 new StatementSignature(StatementKind::CreateTable, [
                     SignatureElement::keyword('CREATE'), SignatureElement::optionalModifiers(),
                     SignatureElement::keyword('TABLE'), SignatureElement::optionalModifiers(),
                     SignatureElement::target($table),
+                    SignatureElement::columnDefinitions(self::COLUMN_TYPE_TERMINATORS),
                 ]),
                 // DROP INDEX [CONCURRENTLY] [IF EXISTS] <i>
                 new StatementSignature(StatementKind::DropIndex, [
@@ -339,6 +365,9 @@ final class PgsqlCanonicalization implements DriverCanonicalization
                     SignatureElement::optionalModifiers(), SignatureElement::target($table),
                     SignatureElement::keyword('ADD'), SignatureElement::keyword('COLUMN'),
                     SignatureElement::optionalModifiers(), SignatureElement::target($column),
+                    // The type the column is added AS. Directly after the target, which is what
+                    // pairs the two — see SignatureElementKind::TrailingColumnType.
+                    SignatureElement::trailingColumnType(self::COLUMN_TYPE_TERMINATORS),
                 ]),
                 // ALTER TABLE [ONLY] <t> DROP COLUMN [IF EXISTS] <c>
                 new StatementSignature(StatementKind::DropColumn, [

@@ -15,6 +15,7 @@ use Pushery\SQLens\Drivers\Pgsql\Rules\L2\DropIndexNotConcurrentRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L2\SetNotNullScanRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L2\TypeChangeRewriteRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L3\ConcurrentlyInTransactionRule;
+use Pushery\SQLens\Drivers\Pgsql\Rules\L3\LockTimeoutIneffectiveRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L3\MissingLockTimeoutRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L3\MissingStatementTimeoutRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L3\RiskyOpsSingleTransactionRule;
@@ -43,6 +44,7 @@ use Pushery\SQLens\Drivers\Pgsql\Rules\L6\StandardConformingStringsOffRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L6\TimestampWithoutTimeZoneRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L6\TimeZoneNotUtcRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L6\UuidV4PrimaryKeyRule;
+use Pushery\SQLens\Drivers\Pgsql\Rules\L7\AutovacuumDisabledRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L7\DataChecksumsDisabledRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L7\RedundantIndexRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L7\UnbatchedMassDmlRule;
@@ -149,7 +151,11 @@ final readonly class PgsqlRuleSet
             new StandardConformingStringsOffRule($projectRoot),
             new DefaultTransactionIsolationDriftRule($projectRoot),
             new DefaultTransactionReadOnlyRule($projectRoot),
+            // Beside the other server-baseline rules rather than beside the two migration
+            // rules whose subject it shares: it reads the catalog, not a migration stream.
+            new LockTimeoutIneffectiveRule($projectRoot),
             new DataChecksumsDisabledRule($projectRoot),
+            new AutovacuumDisabledRule($projectRoot),
             new RedundantIndexRule($projectRoot),
             new UnbatchedMassDmlRule($projectRoot),
             new UnusedIndexRule($projectRoot, $unusedIndexMinDays),

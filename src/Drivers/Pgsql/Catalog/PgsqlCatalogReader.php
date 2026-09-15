@@ -217,6 +217,11 @@ final readonly class PgsqlCatalogReader implements CatalogReader
                         'partitioned' => $kind === 'p',
                         'persistence' => $this->str($row, 'persistence'),
                         'comment' => $this->nullableStr($row, 'comment'),
+                        // `'true'`, `'false'`, or `''` for a table that carries no such parameter
+                        // and therefore runs under the cluster's setting. Kept as the server's own
+                        // spelling rather than cast to a bool, because a bool has no third value and
+                        // the third value is the ordinary one.
+                        'autovacuum_enabled' => $this->str($row, 'autovacuum_enabled'),
                     ],
                     $this->subjectContext,
                     fromExtension: $owner !== '',
@@ -444,7 +449,17 @@ final readonly class PgsqlCatalogReader implements CatalogReader
                        JOIN pg_extension e ON e.oid = d.refobjid
                        WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid AND d.deptype = 'e'
                        LIMIT 1
-                   ), '')              AS owning_extension
+                   ), '')              AS owning_extension,
+                   -- Whether somebody switched autovacuum OFF for this table, read out of the
+                   -- storage parameters rather than guessed from behavior. Three states, and the
+                   -- empty string is the third: a table with no such parameter is running under the
+                   -- cluster's setting, which is not the same as one that carries `true`, and a rule
+                   -- must not read "nobody said" as "somebody said yes".
+                   COALESCE((
+                       SELECT o.option_value FROM pg_options_to_table(c.reloptions) o
+                       WHERE o.option_name = 'autovacuum_enabled'
+                       LIMIT 1
+                   ), '')              AS autovacuum_enabled
             FROM pg_class c
             JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE n.nspname = ANY (?)

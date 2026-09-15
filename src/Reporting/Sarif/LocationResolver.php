@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Reporting\Sarif;
 
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
+use Pushery\SQLens\Findings\LocationKind;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
 /**
@@ -32,9 +33,16 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * - `logicalLocations` carries the REAL subject as a `fullyQualifiedName` — `pgsql.public.orders` —
  *   so the object identity is machine-readable and stable across runs and machines.
- * - `physicalLocation` carries an ANCHOR: one configurable repository file, `config/sqlens.php` by
- *   default, chosen because it is the file a reader would edit in response. It has no `region`, and
- *   the omission is the point — a line number here would be the invention above.
+ * - `physicalLocation` carries an ANCHOR. Where the migration that introduced the subject could be
+ *   read, that is the anchor, with its real line: the alert then lands in the diff somebody is
+ *   already looking at. Where it could not — a table named by a variable, an unparseable file, an
+ *   application that has run `schema:dump --prune` — the anchor is one configurable repository
+ *   file, `config/sqlens.php` by default, chosen because it is the file a reader would edit in
+ *   response, and it carries no `region`, because a line number there would be the invention above.
+ *
+ * Both are anchors and both say so. `sqlens-anchored` stays true either way — a migration is where
+ * an object CAME FROM, never what the finding is about — and `sqlens-anchor-kind` says which of the
+ * two a consumer is looking at.
  *
  * The anchor is honest only because the message says so. A catalog finding's SARIF text names its
  * object FIRST and states that the file is a stand-in, so nobody reads the alert as a finding about
@@ -59,28 +67,47 @@ final readonly class LocationResolver
      */
     public function locations(Finding $finding): array
     {
-        $file = $finding->location->file;
+        $location = $finding->location;
 
-        if ($file !== null) {
+        if ($location->kind !== LocationKind::Catalog) {
             // A migration or callsite finding. The file is already repo-relative — `Location` does
             // that at construction — and the region is omitted rather than defaulted when the
             // finding has no line, because a file-level finding pinned to line 1 is the invention
             // this class exists to avoid.
             return [[
                 'physicalLocation' => [
-                    'artifactLocation' => ['uri' => $file],
-                    ...($finding->location->line === null ? [] : ['region' => ['startLine' => $finding->location->line]]),
+                    'artifactLocation' => ['uri' => (string) $location->file],
+                    ...($location->line === null ? [] : ['region' => ['startLine' => $location->line]]),
                 ],
             ]];
         }
 
+        // A catalog finding, and the branch is chosen on the KIND rather than on whether a file
+        // happens to be set. That distinction is load-bearing since a catalog location can now
+        // carry the migration that introduced its subject: branching on `file !== null` sent an
+        // anchored finding down the migration path, which drops `logicalLocations` — so the alert
+        // would lose the machine-readable identity of the object it is about, which is the half
+        // this class exists to carry.
+        $migration = $location->file;
+
         return [[
-            'physicalLocation' => ['artifactLocation' => ['uri' => $this->anchorFile]],
-            'logicalLocations' => [$this->logical($finding->location)],
+            'physicalLocation' => [
+                'artifactLocation' => ['uri' => $migration ?? $this->anchorFile],
+                ...($migration === null || $location->line === null ? [] : ['region' => ['startLine' => $location->line]]),
+            ],
+            'logicalLocations' => [$this->logical($location)],
             'properties' => [
                 // The anchor, named as an anchor. A consumer reading the physical location alone
                 // would otherwise have no way to know it is a stand-in rather than the subject.
+                // TRUE in both cases: a migration is where the object CAME FROM, never what the
+                // finding is about — the finding is about the object as the database holds it now.
                 'sqlens-anchored' => true,
+                // …and WHICH kind of anchor, because the two are worth different amounts to a
+                // reader. `migration` is the file that introduced the subject, so the alert lands
+                // on a line somebody is reading anyway; `configured` is a stand-in for an object
+                // with no file at all. Additive, so a consumer that only knows the flag above is
+                // unaffected.
+                'sqlens-anchor-kind' => $migration === null ? 'configured' : 'migration',
             ],
         ]];
     }
@@ -126,14 +153,31 @@ final readonly class LocationResolver
      */
     public function message(Finding $finding): string
     {
-        if ($finding->location->file !== null) {
+        $location = $finding->location;
+
+        if ($location->kind !== LocationKind::Catalog) {
             return $finding->message;
+        }
+
+        // An anchored finding still needs the correction, and arguably needs it more: the header
+        // now shows a real migration, so a reader has every reason to take the alert for a finding
+        // about that file. It is not — the migration is where the object came from, and the finding
+        // is about the object as the database holds it now. A `CREATE TABLE` that was correct on
+        // the day it ran is the ordinary case.
+        if ($location->file !== null) {
+            return sprintf(
+                '%s: %s (a live-database finding — this alert sits on the migration that introduced '
+                .'%s, which is where it came from rather than what is being reported)',
+                (string) $location->objectName,
+                $finding->message,
+                (string) $location->objectName,
+            );
         }
 
         return sprintf(
             '%s: %s (a live-database finding — this alert is anchored to %s because the object it '
             .'reports has no file in the repository)',
-            (string) $finding->location->objectName,
+            (string) $location->objectName,
             $finding->message,
             $this->anchorFile,
         );
