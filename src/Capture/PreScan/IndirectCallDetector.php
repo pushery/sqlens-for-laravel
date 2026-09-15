@@ -51,7 +51,7 @@ use Pushery\SQLens\Rules\VersionWindow;
  *
  * **What is deliberately NOT a hit,** so the rule is not noise:
  *
- * - A call on `$this` (the migration's own method or a trait method mixed into
+ * - A call on `$this` (the migration's own method or a method mixed into
  *   it). Flagging every migration that factored code into a private helper would
  *   make the rule unusable; own methods live in the same file the pre-scan
  *   already covers.

@@ -8,6 +8,7 @@ use Laravel\Mcp\Server;
 use Laravel\Mcp\Server\Contracts\Transport;
 use Laravel\Mcp\Server\Tool;
 use Pushery\SQLens\Agent\Mcp\Methods\CallDeclaredTool;
+use Pushery\SQLens\Agent\Mcp\Methods\InitializeOnThePinnedRevision;
 use Pushery\SQLens\Agent\Mcp\Tools\SqlensTool;
 use Pushery\SQLens\PackageVersion;
 use stdClass;
@@ -88,6 +89,12 @@ final class SqlensMcpServer extends Server
         // Without this the SDK answers "not found" for both, which tells an agent that a real
         // capability does not exist and sends a log reader looking for a typo that is not there.
         $this->addMethod('tools/call', CallDeclaredTool::class);
+
+        // The handshake is held to the pin above. Since laravel/mcp 1.0 the SDK's own `initialize`
+        // negotiates instead of refusing, and reads the declared pin only on the newer discovery
+        // handshake — so without this a client asking for a revision this build does not implement
+        // gets served the SDK's newest one.
+        $this->addMethod('initialize', InitializeOnThePinnedRevision::class);
 
         // Read from Composer's installed set rather than declared as a second string here. A
         // hand-maintained version drifts from the released one silently, and `serverInfo` is the

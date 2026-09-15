@@ -40,7 +40,7 @@ final class FloatForMoneyRule extends AbstractCatalogRule implements DeclaresJud
     /**
      * Why there is no standard sequence here.
      *
-     * The trait decides WHEN this is attached — only where this rule itself flagged — so the rule
+     * The shared concern decides WHEN this is attached — only where this rule itself flagged — so the rule
      * only has to say what it concluded.
      */
     #[Override]
