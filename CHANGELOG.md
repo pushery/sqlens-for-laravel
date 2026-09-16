@@ -2,6 +2,12 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] - 2026-09-16
+
+### Fixed
+
+- **A functional index on MySQL is now compared instead of skipped, the same way it already was on PostgreSQL.** `CREATE INDEX ... ((lower(display_name)))` came back understood on one engine and as a `not_understood` skip on the other, and nothing said whether that was a limit of MySQL or of this package's reading. It was the reading. Measured against a real MySQL 8.4.10: `information_schema.STATISTICS` returns one row per key position, with `COLUMN_NAME` null and `EXPRESSION` filled on the expression part — the same shape PostgreSQL's per-position `pg_get_indexdef()` produces. The reader was already asking for `EXPRESSION` and then set it aside, recording it beside the index with a flag saying so, and the comprehension check believed the flag over the key list. The expression now enters the key list, so a redundancy question about a functional index is answered rather than declined. **Expect findings you have not seen before**: an index this package used to decline to reason about is now one it reasons about, and on a schema with functional indexes that is new output, not a regression. The flag remains as a fact about the index, beside `visible` and `prefixed_columns`. The same measurement found a second defect: for `KEY (a, (lower(b)))` the expression was read off the index's leading key part, which carries none, so an index that plainly had one reported `null` — it is collected across the key parts now.
+
 ## [0.16.0] - 2026-09-16
 
 ### Changed
