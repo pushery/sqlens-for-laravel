@@ -272,11 +272,17 @@ final readonly class IndexComprehension
      * What that leaves is not a general doubt but two specific ways the expression fails to arrive
      * intact, each of which really does make the comparison meaningless:
      *
-     * - **It never reached the key columns.** MySQL's `information_schema` reports a functional index
-     *   with a null `COLUMN_NAME`, and the reading records the expression beside the index rather
-     *   than inside its column list. So `(lower(a))` and `(lower(b))` would both arrive as an EMPTY
-     *   list and compare equal, and a functional index would look like a duplicate of a plain one.
-     *   This is the arm that keeps the widening PostgreSQL-only without a driver name in it.
+     * - **It never reached the key columns.** A reading that records the expression beside the index
+     *   rather than inside its key list hands over an EMPTY list, so `(lower(a))` and `(lower(b))`
+     *   compare equal and a functional index looks like a duplicate of a plain one. The question is
+     *   put to the LIST and to nothing else — no driver name, no driver flag. MySQL's
+     *   `information_schema` reports a functional key part with a null `COLUMN_NAME` and the
+     *   expression in `EXPRESSION`, one row per position, exactly as PostgreSQL's per-position
+     *   `pg_get_indexdef()` does; both readings therefore put the expression among the key columns
+     *   and both engines answer this question the same way. Until 2026-09-16 the MySQL reading kept
+     *   it beside the index and said so with a flag, and this method believed the flag — so the same
+     *   index was understood on one engine and refused on the other, over a limit that belonged to
+     *   the reading rather than to the server.
      * - **Its key positions do not balance.** A reading whose positions cannot be told apart from
      *   pieces of one another is not a list anything downstream may compare, and it is refused rather
      *   than repaired — see {@see self::isOneKeyPosition()}.
@@ -304,13 +310,17 @@ final readonly class IndexComprehension
     {
         $tokens = TopLevelList::split($index->getString('key_columns') ?? '', ',');
 
-        // Two ways of establishing the same thing, and both are wanted. The flag is the reading's
-        // own statement that it put the expression somewhere else; the search is the fail-closed
-        // half, for a future driver that drops one without saying so. Measured on 18.4 over five
-        // shapes — a cast, a concatenation, a negation, a JSON arrow and a function call — every
-        // deparsed expression carries a parenthesis, either the call's own or the pair PostgreSQL
-        // wraps a bare expression in. An unquoted column name never can.
-        if ($index->getBool('functional') === true || ! self::anExpressionIsVisibleAmong($tokens)) {
+        // ONE question, and it is put to the key list itself: is an expression visible among the
+        // positions this index claims to have? That is fail-closed against any reading that drops
+        // one, whether or not the reading admits it — which is all a flag beside it could add.
+        // Measured on 18.4 over five shapes — a cast, a concatenation, a negation, a JSON arrow and
+        // a function call — every deparsed expression carries a parenthesis, either the call's own
+        // or the pair PostgreSQL wraps a bare expression in. An unquoted column name never can.
+        //
+        // A `functional` flag used to stand beside this, and it was not a second opinion but a
+        // second ANSWER: MySQL hands its expression over per key position just as PostgreSQL does,
+        // so once the reading records it there, the flag refused indexes that had arrived whole.
+        if (! self::anExpressionIsVisibleAmong($tokens)) {
             return 'expression index — the expression is recorded beside the index rather than among its key columns, so comparing this index would compare the columns it does NOT index: '.$expression;
         }
 

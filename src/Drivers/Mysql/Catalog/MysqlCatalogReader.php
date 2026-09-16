@@ -821,13 +821,13 @@ final readonly class MysqlCatalogReader implements CatalogReader
             ORDER BY TABLE_SCHEMA, TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX
             SQL, $schemas);
 
-        /** @var array<string, array{row: array<string, scalar|null>, columns: list<array{name: string, descending: bool}>, functional: bool, prefixed: bool}> $grouped */
+        /** @var array<string, array{row: array<string, scalar|null>, columns: list<array{name: string, descending: bool}>, functional: bool, prefixed: bool, expression: string|null}> $grouped */
         $grouped = [];
 
         foreach ($rows as $row) {
             $key = $this->str($row, 'schema').'.'.$this->str($row, 'relation').'.'.$this->str($row, 'name');
 
-            $grouped[$key] ??= ['row' => $row, 'columns' => [], 'functional' => false, 'prefixed' => false];
+            $grouped[$key] ??= ['row' => $row, 'columns' => [], 'functional' => false, 'prefixed' => false, 'expression' => null];
 
             if ($this->nullableInt($row, 'sub_part') !== null) {
                 // ANY prefixed column makes the whole index one this package will not compare: a
@@ -839,12 +839,34 @@ final readonly class MysqlCatalogReader implements CatalogReader
             $column = $this->nullableStr($row, 'column_name');
 
             if ($column === null) {
-                // A functional index has no column name and an EXPRESSION instead. Recorded as a
-                // fact rather than guessed at: a redundancy heuristic that treated an expression
-                // index as a plain one would be wrong about the one index kind it cannot read.
+                // A FUNCTIONAL KEY PART. MySQL reports it with a null COLUMN_NAME and carries the
+                // expression in EXPRESSION -- one row per key position, exactly as it reports a
+                // plain column, since 8.0.13. So the expression is recorded AS that key position,
+                // which is the shape PostgreSQL's per-position `pg_get_indexdef()` already
+                // produces, and one question about an index gets one answer whichever engine
+                // answered it.
+                //
+                // It used to be recorded only BESIDE the index, and {@see IndexComprehension} then
+                // refused every such index as not understood while PostgreSQL compared the same
+                // index without trouble. Measured against the fixture catalog on both engines:
+                // `customers_lower_name_idx` arrived with an empty key list here and with
+                // `lower(display_name::text)` there. The difference was this reading, never the
+                // server -- EXPRESSION was already being selected, and then dropped on the floor.
                 $grouped[$key]['functional'] = true;
+                $expression = $this->nullableStr($row, 'expression');
 
-                continue;
+                // First one wins, and it is the index's own expression rather than the first row's:
+                // `KEY (a, (lower(b)))` carries no EXPRESSION on its leading row, so reading the
+                // attribute off that row reported null for an index that plainly has one.
+                $grouped[$key]['expression'] ??= $expression;
+
+                // `??` rather than a branch, and the coverage floor is the reason. On 8.0.13+ a null
+                // COLUMN_NAME always arrives with EXPRESSION filled -- measured on 8.4.10 -- so a
+                // guard written for the other case is a line no run can enter, and a 100% floor says
+                // exactly that about it. The empty name keeps the same fail-closed behavior without
+                // one: a key position naming nothing shows no parenthesis among the key columns, so
+                // {@see IndexComprehension} refuses the index rather than comparing an empty list.
+                $column = $expression ?? '';
             }
 
             $grouped[$key]['columns'][] = [
@@ -893,7 +915,9 @@ final readonly class MysqlCatalogReader implements CatalogReader
                     // An invisible index exists, costs writes, and the optimizer ignores it — a fact
                     // with no PostgreSQL counterpart and one a redundancy rule must not miss.
                     'visible' => $this->str($row, 'is_visible') !== 'NO',
-                    'expression' => $this->nullableStr($row, 'expression'),
+                    // The index's expression, collected across its key parts rather than read off
+                    // its leading row -- see the grouping above for why that distinction has teeth.
+                    'expression' => $index['expression'],
                 ],
                 $this->subjectContext,
             );
