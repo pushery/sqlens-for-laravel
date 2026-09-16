@@ -15,6 +15,7 @@ use Pushery\SQLens\Findings\Confidence;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
+use Pushery\SQLens\Findings\NotApplicableReason;
 use Pushery\SQLens\Findings\Outcome;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
@@ -61,6 +62,14 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * Every finding used to block here as well, and that included the provenance note: a server whose
  * `performance_schema` this role cannot read stopped every deploy with nothing but an `info` beside
  * it.
+ *
+ * ## With nothing pending, nothing is judged
+ *
+ * The same split the PostgreSQL sibling makes, and it matters more here. MySQL ships
+ * `lock_wait_timeout` at one year, so every server left at its default reports an unbounded wait —
+ * and without the split that `high` stopped every deploy, including the ones that carry no migration
+ * at all. With nothing pending each variable is `not_applicable` with the reason `nothing_pending`,
+ * named with its value and without the sentence about a change that is not happening.
  *
  * ## Reading it never changes it
  *
@@ -129,6 +138,11 @@ final readonly class ServerSettingsCheck implements PreflightCheck
         $findings = [];
         $unreadable = [];
 
+        // Whether anything is actually about to run, read ONCE, as the PostgreSQL sibling does: the
+        // judgments argue from the same fact, and two readings of one fact is two chances for a report
+        // to contradict itself.
+        $pending = ! $context->pending->isEmpty();
+
         foreach ($this->judgments() as $name => $judge) {
             $setting = $reading->get($name);
 
@@ -140,7 +154,7 @@ final readonly class ServerSettingsCheck implements PreflightCheck
                 continue;
             }
 
-            $finding = $judge((string) $setting?->serverValue(), $context);
+            $finding = $judge((string) $setting?->serverValue(), $context, $pending);
 
             if ($finding instanceof Finding) {
                 $findings[] = $finding;
@@ -152,6 +166,7 @@ final readonly class ServerSettingsCheck implements PreflightCheck
             // were read; what was lost is where they came from.
             $findings[] = $this->finding(
                 $context,
+                $pending,
                 'PROVENANCE_UNAVAILABLE',
                 'performance_schema',
                 'The variables above were read through `SHOW GLOBAL VARIABLES` rather than '
@@ -159,6 +174,9 @@ final readonly class ServerSettingsCheck implements PreflightCheck
                 .'role. Their VALUES are correct; what is missing is where each came from. So a '
                 .'value that looks deliberate here may simply be the compiled-in default nobody '
                 .'ever set, and this report cannot tell you which.',
+                // No premise: the note describes the reading, not the change, so there is nothing a
+                // run with nothing pending would have to leave unsaid, and at `info` it is a pass.
+                null,
                 Severity::Info,
                 DowntimeClass::Online,
             );
@@ -209,61 +227,74 @@ final readonly class ServerSettingsCheck implements PreflightCheck
     /**
      * The variables this check judges, and what each verdict is.
      *
-     * @return array<string, callable(string, PreflightContext): ?Finding>
+     * Each message comes in two halves, for the reason the PostgreSQL sibling gives: the first says
+     * what the variable IS, the second what that means for the change about to run — and only the
+     * second is true when a change is actually pending. A report that argues from "a migration is
+     * about to run" beneath a header saying none was read teaches a reader to take the next real red
+     * for noise.
+     *
+     * @return array<string, callable(string, PreflightContext, bool): ?Finding>
      */
     private function judgments(): array
     {
         return [
-            'lock_wait_timeout' => fn (string $value, PreflightContext $context): ?Finding => ! ctype_digit($value) || (int) $value <= self::LOCK_WAIT_CEILING_SECONDS ? null : $this->finding(
+            'lock_wait_timeout' => fn (string $value, PreflightContext $context, bool $pending): ?Finding => ! ctype_digit($value) || (int) $value <= self::LOCK_WAIT_CEILING_SECONDS ? null : $this->finding(
                 $context,
+                $pending,
                 'LOCK_WAIT_TIMEOUT_UNBOUNDED',
                 'lock_wait_timeout',
                 sprintf(
-                    'The server runs with `lock_wait_timeout = %s` seconds, and a migration is about '
-                    .'to run. MySQL ships one year, which at deploy time is the same thing as '
-                    .'forever: a DDL blocked on a metadata lock will sit there, and every statement '
-                    .'that needs that table sits behind it. Nothing here says a blocker exists — '
-                    .'only that if one appears, nothing will end the wait.',
+                    'The server runs with `lock_wait_timeout = %s` seconds. MySQL ships one year, '
+                    .'which at deploy time is the same thing as forever: a DDL blocked on a metadata '
+                    .'lock will sit there, and every statement that needs that table sits behind it. '
+                    .'Nothing here says a blocker exists — only that if one appears, nothing will end '
+                    .'the wait.',
                     $value,
                 ),
+                ' A migration is about to run under it.',
                 Severity::High,
                 DowntimeClass::Blocking,
             ),
-            'foreign_key_checks' => fn (string $value, PreflightContext $context): ?Finding => $this->isOn($value) ? null : $this->finding(
+            'foreign_key_checks' => fn (string $value, PreflightContext $context, bool $pending): ?Finding => $this->isOn($value) ? null : $this->finding(
                 $context,
+                $pending,
                 'FOREIGN_KEY_CHECKS_OFF',
                 'foreign_key_checks',
                 'The server runs with `foreign_key_checks = OFF`. A migration that adds a foreign '
                 .'key will be accepted and will validate nothing, so the constraint exists in the '
                 .'schema and the data behind it was never checked. The failure surfaces later, as '
                 .'rows that violate a constraint the database believes it is enforcing.',
+                ' A migration is about to run under it.',
                 Severity::High,
                 DowntimeClass::Online,
             ),
-            'sql_mode' => fn (string $value, PreflightContext $context): ?Finding => str_contains($value, 'STRICT_TRANS_TABLES') || str_contains($value, 'STRICT_ALL_TABLES') ? null : $this->finding(
+            'sql_mode' => fn (string $value, PreflightContext $context, bool $pending): ?Finding => str_contains($value, 'STRICT_TRANS_TABLES') || str_contains($value, 'STRICT_ALL_TABLES') ? null : $this->finding(
                 $context,
+                $pending,
                 'SQL_MODE_NOT_STRICT',
                 'sql_mode',
                 'The server\'s `sql_mode` carries neither `STRICT_TRANS_TABLES` nor '
-                .'`STRICT_ALL_TABLES`. Outside strict mode a column narrowed by this migration '
+                .'`STRICT_ALL_TABLES`. Outside strict mode a migration that narrows a column '
                 .'TRUNCATES the values that no longer fit and reports a warning rather than an '
                 .'error — so the migration succeeds, the deploy goes green, and the data is gone.',
+                ' A migration is about to run under it.',
                 Severity::High,
                 DowntimeClass::Online,
             ),
-            'innodb_online_alter_log_max_size' => fn (string $value, PreflightContext $context): ?Finding => ! ctype_digit($value) || (int) $value > self::DEFAULT_ONLINE_ALTER_LOG_BYTES ? null : $this->finding(
+            'innodb_online_alter_log_max_size' => fn (string $value, PreflightContext $context, bool $pending): ?Finding => ! ctype_digit($value) || (int) $value > self::DEFAULT_ONLINE_ALTER_LOG_BYTES ? null : $this->finding(
                 $context,
+                $pending,
                 'ONLINE_ALTER_LOG_AT_DEFAULT',
                 'innodb_online_alter_log_max_size',
                 sprintf(
                     'The server is still on the shipped `innodb_online_alter_log_max_size` (%s '
-                    .'bytes) while a schema change is pending. An online ALTER buffers the DML that '
-                    .'arrives while it runs; when the buffer fills, the ALTER FAILS — after doing '
-                    .'most of its work, and under exactly the write load that made it fill. Nothing '
-                    .'here has seen your traffic; this is the default being reported, not a '
-                    .'computed need.',
+                    .'bytes). An online ALTER buffers the DML that arrives while it runs; when the '
+                    .'buffer fills, the ALTER FAILS — after doing most of its work, and under exactly '
+                    .'the write load that made it fill. Nothing here has seen your traffic; this is the '
+                    .'default being reported, not a computed need.',
                     $value,
                 ),
+                ' A schema change is pending against it.',
                 Severity::Medium,
                 DowntimeClass::Online,
                 Confidence::Heuristic,
@@ -278,15 +309,22 @@ final readonly class ServerSettingsCheck implements PreflightCheck
     }
 
     /**
-     * One finding for a variable: a failure at `high` and above, a reported pass below it.
+     * One finding for a variable: a failure, a reported pass, or a not-applicable notice.
      *
-     * Decided here and nowhere else — see the class note for where the line comes from.
+     * Decided here and nowhere else. With nothing pending a variable is not applicable, whatever its
+     * severity, and its message stops before the sentence about the change. With a migration pending,
+     * `high` fails and everything below it is reported as a pass — see the class note for the line.
+     *
+     * A null premise marks a finding that argues from no change at all, and nothing pending leaves it
+     * exactly as it is.
      */
     private function finding(
         PreflightContext $context,
+        bool $pending,
         string $suffix,
         string $setting,
-        string $message,
+        string $state,
+        ?string $premise,
         Severity $severity,
         DowntimeClass $downtimeClass,
         Confidence $confidence = Confidence::Deterministic,
@@ -295,8 +333,23 @@ final readonly class ServerSettingsCheck implements PreflightCheck
         $location = Location::inCatalog($context->driver, $context->connection, $setting, SchemaObjectType::Setting);
         $subject = new SubjectContext(driver: $context->driver, profile: $context->profile, strictTools: false);
 
-        $finding = $severity->isAtLeast(Severity::High)
-            ? Finding::fail(
+        $message = $state.($premise ?? '');
+
+        $finding = match (true) {
+            ! $pending && $premise !== null => Finding::notApplicable(
+                ruleId: $ruleId,
+                messagePrefix: DeployNotice::MESSAGE_PREFIX,
+                message: $state,
+                reason: NotApplicableReason::NothingPending,
+                location: $location,
+                category: Category::Safety,
+                level: Level::Capturable,
+                stability: StabilityTier::Stable,
+                documentationUrl: RuleDocumentationUrl::for($ruleId),
+                context: $subject,
+                severity: $severity,
+            ),
+            $severity->isAtLeast(Severity::High) => Finding::fail(
                 ruleId: $ruleId,
                 messagePrefix: DeployNotice::MESSAGE_PREFIX,
                 message: $message,
@@ -307,8 +360,8 @@ final readonly class ServerSettingsCheck implements PreflightCheck
                 documentationUrl: RuleDocumentationUrl::for($ruleId),
                 context: $subject,
                 severity: $severity,
-            )
-            : Finding::pass(
+            ),
+            default => Finding::pass(
                 ruleId: $ruleId,
                 messagePrefix: DeployNotice::MESSAGE_PREFIX,
                 message: $message,
@@ -319,7 +372,8 @@ final readonly class ServerSettingsCheck implements PreflightCheck
                 documentationUrl: RuleDocumentationUrl::for($ruleId),
                 context: $subject,
                 severity: $severity,
-            );
+            ),
+        };
 
         return $finding->withDowntimeClass($downtimeClass)->withConfidence($confidence);
     }

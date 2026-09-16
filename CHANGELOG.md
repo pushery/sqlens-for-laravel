@@ -2,6 +2,16 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-09-16
+
+### Changed
+
+- **Two absences in the rule set are now stated rather than left as gaps.** MySQL's `--skip-grant-tables` gets no rule, because the server enables `skip_networking` alongside it and therefore refuses every remote connection — a run that connected at all proves it is not in that state, so the rule could never have a subject. And there is no composite id for a `pg_hba.conf` line that authenticates with `password` on a server whose `ssl` is off: `SEC.AUTH.HBA_CLEARTEXT` and `SEC.PG.TLS.DISABLED` are both already in the report on exactly those runs, and a third id would only restate their conjunction. Both reasons now sit where the question comes up, on the scope page and beside the rule.
+
+### Fixed
+
+- **On MySQL, `sqlens:predeploy` no longer judges the server settings when no migration is pending.** MySQL ships `lock_wait_timeout` at one year, which this check reports as an unbounded wait at `high` — and the MySQL side never asked whether anything was about to run, so every deploy on a server at its defaults stopped over it, including the ones that carried no migration at all. The messages argued from "a migration is about to run" either way. It now makes the split the PostgreSQL side has made since 0.11.0: with nothing pending every variable is `not_applicable` with the reason `nothing_pending`, named with its value and without the sentence about the change; with a migration pending nothing changes. The provenance note stays a `pass` in both cases, because it describes the reading, not the change.
+
 ## [0.15.3] - 2026-09-16
 
 ### Fixed

@@ -30,6 +30,18 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * line. That setting is read by a rule of its own, so this finding names the encryption question and
  * points at it instead of guessing — a `critical` asserted on an unread setting would be a severity
  * derived from an assumption.
+ *
+ * ## And there is deliberately no composite id for "cleartext AND unencrypted"
+ *
+ * The obvious next rule — a `SEC.L0.HBA_CLEARTEXT_UNENCRYPTED` that fires when a `host` line uses
+ * `password` on a server whose `ssl` is off — was specified and then dropped. It would fire on
+ * exactly the runs where this finding and {@see TlsDisabledRule} are BOTH already in the report, so
+ * its whole content is their conjunction. A reader who sees both lines has the exposed case in front
+ * of them; a third id adds a severity to restate it, and a catalog that does that once starts
+ * answering every pair of findings with a third.
+ *
+ * The rule to apply when the next one comes up: a new id earns its place by saying something neither
+ * of its parts says, not by saying that both of them are true at once.
  */
 final class HbaCleartextRule extends AbstractHbaRule
 {
