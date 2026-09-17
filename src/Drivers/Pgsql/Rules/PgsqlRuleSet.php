@@ -51,6 +51,7 @@ use Pushery\SQLens\Drivers\Pgsql\Rules\L7\UnbatchedMassDmlRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L7\UnusedIndexRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L8\ForeignKeyIdSuffixRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L8\SnakeCaseIdentifiersRule;
+use Pushery\SQLens\Drivers\Pgsql\Rules\L8\UniqueCaseFoldedIndexRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L9\MissingCommentRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L9\SelectStarInViewRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L9\TypeImplicitCastRule;
@@ -162,6 +163,7 @@ final readonly class PgsqlRuleSet
             new TableWithoutPrimaryKeyRule($projectRoot),
             new ForeignKeyIdSuffixRule($projectRoot, $naming ?? NamingConvention::shipped()),
             new SnakeCaseIdentifiersRule($projectRoot, $naming ?? NamingConvention::shipped()),
+            new UniqueCaseFoldedIndexRule($projectRoot),
             new MissingCommentRule($projectRoot, $documentation ?? DocumentationPolicy::shipped()),
             new SelectStarInViewRule($projectRoot),
             new TypeImplicitCastRule($projectRoot),
