@@ -475,6 +475,39 @@ That is not ceremony: a mode that fits the expectation to reality must never run
 that *checks* reality, or a rule bug would regenerate its own expectation to green and every
 fixture would certify only that the bug agrees with itself.
 
+## Landing copy
+
+**Decided 2026-09-16: the README section is the source. There is no second copy.**
+
+Six pieces of work promise landing-page content — the launch story, the least-privilege promise, the
+authorization note, the incident-library teaser, the Squawk parity statement and the false-positive
+rate — and their acceptance lines read "the README and the landing page carry …". That sentence was
+checkable from nowhere, because **there is no landing-page project**: one repository carries this
+package's name and it is this one. An acceptance line nothing can check is not one.
+
+The alternative was a separate source file with the README generated from it. It buys nothing here
+and costs a generation step: the README section already exists, is already spell-gated and
+leak-gated, and is read by more people than a landing page will be. Keeping one hand-maintained copy
+means there is nothing to drift — which is the outcome the "one source, two renderings" rule wants,
+reached by having one rendering fewer rather than by a comparison.
+
+**A site renders from the README section.** If one is ever built, it pulls these blocks rather than
+restating them; that direction still holds, and the reverse would have been a migration.
+
+### What keeps it honest
+
+`tests/Support/LandingCopyBlocks.php` is the register: one entry per block, naming the heading it
+lives under, a **marker** phrase lifted from the copy itself, and whether it is written yet.
+`tests/Feature/Docs/LandingCopyBlocksTest.php` holds it to that in **both** directions — a written
+block must still carry its marker, and a block registered as pending must still be absent. The
+second half is what stops the register going stale the day somebody writes the missing copy.
+
+The marker is a phrase rather than the heading on purpose: a heading proves a section exists and says
+nothing about whether it still says the thing, and two of these blocks are a single line inside a
+shared section, where a heading check would pass over an empty promise. Markers are compared with
+whitespace collapsed, so rewrapping a paragraph — which is not a content change — never turns an arm
+red.
+
 ## Quality bar
 
 This package holds itself to a strict quality bar — Laravel Pint, Larastan at `max`,

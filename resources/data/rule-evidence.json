@@ -1094,6 +1094,14 @@
                 "note": "The lexical-structure chapter states that unquoted identifiers are folded to lower case, and that a quoted identifier keeps the case it was written in. Both halves matter here: folding is what makes `Orders` and `orders` the same name when neither is quoted, and case preservation is what makes them two different names once one of them is. A schema holding both spellings therefore holds two objects that every unquoted reference resolves to the same one of."
             }
         ],
+        "PG.L8.UNIQUE_CASE_FOLDED": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/indexes-expressional.html",
+                "applies_to": "PostgreSQL 18 and newer",
+                "note": "The chapter on indexes on expressions states that the index stores the computed values rather than the column's, and that the planner uses such an index only for a query written with the same expression. Those two sentences are the whole finding: a unique index over a folded value constrains the folded value, and a lookup that compares the column plainly neither uses the index nor asks what it enforces."
+            }
+        ],
         "PG.L9.DOC_MISSING_COMMENT": [
             {
                 "type": "doc",
