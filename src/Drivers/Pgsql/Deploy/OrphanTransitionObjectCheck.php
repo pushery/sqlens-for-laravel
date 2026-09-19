@@ -108,6 +108,7 @@ final readonly class OrphanTransitionObjectCheck implements PostdeployCheck
             // exactly when somebody is deciding whether to look further.
             return CheckResult::undetermined(
                 self::ID,
+                UndeterminedReason::CatalogReadFailed,
                 'the relation catalog could not be read, so whether the deploy left transition '
                 .'objects behind is unknown: '.$failure->getMessage(),
             );
@@ -133,6 +134,7 @@ final readonly class OrphanTransitionObjectCheck implements PostdeployCheck
             ? CheckResult::pass(self::ID)
             : CheckResult::undetermined(
                 self::ID,
+                UndeterminedReason::NameSuggestsTransitionObject,
                 sprintf(
                     '%d object(s) carry a name that looks like a transition leftover. A name is not '
                     .'evidence, so this is reported rather than decided.',

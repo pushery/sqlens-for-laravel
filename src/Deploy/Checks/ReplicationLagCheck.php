@@ -15,6 +15,7 @@ use Pushery\SQLens\Deploy\PreflightContext;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
+use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
 use Pushery\SQLens\Rules\StabilityTier;
@@ -81,7 +82,8 @@ final readonly class ReplicationLagCheck implements PreflightCheck
         if (! $context->activity instanceof ActivityReader) {
             return CheckResult::undetermined(
                 self::ID,
-                'replication_views_unreadable: this run has no activity reader, so how far the '
+                UndeterminedReason::ReplicationViewsUnreadable,
+                'this run has no activity reader, so how far the '
                 .'replicas are behind is unknown. That is not the same as them being caught up — '
                 .'a deploy is about to add to whatever they already owe.',
             );
@@ -105,7 +107,8 @@ final readonly class ReplicationLagCheck implements PreflightCheck
         } catch (Throwable $failure) {
             return CheckResult::undetermined(
                 self::ID,
-                'replication_views_unreadable: the replication views could not be read, so how far '
+                UndeterminedReason::ReplicationViewsUnreadable,
+                'the replication views could not be read, so how far '
                 .'the replicas are behind is unknown: '.$failure->getMessage(),
             );
         }

@@ -850,11 +850,225 @@ enum UndeterminedReason: string
      */
     case HostAuthRuleUnparsable = 'host_auth_rule_unparsable';
 
+    /*
+    |--------------------------------------------------------------------------
+    | The DEPLOY preflight's reasons
+    |--------------------------------------------------------------------------
+    |
+    | Fourteen reasons the deploy preflight has been writing as FREE TEXT since it was built, each
+    | beginning with a token by convention and nothing enforcing it. That convention is the whole
+    | problem this block exists to end: `suppression.allow_undetermined` took a LIST of reasons and
+    | validated it against this enum, while `deploy.predeploy.allow_undetermined` could only be a
+    | boolean, because a list on that side would have had to match a prefix on prose.
+    |
+    | Both sides take a list now. That was the point of ending the convention rather than the
+    | pleasant side effect: the deploy gate can be opened for the reason a project has accepted and
+    | left shut for the ones it has not, which one bit could never express.
+    |
+    | Measured before this block was written: of the leading tokens at the 43 `CheckResult::
+    | undetermined()` call sites, ZERO were cases here. The two vocabularies were disjoint.
+    |
+    | The control that measurement needed, and it earned its keep: a first, cruder pass reported
+    | `world` and `bound` as tokens. Both are ordinary English mid-sentence, and a counter that
+    | reports them is a counter measuring its own pattern.
+    |
+    | ⚠️ AND THE FIRST COUNT WAS STILL WRONG, BECAUSE IT COMPARED TOKENS RATHER THAN CONCEPTS.
+    | Sixteen cases went in; two of them named a state this enum already carried under other words,
+    | and both were removed:
+    |
+    |   grant_subject_missing      -> MigrationRoleMissing    (the role is not on this server)
+    |   server_version_unreadable  -> UnknownServerVersion    ("could not be determined")
+    |
+    | The measured claim "the two vocabularies are disjoint" was true of the token STRINGS and false
+    | of the meanings. A vocabulary with two names for one state is worse than a missing case: a
+    | waiver that lists one of them silently misses the other half of the same situation.
+    |
+    | Kept apart on purpose, and the code makes the same cut one line from each other:
+    | MigrationRoleUnknown is "the configuration does not say which role" and MigrationRoleMissing
+    | is "the role does not exist". GrantCheck's own comment says why — "has no privileges" and "is
+    | not a user" are different problems, and only one is fixed by a GRANT.
+    */
+
+    /**
+     * The run has no activity reader, so what is holding a lock cannot be read.
+     *
+     * Not "no blocker": an empty reading and a withheld view are the same bytes, and reporting the
+     * first when the second happened is the one answer a deploy gate must never give.
+     */
+    case ActivityUnreadable = 'activity_unreadable';
+
+    /**
+     * MySQL's `performance_schema` is not available, so the metadata-lock holders cannot be listed.
+     *
+     * The same shape as {@see self::ActivityUnreadable} on the other engine, and kept apart from it
+     * because the remedy differs: one is a missing reader in this run, the other a server built or
+     * configured without the schema.
+     */
+    case MysqlInstrumentationUnavailable = 'mysql_instrumentation_unavailable';
+
+    /**
+     * A server setting the check judges could not be read back.
+     *
+     * Reported per setting rather than as one blanket answer, because "this instance does not
+     * expose it" and "this role may not read it" send an operator to different places.
+     */
+    case SettingUnreadable = 'setting_unreadable';
+
+    /**
+     * Whether these tables carry a per-table autovacuum override could not be read.
+     *
+     * Its own reason rather than {@see self::SettingUnreadable}: the global setting being readable
+     * says nothing about the per-table one, and a check that conflated them would report the
+     * instance default over a table that overrides it.
+     */
+    case AutovacuumSettingUnreadable = 'autovacuum_setting_unreadable';
+
+    /**
+     * The instance does not report free space, so disk headroom cannot be judged.
+     *
+     * A managed instance that withholds it is the ordinary case, not a defect — which is why this
+     * is undetermined rather than a finding about the instance.
+     */
+    case FilesystemHeadroomUnreadable = 'filesystem_headroom_unreadable';
+
+    /**
+     * How close these tables are to their freeze horizon could not be read.
+     */
+    case FreezeHorizonUnreadable = 'freeze_horizon_unreadable';
+
+    /**
+     * Whether a retired consumer is holding WAL could not be read.
+     */
+    case ReplicationSlotsUnreadable = 'replication_slots_unreadable';
+
+    /**
+     * The replication views could not be read, so replication distance is unknown.
+     *
+     * Separate from {@see self::ReplicationSlotsUnreadable}: a held slot and a lagging replica are
+     * different states with different remedies, and one being readable does not imply the other.
+     */
+    case ReplicationViewsUnreadable = 'replication_views_unreadable';
+
+    /**
+     * The privilege tables could not be read, so what the migration user may do is unknown.
+     */
+    case GrantsUnreadable = 'grants_unreadable';
+
+    /**
+     * The configuration does not say which user runs migrations, so no privileges can be judged.
+     *
+     * The one reason in this group that names a gap in the PROJECT rather than in the reading, and
+     * it stays undetermined for the same purpose: a guess here would judge the wrong account.
+     */
+    case MigrationRoleUnknown = 'migration_role_unknown';
+
+    /**
+     * Some of the privilege questions were answered and some were not.
+     *
+     * Deliberately distinct from {@see self::GrantsUnreadable}, which is the total case. A partial
+     * answer that reported as complete is how a missing grant becomes a deploy that fails halfway.
+     */
+    case PrivilegeCheckIncomplete = 'privilege_check_incomplete';
+
+    /**
+     * A `CREATE INDEX CONCURRENTLY` is still running, so the index state is not yet final.
+     *
+     * Not a failure: an in-flight build is the expected state during a deploy window, and the
+     * honest answer is that the check ran too early rather than that something is wrong.
+     */
+    case IndexBuildInProgress = 'index_build_in_progress';
+
+    /**
+     * Invalid indexes were found, and whether a build is still running for them could not be
+     * verified.
+     *
+     * The pair of {@see self::IndexBuildInProgress} and its opposite collapsed into one honest
+     * answer: an invalid index left by a failed build must be dropped, an invalid index belonging
+     * to a running build must be left alone, and this reason says the two could not be told apart.
+     */
+    case InvalidIndexFoundButBuildsUnverifiable = 'invalid_index_found_but_builds_unverifiable';
+
+    /**
+     * The session would not say which statement timeouts are in force.
+     *
+     * Found by the arm that looked for this group's tokens and reported `bound` — ordinary English
+     * from the middle of this reason's own sentence. The call site carried NO token at all, and the
+     * false positive is what pointed at it: a reason with no name cannot be named in a waiver, so
+     * it was invisible to the very list this group exists to make possible.
+     */
+    case SessionTimeoutsUnreadable = 'session_timeouts_unreadable';
+
+    /**
+     * The run reached its own time budget before this check ever started, so it never asked.
+     *
+     * Distinct from {@see self::CatalogReadBudgetExceeded}, which is one catalog read stopping
+     * short. This is the sequence ending: the check did not run at all, and reporting it as a pass
+     * would make a gate that executed half its checks read exactly like one that executed all of
+     * them.
+     */
+    case RunTimeBudgetExhausted = 'run_time_budget_exhausted';
+
+    /**
+     * The server would not say whether it accepts writes.
+     *
+     * An unread setting is not a permissive one. A deploy sent at a standby fails whether or not
+     * this gate saw it coming, so the honest answer is that the question went unanswered.
+     */
+    case WriteAcceptanceUnreadable = 'write_acceptance_unreadable';
+
+    /**
+     * No driver capability answers the write state on this connection at all.
+     *
+     * Kept apart from {@see self::WriteAcceptanceUnreadable}, and the remedy is why: there the
+     * server refused a question this build knows how to ask, here the build has no way to ask it.
+     * One is fixed on the server, the other in the driver.
+     */
+    case WriteAcceptanceUnsupported = 'write_acceptance_unsupported';
+
+    /**
+     * Online-schema-change artifacts are present, and a run still IN FLIGHT looks exactly like one
+     * that died.
+     *
+     * The same shape as {@see self::IndexBuildInProgress} one layer out: the object is real, and
+     * what cannot be established is whether something is still working on it. Deciding either way
+     * is wrong in a different direction -- dropping a live migration's table, or leaving a dead
+     * one behind.
+     */
+    case TransitionArtifactsMayBeInFlight = 'transition_artifacts_may_be_in_flight';
+
+    /**
+     * The engine has no such state, so the check has nothing to look at on this driver.
+     *
+     * Distinct from {@see self::StructurallyNotApplicable}, which is an object that does not exist
+     * in THIS schema and could exist in another. This one can never apply here: InnoDB has no
+     * invalid-index state, and no configuration changes that.
+     */
+    case NotApplicableOnThisEngine = 'not_applicable_on_this_engine';
+
     /** A one-line English explanation of why the check could not conclude. */
     public function description(): string
     {
         return match ($this) {
             self::ConnectionNotConfigured => 'The application defines no connection under the requested name.',
+            self::ActivityUnreadable => 'The run has no activity reader, so what is holding a lock could not be read — which is not the same as nothing holding one.',
+            self::MysqlInstrumentationUnavailable => 'This MySQL server does not provide the instrumentation these readings come from, so the metadata-lock holders could not be listed.',
+            self::SettingUnreadable => 'A server setting this check judges could not be read back.',
+            self::AutovacuumSettingUnreadable => 'Whether these tables carry a per-table autovacuum override could not be read, and the instance default does not answer for a table that overrides it.',
+            self::FilesystemHeadroomUnreadable => 'This instance does not report free space, so disk headroom could not be judged.',
+            self::FreezeHorizonUnreadable => 'How close these tables are to their freeze horizon could not be read.',
+            self::ReplicationSlotsUnreadable => 'Whether a retired consumer is holding WAL could not be read.',
+            self::ReplicationViewsUnreadable => 'The replication views could not be read, so how far a replica has fallen behind is unknown.',
+            self::GrantsUnreadable => 'The privilege tables could not be read, so what the migration user may do is unknown.',
+            self::MigrationRoleUnknown => 'The configuration does not say which user runs migrations, so no privilege can be judged against it.',
+            self::PrivilegeCheckIncomplete => 'Some privilege questions were answered and some were not, and a partial answer reported as complete is how a missing grant becomes a deploy that fails halfway.',
+            self::IndexBuildInProgress => 'A concurrent index build is still running, so the index state is not final yet — the check ran inside the build window.',
+            self::InvalidIndexFoundButBuildsUnverifiable => 'Invalid indexes were found and whether a build is still running for them could not be verified, so a leftover to drop could not be told from one to leave alone.',
+            self::SessionTimeoutsUnreadable => 'The session would not say which statement timeouts are in force, and an unread bound is not a bound.',
+            self::RunTimeBudgetExhausted => 'The run reached its own time budget before this check started, so the check never asked.',
+            self::WriteAcceptanceUnreadable => 'The server would not say whether it accepts writes, and an unread setting is not a permissive one.',
+            self::WriteAcceptanceUnsupported => 'No driver capability answers the write state on this connection, so a writable primary cannot be told from a standby.',
+            self::TransitionArtifactsMayBeInFlight => 'Online-schema-change artifacts are present, and a run still in flight looks exactly like one that died.',
+            self::NotApplicableOnThisEngine => 'This engine has no such state, so the check has nothing to look at on this driver.',
             self::OriginUnknown => 'The statement carries no file this run can attribute it to, so a rule that means one thing in a migration and another outside it has nothing to decide on.',
             self::ValueOriginUnknown => 'The run could not tell whether a value in this statement was written into the file or supplied at the call site, and the two are the same text by the time a rule reads them.',
             self::NotConfigured => 'The check needs a setting this project has not made, and guessing it would name the wrong thing.',

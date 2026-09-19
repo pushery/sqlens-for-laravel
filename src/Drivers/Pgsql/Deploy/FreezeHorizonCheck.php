@@ -16,6 +16,7 @@ use Pushery\SQLens\Deploy\PreflightContext;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
+use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
 use Pushery\SQLens\Rules\StabilityTier;
@@ -139,7 +140,8 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
         } catch (Throwable $failure) {
             return CheckResult::undetermined(
                 self::ID,
-                'freeze_horizon_unreadable: how close these tables are to their freeze horizon is '
+                UndeterminedReason::FreezeHorizonUnreadable,
+                'how close these tables are to their freeze horizon is '
                 .'unknown, so whether an anti-wraparound vacuum will stand in front of this deploy '
                 .'cannot be said. A managed database commonly withholds these views: '
                 .$failure->getMessage(),

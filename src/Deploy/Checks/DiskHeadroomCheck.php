@@ -18,6 +18,7 @@ use Pushery\SQLens\Findings\Confidence;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
+use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
 use Pushery\SQLens\Rules\StabilityTier;
@@ -104,6 +105,7 @@ final readonly class DiskHeadroomCheck implements PreflightCheck
         if (! $context->statistics instanceof StatisticsReader) {
             return CheckResult::undetermined(
                 self::ID,
+                UndeterminedReason::StatisticsUnavailable,
                 'this run has no statistics reader, so how much space the pending rewrite needs '
                 .'could not even be estimated. The operation still needs it.',
             );
@@ -114,6 +116,7 @@ final readonly class DiskHeadroomCheck implements PreflightCheck
         } catch (Throwable $failure) {
             return CheckResult::undetermined(
                 self::ID,
+                UndeterminedReason::ObjectStatisticsUnread,
                 'the object sizes could not be read, so the space this migration needs is unknown: '
                 .$failure->getMessage(),
             );
@@ -136,6 +139,7 @@ final readonly class DiskHeadroomCheck implements PreflightCheck
         if ($measured === 0) {
             return CheckResult::undetermined(
                 self::ID,
+                UndeterminedReason::ObjectStatisticsUnread,
                 'none of the objects this migration rewrites reported a size, so the space it needs '
                 .'could not be estimated. An unmeasured table is not a small one.',
             );
@@ -160,8 +164,9 @@ final readonly class DiskHeadroomCheck implements PreflightCheck
         if ($freeBytes === null) {
             return CheckResult::undetermined(
                 self::ID,
+                UndeterminedReason::FilesystemHeadroomUnreadable,
                 sprintf(
-                    'filesystem_headroom_unreadable: this instance does not report free space — on a '
+                    'this instance does not report free space — on a '
                     .'managed database it never does, and no privilege changes that. What CAN be '
                     .'said: the pending rewrite touches %d object(s) totalling about %s, and a '
                     .'rewrite needs that much AGAIN while it runs because the old copy stays '

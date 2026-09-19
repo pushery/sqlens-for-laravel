@@ -12,6 +12,7 @@ use Pushery\SQLens\Deploy\PreflightContext;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
+use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
 use Pushery\SQLens\Rules\ServerVersion;
@@ -75,6 +76,7 @@ final readonly class ServerVersionSkewCheck implements PreflightCheck
             // reporting it as one would be exactly the silent green this gate exists to refuse.
             return CheckResult::undetermined(
                 self::ID,
+                UndeterminedReason::UnknownServerVersion,
                 'the server did not answer with a version this build could read, so the pin could '
                 .'not be compared against it. Nothing follows about whether CI checked the right '
                 .'world: an unread version is not a matching one.',
@@ -93,6 +95,7 @@ final readonly class ServerVersionSkewCheck implements PreflightCheck
         if (! $pinned instanceof ServerVersion) {
             return CheckResult::undetermined(
                 self::ID,
+                UndeterminedReason::UnreadableServerVersionPin,
                 sprintf(
                     'the configured `assume_server_version` pin "%s" is not a version this build '
                     .'understands, so nothing was compared. A pin that cannot be read is worse than '

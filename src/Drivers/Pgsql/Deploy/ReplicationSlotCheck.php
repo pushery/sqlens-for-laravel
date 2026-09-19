@@ -15,6 +15,7 @@ use Pushery\SQLens\Deploy\PreflightContext;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
+use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
 use Pushery\SQLens\Rules\StabilityTier;
@@ -123,7 +124,8 @@ final readonly class ReplicationSlotCheck implements PreflightCheck
         } catch (Throwable $failure) {
             return CheckResult::undetermined(
                 self::ID,
-                'replication_slots_unreadable: whether a retired consumer is holding WAL is unknown, '
+                UndeterminedReason::ReplicationSlotsUnreadable,
+                'whether a retired consumer is holding WAL is unknown, '
                 .'so how much of the headroom this migration needs has already been spent cannot be '
                 .'said. A managed database commonly withholds this view: '.$failure->getMessage(),
             );

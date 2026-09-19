@@ -95,7 +95,8 @@ final readonly class GrantCheck implements PreflightCheck
         if ($role === null) {
             return CheckResult::undetermined(
                 self::ID,
-                'migration_role_unknown: the configuration does not say which role runs the '
+                UndeterminedReason::MigrationRoleUnknown,
+                'the configuration does not say which role runs the '
                 .'migrations, so whose privileges to ask about is unknown. Set the `username` on the '
                 .'migration connection — an empty one is not a role, and asking about it would '
                 .'certify a role that does not exist.',
@@ -113,9 +114,10 @@ final readonly class GrantCheck implements PreflightCheck
         if (! $this->roleExists($context, $role)) {
             return CheckResult::undetermined(
                 self::ID,
-                UndeterminedReason::MigrationRoleMissing->value.': the migration connection names '
-                    .'the role `'.$role.'`, and this server has no such role. Nothing was '
-                    .'established about any privilege — check the username before reading grants.',
+                UndeterminedReason::MigrationRoleMissing,
+                'the migration connection names the role `'.$role.'`, and this server has no such '
+                    .'role. Nothing was established about any privilege — check the username '
+                    .'before reading grants.',
             );
         }
 
@@ -150,7 +152,8 @@ final readonly class GrantCheck implements PreflightCheck
         if ($unanswered !== []) {
             return CheckResult::undetermined(
                 self::ID,
-                'privilege_check_incomplete: '.implode('; ', $unanswered),
+                UndeterminedReason::PrivilegeCheckIncomplete,
+                ''.implode('; ', $unanswered),
                 $findings,
             );
         }

@@ -304,7 +304,14 @@ final readonly class ConsoleReporter implements Reporter
         // rather than waved through, and a line that appeared only on waivers would make its
         // absence the claim — which is the reading this package refuses everywhere else.
         if ($context->undeterminedWaiver !== null) {
-            $out->writeln('  undetermined-waiver='.$this->onOff($context->undeterminedWaiver));
+            // `on` when the hatch was opened for whatever could not answer, and the REASONS when a
+            // project named them: those are different decisions, and a deploy log that renders both
+            // as `on` loses exactly the distinction the narrow form was added for.
+            $waiver = $context->undeterminedWaiverReasons === null || $context->undeterminedWaiverReasons === []
+                ? $this->onOff($context->undeterminedWaiver)
+                : implode(',', $context->undeterminedWaiverReasons);
+
+            $out->writeln('  undetermined-waiver='.$waiver);
         }
 
         // The remediation contract, once and unconditionally. A run with no payload at all is

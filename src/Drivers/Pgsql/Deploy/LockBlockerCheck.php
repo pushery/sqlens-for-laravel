@@ -17,6 +17,7 @@ use Pushery\SQLens\Deploy\PreflightContext;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
+use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
 use Pushery\SQLens\Rules\StabilityTier;
@@ -113,7 +114,8 @@ final readonly class LockBlockerCheck implements PreflightCheck
         if (! $context->activity instanceof ActivityReader) {
             return CheckResult::undetermined(
                 self::ID,
-                'activity_unreadable: this run has no activity reader, so what is holding locks on '
+                UndeterminedReason::ActivityUnreadable,
+                'this run has no activity reader, so what is holding locks on '
                 .'the tables this migration is about to alter is unknown. That is not the same as '
                 .'nothing holding them.',
             );
@@ -130,7 +132,8 @@ final readonly class LockBlockerCheck implements PreflightCheck
         } catch (Throwable $failure) {
             return CheckResult::undetermined(
                 self::ID,
-                'activity_unreadable: the activity views could not be read, so what is holding locks '
+                UndeterminedReason::ActivityUnreadable,
+                'the activity views could not be read, so what is holding locks '
                 .'on the target tables is unknown: '.$failure->getMessage(),
             );
         }
@@ -168,7 +171,8 @@ final readonly class LockBlockerCheck implements PreflightCheck
 
             return CheckResult::undetermined(
                 self::ID,
-                'activity_unreadable: the reading came back empty AND incomplete, so "no blocker" '
+                UndeterminedReason::ActivityUnreadable,
+                'the reading came back empty AND incomplete, so "no blocker" '
                 .'cannot be told from "the view that would have reported one was withheld". What '
                 .'was missing: '.($gaps === [] ? '(the reading did not say)' : implode('; ', $gaps)),
             );

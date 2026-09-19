@@ -14,6 +14,7 @@ use Pushery\SQLens\Deploy\PostdeployContext;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
+use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
 use Pushery\SQLens\Rules\StabilityTier;
@@ -99,6 +100,7 @@ final readonly class UnenforcedConstraintCheck implements PostdeployCheck
             // this check exists to prevent.
             return CheckResult::undetermined(
                 self::ID,
+                UndeterminedReason::CatalogReadFailed,
                 'the constraint catalog could not be read, so whether a CHECK constraint is standing '
                 .'unenforced is unknown — and an unchecked guarantee reads exactly like a kept one: '
                 .$failure->getMessage(),

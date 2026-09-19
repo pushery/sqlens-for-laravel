@@ -1300,6 +1300,21 @@ return [
          * Either way the waiver is on the RECORD: the report's run header carries
          * `undetermined_waiver`, so a green that was waved through can never be read as an earned
          * one. A real finding still blocks whatever this says — the hatch is one door.
+         *
+         * It also takes a LIST, and that is the form worth reaching for. `true` waives whatever
+         * could not answer; a list waives only the reasons named on it, and the gate proceeds only
+         * when EVERY answer it could not get is one of them:
+         *
+         *     'allow_undetermined' => ['missing_external_tool'],
+         *
+         * The difference is a real one. "The tool that formats a plan is not installed on this
+         * runner" is a fact about the runner. "The privilege table could not be read" is not
+         * knowing whether the deploy may do what it is about to do. A boolean makes those one
+         * decision, and a project that needs the first has to grant the second.
+         *
+         * Every name is validated against the reason vocabulary, so a typo is reported rather than
+         * quietly widening or narrowing the hatch. An unknown name, a value that is not a list, an
+         * answer carrying no reason at all: each closes the door rather than opening it.
          */
         'predeploy' => [
             'allow_undetermined' => false,

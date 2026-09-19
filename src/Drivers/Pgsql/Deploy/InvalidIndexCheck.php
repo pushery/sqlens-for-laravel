@@ -15,6 +15,7 @@ use Pushery\SQLens\Deploy\PreflightContext;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
+use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
 use Pushery\SQLens\Rules\StabilityTier;
@@ -120,6 +121,7 @@ final readonly class InvalidIndexCheck implements PreflightCheck
         } catch (Throwable $failure) {
             return CheckResult::undetermined(
                 self::ID,
+                UndeterminedReason::CatalogReadFailed,
                 'the index catalog could not be read, so whether a previous concurrent build left '
                 .'something behind is unknown — and the deploy about to run is the one that would '
                 .'collide with it: '.$failure->getMessage(),

@@ -212,6 +212,24 @@ final readonly class RunContext
          * Null rather than omitted, for the reason `instance`, `tenant` and `guard` already state.
          */
         public ?bool $undeterminedWaiver = null,
+        /**
+         * WHICH reasons a waiver named, when it named any — empty when it waived whatever could
+         * not answer, `null` when there was no gate to waive.
+         *
+         * Deliberately not in {@see toArray()}, and that is a decision rather than an oversight:
+         * adding a key to the envelope bumps `schema_version` for every consumer, and the boolean
+         * beside this already answers the question the document exists to answer — was this green
+         * earned or waved through. This field narrows the line a PERSON reads, where "waved
+         * through, and here is exactly what for" is the difference worth having.
+         *
+         * Because the envelope does not carry it, the serialization-comparing arm in
+         * `UndeterminedWaiverIsOnTheRecordTest` cannot see it. The arm beside that one walks the
+         * four derivations that only pass it along, which is where a hand-written copy loses a
+         * field.
+         *
+         * @var list<string>|null
+         */
+        public ?array $undeterminedWaiverReasons = null,
 
         /**
          * Which POLICY a drift run applied — report or gate — or null on a producer that has none.
@@ -324,6 +342,7 @@ final readonly class RunContext
     {
         return $this->copyWith(
             undeterminedWaiver: $this->undeterminedWaiver,
+            undeterminedWaiverReasons: $this->undeterminedWaiverReasons,
             driftMode: $this->driftMode,
             comparedObjectTypes: $this->comparedObjectTypes,
             expectation: $this->expectation,
@@ -343,6 +362,7 @@ final readonly class RunContext
     {
         return $this->copyWith(
             undeterminedWaiver: $this->undeterminedWaiver,
+            undeterminedWaiverReasons: $this->undeterminedWaiverReasons,
             driftMode: $driftMode,
             comparedObjectTypes: $this->comparedObjectTypes,
             expectation: $this->expectation,
@@ -369,6 +389,7 @@ final readonly class RunContext
 
         return $this->copyWith(
             undeterminedWaiver: $this->undeterminedWaiver,
+            undeterminedWaiverReasons: $this->undeterminedWaiverReasons,
             driftMode: $this->driftMode,
             comparedObjectTypes: $values,
             expectation: $this->expectation,
@@ -385,11 +406,14 @@ final readonly class RunContext
      * field because the class is `final readonly`: there is no clone-with in this language version,
      * and a reflection-driven copy would silently keep working while dropping a field somebody adds
      * later.
+     *
+     * @param  list<string>  $reasons  which reasons the waiver named; empty when it named none
      */
-    public function withUndeterminedWaiver(bool $waived): self
+    public function withUndeterminedWaiver(bool $waived, array $reasons = []): self
     {
         return $this->copyWith(
             undeterminedWaiver: $waived,
+            undeterminedWaiverReasons: $reasons,
             driftMode: $this->driftMode,
             comparedObjectTypes: $this->comparedObjectTypes,
             expectation: $this->expectation,
@@ -411,6 +435,7 @@ final readonly class RunContext
     {
         return $this->copyWith(
             undeterminedWaiver: $this->undeterminedWaiver,
+            undeterminedWaiverReasons: $this->undeterminedWaiverReasons,
             driftMode: $this->driftMode,
             comparedObjectTypes: $this->comparedObjectTypes,
             expectation: $expectation,
@@ -426,10 +451,11 @@ final readonly class RunContext
      * with the drift policy, and two copies of twenty-two arguments is two places for a new field to
      * be forgotten — while `UndeterminedWaiverIsOnTheRecordTest` only ever compares one of them.
      *
+     * @param  list<string>|null  $undeterminedWaiverReasons
      * @param  list<string>|null  $comparedObjectTypes
      * @param  array{requested: bool, compared: bool, note: string}|null  $expectation
      */
-    private function copyWith(?bool $undeterminedWaiver, ?DriftRunMode $driftMode, ?array $comparedObjectTypes, ?array $expectation, ?string $guardProfile, ?int $subjectCount): self
+    private function copyWith(?bool $undeterminedWaiver, ?array $undeterminedWaiverReasons, ?DriftRunMode $driftMode, ?array $comparedObjectTypes, ?array $expectation, ?string $guardProfile, ?int $subjectCount): self
     {
         return new self(
             serverVersions: $this->serverVersions,
@@ -455,6 +481,7 @@ final readonly class RunContext
             timeBudgetMsConsumed: $this->timeBudgetMsConsumed,
             guard: $this->guard,
             undeterminedWaiver: $undeterminedWaiver,
+            undeterminedWaiverReasons: $undeterminedWaiverReasons,
             driftMode: $driftMode,
             comparedObjectTypes: $comparedObjectTypes,
             expectation: $expectation,

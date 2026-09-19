@@ -123,6 +123,7 @@ final readonly class ServerSettingsCheck implements PreflightCheck
         if ($reading->failure instanceof UndeterminedReason) {
             return CheckResult::undetermined(
                 self::ID,
+                UndeterminedReason::SettingUnreadable,
                 sprintf(
                     'the server settings could not be read (%s), so the timeouts this migration will '
                     .'run under are unknown. That is not the same as them being fine.',
@@ -181,7 +182,8 @@ final readonly class ServerSettingsCheck implements PreflightCheck
         if ($unreadable !== []) {
             return CheckResult::undetermined(
                 self::ID,
-                'setting_unreadable: '.implode('; ', $unreadable),
+                UndeterminedReason::SettingUnreadable,
+                ''.implode('; ', $unreadable),
                 [...$blocking, ...$reported],
             );
         }

@@ -15,6 +15,7 @@ use Pushery\SQLens\Deploy\PostdeployContext;
 use Pushery\SQLens\Deploy\PreflightContext;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Outcome;
+use Pushery\SQLens\Findings\UndeterminedReason;
 use Throwable;
 
 /**
@@ -117,7 +118,8 @@ final readonly class PostdeployInvalidIndexCheck implements PostdeployCheck, Pro
         if (! $context->activity instanceof ActivityReader) {
             return CheckResult::undetermined(
                 $this->id(),
-                'invalid_index_found_but_builds_unverifiable: '.count($result->findings).' index(es) '
+                UndeterminedReason::InvalidIndexFoundButBuildsUnverifiable,
+                ''.count($result->findings).' index(es) '
                 .'report `indisvalid = false`, and this run has no activity reader — so whether a '
                 .'`CREATE INDEX CONCURRENTLY` is STILL BUILDING them could not be established. '
                 .'Immediately after a deploy that is the likely explanation, and reporting wreckage '
@@ -131,7 +133,8 @@ final readonly class PostdeployInvalidIndexCheck implements PostdeployCheck, Pro
         } catch (Throwable $failure) {
             return CheckResult::undetermined(
                 $this->id(),
-                'activity_unreadable: '.count($result->findings).' index(es) report '
+                UndeterminedReason::ActivityUnreadable,
+                ''.count($result->findings).' index(es) report '
                 .'`indisvalid = false`, and the activity views could not be read, so a build still '
                 .'in flight could not be ruled out: '.$failure->getMessage(),
                 $result->findings,
@@ -146,7 +149,8 @@ final readonly class PostdeployInvalidIndexCheck implements PostdeployCheck, Pro
 
         return CheckResult::undetermined(
             $this->id(),
-            'index_build_in_progress: a `CREATE INDEX CONCURRENTLY` is still running against '
+            UndeterminedReason::IndexBuildInProgress,
+            'a `CREATE INDEX CONCURRENTLY` is still running against '
             .implode(', ', $building).', and an index under construction reports '
             .'`indisvalid = false` legitimately. The finding is held rather than dropped — check '
             .'again once the build finishes, because the same reading will mean the opposite then.',

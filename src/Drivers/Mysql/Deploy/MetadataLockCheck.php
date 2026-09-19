@@ -18,6 +18,7 @@ use Pushery\SQLens\Deploy\PreflightContext;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
+use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
 use Pushery\SQLens\Rules\StabilityTier;
@@ -92,7 +93,8 @@ final readonly class MetadataLockCheck implements PreflightCheck
         if (! $context->activity instanceof ActivityReader) {
             return CheckResult::undetermined(
                 self::ID,
-                'performance_schema_unavailable: this run has no activity reader, so what is holding '
+                UndeterminedReason::MysqlInstrumentationUnavailable,
+                'this run has no activity reader, so what is holding '
                 .'a metadata lock on the tables this migration will alter is unknown. That is not '
                 .'the same as nothing holding one.',
             );
@@ -109,7 +111,8 @@ final readonly class MetadataLockCheck implements PreflightCheck
         } catch (Throwable $failure) {
             return CheckResult::undetermined(
                 self::ID,
-                'performance_schema_unavailable: the activity views could not be read: '.$failure->getMessage(),
+                UndeterminedReason::MysqlInstrumentationUnavailable,
+                'the activity views could not be read: '.$failure->getMessage(),
             );
         }
 
@@ -132,7 +135,8 @@ final readonly class MetadataLockCheck implements PreflightCheck
         if (! $snapshot->silenceIsTrustworthy()) {
             return CheckResult::undetermined(
                 self::ID,
-                'performance_schema_unavailable: the reading came back empty AND incomplete, so '
+                UndeterminedReason::MysqlInstrumentationUnavailable,
+                'the reading came back empty AND incomplete, so '
                 .'"no blocker" cannot be told from "the instrument that would have reported one is '
                 .'switched off". What was missing: '.$this->gapDetail($snapshot),
             );

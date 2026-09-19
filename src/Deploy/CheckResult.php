@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Deploy;
 
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Outcome;
+use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Reporting\CredentialRedaction;
 
 /**
@@ -35,6 +36,21 @@ final readonly class CheckResult
         public ?string $reason,
         /** @var list<Finding> what the check found; empty for a clean pass */
         public array $findings,
+        /**
+         * The same reason as a NAME — present exactly when {@see $reason} is.
+         *
+         * Both, and not one instead of the other. The sentence above is specific on purpose: WHICH
+         * view refused, WHICH privilege is missing, WHICH budget ran out, and a category alone
+         * would make two very different situations look alike at exactly the moment somebody needs
+         * to tell them apart. That argument stands and is why this is an addition rather than a
+         * replacement.
+         *
+         * What the sentence cannot do is be named in a configuration. `suppression.allow_undetermined`
+         * takes a list of reasons and validates it against this enum; the deploy waiver was a
+         * boolean, because a list on that side would have had to match a prefix on prose — precise
+         * looking, and wrong the first time somebody rewords a sentence.
+         */
+        public ?UndeterminedReason $undeterminedReason = null,
     ) {}
 
     /**
@@ -67,16 +83,26 @@ final readonly class CheckResult
     /**
      * The check could not answer, and here is why — in words somebody can act on.
      *
-     * The reason travels as text rather than as an enum because the useful sentence is specific:
-     * WHICH view refused, WHICH privilege is missing, WHICH budget ran out. A category would make
-     * two very different situations look alike at exactly the moment somebody needs to tell them
-     * apart.
+     * The reason travels as BOTH a name and a sentence, and the sentence is why it is not only a
+     * name: it is specific — WHICH view refused, WHICH privilege is missing, WHICH budget ran out —
+     * and a category alone would make two very different situations look alike at exactly the
+     * moment somebody needs to tell them apart.
+     *
+     * The name is what a configuration can hold, and it is composed into the sentence rather than
+     * kept beside it so that the token is legible exactly where the failure is read. An operator who
+     * wants to allow this answer has to name it in `allow_undetermined`, and prose alone would send
+     * them to look the token up.
+     *
+     * The shape `name: detail` is not new: 24 of the 43 call sites had written it out by hand,
+     * independently, before there was anything to compose it from. The remaining 19 GAIN a prefix
+     * they did not print before, which is a deliberate change to their rendered text and the reason
+     * five pinned message tests moved with this commit.
      *
      * @param  list<Finding>  $findings
      */
-    public static function undetermined(string $checkId, string $reason, array $findings = []): self
+    public static function undetermined(string $checkId, UndeterminedReason $reason, string $detail, array $findings = []): self
     {
-        $trimmed = trim($reason);
+        $trimmed = trim($detail);
 
         if ($trimmed === '') {
             throw new InvalidCheckResult(
@@ -86,7 +112,7 @@ final readonly class CheckResult
             );
         }
 
-        return new self($checkId, Outcome::Undetermined, $trimmed, $findings);
+        return new self($checkId, Outcome::Undetermined, $reason->value.': '.$trimmed, $findings, $reason);
     }
 
     /**
@@ -108,7 +134,7 @@ final readonly class CheckResult
             return $this;
         }
 
-        return new self($this->checkId, $this->outcome, $redaction->in($this->reason), $this->findings);
+        return new self($this->checkId, $this->outcome, $redaction->in($this->reason), $this->findings, $this->undeterminedReason);
     }
 
     /** Whether this answer should stop a deploy under a fail-closed gate. */
@@ -124,6 +150,10 @@ final readonly class CheckResult
             'check_id' => $this->checkId,
             'outcome' => $this->outcome->value,
             'reason' => $this->reason,
+            // ADDITIVE, and the one field that makes a waiver expressible. A consumer writing its
+            // own rule from this document had to match a prefix on the sentence above; now it can
+            // name the reason. Absent on a pass, like every other null field here.
+            'undetermined_reason' => $this->undeterminedReason?->value,
             'findings' => array_map(static fn (Finding $f): array => $f->toArray(), $this->findings),
         ];
 

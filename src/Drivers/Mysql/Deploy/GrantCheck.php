@@ -17,6 +17,7 @@ use Pushery\SQLens\Deploy\RequiredPrivileges;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
+use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
 use Pushery\SQLens\Rules\StabilityTier;
@@ -88,7 +89,8 @@ final readonly class GrantCheck implements PreflightCheck
         if ($role === null) {
             return CheckResult::undetermined(
                 self::ID,
-                'migration_role_unknown: the configuration does not say which user runs the '
+                UndeterminedReason::MigrationRoleUnknown,
+                'the configuration does not say which user runs the '
                 .'migrations, so whose grants to ask about is unknown. Set the `username` on the '
                 .'migration connection — an empty one is not a user, and asking about it would '
                 .'certify one that does not exist.',
@@ -103,8 +105,9 @@ final readonly class GrantCheck implements PreflightCheck
         if ($this->subjectIsAbsent($context, $role)) {
             return CheckResult::undetermined(
                 self::ID,
+                UndeterminedReason::MigrationRoleMissing,
                 sprintf(
-                    'grant_subject_missing: `%s` is named as the migration user, and `mysql.user` '
+                    '`%s` is named as the migration user, and `mysql.user` '
                     .'holds no account by that name. Nothing can be established about privileges it '
                     .'does not have — and a finding here would advise a `GRANT` to an account that '
                     .'does not exist, which fails in turn. Check the `username` on the migration '
@@ -120,7 +123,8 @@ final readonly class GrantCheck implements PreflightCheck
         } catch (Throwable $failure) {
             return CheckResult::undetermined(
                 self::ID,
-                'grants_unreadable: the privilege tables could not be read, so what the migration '
+                UndeterminedReason::GrantsUnreadable,
+                'the privilege tables could not be read, so what the migration '
                 .'user may do is unknown: '.$failure->getMessage(),
             );
         }
@@ -166,7 +170,8 @@ final readonly class GrantCheck implements PreflightCheck
         if ($unanswered !== []) {
             return CheckResult::undetermined(
                 self::ID,
-                'privilege_check_incomplete: '.implode('; ', $unanswered),
+                UndeterminedReason::PrivilegeCheckIncomplete,
+                ''.implode('; ', $unanswered),
                 $findings,
             );
         }
