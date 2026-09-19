@@ -16,6 +16,7 @@ use Pushery\SQLens\Agent\Mcp\ToolAnswer;
 use Pushery\SQLens\Deploy\PreflightOutcome;
 use Pushery\SQLens\Deploy\PreflightReport;
 use Pushery\SQLens\Deploy\PreflightRuns;
+use Pushery\SQLens\Deploy\UndeterminedWaiver;
 use Pushery\SQLens\Findings\Result;
 use Pushery\SQLens\Reporting\Json\JsonEnvelope;
 use Pushery\SQLens\Reporting\RunContext;
@@ -45,6 +46,24 @@ use Pushery\SQLens\Reporting\RunContext;
  * pipeline legitimately makes. What it must never be is invisible — so it is echoed in the answer
  * whether or not it changed anything, and a run that used it says so beside the verdict it produced.
  *
+ * ## Leaving the parameter out falls back to the PROJECT's declaration, and that is the whole point
+ *
+ * The parameter is the counterpart of the command's `--allow-undetermined` FLAG: a person watching
+ * this run decide to proceed, all-or-nothing on both sides. It is not the counterpart of the config
+ * key, which is a project deciding in advance which questions it can deploy without and naming
+ * them. So an explicit parameter wins in both directions, and its ABSENCE reads
+ * `sqlens.deploy.predeploy.allow_undetermined` — the same source, through the same
+ * {@see UndeterminedWaiver}, as the `sqlens:predeploy` console command.
+ *
+ * ⚠️ That command is named in prose and NOT as a `{@see}`, which is not a style choice. A
+ * fully-qualified reference in a docblock is rewritten into a real `use` statement by the
+ * formatter, and an import out of `Console\` is a coupling this layer is built not to have —
+ * `AgentLayerArchTest` caught exactly that, one merge after it was written.
+ *
+ * Before that, absence meant `false`. A project that had named the reasons it can deploy past got
+ * them honored on the command line and refused here, for the same run — and {@see gate()} below
+ * promises in as many words that the two paths cannot disagree. They could.
+ *
  * ## The budget and the session defense are the service's
  *
  * The time budget, the session's own `statement_timeout` / `lock_timeout` and the rule that the gate
@@ -65,7 +84,17 @@ final class PredeployTool extends SqlensTool
     public function handle(Request $request, Repository $config, PreflightRuns $preflight): Response
     {
         $validated = $this->validated($request);
-        $allowUndetermined = ($validated['allow_undetermined'] ?? false) === true;
+
+        // Two ways in, one door — the same join the command makes, for the same reason. The
+        // parameter decides it either way when it is present; leaving it out is what falls back to
+        // what the project declared.
+        $waiver = array_key_exists('allow_undetermined', $validated)
+            ? ($validated['allow_undetermined'] === true ? UndeterminedWaiver::everyReason() : UndeterminedWaiver::closed())
+            : UndeterminedWaiver::fromConfig($config->get('sqlens.deploy.predeploy.allow_undetermined'));
+
+        // The fact a deploy log needs even when nothing went unanswered: was the hatch open at all.
+        // Whether it was USED is a different question and travels in the run header below.
+        $allowUndetermined = $waiver->opensAnything();
 
         $outcome = $preflight->run(
             connection: is_string($validated['connection'] ?? null) ? $validated['connection'] : null,
@@ -83,12 +112,30 @@ final class PredeployTool extends SqlensTool
                     'refusal' => ['id' => 'preflight_unavailable', 'connection' => $outcome->connection],
                 ])->toArray(),
                 'connection' => $outcome->connection,
-                'gate' => $this->gate($outcome, $allowUndetermined),
+                // `false`, not the waiver: a gate that could not RUN has no unanswered checks to
+                // waive, and a waiver cannot carry a deploy past a missing gate.
+                'gate' => $this->gate($outcome, false),
                 'allow_undetermined' => $allowUndetermined,
             ]);
         }
 
-        $envelope = JsonEnvelope::for($outcome->result, $outcome->context)->toArray();
+        // Word for word the command's join: blocked, blocked by nothing BUT unanswered checks, and
+        // every one of them covered. Partial coverage is the one result that must not read as
+        // permission.
+        $waived = $outcome->report->blocks()
+            && $outcome->blockedOnlyByUndetermined()
+            && $waiver->opensFor($outcome->report->undetermined());
+
+        // Carried on the context rather than assembled here, so `run.undetermined_waiver` says the
+        // same thing over the protocol as it does on the command line. Left off, it stayed null —
+        // "this producer has no gate at all", which on this path is simply untrue.
+        $envelope = JsonEnvelope::for(
+            $outcome->result,
+            $outcome->context->withUndeterminedWaiver(
+                $waived,
+                $waived ? $waiver->reasonsItNames($outcome->report->undetermined()) : [],
+            ),
+        )->toArray();
         $page = ReportPage::of($envelope['findings'], 0, null, $this->ceiling($config));
         $unresolved = $outcome->report->undetermined();
 
@@ -106,7 +153,7 @@ final class PredeployTool extends SqlensTool
         return Response::json([
             ...$answer->toArray(),
             'connection' => $outcome->connection,
-            'gate' => $this->gate($outcome, $allowUndetermined),
+            'gate' => $this->gate($outcome, $waived),
             // Echoed whether or not it changed anything. An emergency exit that could be used
             // invisibly is not an emergency exit, it is a default nobody agreed to — and the one
             // reading a deploy log afterwards is the person who needs to see it most.
@@ -146,7 +193,7 @@ final class PredeployTool extends SqlensTool
     {
         return [
             'connection' => $schema->string()->description('The name of a connection this application has configured. Never a connection string.'),
-            'allow_undetermined' => $schema->boolean()->description('Proceed when the ONLY blockers are checks that could not answer. Fail-closed is the default; a real failure still blocks, and using this is recorded in the answer.'),
+            'allow_undetermined' => $schema->boolean()->description('Proceed when the ONLY blockers are checks that could not answer. Leave it out to use what the project declared in sqlens.deploy.predeploy.allow_undetermined, which may name individual reasons; passing it decides this run either way, all-or-nothing. A real failure still blocks, and whichever applied is recorded in the answer.'),
         ];
     }
 
@@ -159,7 +206,7 @@ final class PredeployTool extends SqlensTool
      *
      * @return array{blocks: bool, exit_code: int, meaning: string}
      */
-    private function gate(PreflightOutcome $outcome, bool $allowUndetermined): array
+    private function gate(PreflightOutcome $outcome, bool $waived): array
     {
         if (! $outcome->report instanceof PreflightReport) {
             return [
@@ -173,18 +220,16 @@ final class PredeployTool extends SqlensTool
             return ['blocks' => false, 'exit_code' => 0, 'meaning' => 'No check blocked; the deploy may proceed.'];
         }
 
-        $onlyUndetermined = $outcome->blockedOnlyByUndetermined();
-
-        if ($onlyUndetermined && $allowUndetermined) {
+        if ($waived) {
             return [
                 'blocks' => false,
                 'exit_code' => 0,
-                'meaning' => 'The only blockers were checks that could not answer, and allow_undetermined let the deploy proceed.',
+                'meaning' => 'The only blockers were checks that could not answer, and a waiver covering every one of them let the deploy proceed. Which reasons it named is in the run header.',
             ];
         }
 
-        return $onlyUndetermined
-            ? ['blocks' => true, 'exit_code' => 3, 'meaning' => 'Every blocker is a check that could not answer. Fail-closed: it blocks.']
+        return $outcome->blockedOnlyByUndetermined()
+            ? ['blocks' => true, 'exit_code' => 3, 'meaning' => 'Every blocker is a check that could not answer, and no waiver covers all of them. Fail-closed: it blocks.']
             : ['blocks' => true, 'exit_code' => 1, 'meaning' => 'A check found a real problem with this deploy.'];
     }
 

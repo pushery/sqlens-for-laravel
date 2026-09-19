@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Drivers\Mysql\Deploy;
 use Pushery\SQLens\Contracts\PostdeployCheck;
 use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\PostdeployContext;
+use Pushery\SQLens\Findings\UndeterminedReason;
 
 /**
  * A check that answers NOT APPLICABLE, out loud, and that is its entire job.
@@ -57,6 +58,7 @@ final readonly class InvalidIndexCheck implements PostdeployCheck
     {
         return CheckResult::undetermined(
             self::ID,
+            UndeterminedReason::NotApplicableOnThisEngine,
             'not applicable on this driver: InnoDB has no invalid-index state — an index build is '
             .'either committed or rolled back, and there is no equivalent of PostgreSQL\'s '
             .'`indisvalid = false`. This is reported rather than skipped so that a reader comparing '

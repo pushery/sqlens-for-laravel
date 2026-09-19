@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Deploy;
 
 use Closure;
+use Pushery\SQLens\Findings\UndeterminedReason;
 
 /**
  * The one implementation of "run a list of checks under a budget and report what happened".
@@ -65,6 +66,7 @@ final readonly class CheckSequence
             if ($exhausted()) {
                 $results[] = CheckResult::undetermined(
                     $id,
+                    UndeterminedReason::RunTimeBudgetExhausted,
                     'the run reached its time budget before this check started, so it never asked. '
                     .'Reported rather than omitted: a gate that quietly ran half its checks and '
                     .'answered clean would be trusted like a complete one.',

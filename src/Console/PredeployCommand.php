@@ -9,6 +9,7 @@ use Illuminate\Contracts\Config\Repository;
 use Pushery\SQLens\Catalog\CatalogSkip;
 use Pushery\SQLens\Deploy\PreflightReport;
 use Pushery\SQLens\Deploy\PreflightRuns;
+use Pushery\SQLens\Deploy\UndeterminedWaiver;
 use Pushery\SQLens\Exceptions\UnknownReporterFormat;
 use Pushery\SQLens\Findings\Result;
 use Pushery\SQLens\Reporting\ReporterManager;
@@ -128,19 +129,29 @@ final class PredeployCommand extends Command
         // Two ways in, one door. The flag is the per-run decision; the config key is the same
         // decision taken once for a project. Neither is a second kind of waiver, so they are joined
         // here rather than checked at two places that could disagree about what "open" means.
-        $hatchOpen = $this->option('allow-undetermined') === true
-            || $config->get('sqlens.deploy.predeploy.allow_undetermined') === true;
+        //
+        // They are not the same WIDTH, though, and that is deliberate. The flag is somebody
+        // watching this run decide to proceed past whatever could not answer; the config key is a
+        // project deciding in advance which questions it can deploy without, and it may name them.
+        // A project that can live without a formatter it does not install should not have to grant
+        // the same pass to a privilege table it could not read.
+        $waiver = $this->option('allow-undetermined') === true
+            ? UndeterminedWaiver::everyReason()
+            : UndeterminedWaiver::fromConfig($config->get('sqlens.deploy.predeploy.allow_undetermined'));
 
         $waived = $outcome->report->blocks()
             && $outcome->blockedOnlyByUndetermined()
-            && $hatchOpen;
+            && $waiver->opensFor($outcome->report->undetermined());
 
         // Both halves as ONE result, and both come from the service. Assembling them here as well
         // would be a second merge of one run, free to differ from the one the MCP tool renders —
         // and a consumer would then have to choose which document is "the" verdict.
         $reporter->report(
             $outcome->result,
-            $outcome->context->withUndeterminedWaiver($waived),
+            $outcome->context->withUndeterminedWaiver(
+                $waived,
+                $waived ? $waiver->reasonsItNames($outcome->report->undetermined()) : [],
+            ),
             $this->getOutput()->getOutput(),
         );
 

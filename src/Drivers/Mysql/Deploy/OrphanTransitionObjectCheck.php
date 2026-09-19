@@ -91,6 +91,7 @@ final readonly class OrphanTransitionObjectCheck implements PostdeployCheck
             // the privilege probe exists to prevent.
             return CheckResult::undetermined(
                 self::ID,
+                UndeterminedReason::CatalogReadFailed,
                 'information_schema could not be read, so whether an online-schema-change tool left '
                 .'artifacts behind is unknown: '.$failure->getMessage(),
             );
@@ -123,6 +124,7 @@ final readonly class OrphanTransitionObjectCheck implements PostdeployCheck
             ? CheckResult::pass(self::ID)
             : CheckResult::undetermined(
                 self::ID,
+                UndeterminedReason::TransitionArtifactsMayBeInFlight,
                 sprintf(
                     '%d online-schema-change artifact(s) are present. A run still IN FLIGHT looks '
                     .'exactly like one that died, so this is reported rather than decided.',

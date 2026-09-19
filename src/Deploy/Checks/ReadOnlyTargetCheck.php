@@ -14,6 +14,7 @@ use Pushery\SQLens\Deploy\WriteAcceptance;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
+use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
 use Pushery\SQLens\Rules\StabilityTier;
@@ -87,6 +88,7 @@ final readonly class ReadOnlyTargetCheck implements PreflightCheck
             // through the gate itself.
             return CheckResult::undetermined(
                 self::ID,
+                UndeterminedReason::WriteAcceptanceUnsupported,
                 sprintf(
                     'no driver capability answers the write state for "%s", so this run cannot tell a '
                     .'writable primary from a standby. That is not a pass: an unasked question and a '
@@ -103,6 +105,7 @@ final readonly class ReadOnlyTargetCheck implements PreflightCheck
             // writes" are opposite answers, and only one of them is safe to act on.
             return CheckResult::undetermined(
                 self::ID,
+                UndeterminedReason::WriteAcceptanceUnreadable,
                 'the server would not say whether it accepts writes ('.$error->getMessage().'). '
                 .'Nothing follows from that: an unread setting is not a permissive one, and a deploy '
                 .'sent at a standby fails whether or not this gate could see it coming.',

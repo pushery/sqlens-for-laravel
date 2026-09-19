@@ -15,6 +15,7 @@ use Pushery\SQLens\Deploy\PreflightContext;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
+use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
 use Pushery\SQLens\Rules\StabilityTier;
@@ -118,6 +119,7 @@ final readonly class SessionDefenseAppliedCheck implements PreflightCheck, Reads
         } catch (Throwable $error) {
             return CheckResult::undetermined(
                 self::ID,
+                UndeterminedReason::SessionTimeoutsUnreadable,
                 'the session would not say which timeouts are in force ('.$error->getMessage().'), '
                 .'so nothing is known about whether this run is bounded. An unread bound is not a '
                 .'bound: the statements that follow could run for as long as the server allows.',

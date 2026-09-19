@@ -579,7 +579,8 @@ final readonly class ConfigSchema
             'deploy.drift.exclude_file' => 'a non-empty, repository-relative path — where the differences this project has accepted are recorded. Never null and never absolute: the file is a decision log, and one outside the repository is one nobody reviews. Every entry needs a reason, and an entry that matches nothing ends the run',
             'deploy.drift.mode' => 'one of: report, gate — whether sqlens:drift prints what it found and exits clean, or ends the run with the gate exit code. Report is the shipped state and the one that gets the feature adopted: the first run on a grown production database finds a decade of hand-made objects, and a gate that turns red there is switched off rather than fixed. Raise it after the intentional differences are in the exclude file',
             'deploy.predeploy.available_disk_bytes' => 'a positive integer number of free BYTES on the volume this database writes to, or null to ask the instance. Free filesystem space is not readable from inside a database and never will be on a managed one, so without this the headroom check reports its estimate and stays undetermined. It is a CLAIM rather than a reading — nothing can verify it, and a stale value tells the gate that a full disk is empty, so feed it from the monitoring you would otherwise have checked by hand',
-            'deploy.predeploy.allow_undetermined' => "true or false — whether a predeploy blocked ONLY by checks that could not answer still exits clean. False is the shipped state and the safe one: a gate that waves through what it could not read is the silent green this package exists to refuse. Setting it true is the same decision as passing --allow-undetermined on every run, and it is recorded the same way — the report's run header carries undetermined_waiver so a waved-through green can never be mistaken for an earned one",
+            'deploy.predeploy.allow_undetermined' => "true, false, or a list of undetermined reasons — whether a predeploy blocked ONLY by checks that could not answer still exits clean. False is the shipped state and the safe one: a gate that waves through what it could not read is the silent green this package exists to refuse. True is the same decision as passing --allow-undetermined on every run. A LIST is the narrow form: the gate proceeds only when EVERY answer it could not get names a reason on the list, so a project can deploy past a formatter it does not install without also waiving a privilege table it could not read. All three are recorded the same way — the report's run header carries undetermined_waiver so a waved-through green can never be mistaken for an earned one",
+            'deploy.predeploy.allow_undetermined-item' => 'one of: '.$this->enumValues(UndeterminedReason::class),
             'deploy.debt' => 'an array with the keys: enabled, path, thresholds, fail_at',
             'deploy.debt.path' => 'a non-empty, repository-relative path — where the migration debt account file lives. Never null: the ledger is a repo file and always has a location',
             'deploy.debt.enabled' => 'true or false — whether the migration debt account is consulted at all. False is for a project that has not adopted it, never a way to silence a debt: that is what an acknowledged entry with a written reason is for',
@@ -1165,8 +1166,20 @@ final readonly class ConfigSchema
             'deploy.predeploy.available_disk_bytes' => $value === null || (is_int($value) && $value > 0)
                 ? []
                 : [ConfigViolation::wrongType($path, $expected, $value)],
+            // Its own arm for the same reason available_disk_bytes has one, and the reason is
+            // now a third shape rather than a second: `true`, `false`, or a LIST of the reasons
+            // this project has decided it can deploy without. Folded into the boolean group it
+            // would reject every list, which is the shape the key exists to take.
+            'deploy.predeploy.allow_undetermined' => is_bool($value)
+                ? []
+                : $this->listOfStrings(
+                    $path,
+                    $value,
+                    'deploy.predeploy.allow_undetermined',
+                    static fn (string $item): bool => UndeterminedReason::tryFrom($item) instanceof UndeterminedReason,
+                    'deploy.predeploy.allow_undetermined-item',
+                ),
             'deploy.debt.enabled',
-            'deploy.predeploy.allow_undetermined',
             'security.include_vendor_migrations',
             'reporting.maintenance_window' => is_bool($value) ? [] : [ConfigViolation::wrongType($path, $expected, $value)],
             // Exactly one legal value today, and it is still checked against a list rather than a
