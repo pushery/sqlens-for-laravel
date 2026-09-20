@@ -53,11 +53,11 @@ final readonly class PgsqlInstanceIdentityReader implements InstanceIdentityRead
                 // WITH its netmask — `127.0.0.1/32`, `::1/128` — which is a network, not a host. It
                 // would reach the report header as the server's identity and would fail every
                 // address comparison, including the pinned-host check, while looking almost right.
-                'select host(inet_server_addr()) as host,'
+                'select pg_catalog.host(pg_catalog.inet_server_addr()) as host,'
             .' inet_server_port() as port,'
-            .' current_database() as db,'
-            .' current_setting(\'server_version\') as version,'
-                .' pg_is_in_recovery() as in_recovery'
+            .' pg_catalog.current_database() as db,'
+            .' pg_catalog.current_setting(\'server_version\') as version,'
+                .' pg_catalog.pg_is_in_recovery() as in_recovery'
             ));
 
             $host = $this->text($row, 'host');

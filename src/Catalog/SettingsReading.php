@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Catalog;
 
+use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\UndeterminedReason;
 
 /**
@@ -74,10 +75,26 @@ final readonly class SettingsReading
      * Distinct from `of([])`, which is a successful read of a server that reported nothing — a
      * state no real server produces, and therefore one that should look different in a report from
      * the failure that produces it constantly.
+     *
+     * ⚠️ The detail is REDACTED here rather than at the caller, and that is the whole shape of
+     * the fix: eighteen producers wrote `Throwable::getMessage()` into this field with no
+     * redactor at all, and `QueryException::formatMessage()` appends ` (Connection: …, Host: …,
+     * Port: …, Database: …, SQL: …)` to every query exception on both engines. A refused catalog
+     * read on a managed instance — which the collectors' own comments call the ordinary case —
+     * therefore arrived wearing the connection's coordinates.
+     *
+     * At the sink, because a nineteenth producer inherits the redaction without knowing it exists.
+     * Not at {@see Finding}, which would be a filter rather than a sink: the shape redactor removes
+     * `role "…"`, `user "…"` and `database "…"`, and that is precisely what a SECURITY finding
+     * about a role or a database is made of. This field carries error text and nothing else.
+     *
+     * The property's own docblock already said this text must never be shown as-is because it can
+     * carry a host and a database name. It was shown as-is, by two readers, through the audit's
+     * notices.
      */
     public static function failed(UndeterminedReason $reason, ?string $detail = null): self
     {
-        return new self([], $reason, null, true, $detail);
+        return new self([], $reason, null, true, $detail === null ? null : new CredentialRedactor()->redact($detail));
     }
 
     public function succeeded(): bool

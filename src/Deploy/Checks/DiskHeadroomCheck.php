@@ -15,6 +15,7 @@ use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PreflightContext;
 use Pushery\SQLens\Findings\Confidence;
+use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
@@ -118,7 +119,7 @@ final readonly class DiskHeadroomCheck implements PreflightCheck
                 self::ID,
                 UndeterminedReason::ObjectStatisticsUnread,
                 'the object sizes could not be read, so the space this migration needs is unknown: '
-                .$failure->getMessage(),
+                .new CredentialRedactor()->redact($failure->getMessage()),
             );
         }
 
@@ -168,7 +169,7 @@ final readonly class DiskHeadroomCheck implements PreflightCheck
                 sprintf(
                     'this instance does not report free space — on a '
                     .'managed database it never does, and no privilege changes that. What CAN be '
-                    .'said: the pending rewrite touches %d object(s) totalling about %s, and a '
+                    .'said: the pending rewrite touches %d object(s) totaling about %s, and a '
                     .'rewrite needs that much AGAIN while it runs because the old copy stays '
                     .'readable until the new one is complete. Hold that number against your own '
                     .'monitoring — or set `deploy.predeploy.available_disk_bytes` and this check '
@@ -217,7 +218,7 @@ final readonly class DiskHeadroomCheck implements PreflightCheck
             ruleId: self::ID,
             messagePrefix: DeployNotice::MESSAGE_PREFIX,
             message: sprintf(
-                'The pending rewrite touches %d object(s) totalling about %s, and %s about %s free. '
+                'The pending rewrite touches %d object(s) totaling about %s, and %s about %s free. '
                 .'A rewrite needs the object\'s size AGAIN while it runs — '
                 .'the old copy stays readable until the new one is complete — so this deploy is '
                 .'estimated to need more space than there is. An instance that fills up mid-rewrite '

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Capture;
 
+use Illuminate\Database\Connection;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Migrations\Migrator;
 use Pushery\SQLens\Contracts\PendingResolver;
@@ -47,6 +48,12 @@ final readonly class PendingMigrationResolver implements PendingResolver
 {
     /**
      * @param  list<string>  $migrationPaths
+     * @param  SessionGuard  $sessionGuard  bounds the borrowed session around the catalog reads
+     *                                      below. REQUIRED rather than defaulted: a default would
+     *                                      be a second answer to "how long may this run wait",
+     *                                      free to diverge from the configured one without saying
+     *                                      so, and the unbounded read is what this parameter
+     *                                      exists to make impossible.
      * @param  bool  $includeVendorMigrations  whether a migration discovered inside `vendor/` is
      *                                         enumerated. False drops it before anything reads it;
      *                                         see {@see self::vendorFiltered()} for what is never
@@ -58,6 +65,7 @@ final readonly class PendingMigrationResolver implements PendingResolver
         private array $migrationPaths,
         private string $migrationsTable,
         private string $projectRoot,
+        private SessionGuard $sessionGuard,
         private bool $includeVendorMigrations = true,
     ) {}
 
@@ -77,6 +85,42 @@ final readonly class PendingMigrationResolver implements PendingResolver
             return PendingResolution::skipped(PendingSkipReason::ConnectionUnreachable);
         }
 
+        // ⚠️ THE BOUND SITS HERE, IN THE RESOLVER, AND NOT AT THE CALL SITES. Three commands read
+        // the pending state; `sqlens:lint` bounded its session first and `sqlens:drift` and
+        // `sqlens:postdeploy --expect-shadow` did not, so two of three reads of a possibly
+        // PRODUCTION connection sat behind a lock with no budget at all. `sqlens:drift` is the
+        // likeliest of the three to point at production — comparing what is against what should be
+        // is its whole purpose. Discipline at each call site had already been tried and had a
+        // two-in-three failure rate; a fourth caller cannot forget what it cannot construct
+        // without.
+        //
+        // AFTER the reachability check and before the first catalog read, which is the only correct
+        // window rather than a stylistic choice. `bind()` writes with `Connection::statement()`,
+        // which THROWS on an unreachable server — binding above would turn the named
+        // `ConnectionUnreachable` skip into a stack trace, replacing the specific answer with a
+        // crash. Below it, the three reads this bounds are the three the audit found unbounded.
+        //
+        // Nesting is safe by construction, which is what lets the lint path keep its own outer
+        // bound: `bind()` snapshots whatever it finds and restores exactly that, so an inner bind
+        // over an identical outer one restores the outer value rather than the pre-run one.
+        $release = $this->sessionGuard->bind($target);
+
+        try {
+            return $this->resolveBounded($target, $connection);
+        } finally {
+            $release();
+        }
+    }
+
+    /**
+     * The reads themselves, with the session already bounded by {@see self::resolve()}.
+     *
+     * Split out for the `finally` rather than for length: every exit below — three named skips and
+     * the resolved list — has to release the bound, and a single return point is the only way that
+     * is true of a path somebody adds later too.
+     */
+    private function resolveBounded(Connection $target, string $connection): PendingResolution
+    {
         // The migration repository must exist, or "which ran" is unknowable — a fresh
         // project is distinguished from a broken connection this way.
         if (! $target->getSchemaBuilder()->hasTable($this->migrationsTable)) {

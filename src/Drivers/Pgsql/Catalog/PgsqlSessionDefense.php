@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Drivers\Pgsql\Catalog;
 
+use Pushery\SQLens\Capture\Shadow\SessionTimeoutDetector;
 use Pushery\SQLens\Catalog\ReaderSession;
 use Pushery\SQLens\Catalog\SessionBudget;
 use Pushery\SQLens\Contracts\SessionDefense;
@@ -22,12 +23,21 @@ use Pushery\SQLens\Contracts\SessionDefense;
  * That is also why the reader verifies the seal instead of trusting it. See
  * {@see ReaderSession}.
  *
- * ## Why the bounds are set twice
+ * ## Why every bound is `SET LOCAL` and nothing is set at session scope
  *
- * Once on the session, once as `SET LOCAL` inside the read transaction. The duplication is
- * deliberate: `SET LOCAL` is scoped to the transaction, which is the property a transaction pooler
- * needs — a plain session `SET` may be handed to another client later. The session `SET` is the
- * belt to that brace, and costs one statement.
+ * `SET LOCAL` ends with the transaction, which is the one scope a transaction pooler guarantees. A
+ * plain session `SET` does not: behind PgBouncer in transaction pooling it lands on whichever
+ * backend carried that statement and STAYS there. `server_reset_query` runs only in session pooling
+ * by default, and `track_extra_parameters` can only reset parameters the server announces through
+ * `ParameterStatus` — which none of the three timeouts are. The next session of the HOST
+ * APPLICATION that is handed that backend inherits them and starts losing queries over the budget
+ * to `57014` and idle transactions to a FATAL `25P03`, for a reason it never chose. The reader
+ * connection is a copy of the application's config, so it goes through the same pooler.
+ *
+ * ⚠️ This used to set the bounds TWICE — once on the session, once as `SET LOCAL` — and called the
+ * session copy "the belt to that brace". The belt was the damage. The brace holds alone: everything
+ * this session does happens inside the read transaction, so there is no window a session-scoped
+ * copy would cover and no topology in which it earns its risk.
  *
  * `idle_in_transaction_session_timeout` is the one with no MySQL counterpart and it matters most
  * here: a read transaction that stalls holds a snapshot open, and an open snapshot stops `VACUUM`
@@ -39,17 +49,10 @@ final readonly class PgsqlSessionDefense implements SessionDefense
     /** Refused because the transaction is read-only. */
     private const string READ_ONLY_SQL_STATE = '25006';
 
-    /** The statement (or the lock wait) hit its budget and was canceled. */
-    private const string QUERY_CANCELED_SQL_STATE = '57014';
-
+    /** Nothing. Everything this session sets is scoped to its transaction — see the note above. */
     public function sessionStatements(SessionBudget $budget): array
     {
-        return [
-            sprintf("SET statement_timeout = '%dms'", $budget->statementTimeoutMs),
-            sprintf("SET lock_timeout = '%dms'", $budget->lockTimeoutMs),
-            sprintf("SET idle_in_transaction_session_timeout = '%dms'", $budget->idleInTransactionTimeoutMs),
-            sprintf("SET application_name = '%s'", str_replace("'", "''", $budget->applicationName)),
-        ];
+        return [];
     }
 
     /** Nothing: PostgreSQL takes its seal inside the transaction, not before it. */
@@ -64,6 +67,10 @@ final readonly class PgsqlSessionDefense implements SessionDefense
             'SET TRANSACTION READ ONLY',
             sprintf("SET LOCAL statement_timeout = '%dms'", $budget->statementTimeoutMs),
             sprintf("SET LOCAL lock_timeout = '%dms'", $budget->lockTimeoutMs),
+            sprintf("SET LOCAL idle_in_transaction_session_timeout = '%dms'", $budget->idleInTransactionTimeoutMs),
+            // Quoted by doubling, the way PostgreSQL takes a literal apostrophe. An unescaped name
+            // would not merely mislabel the session — it would end the statement early.
+            sprintf("SET LOCAL application_name = '%s'", str_replace("'", "''", $budget->applicationName)),
         ];
     }
 
@@ -93,8 +100,10 @@ final readonly class PgsqlSessionDefense implements SessionDefense
         return $sqlState === '42501';
     }
 
-    public function isTimeout(string $sqlState): bool
+    public function isTimeout(string $sqlState, ?int $driverCode): bool
     {
-        return $sqlState === self::QUERY_CANCELED_SQL_STATE;
+        // Through the ONE classifier. Both engines' answers used to live here, and both were
+        // wrong in opposite directions — see SessionDefense::isTimeout().
+        return SessionTimeoutDetector::matchesTimeout($sqlState, $driverCode);
     }
 }

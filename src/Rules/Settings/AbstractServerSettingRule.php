@@ -428,6 +428,7 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
             match ($expectation->changeable) {
                 SettingChangeCost::Session, SettingChangeCost::Reload => 'sqlens::messages.remediation.no_safe_sequence.server_setting_reload',
                 SettingChangeCost::Restart => 'sqlens::messages.remediation.no_safe_sequence.server_setting_restart',
+                SettingChangeCost::Offline => 'sqlens::messages.remediation.no_safe_sequence.server_setting_offline',
                 SettingChangeCost::Initdb => 'sqlens::messages.remediation.no_safe_sequence.server_setting_initdb',
             },
             'sqlens::messages.remediation.no_safe_sequence.server_setting_verification',
@@ -440,9 +441,14 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
     /**
      * How to say "and here is what it would take to change it" without proposing the impossible.
      *
-     * `data_checksums` and `lower_case_table_names` are fixed when the cluster is initialized. A
-     * remediation telling somebody to set one of them is advice they will follow for an afternoon
-     * before discovering it cannot be done, so those get the honest sentence instead.
+     * `lower_case_table_names` is fixed when the cluster is initialized. A remediation telling
+     * somebody to set it is advice they will follow for an afternoon before discovering it cannot be
+     * done, so it gets the honest sentence instead.
+     *
+     * ⚠️ **`data_checksums` was in that sentence and does not belong there.** It is changeable in
+     * place with `pg_checksums --enable` on a cleanly shut-down cluster, so it takes the `Offline`
+     * arm — a maintenance window rather than a migration. The two plans differ by orders of
+     * magnitude, and this sentence is read exactly where one of them gets scheduled.
      */
     final protected function remediation(ServerSettingExpectation $expectation): string
     {
@@ -454,6 +460,7 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
             // fixed, not a workaround one connection at a time.
             SettingChangeCost::Session, SettingChangeCost::Reload => 'changing what the server hands new connections is a configuration change plus a reload — no downtime.',
             SettingChangeCost::Restart => 'changing it takes a server restart, so it needs a maintenance window.',
+            SettingChangeCost::Offline => 'it can be turned on in place with pg_checksums --enable, which needs the cluster cleanly shut down — a maintenance window, not a new cluster and a dump/restore.',
             SettingChangeCost::Initdb => 'it was fixed when the cluster was initialized and cannot be changed on this one — moving it means a new cluster and a dump/restore.',
         };
     }

@@ -6,9 +6,11 @@ namespace Pushery\SQLens\Drivers\Mysql\Rules\L2;
 
 use Override;
 use Pushery\SQLens\Canonical\StatementTarget;
+use Pushery\SQLens\Canonical\StringLiteralMask;
 use Pushery\SQLens\Contracts\DerivesDowntimeClass;
 use Pushery\SQLens\Contracts\ProvidesRemediation;
 use Pushery\SQLens\Deploy\Contracts\DeclaresOperationClass;
+use Pushery\SQLens\Drivers\Mysql\Canonical\MysqlCanonicalization;
 use Pushery\SQLens\Drivers\Mysql\DowntimeClass\MysqlDowntimeClassSource;
 use Pushery\SQLens\Drivers\Mysql\Remediation\CharsetMigrationTemplate;
 use Pushery\SQLens\Drivers\Mysql\Rules\AbstractMysqlRule;
@@ -159,7 +161,7 @@ final class CopyAlterCharsetRule extends AbstractMysqlRule implements DeclaresOp
             return false;
         }
 
-        $masked = preg_replace("/'(?:[^']|'')*'/", "''", $statement->canonical) ?? $statement->canonical;
+        $masked = StringLiteralMask::forDriver(new MysqlCanonicalization)->apply($statement->canonical);
 
         return preg_match('/^ALTER TABLE \S+ .*\bCONVERT TO CHARACTER SET\b/', $masked) === 1;
     }

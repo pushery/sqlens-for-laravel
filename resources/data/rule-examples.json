@@ -112,7 +112,7 @@
         },
         "MY.L4.ENUM_CHANGE": {
             "bad": "Schema::table('orders', fn (Blueprint $table) => $table->enum('status', ['draft', 'paid', 'void'])->change());",
-            "good": "// Append at the end, which is the one enum change MySQL applies instantly and the one\n// no deployed code can be surprised by — every existing value keeps its meaning:\nSchema::table('orders', fn (Blueprint $table) => $table->enum('status', ['draft', 'sent', 'paid', 'refunded'])->change());",
+            "good": "// Append at the end. It is instant, and unlike the equally instant respelling above it is the one\n// no deployed code can be surprised by — every existing value keeps its meaning:\nSchema::table('orders', fn (Blueprint $table) => $table->enum('status', ['draft', 'sent', 'paid', 'refunded'])->change());",
             "note": "MySQL stores an ENUM value as its ordinal, so removing, reordering or renaming a member changes what existing rows mean to an application that has not been redeployed — and a rename does it instantly, with no lock and no rewrite to notice. Appending at the end is the only change that leaves every stored value meaning what it did.",
             "false_positives": "An append-only change is reported too, because the statement names the whole member list and not the delta — the rule cannot tell an append from an insertion without the live column. The trade is deliberate: a false positive costs one look at the column, a false negative ships an application reading a value the database no longer has."
         },
@@ -506,7 +506,7 @@
         },
         "PG.L6.SERIAL_NOT_IDENTITY": {
             "bad": "Schema::create('orders', function (Blueprint $table) {\n    $table->bigIncrements('id');\n});",
-            "good": "Schema::create('orders', function (Blueprint $table) {\n    $table->id();\n});",
+            "good": "Schema::create('orders', function (Blueprint $table) {\n    $table->bigInteger('id')->generatedAs()->always()->primary();\n});",
             "note": "serial is a macro, not a type: it expands into a column, a sequence, a default and a dependency, and the catalog afterwards reports plain bigint. The three consequences are that the default can be dropped without a trace, the sequence carries its own USAGE grant so another role's INSERT fails at runtime, and an explicit id is accepted silently and collides later. An identity column keeps all three inside the column.",
             "false_positives": "Three neighboring shapes are deliberately not reported. A hand-managed sequence several columns default from is a design, not an escaped serial — the AUTO dependency sits on the owning column, so a check asking whether the TABLE owns a sequence would report the borrowing column. A sequence owned by a column purely so it is dropped with it carries no default and is not reported. An identity column is never reported: its sequence is an INTERNAL dependency and it has no pg_attrdef row at all. A column whose default wraps nextval in a larger expression is reported as undetermined rather than either way, because an identity column cannot express that default."
         },

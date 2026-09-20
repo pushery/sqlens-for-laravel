@@ -11,19 +11,42 @@ use Pushery\SQLens\Drivers\Pgsql\Rules\AbstractPgsqlSafetyRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L5\ForeignKeyWithoutIndexRule;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\RemediationPayload;
+use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDriverNotes;
+use Pushery\SQLens\Rules\RuleVerdict;
 use Pushery\SQLens\Rules\TouchedTables;
 use Pushery\SQLens\Subjects\MigrationStatementView;
 
 /**
  * `ALTER TABLE … ADD CONSTRAINT` validates the whole table under a lock before it
- * returns. For a foreign key it is worse than that: PostgreSQL takes an
- * AccessExclusive lock on BOTH the table carrying the constraint and the one it
- * references, while it installs the enforcing triggers — and because that lock
- * conflicts with every other lock, one read query already touching the referenced
- * table can stall all traffic to it behind the migration. It is the exact mechanism
- * behind GoCardless's documented ~15-second outage (see the evidence register).
+ * returns. For a foreign key it reaches a SECOND table: PostgreSQL locks both the table
+ * carrying the constraint and the one it references while it installs the enforcing
+ * triggers, so a migration that names one table stalls writes to two.
+ *
+ * ⚠️ THE LOCK IS SHARE ROW EXCLUSIVE ON BOTH SIDES, AND THIS SAID AccessExclusive — which
+ * inverted the planning advice. Measured on PostgreSQL 18.0, inside the transaction:
+ *
+ *   receiving table   AccessShareLock, ShareRowExclusiveLock
+ *   referenced table  AccessShareLock, RowShareLock, ShareRowExclusiveLock
+ *
+ * No AccessExclusive on either. And the difference is exactly the one a maintenance window
+ * is planned around — measured against a held SHARE ROW EXCLUSIVE on the same server:
+ *
+ *   SELECT  returns immediately   <- readers are NOT blocked
+ *   INSERT  waits, then hits lock_timeout
+ *
+ * So this blocks WRITERS. The old text said the lock "conflicts with every other lock" and
+ * that "all traffic" stalls, which describes AccessExclusive and would send a reader to
+ * schedule a read outage they do not need — or to underestimate what they really block.
+ *
+ * ⚠️ The queue effect is real and survives the correction: a long-running READ transaction
+ * already holding AccessShare does not conflict with SHARE ROW EXCLUSIVE, but any lock
+ * request queued BEHIND this one waits, so writers pile up behind a slow validation. That
+ * is the mechanism worth planning for, and `lock_timeout` is what bounds it.
+ *
+ * GoCardless's documented ~15-second outage predates 9.5, which is when the referenced-side
+ * lock was weakened; the evidence register now says so rather than presenting it as current.
  *
  * Two remediations, and the finding names the right one:
  *
@@ -129,6 +152,36 @@ final class ConstraintNotValidatedRule extends AbstractPgsqlSafetyRule implement
             : null;
     }
 
+    /**
+     * Three-valued, because the classifier has a real third answer.
+     *
+     * ⚠️ **`ConstraintShape::Unrecognized` is an `undetermined`, never a pass.** The shape used to
+     * answer `null` for a form it did not know, which is the same value it answers for a form it
+     * deliberately clears — so an unconsidered constraint kind read as a considered one. PostgreSQL
+     * 18's named not-null constraint went through that hole, and it performs the exact scan
+     * `PG.L2.SET_NOT_NULL_SCAN` exists to report.
+     *
+     * The seam for this is documented on {@see ReadsMigrationStatements::verdict()}: *a classifier
+     * that meets a case its data does not cover overrides this and returns an undetermined rather
+     * than a silent pass.* This is that case.
+     */
+    protected function verdict(MigrationStatementView $statement): ?RuleVerdict
+    {
+        if (ConstraintShape::of($statement) === ConstraintShape::Unrecognized) {
+            return RuleVerdict::undetermined(
+                'this ADD CONSTRAINT installs a constraint kind SQLens does not classify, so it cannot say '
+                .'whether the statement validates existing rows under a lock. The kinds it knows are FOREIGN '
+                .'KEY, CHECK, PRIMARY KEY, UNIQUE, EXCLUDE and the named NOT NULL form. Read the statement '
+                .'and decide by hand: if PostgreSQL validates on ADD, the operation blocks for the length of '
+                .'that scan. Reporting this rather than passing silently is deliberate — the alternative is a '
+                .'green result over a statement nobody looked at.',
+                UndeterminedReason::UnclassifiedConstraintShape,
+            );
+        }
+
+        return parent::verdict($statement);
+    }
+
     protected function judge(MigrationStatementView $statement): ?string
     {
         return match (ConstraintShape::of($statement)) {
@@ -140,6 +193,15 @@ final class ConstraintNotValidatedRule extends AbstractPgsqlSafetyRule implement
                 .'writes for the whole build. These do not support NOT VALID; instead CREATE UNIQUE INDEX '
                 .'CONCURRENTLY and then ADD CONSTRAINT … USING INDEX, which promotes the ready-built index '
                 .'without the validating scan.',
+            ConstraintShape::Exclude => 'Adding an EXCLUDE constraint builds its backing index under a lock that blocks '
+                .'writes for the whole build — measured on PostgreSQL 18.0, ACCESS EXCLUSIVE together with a '
+                .'SHARE lock on the same table. Unlike a foreign key or a check it cannot be deferred: the '
+                .'server refuses NOT VALID on an EXCLUDE constraint outright, and there is no USING INDEX '
+                .'promotion for it either. So this one needs a maintenance window sized to the index build, '
+                .'which is the honest answer rather than a sequence that does not exist.',
+            // `Unrecognized` never reaches here: `verdict()` above answers it as an undetermined. Listed
+            // so the match stays exhaustive and a future shape cannot fall through to the silent arm.
+            ConstraintShape::Unrecognized => null,
             null => null,
         };
     }

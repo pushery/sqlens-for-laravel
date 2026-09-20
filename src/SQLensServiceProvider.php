@@ -25,8 +25,11 @@ use Pushery\SQLens\Audit\AuditRunner;
 use Pushery\SQLens\Audit\AuditRuns;
 use Pushery\SQLens\Audit\ProjectManifest;
 use Pushery\SQLens\Canonical\Extensions\CanonicalExtensionRegistry;
+use Pushery\SQLens\Capture\CaptureConnectionResolver;
 use Pushery\SQLens\Capture\MigrationPaths;
+use Pushery\SQLens\Capture\MigrationsTable;
 use Pushery\SQLens\Capture\PendingMigrationResolver;
+use Pushery\SQLens\Capture\SessionGuard;
 use Pushery\SQLens\Capture\Shadow\ApplicationShadowClearance;
 use Pushery\SQLens\Capture\Shadow\ProductionConnectionDetector;
 use Pushery\SQLens\Catalog\CatalogReaderFactory;
@@ -102,6 +105,7 @@ use Pushery\SQLens\Drivers\Pgsql\Deploy\PostdeployInvalidIndexCheck;
 use Pushery\SQLens\Drivers\Pgsql\Deploy\PostdeployNotValidConstraintCheck;
 use Pushery\SQLens\Drivers\Pgsql\Deploy\ReplicationSlotCheck;
 use Pushery\SQLens\Drivers\Pgsql\Deploy\ServerSettingsCheck;
+use Pushery\SQLens\Findings\CompositeCredentialRedactor;
 use Pushery\SQLens\Format\DialectResolver;
 use Pushery\SQLens\Format\FormatConfig;
 use Pushery\SQLens\Format\FormatterRegistry;
@@ -312,7 +316,7 @@ final class SQLensServiceProvider extends ServiceProvider
                     new PgsqlSettingCrossFactCollector($session),
                     // The pooler reader takes the CONNECTION, not the session: transaction pooling
                     // is invisible inside a transaction, which is where the session always operates.
-                    pooler: new PgsqlPoolerReader($connection, $budget),
+                    pooler: new PgsqlPoolerReader($connection),
                     // The security reader shares the session too. What a security reading sees depends
                     // on the ROLE it connects as, so a reading over a second connection could report a
                     // different server than the one the rest of the audit describes.
@@ -359,6 +363,18 @@ final class SQLensServiceProvider extends ServiceProvider
         $this->app->singleton(
             ProjectManifest::class,
             static fn (Application $app): ProjectManifest => new ProjectManifest($app->basePath()),
+        );
+
+        // Credential redaction, assembled ONCE. The two halves are blind in different places —
+        // one knows the configured values, the other knows the drivers' message shapes — and the
+        // order between them is a correctness property rather than a preference, stated in the
+        // class. Bound rather than auto-wired so that the composition is a declaration somebody
+        // can find, not an accident of reflection.
+        $this->app->singleton(
+            CompositeCredentialRedactor::class,
+            static fn (Application $app): CompositeCredentialRedactor => new CompositeCredentialRedactor(
+                new CredentialRedaction($app->make('config')),
+            ),
         );
 
         // What `sqlens:audit` actually runs. Bound here so the command depends on the seam and
@@ -432,7 +448,11 @@ final class SQLensServiceProvider extends ServiceProvider
 
         $this->app->singleton(
             ShadowClearance::class,
-            static fn (Application $app): ShadowClearance => new ApplicationShadowClearance($app, $app->make('config')),
+            static fn (Application $app): ShadowClearance => new ApplicationShadowClearance(
+                $app,
+                $app->make('config'),
+                $app->make(DriverManager::class),
+            ),
         );
 
         $this->app->bind(
@@ -450,8 +470,23 @@ final class SQLensServiceProvider extends ServiceProvider
                 $app->make(DatabaseManager::class),
                 $app->make(Migrator::class),
                 new MigrationPaths($app, $app->make(Migrator::class), $app->make('config'))->all(),
-                'migrations',
+                // From the configuration, through the one place that narrows it. The literal that
+                // stood here was not a default — it OVERRODE a decision the application had
+                // already made, and an application that renames its ledger got a
+                // `NoMigrationTable` skip over a table that exists.
+                MigrationsTable::from($app->make(Repository::class)->get('database.migrations')),
                 (string) $app->basePath(),
+                // ⚠️ THIS IS THE BINDING `sqlens:drift` AND `sqlens:postdeploy --expect-shadow`
+                // RESOLVE, and until now neither bounded the session it read the pending state on.
+                // The budget comes from the shared capture resolver, so all three commands wait
+                // exactly as long as the project configured — not as long as whichever call site
+                // remembered to say so.
+                new SessionGuard(
+                    new CaptureConnectionResolver(
+                        $app->make(DriverManager::class),
+                        $app->make('config'),
+                    )->sessionBudget(),
+                ),
             ),
         );
 

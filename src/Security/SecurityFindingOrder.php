@@ -26,14 +26,23 @@ use Pushery\SQLens\Severity\Severity;
  *
  * **Merge findings from different sources.** The plan asks for a lint finding about a
  * `GRANT … TO PUBLIC` migration and an audit finding about the resulting catalog state to become one
- * entry carrying both sources. Measured: it cannot be done today, and not for want of effort.
- * `Location::inMigration()` takes no object name and leaves the field null, so a migration finding
- * does not know WHICH object its statement touches. The only thing the two findings share is a rule
- * id — and merging on a rule id alone is exactly the wrong merge the plan's own guard rail forbids:
- * two different tables, one rule, collapsed into a single entry that is true of neither.
+ * entry carrying both sources.
  *
- * So the merge waits for the capture layer to attach the object it already parses, and this file
- * does the half that stands on its own.
+ * ⚠️ THIS PARAGRAPH SAID THE MECHANISM DOES NOT EXIST, AND IT DOES. It read
+ * "`Location::inMigration()` takes no object name and leaves the field null", and that stopped being
+ * true: the factory takes `?string $objectName` and `?SchemaObjectType $objectType`, and
+ * `MigrationVerdicts` passes both. A stale reason is worse than no reason here, because it tells the
+ * next reader the merge is blocked on work somebody else has already done.
+ *
+ * The blocker moved rather than disappeared, and where it sits now is a coverage question instead of
+ * a structural one: the parameters are OPTIONAL, and the factory says why in its own comment —
+ * "almost no rule names one". So for most rules a migration finding still does not know WHICH object
+ * its statement touches, and the only thing the two findings share is a rule id. Merging on a rule id
+ * alone is the wrong merge the plan's own guard rail forbids: two different tables, one rule,
+ * collapsed into an entry true of neither.
+ *
+ * So the merge waits for RULES to name their object, not for the capture layer to gain the ability,
+ * and this file does the half that stands on its own.
  */
 final readonly class SecurityFindingOrder
 {

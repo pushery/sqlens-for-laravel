@@ -11,6 +11,7 @@ use Pushery\SQLens\Contracts\PreflightCheck;
 use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PreflightContext;
+use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
 use Pushery\SQLens\Findings\UndeterminedReason;
@@ -97,7 +98,7 @@ final readonly class AutovacuumDisabledCheck implements PreflightCheck
                 UndeterminedReason::AutovacuumSettingUnreadable,
                 'whether these tables carry a per-table autovacuum '
                 .'override could not be read, so the estimates below cannot be qualified either '
-                .'way: '.$failure->getMessage(),
+                .'way: '.new CredentialRedactor()->redact($failure->getMessage()),
             );
         }
 
@@ -163,10 +164,10 @@ final readonly class AutovacuumDisabledCheck implements PreflightCheck
             'select n.nspname || \'.\' || c.relname as relation'
             .' from pg_class c'
             .' join pg_namespace n on n.oid = c.relnamespace'
-            .' cross join lateral pg_options_to_table(c.reloptions) o'
+            .' cross join lateral pg_catalog.pg_options_to_table(c.reloptions) o'
             .' where c.relkind in (\'r\', \'m\', \'p\')'
             .' and o.option_name = \'autovacuum_enabled\''
-            .' and lower(o.option_value) in (\'false\', \'off\', \'0\', \'n\', \'no\', \'f\')'
+            .' and pg_catalog.lower(o.option_value) in (\'false\', \'off\', \'0\', \'n\', \'no\', \'f\')'
             .' and n.nspname || \'.\' || c.relname in ('.$placeholders.')'
             .' order by relation',
             $targets,

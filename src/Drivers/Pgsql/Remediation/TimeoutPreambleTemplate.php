@@ -78,19 +78,45 @@ final readonly class TimeoutPreambleTemplate
      * @param  string  $timeout  a name from {@see ExpectedTimeouts::KNOWN} — the same vocabulary the
      *                           rules are gated on, so a payload can never recommend a GUC the
      *                           config surface does not know
+     * @param  bool  $withinTransaction  whether the migration this payload is for runs inside one.
+     *                                   ⚠️ **Not a refinement — it decides whether the SQL works at all.**
+     *                                   This rendered `SET LOCAL` unconditionally while the comment beside it
+     *                                   promised the plain form outside a transaction, so the package handed a
+     *                                   `CONCURRENTLY` migration a preamble that PostgreSQL discards: measured
+     *                                   on 18.0, `SET LOCAL` in autocommit answers `WARNING: SET LOCAL can only
+     *                                   be used in transaction blocks` and leaves the GUC at `0`. Every
+     *                                   `CONCURRENTLY` migration is such a migration, and this package's own
+     *                                   `ConcurrentlyTemplate` builds one — so the advice produced the very
+     *                                   configuration the rule then read as safe.
+     *
+     *                                   ⚠️ **No default, deliberately.** A default would have to be
+     *                                   `true`, since that is the common case — and then a caller that
+     *                                   simply forgot would get the form that does nothing, silently,
+     *                                   which is the defect this parameter exists to close.
      */
-    public function forTimeout(string $timeout, string $ruleId, DowntimeClass $downtimeClass): RemediationPayload
-    {
+    public function forTimeout(
+        string $timeout,
+        string $ruleId,
+        DowntimeClass $downtimeClass,
+        bool $withinTransaction,
+    ): RemediationPayload {
         return new RemediationPayload(
             steps: [
                 new RemediationStep(
                     order: 1,
                     kind: RemediationStepKind::SessionSetting,
                     noteKey: self::LANG.$timeout,
-                    // The value stays a placeholder. `SET LOCAL` scopes it to the migration's own
-                    // transaction, so it cannot leak into whatever the connection does afterwards —
-                    // and a `CONCURRENTLY` migration, which has no transaction, uses the plain form.
-                    sqlTemplate: sprintf("SET LOCAL %s = '{{%s}}'", $timeout, $timeout),
+                    // The value stays a placeholder. Inside a transaction `SET LOCAL` scopes it to
+                    // the migration's own transaction, so it cannot leak into whatever the connection
+                    // does afterwards; outside one it would be discarded, so the plain session form is
+                    // the only one that bounds anything. The comment used to promise exactly this and
+                    // the line below used to ignore it.
+                    sqlTemplate: sprintf(
+                        $withinTransaction ? "SET LOCAL %s = '{{%s}}'" : "SET %s = '{{%s}}'",
+                        $timeout,
+                        $timeout,
+                    ),
+                    withinTransaction: $withinTransaction,
                 ),
                 new RemediationStep(
                     order: 2,

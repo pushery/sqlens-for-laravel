@@ -80,6 +80,7 @@ final class SecurityCommand extends Command
     use ResolvesMinSeverity;
     use ResolvesProfile;
     use ResolvesStrictTools;
+    use ValidatesConfig;
 
     // Adopted now that `--format` and `--output` arrive. This command's byte-identical copies of
     // `configIsValid()` and `stderr()` are gone with them; what it cannot take is SharesRunOptions
@@ -107,7 +108,7 @@ final class SecurityCommand extends Command
         // Before anything else, and before anything connects. An unknown config key is a key that
         // gets IGNORED, and ignoring is silent — a typo produces a run that checked less, with
         // nothing on screen to say so.
-        if (! $this->configIsValid($config->get('sqlens'))) {
+        if ($this->refusesInvalidConfig()) {
             return ExitCode::Misconfiguration->value;
         }
 

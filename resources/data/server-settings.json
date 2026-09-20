@@ -1,6 +1,6 @@
 {
     "schema_version": 1,
-    "about": "Per-variable expectations for the server-baseline rules, so no rule hard-codes one. Every entry is written here in our own words with the vendor page it rests on; nothing is copied. `sqlens_expectation` may be null, which means the value is worth READING but not worth judging — usually because the right answer depends on the deployment. `changeable` is load-bearing rather than descriptive: an `initdb` variable cannot be altered afterwards, so a rule about one must report a fact to plan around instead of proposing a change that is impossible.",
+    "about": "Per-variable expectations for the server-baseline rules, so no rule hard-codes one. Every entry is written here in our own words with the vendor page it rests on; nothing is copied. `sqlens_expectation` may be null, which means the value is worth READING but not worth judging — usually because the right answer depends on the deployment. `changeable` is load-bearing rather than descriptive: an `initdb` variable cannot be altered afterwards, so a rule about one must report a fact to plan around instead of proposing a change that is impossible. `offline` is the middle case and was missing until 2026-09-20: changeable in place, but only while the server is stopped. Without it `data_checksums` fell into the most expensive bucket and the finding recommended a new cluster and a dump/restore for something `pg_checksums --enable` does in a maintenance window.",
     "entries": [
         {
             "variable": "character_set_server",
@@ -178,9 +178,9 @@
             "vendor_default": "on",
             "sqlens_expectation": "on",
             "scope": "cluster",
-            "changeable": "initdb",
+            "changeable": "offline",
             "source_url": "https://www.postgresql.org/docs/18/runtime-config-preset.html",
-            "note": "On since 18 by default. It cannot be turned on later without re-initializing the cluster, so a rule about it reports a fact to plan around rather than a change to make."
+            "note": "On since 18 by default. ⚠️ THIS ENTRY SAID IT CANNOT BE TURNED ON LATER WITHOUT RE-INITIALIZING THE CLUSTER, AND THAT HAS BEEN WRONG SINCE PostgreSQL 12: pg_checksums --enable turns them on in the existing data directory, with the server cleanly shut down. Verified rather than read off the page -- pg_checksums --help on 18.0 lists -e, --enable, and run against a running cluster the tool answers \"cluster must be shut down\". So this is changeable OFFLINE, not fixed at initdb, and the difference is a maintenance window against a new cluster plus a dump/restore -- two plans that differ by orders of magnitude, decided on the strength of this sentence."
         },
         {
             "variable": "default_transaction_isolation",

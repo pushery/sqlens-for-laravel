@@ -15,6 +15,7 @@ use Pushery\SQLens\Contracts\PreflightCheck;
 use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PreflightContext;
+use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
@@ -112,7 +113,7 @@ final readonly class MetadataLockCheck implements PreflightCheck
             return CheckResult::undetermined(
                 self::ID,
                 UndeterminedReason::MysqlInstrumentationUnavailable,
-                'the activity views could not be read: '.$failure->getMessage(),
+                'the activity views could not be read: '.new CredentialRedactor()->redact($failure->getMessage()),
             );
         }
 

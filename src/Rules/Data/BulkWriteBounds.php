@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Rules\Data;
 
+use Pushery\SQLens\Contracts\DriverCanonicalization;
+
 /**
  * Whether an engine can see a bound on how many rows a data statement will touch.
  *
@@ -34,4 +36,14 @@ interface BulkWriteBounds
      *                             from a predicate on the target table
      */
     public function bounds(string $masked, bool $isRowSource): bool;
+
+    /**
+     * The engine whose literal grammar the `$masked` argument was produced with.
+     *
+     * It lives on this interface rather than being passed beside it because the two are one decision:
+     * a bounds implementation that reads MySQL syntax must be handed a statement masked by MySQL
+     * rules, and letting a caller pair them freely is how they come apart. `BulkWrite::parse()` uses
+     * it to build the mask, so the pairing cannot be got wrong at a call site.
+     */
+    public function canonicalization(): DriverCanonicalization;
 }

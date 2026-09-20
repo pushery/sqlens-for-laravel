@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Rules\Security;
 
-use JsonException;
+use Pushery\SQLens\Resources\ShippedJson;
 
 /**
  * The MySQL privileges that make an account an administrator of the SERVER.
@@ -42,23 +42,17 @@ final class MysqlAdminPrivileges
         }
 
         $path = dirname(__DIR__, 3).'/resources/data/mysql-admin-privileges.json';
-        $raw = @file_get_contents($path);
-
-        if ($raw === false) {
-            // An artifact this rule cannot read is not an empty list — an empty list would make the
-            // rule silently correct about every server. It is a broken installation, and the loudest
-            // honest answer available here is no entries plus a shipped guard that proves the file is
-            // present. The guard is the mechanism; this is only the fallback that cannot lie.
-            return self::$judged = [];
-        }
-
-        try {
-            $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
-        } catch (JsonException) {
-            return self::$judged = [];
-        }
-
-        $entries = is_array($decoded) && is_array($decoded['entries'] ?? null) ? $decoded['entries'] : [];
+        // ⚠️ THIS USED TO RETURN AN EMPTY LIST, and the docblock defending it said so itself: "an empty
+        // list would make the rule silently correct about every server". It then argued the fallback was
+        // acceptable because a shipped guard proves the file is present — but that guard lives under
+        // `tests/`, which is RELEASE_STRIP and exists in no `vendor/` tree. The belt was only ever
+        // fastened in the repository that did not need it.
+        //
+        // Both rules reading this list open with "if it is empty, report nothing", so an unreadable
+        // artifact turned SEC.PRIV.GRANT_ADMIN* into a PASS on every server — not an `undetermined`.
+        $decoded = ShippedJson::decode($path, 'entries');
+        /** @var array<array-key, mixed> $entries */
+        $entries = $decoded['entries'];
         $names = [];
 
         foreach ($entries as $entry) {

@@ -16,6 +16,7 @@ use Pushery\SQLens\Deploy\PreflightContext;
 use Pushery\SQLens\Deploy\PrivilegeClass;
 use Pushery\SQLens\Deploy\PrivilegeRequirement;
 use Pushery\SQLens\Deploy\RequiredPrivileges;
+use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
@@ -139,7 +140,7 @@ final readonly class GrantCheck implements PreflightCheck
                 $allowed = $this->isAllowed($context, $role, $requirement);
             } catch (Throwable $failure) {
                 $unanswered[] = $requirement->object.': the server refused the privilege question ('
-                    .$failure->getMessage().')';
+                    .new CredentialRedactor()->redact($failure->getMessage()).')';
 
                 continue;
             }
@@ -191,7 +192,7 @@ final readonly class GrantCheck implements PreflightCheck
     private function ownsSchema(PreflightContext $context, string $role, string $schema): bool
     {
         $row = $context->session->read(static fn (Connection $db): array => $db->select(
-            'select pg_has_role(?, n.nspowner, \'USAGE\') as allowed from pg_namespace n where n.nspname = ?',
+            'select pg_catalog.pg_has_role(?, n.nspowner, \'USAGE\') as allowed from pg_namespace n where n.nspname = ?',
             [$role, $schema],
         ))[0] ?? null;
 
@@ -227,7 +228,7 @@ final readonly class GrantCheck implements PreflightCheck
     }
 
     /** Whether the role may do this, asked of the server rather than reasoned about here. */
-    #[RawSql(reason: 'asks has_table_privilege() and friends -- server functions that answer the exact question a preflight has, without the reader having to reimplement ACL resolution')]
+    #[RawSql(reason: 'asks pg_catalog.has_table_privilege() and friends -- server functions that answer the exact question a preflight has, without the reader having to reimplement ACL resolution')]
     private function isAllowed(PreflightContext $context, string $role, PrivilegeRequirement $requirement): bool
     {
         $object = $requirement->object;
@@ -249,7 +250,7 @@ final readonly class GrantCheck implements PreflightCheck
         // a migration that creates a table names exactly such an object — so the absent case is
         // judged at the schema, which is the right question for a CREATE anyway.
         $exists = $context->session->read(static fn (Connection $db): array => $db->select(
-            'select to_regclass(?) is not null as present',
+            'select pg_catalog.to_regclass(?) is not null as present',
             [$object],
         ))[0] ?? null;
 
@@ -257,31 +258,31 @@ final readonly class GrantCheck implements PreflightCheck
 
         [$sql, $bindings] = match (true) {
             ! $present, $requirement->class === PrivilegeClass::Create => [
-                'select has_schema_privilege(?, ?, \'CREATE\') as allowed',
+                'select pg_catalog.has_schema_privilege(?, ?, \'CREATE\') as allowed',
                 [$role, $schema],
             ],
             $requirement->class === PrivilegeClass::Ownership => [
                 // Not a privilege. `ALTER TABLE` requires OWNERSHIP, and no GRANT produces it — so
                 // the question is membership in the owning role, which is what PostgreSQL itself
                 // checks before it allows the statement.
-                'select pg_has_role(?, c.relowner, \'USAGE\') as allowed'
-                .' from pg_class c where c.oid = to_regclass(?)',
+                'select pg_catalog.pg_has_role(?, c.relowner, \'USAGE\') as allowed'
+                .' from pg_class c where c.oid = pg_catalog.to_regclass(?)',
                 [$role, $object],
             ],
             $requirement->class === PrivilegeClass::References => [
-                'select has_table_privilege(?, ?, \'REFERENCES\') as allowed',
+                'select pg_catalog.has_table_privilege(?, ?, \'REFERENCES\') as allowed',
                 [$role, $object],
             ],
             $requirement->class === PrivilegeClass::Write => [
-                'select has_table_privilege(?, ?, \'INSERT\') and has_table_privilege(?, ?, \'UPDATE\') as allowed',
+                'select pg_catalog.has_table_privilege(?, ?, \'INSERT\') and pg_catalog.has_table_privilege(?, ?, \'UPDATE\') as allowed',
                 [$role, $object, $role, $object],
             ],
             // Drop, like Alter, is not grantable on PostgreSQL: it needs ownership. Kept as its own
             // arm rather than folded into the one above, because the two classes exist so a project
             // can be told which of them it is short of.
             default => [
-                'select pg_has_role(?, c.relowner, \'USAGE\') as allowed'
-                .' from pg_class c where c.oid = to_regclass(?)',
+                'select pg_catalog.pg_has_role(?, c.relowner, \'USAGE\') as allowed'
+                .' from pg_class c where c.oid = pg_catalog.to_regclass(?)',
                 [$role, $object],
             ],
         };

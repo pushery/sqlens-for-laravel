@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Drivers;
 
+use Illuminate\Contracts\Config\Repository;
 use Illuminate\Database\ConfigurationUrlParser;
 use Illuminate\Support\Arr;
 
@@ -67,6 +68,23 @@ final readonly class EffectiveConnectionConfig
         }
 
         return $parsed;
+    }
+
+    /**
+     * The driver of a NAMED connection, read the way Laravel reads it.
+     *
+     * ⚠️ The one call every reader in this package should make, and the reason it exists is that
+     * nine of them did not. `database.connections.<name>.driver` is absent on a `url`-configured
+     * connection — the form Laravel Cloud, Heroku and every `DATABASE_URL` deployment produce —
+     * because the framework derives the driver from the URL's SCHEME at
+     * `ConfigurationUrlParser`. Reading the key raw answers `null` there, and the same
+     * configuration then worked under `sqlens:lint` and failed under `sqlens:drift`.
+     *
+     * Taking the repository rather than the array, so a caller cannot get the path wrong either.
+     */
+    public static function driverForConnection(Repository $config, string $connection): ?string
+    {
+        return self::driverFor($config->get('database.connections.'.$connection));
     }
 
     /** The driver this connection resolves to, or null when it names none. */

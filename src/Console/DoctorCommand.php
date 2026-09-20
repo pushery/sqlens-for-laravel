@@ -6,7 +6,10 @@ namespace Pushery\SQLens\Console;
 
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Config\Repository;
+use Pushery\SQLens\Config\ConfigInspection;
+use Pushery\SQLens\Config\ConfigViolation;
 use Pushery\SQLens\ConnectionProbe;
+use Pushery\SQLens\Drivers\DriverManager;
 use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Exceptions\InvalidGuardProfile;
 use Pushery\SQLens\Guard\GuardProfile;
@@ -41,6 +44,8 @@ use Throwable;
  */
 final class DoctorCommand extends Command
 {
+    use ValidatesConfig;
+
     /**
      * The two formats this command implements, and the only two it accepts.
      *
@@ -62,8 +67,22 @@ final class DoctorCommand extends Command
     /** @var string */
     protected $description = 'Report the environment SQLens runs in: tool versions and each connection’s real server version.';
 
-    public function handle(Repository $config, ServerVersion $versions, ToolReport $tools, ConnectionProbe $probe): int
+    public function handle(Repository $config, ServerVersion $versions, ToolReport $tools, ConnectionProbe $probe, DriverManager $drivers): int
     {
+        // ⚠️ REPORTED, NOT REFUSED — the one command where the validator's usual answer is wrong.
+        //
+        // Every other command in this package stops here, because a key it does not know is a key
+        // it IGNORES and ignoring is silent. This one describes an environment, and an operator
+        // reaches for it precisely when something is off. A doctor that will not start because the
+        // configuration is broken has inverted its own purpose; the suite has said so since long
+        // before the validator arrived here — "it DESCRIBES a broken profile rather than dying on
+        // it, the one command that must survive it".
+        //
+        // Nothing is lost by reporting instead: a run that MATTERS still stops, at whichever
+        // command was going to do the work. What is gained is that the command you reach for
+        // afterwards can name the key.
+        $inspection = $this->configInspection();
+
         $format = $this->option('format');
 
         // Resolved either way — constructing it connects to nothing — but handed on only for the
@@ -78,7 +97,7 @@ final class DoctorCommand extends Command
         // because nothing failed. Measured: `--probe` over all six connections printed the four
         // header lines and hung on the FIRST one, indefinitely, while the connection the operator
         // cared about sat two lines below, reachable.
-        $probeScope = $this->probeScope($config);
+        $probeScope = $this->probeScope($config, $drivers);
 
         // Measured before this guard existed: `--format=yaml` printed the console report and exited
         // 0, and so did `--format=sarif` — which became a likely thing to type the day this package
@@ -98,7 +117,22 @@ final class DoctorCommand extends Command
         }
 
         if ($format === 'json') {
-            $this->line((string) json_encode($this->payload($config, $versions, $tools, $probe, $probeScope), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            // ⚠️ THE FLAGS ARE THE POINT, AND THE CAST THAT USED TO BE HERE WAS THE DEFECT.
+            // `json_encode` answers `false` on invalid UTF-8, a `(string)` cast turns that into `''`,
+            // and `line('')` prints a BLANK LINE. The exit code comes from the verdict below, so a
+            // pipeline consumer received an empty document with a success status -- the shape this
+            // package rules out everywhere else.
+            //
+            // The bytes have a real source: this payload carries tool versions and resolutions read
+            // from PROCESS OUTPUT and `$PATH`, neither of which is guaranteed to be UTF-8.
+            //
+            // Same policy as {@see JsonReporter}: substitute the bad bytes so a malformed version
+            // string cannot suppress the whole document, and keep THROW for the structural failures
+            // that substitution cannot cause. Whatever happens, the run does not answer with silence.
+            $this->line(json_encode(
+                $this->payload($config, $versions, $tools, $probe, $probeScope, $inspection),
+                JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES,
+            ));
 
             return $this->strictVerdict($tools);
         }
@@ -109,6 +143,10 @@ final class DoctorCommand extends Command
         $this->line('laravel: '.$this->getLaravel()->version());
         $this->line('sqlens: '.$this->packageVersion());
         $this->line('os: '.PHP_OS_FAMILY);
+
+        foreach ($this->configLines($inspection) as $line) {
+            $this->line($line);
+        }
 
         /** @var array<string, mixed> $connections */
         $connections = $config->get('database.connections', []);
@@ -218,7 +256,7 @@ final class DoctorCommand extends Command
      * @param  list<string>  $probeScope  the connections this run may open
      * @return array<string, mixed>
      */
-    private function payload(Repository $config, ServerVersion $versions, ToolReport $tools, ConnectionProbe $probe, array $probeScope): array
+    private function payload(Repository $config, ServerVersion $versions, ToolReport $tools, ConnectionProbe $probe, array $probeScope, ConfigInspection $inspection): array
     {
         /** @var array<string, mixed> $connections */
         $connections = $config->get('database.connections', []);
@@ -237,7 +275,56 @@ final class DoctorCommand extends Command
             ], $names),
             'tools' => $tools->entries(),
             'guard' => $this->guardSection($config, $names),
+            'config' => $this->configSection($inspection),
         ];
+    }
+
+    /**
+     * The validator's verdict as data: `ok` when the configuration is a shape this package
+     * understands, and the offending paths when it is not.
+     *
+     * ⚠️ `status` IS PRESENT EVEN WHEN EVERYTHING IS FINE, for the same reason the guard section
+     * reports `off` as a value rather than an absence: a field that appears only when something is
+     * wrong answers "is my configuration alright?" with silence, which is indistinguishable from a
+     * doctor that never looked.
+     *
+     * @return array{status: string, violations: list<array{path: string, expected: string, found: string}>, notices: list<array{path: string, expected: string, found: string}>}
+     */
+    private function configSection(ConfigInspection $inspection): array
+    {
+        $entry = static fn (ConfigViolation $violation): array => [
+            'path' => $violation->path,
+            'expected' => $violation->expected,
+            'found' => $violation->found,
+        ];
+
+        return [
+            'status' => $inspection->isValid() ? 'ok' : 'invalid',
+            'violations' => array_map($entry, $inspection->violations),
+            'notices' => array_map($entry, $inspection->notices),
+        ];
+    }
+
+    /**
+     * The same verdict for the console, one line per finding and nothing at all when there is
+     * nothing to say — the console report is read by a person, and a line saying "your
+     * configuration is fine" on every run is a line people stop seeing.
+     *
+     * @return list<string>
+     */
+    private function configLines(ConfigInspection $inspection): array
+    {
+        $lines = [];
+
+        foreach ($inspection->notices as $notice) {
+            $lines[] = 'config '.$notice->path.': absent — '.$notice->expected;
+        }
+
+        foreach ($inspection->violations as $violation) {
+            $lines[] = 'config '.$violation->path.': '.$violation->found.' — expected '.$violation->expected;
+        }
+
+        return $lines;
     }
 
     /**
@@ -372,7 +459,7 @@ final class DoctorCommand extends Command
      *
      * @return list<string>
      */
-    private function probeScope(Repository $config): array
+    private function probeScope(Repository $config, DriverManager $drivers): array
     {
         $probe = $this->option('probe');
 
@@ -384,9 +471,14 @@ final class DoctorCommand extends Command
         // question a diagnostic is nearly always being asked, and it is the only scope that cannot
         // wander into an entry nobody configured on purpose.
         if ($probe === null || $probe === '') {
-            $default = $config->get('database.default');
+            // Through the resolver, not `database.default`: "the connection this application
+            // actually uses" is what `sqlens.connection` answers when a project sets it, and every
+            // other command follows that key. A diagnostic that opened a different one would report
+            // about a connection nobody is running against — from the command whose whole job is
+            // telling an operator what SQLens sees.
+            $addressed = $drivers->defaultConnectionName();
 
-            return is_string($default) ? [$default] : [];
+            return $addressed === '' ? [] : [$addressed];
         }
 
         if ($probe !== 'all') {

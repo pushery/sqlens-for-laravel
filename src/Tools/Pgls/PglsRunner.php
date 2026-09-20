@@ -91,7 +91,7 @@ final readonly class PglsRunner
             );
         }
 
-        return $this->read($result, $invocation->connection);
+        return $this->read($result, $invocation->connectionName);
     }
 
     /**
@@ -122,7 +122,7 @@ final readonly class PglsRunner
     }
 
     /** Read the report, or say which way it was not one. */
-    private function read(ToolRunResult $result, PglsConnection $connection): PglsRunResult
+    private function read(ToolRunResult $result, string $connectionName): PglsRunResult
     {
         try {
             $decoded = json_decode($result->stdout, true, flags: JSON_THROW_ON_ERROR);
@@ -132,13 +132,20 @@ final readonly class PglsRunner
             // `--reporter=json` was asked for. So "the output is not JSON" is not evidence of a
             // broken tool here — it is the ordinary shape of the most likely misconfiguration, and
             // reporting it as a defect in the tool would send the reader to the wrong place.
+            // ⚠️ THE CONNECTION'S NAME, NOT ITS COORDINATES. This detail becomes the message of a
+            // finding and goes through every reporter, so the host, the port and the database name
+            // written here left the machine on every unreachable run. `CredentialRedaction` lists
+            // `host` and `database` among the values it masks, and the stderr suffix appended one
+            // line down is redacted — the protection reached around exactly the part that needed
+            // it, because this sentence put the coordinates back in front of it.
+            //
+            // The reader is holding the configuration this name comes from. They find the host
+            // under it; the report gains nothing by repeating it.
             return PglsRunResult::failed(
                 PglsFailureReason::DatabaseUnreachable,
                 sprintf(
-                    'postgrestools could not report on %s:%d/%s and answered outside its JSON format%s',
-                    $connection->host,
-                    $connection->port,
-                    $connection->database,
+                    'postgrestools could not report on the connection "%s" and answered outside its JSON format%s',
+                    $connectionName,
                     $this->stderrSuffix($result),
                 ),
             );

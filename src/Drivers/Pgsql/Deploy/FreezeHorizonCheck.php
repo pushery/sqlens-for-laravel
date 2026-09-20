@@ -13,6 +13,7 @@ use Pushery\SQLens\Contracts\PreflightCheck;
 use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PreflightContext;
+use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
@@ -144,7 +145,7 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
                 'how close these tables are to their freeze horizon is '
                 .'unknown, so whether an anti-wraparound vacuum will stand in front of this deploy '
                 .'cannot be said. A managed database commonly withholds these views: '
-                .$failure->getMessage(),
+                .new CredentialRedactor()->redact($failure->getMessage()),
             );
         }
 
@@ -181,8 +182,8 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
             // and `age()` would measure them against the transaction one. The two are unrelated
             // numbers that both look like plausible ages.
             .' mxid_age(c.relminmxid) as mxid_age,'
-            .' current_setting(\'autovacuum_freeze_max_age\')::bigint as xid_threshold,'
-            .' current_setting(\'autovacuum_multixact_freeze_max_age\')::bigint as mxid_threshold'
+            .' pg_catalog.current_setting(\'autovacuum_freeze_max_age\')::bigint as xid_threshold,'
+            .' pg_catalog.current_setting(\'autovacuum_multixact_freeze_max_age\')::bigint as mxid_threshold'
             .' from pg_class c'
             .' join pg_namespace n on n.oid = c.relnamespace'
             // Ordinary tables, partitioned parents and materialized views. A partitioned PARENT has

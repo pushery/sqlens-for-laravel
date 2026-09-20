@@ -43,6 +43,8 @@ use Symfony\Component\Console\Output\ConsoleOutputInterface;
  */
 final class McpCommand extends Command
 {
+    use ValidatesConfig;
+
     /**
      * One option, and it names its tool every time.
      *
@@ -61,6 +63,13 @@ final class McpCommand extends Command
 
     public function handle(Repository $config, ServesMcp $server): int
     {
+        // FIRST, before the reporter, before the profile, before anything opens a connection. A
+        // misconfiguration that surfaces after twenty seconds of catalog reading is one people
+        // check for less often — and a key this package does not know is one it IGNORES, silently.
+        if ($this->refusesInvalidConfig()) {
+            return ExitCode::Misconfiguration->value;
+        }
+
         if (! $server->isAvailable()) {
             // Named, actionable, and on stderr. A trace here would tell a user that a class is
             // missing; this tells them which package provides it and that installing it is all
@@ -74,17 +83,15 @@ final class McpCommand extends Command
             return ExitCode::Misconfiguration->value;
         }
 
-        if ($config->get('sqlens.agent.mcp.transport') !== 'stdio') {
-            // The configuration validator already refuses anything else, so reaching this means it
-            // was bypassed. Refusing again rather than falling back to stdio: a project that wrote
-            // a different transport asked for something this build cannot do, and quietly giving
-            // them a different one is the answer they cannot check.
-            $this->outputErrorLine(
-                'This build speaks only the stdio transport. Set sqlens.agent.mcp.transport to "stdio".'
-            );
-
-            return ExitCode::Misconfiguration->value;
-        }
+        // ⚠️ A SECOND TRANSPORT CHECK USED TO STAND HERE, AND ITS OWN COMMENT PREDICTED WHY IT IS
+        // GONE: "the configuration validator already refuses anything else, so reaching this means
+        // it was bypassed". That sentence was false when it was written — the validator had no
+        // caller on this command — and it became true the moment it got one, which made the branch
+        // unreachable rather than redundant. Coverage is what said so: no run could enter it.
+        //
+        // What it did is done a step earlier and better. `refusesInvalidConfig()` names the KEY and
+        // the legal value, where the old line only said which transport this build speaks; a reader
+        // with a typo'd `agent.mcp.transort` was told about stdio and never about the typo.
 
         // What this run REALLY exposed, named before a client connects rather than after it asks.
         //

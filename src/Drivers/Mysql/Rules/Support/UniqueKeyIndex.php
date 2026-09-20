@@ -6,6 +6,8 @@ namespace Pushery\SQLens\Drivers\Mysql\Rules\Support;
 
 use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Canonical\StatementTarget;
+use Pushery\SQLens\Canonical\StringLiteralMask;
+use Pushery\SQLens\Drivers\Mysql\Canonical\MysqlCanonicalization;
 use Pushery\SQLens\Subjects\MigrationContext;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
@@ -135,6 +137,6 @@ final readonly class UniqueKeyIndex
 
     private static function withoutStringLiterals(string $statement): string
     {
-        return preg_replace("/'(?:[^']|'')*'/", "''", $statement) ?? $statement;
+        return StringLiteralMask::forDriver(new MysqlCanonicalization)->apply($statement);
     }
 }

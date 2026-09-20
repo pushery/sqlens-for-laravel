@@ -16,7 +16,7 @@ use Throwable;
  * Who this MySQL server is, asked of the server.
  *
  * The PostgreSQL sister's shape, with MySQL's own vocabulary and one difference worth stating:
- * `@@hostname` is the server's OWN name, not the host the client dialled. Measured — a server
+ * `@@hostname` is the server's OWN name, not the host the client dialed. Measured — a server
  * reached at `127.0.0.1` reports its machine name. That is the right answer to "which machine am I
  * on" and the wrong answer to "did I reach the host I configured", so a consumer comparing it
  * against a configured host has to know which question it asked. Recorded rather than reconciled

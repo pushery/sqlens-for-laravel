@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Reporting\Suppression;
 
 use JsonException;
 use Pushery\SQLens\Findings\Finding;
+use Pushery\SQLens\Resources\ShippedJson;
 
 /**
  * The de-duplication layer for row-level security: when an external catalog reports a fact one of
@@ -44,7 +45,27 @@ final readonly class RlsDedupeSuppressionSource
     /** @param  string|null  $tablePath  the mapping table; null loads the bundled one */
     public function __construct(?string $tablePath = null)
     {
-        $this->superseded = $this->read($tablePath ?? dirname(__DIR__, 3).'/resources/data/rule-dedupe-rls.json');
+        // ⚠️ FOUND BY THE BUNDLED-ARTIFACT POLICY ARM, not by the audit finding that prompted it — which
+        // named three loaders and missed these two. The form was identical: `catch (JsonException) {
+        // return []; }` on a shipped register.
+        //
+        // The DIRECTION here is the safe one, and saying so is the honest version of this comment: an
+        // empty dedupe table suppresses nothing, so a broken artifact makes this package report a
+        // duplicate finding rather than hide a real one. That is noise, not a silent pass — unlike the
+        // privilege vocabulary, where empty turned a security rule into a pass on every server.
+        //
+        // It refuses anyway, for a reason that does not depend on the direction: a shipped file that
+        // cannot be read is a broken installation, and a run that quietly reports duplicates leaves the
+        // operator with output they cannot explain. Exempting it would also mean the policy needs an
+        // allowlist, and an allowlist is what let three loaders drift in the first place.
+        $shipped = dirname(__DIR__, 3).'/resources/data/rule-dedupe-rls.json';
+
+        if ($tablePath === null) {
+            // Refuses a broken shipped artifact; the parse below then reads the same file.
+            ShippedJson::decode($shipped);
+        }
+
+        $this->superseded = $this->read($tablePath ?? $shipped);
     }
 
     /**

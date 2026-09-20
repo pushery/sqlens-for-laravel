@@ -140,16 +140,6 @@ final readonly class PgsqlDriver implements Driver
     }
 
     /**
-     * Empty for now — the PostgreSQL catalog readers land later.
-     *
-     * @return iterable<object>
-     */
-    public function readers(): iterable
-    {
-        return [];
-    }
-
-    /**
      * Both shipped adapters, because both are PostgreSQL-only and say so themselves.
      *
      * Squawk parses migration FILES with libpg_query; the Postgres Language Server reads a LIVE

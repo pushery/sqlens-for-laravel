@@ -51,6 +51,34 @@ final class CredentialRedactor
             $text,
         ) ?? $text;
 
+        // THE HOSTNAME THAT DOES NOT RESOLVE, in both drivers' own prose — and the most common
+        // misconfiguration there is, a wrong `DB_HOST`.
+        //
+        // Neither shape is reachable by anything above it: there is no `host=` pair, no libpq
+        // preamble, and Laravel's `Host:` suffix is appended to a QUERY exception, which a connect
+        // failure never becomes. So the one message a broken deployment produces first carried the
+        // hostname through every pattern this class had.
+        //
+        // MEASURED against the drivers on a real machine rather than reconstructed:
+        //
+        //   pgsql  SQLSTATE[08006] [7] could not translate host name "db.internal" to address: …
+        //   mysql  SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for db.internal failed: …
+        //
+        // The MySQL form carries the name UNQUOTED and the PostgreSQL one quoted, which is why
+        // these are two patterns and not one with an optional quote: an unquoted match would have
+        // to guess where the name ends, and `failed:` is what actually ends it.
+        $text = preg_replace(
+            '/\bcould not translate host name\s+"[^"]*"/i',
+            'could not translate host name "'.self::REDACTED.'"',
+            $text,
+        ) ?? $text;
+
+        $text = preg_replace(
+            '/\bgetaddrinfo for\s+\S+?(?=\s+failed\b)/i',
+            'getaddrinfo for '.self::REDACTED,
+            $text,
+        ) ?? $text;
+
         // The Unix-socket form of the same preamble. The path names the directory the server runs
         // in, which on a shared host is as much of an address as a hostname.
         $text = preg_replace(

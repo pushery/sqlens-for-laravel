@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Security;
 
 use Pushery\SQLens\Catalog\Security\SecurityNotice;
 use Pushery\SQLens\Categories\Category;
+use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
 use Pushery\SQLens\Findings\UndeterminedReason;
@@ -37,10 +38,22 @@ final readonly class SecurityRunNotices
      *
      * The rarest of the three and the only one that is not an ordinary state, so it keeps the
      * exception's own message: a paraphrase would lose exactly the part a reader needs.
+     *
+     * ⚠️ The detail is REDACTED here rather than at the caller, and that is the whole shape of
+     * the fix: eighteen producers wrote `Throwable::getMessage()` into this field with no
+     * redactor at all, and `QueryException::formatMessage()` appends ` (Connection: …, Host: …,
+     * Port: …, Database: …, SQL: …)` to every query exception on both engines. A refused catalog
+     * read on a managed instance — which the collectors' own comments call the ordinary case —
+     * therefore arrived wearing the connection's coordinates.
+     *
+     * At the sink, because a nineteenth producer inherits the redaction without knowing it exists.
+     * Not at {@see Finding}, which would be a filter rather than a sink: the shape redactor removes
+     * `role "…"`, `user "…"` and `database "…"`, and that is precisely what a SECURITY finding
+     * about a role or a database is made of. This field carries error text and nothing else.
      */
     public static function subRunCrashed(string $half, string $detail): Finding
     {
-        return self::halfDidNotRun($half, sprintf('it failed with: %s', $detail));
+        return self::halfDidNotRun($half, sprintf('it failed with: %s', new CredentialRedactor()->redact($detail)));
     }
 
     /**

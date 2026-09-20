@@ -133,10 +133,33 @@ final class MysqlCanonicalization implements DriverCanonicalization
         ];
     }
 
-    /** @return list<string> */
+    /**
+     * Both quote characters, because on MySQL both open a string.
+     *
+     * The manual's String Literals section says a string is enclosed within either single quote or
+     * double quote characters. `"` is an identifier quote only under `ANSI_QUOTES`, which is not in
+     * the default `sql_mode` and which Laravel's MySQL connection does not set -- measured on 8.4.10,
+     * `SELECT @@sql_mode` returns ONLY_FULL_GROUP_BY, STRICT_TRANS_TABLES, NO_ZERO_IN_DATE,
+     * NO_ZERO_DATE, ERROR_FOR_DIVISION_BY_ZERO and NO_ENGINE_SUBSTITUTION, and no ANSI_QUOTES.
+     *
+     * This list was `["'"]` alone, and the cost was not theoretical in either direction. A valid
+     * batch was REFUSED: `VALUES ("O'Brien"); ALTER TABLE …` opened a single-quote scan at the
+     * apostrophe that ran to the end of the batch, and the splitter returned `unterminatedLiteral`
+     * over SQL the server accepts. And a literal's content was read as syntax: `VALUES ("set
+     * lock_wait_timeout = 5")` folded into the keyword pass and made MY.L3.MISSING_LOCK_WAIT_TIMEOUT
+     * silent on a migration that never set a timeout.
+     *
+     * Laravel's grammar emits neither form. Raw SQL written by MySQL users emits both, and raw SQL is
+     * what this package reads.
+     *
+     * The identifier quote is the backtick ({@see self::quotingCharacter()}), so nothing here is
+     * ambiguous: a `"` opens data and a backtick opens a name.
+     *
+     * @return list<string>
+     */
     public function stringLiteralDelimiters(): array
     {
-        return ["'"];
+        return ["'", '"'];
     }
 
     /** @return list<string> */

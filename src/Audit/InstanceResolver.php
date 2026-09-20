@@ -161,10 +161,10 @@ final readonly class InstanceResolver
         //
         // A connection that offers NO host is refused too, and that used to be the hole here: the
         // check was skipped whenever the list was empty, which is exactly the case of a socket, a
-        // DSN or a `url` connection. `--host` was then taken at face value and dialled — the
+        // DSN or a `url` connection. `--host` was then taken at face value and dialed — the
         // project's credentials sent over TCP to a machine the operator named and the configuration
         // had never heard of, while the flag's own help text and the shipped docs both say such a
-        // host is refused and never dialled. Offering nothing is not offering everything.
+        // host is refused and never dialed. Offering nothing is not offering everything.
         if ($pinnedHost !== null && ! $topology->offers($pinnedHost)) {
             return InstanceResolution::unofferedHost($pinnedHost, $topology->hosts);
         }

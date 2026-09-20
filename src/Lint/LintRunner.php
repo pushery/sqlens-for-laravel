@@ -19,6 +19,7 @@ use Pushery\SQLens\Capture\CaptureFindingCollector;
 use Pushery\SQLens\Capture\CaptureRun;
 use Pushery\SQLens\Capture\CaptureSection;
 use Pushery\SQLens\Capture\MigrationPaths;
+use Pushery\SQLens\Capture\MigrationsTable;
 use Pushery\SQLens\Capture\PendingMigration;
 use Pushery\SQLens\Capture\PendingMigrationResolver;
 use Pushery\SQLens\Capture\PendingResolution;
@@ -53,6 +54,7 @@ use Pushery\SQLens\Drivers\Capture\DriverCaptorFactory;
 use Pushery\SQLens\Drivers\DriverManager;
 use Pushery\SQLens\Drivers\DriverResolutionFailure;
 use Pushery\SQLens\Drivers\DriverResolutionReason;
+use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Drivers\EngineIdentity;
 use Pushery\SQLens\Drivers\ServerVersionFloor;
 use Pushery\SQLens\Engine\ResolvedServerVersion;
@@ -278,7 +280,7 @@ final readonly class LintRunner implements LintRuns
         ];
 
         if ($configViolations !== []) {
-            $configured = $this->config->get("database.connections.{$connectionName}.driver");
+            $configured = EffectiveConnectionConfig::driverForConnection($this->config, $connectionName);
 
             return $this->refusedConfig(
                 $configViolations,
@@ -633,6 +635,14 @@ final readonly class LintRunner implements LintRuns
         // while a suppressed debt finding came through anyway.
         $findings = [...$findings, ...$this->debtFindings($debt, $findings, $registry->all(), $driver->key(), $subjectContext, $files !== [])];
 
+        // A configured baseline whose file is not there. Appended HERE, with the debt notices and
+        // before suppression, for the same reason they are: it is a finding, and a finding that
+        // bypassed the suppression chain would be a second pipeline that drifts from the first.
+        //
+        // ⚠️ It cannot be suppressed BY the missing baseline, which is the shape that would have
+        // made it useless — there is nothing in an absent file to accept it with.
+        $findings = [...$findings, ...$this->baselineAbsenceNotice($subjectContext)];
+
         // The three-stage suppression chain (baseline · config · annotation) is
         // applied here, after the rule engine and before the reporter, so a second
         // run after a baseline shows only NEW findings — and never suppresses one
@@ -758,15 +768,12 @@ final readonly class LintRunner implements LintRuns
         $connection = $this->database->connection($connectionName);
 
         $budget = new CaptureConnectionResolver($this->drivers, $this->config)->sessionBudget();
-        $guard = new SessionGuard($budget);
 
-        // Snapshot BEFORE applying, or the snapshot records our own bound and "restoring"
-        // would cement exactly what it is supposed to undo.
-        $snapshot = $guard->snapshot($connection);
-
-        $guard->apply($connection);
-
-        return static fn () => $guard->restore($connection, $snapshot);
+        // Through the one seam, which owns the order (snapshot before apply) AND the precondition:
+        // on a connection that measures as multiplexed nothing is written at all, because a `SET`
+        // there lands on a backend this run will never see again and the restore would look for it
+        // on a third. See SessionGuard::mayWriteSessionState().
+        return new SessionGuard($budget)->bind($connection);
     }
 
     /**
@@ -797,8 +804,16 @@ final readonly class LintRunner implements LintRuns
             $this->database,
             $this->migrator,
             $migrationPaths,
-            'migrations',
+            // From the configuration, through the one place that narrows it — see
+            // {@see MigrationsTable}. The literal that stood here overrode a decision the
+            // application had already made.
+            MigrationsTable::from($this->config->get('database.migrations')),
             $this->projectRoot(),
+            // The same budget `boundSourceSession()` above already applied, from the same resolver
+            // rather than a second reading of the config. The inner bound is therefore identical to
+            // the outer one on this path, which is why nesting them restores the outer value and
+            // not the pre-run one.
+            new SessionGuard(new CaptureConnectionResolver($this->drivers, $this->config)->sessionBudget()),
             $includeVendorMigrations,
         );
 
@@ -839,7 +854,7 @@ final readonly class LintRunner implements LintRuns
     private function baselineViolations(): array
     {
         try {
-            $baseline = new ConfiguredBaseline($this->config)->forRun();
+            $baseline = new ConfiguredBaseline($this->config, $this->projectRoot())->forRun();
         } catch (UnreadableBaseline) {
             return [];
         }
@@ -1182,7 +1197,7 @@ final readonly class LintRunner implements LintRuns
      */
     private function buildContext(string $connectionName, CaptureMode $mode, ResolvedServerVersion $resolvedVersion, int $level, int $activeRules, int $hiddenRules, array $activeCategories, array $toolVersions, bool $strictTools, bool $roundtrip, ?DriverResolutionFailure $floorFailure = null, ?GuardDecision $guard = null): RunContext
     {
-        $base = $this->contextCollector->collect();
+        $base = $this->contextCollector->collect(ReportingCaptureMode::from($mode->value));
 
         return new RunContext(
             // The marker rides IN the version string rather than in a new header key. One
@@ -1613,7 +1628,7 @@ final readonly class LintRunner implements LintRuns
      */
     private function baselineFile(): BaselineFile
     {
-        return new ConfiguredBaseline($this->config)->forRun();
+        return new ConfiguredBaseline($this->config, $this->projectRoot())->forRun();
     }
 
     /**
@@ -1812,7 +1827,7 @@ final readonly class LintRunner implements LintRuns
     /** The connection's configured driver key, for driver-aware version parsing. */
     private function driverKey(string $connectionName): string
     {
-        $driver = $this->config->get("database.connections.{$connectionName}.driver");
+        $driver = EffectiveConnectionConfig::driverForConnection($this->config, $connectionName);
 
         return is_string($driver) ? $driver : 'unknown';
     }
@@ -1860,7 +1875,7 @@ final readonly class LintRunner implements LintRuns
         return Finding::undetermined(
             $rule->id(),
             $rule->messagePrefix(),
-            sprintf('%s reasons about the server statistics, but no statistics reader is available in this build, so it was not evaluated. It will run once the audit suite lands.', $rule->id()),
+            sprintf('%s reasons about the server statistics, and this run has no statistics reader: a lint run reads migration source and opens no catalog session. Run it under sqlens:audit or sqlens:predeploy, which do.', $rule->id()),
             UndeterminedReason::StatisticsUnavailable,
             Location::inCallsite($rule->id(), 0, 'connection '.$connectionName, $this->projectRoot()),
             $rule->category(),
@@ -1995,5 +2010,48 @@ final readonly class LintRunner implements LintRuns
     private function projectRoot(): string
     {
         return $this->app->basePath();
+    }
+
+    /**
+     * A notice when a baseline is configured and its file is missing.
+     *
+     * An empty baseline and an absent one produce the same report, and they mean opposite things:
+     * one is a project that accepts nothing, the other is a project whose accepted findings have
+     * all come back at once. The reader sees a wall of new findings either way.
+     *
+     * Not an error. `sqlens:baseline` has to be runnable before the file exists — that is how a
+     * project creates one — so an absent file on a configured path is an ordinary state on the way
+     * to having one, and the honest report is a notice rather than a refusal.
+     *
+     * @return list<Finding>
+     */
+    private function baselineAbsenceNotice(SubjectContext $subjectContext): array
+    {
+        if (! new ConfiguredBaseline($this->config, $this->projectRoot())->configuredButAbsent()) {
+            return [];
+        }
+
+        $configured = $this->config->get('sqlens.baseline.path');
+        $path = is_string($configured) ? $configured : '';
+        $notice = RunnerNotice::BaselineAbsent;
+
+        return [Finding::undetermined(
+            $notice->value,
+            RunnerNotice::MESSAGE_PREFIX,
+            sprintf(
+                'a baseline is configured at "%s" and no file is there, so this run accepted nothing — which '
+                .'is also what a project with no baseline looks like. Every finding the baseline had accepted '
+                .'is in this report. The path is resolved from the application root; if the baseline has not '
+                .'been created yet, sqlens:baseline creates it and this goes away.',
+                $path,
+            ),
+            UndeterminedReason::BaselineAbsent,
+            Location::inCallsite('baseline:'.$path, 0, $notice->value, $this->projectRoot()),
+            $notice->category(),
+            $notice->level(),
+            $notice->stability(),
+            $notice->documentationUrl(),
+            $subjectContext,
+        )];
     }
 }

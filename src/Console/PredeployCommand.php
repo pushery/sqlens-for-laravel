@@ -40,6 +40,7 @@ use Symfony\Component\Console\Output\ConsoleOutputInterface;
 final class PredeployCommand extends Command
 {
     use ResolvesProfile;
+    use ValidatesConfig;
 
     protected $signature = 'sqlens:predeploy
         {--connection= : The database connection to check; defaults to the resolved preflight connection}
@@ -55,6 +56,13 @@ final class PredeployCommand extends Command
         ReporterManager $reporters,
         Repository $config,
     ): int {
+        // FIRST, before the reporter, before the profile, before anything opens a connection. A
+        // misconfiguration that surfaces after twenty seconds of catalog reading is one people
+        // check for less often — and a key this package does not know is one it IGNORES, silently.
+        if ($this->refusesInvalidConfig()) {
+            return ExitCode::Misconfiguration->value;
+        }
+
         $requested = $this->option('connection');
         $budget = $this->option('budget');
 

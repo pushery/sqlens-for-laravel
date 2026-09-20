@@ -23,11 +23,14 @@ use Pushery\SQLens\Deploy\Drift\DriftRunMode;
 use Pushery\SQLens\Deploy\Drift\ExpectationComparison;
 use Pushery\SQLens\Deploy\Drift\ShadowReferenceBuilder;
 use Pushery\SQLens\Drivers\Capture\DriverCaptorFactory;
+use Pushery\SQLens\Drivers\DriverManager;
+use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Exceptions\UnknownReporterFormat;
 use Pushery\SQLens\Exceptions\UnreadableDriftExcludes;
 use Pushery\SQLens\Findings\Result;
 use Pushery\SQLens\Findings\RunMetadata;
 use Pushery\SQLens\Lint\ShadowClearance;
+use Pushery\SQLens\Reporting\CaptureMode as ReportingCaptureMode;
 use Pushery\SQLens\Reporting\ConfigRunContextCollector;
 use Pushery\SQLens\Reporting\ReporterManager;
 use Pushery\SQLens\Subjects\CaptureMode;
@@ -78,6 +81,8 @@ use Symfony\Component\Console\Output\ConsoleOutputInterface;
  */
 final class DriftCommand extends Command
 {
+    use ValidatesConfig;
+
     protected $signature = 'sqlens:drift
         {--connection= : The connection to compare; the application default when omitted}
         {--format= : The report format — console, json, github, sarif, or agent (defaults to the configured format)}
@@ -100,8 +105,16 @@ final class DriftCommand extends Command
         ConfigRunContextCollector $runContext,
         Repository $config,
         Application $app,
+        DriverManager $drivers,
     ): int {
-        $connectionName = $this->connectionName($config);
+        // FIRST, before the reporter, before the profile, before anything opens a connection. A
+        // misconfiguration that surfaces after twenty seconds of catalog reading is one people
+        // check for less often — and a key this package does not know is one it IGNORES, silently.
+        if ($this->refusesInvalidConfig()) {
+            return ExitCode::Misconfiguration->value;
+        }
+
+        $connectionName = $this->connectionName($drivers);
 
         // FIRST, before anything reaches a database — and earlier than the sibling deploy commands
         // resolve theirs, deliberately. The expectation side of this comparison CREATES and drops a
@@ -279,7 +292,10 @@ final class DriftCommand extends Command
             // and fully tested for exactly this line and then never called, so a run the hatch let
             // through was indistinguishable from one that found nothing — the case the field's own
             // docblock calls "precisely the silent green this gate exists to refuse".
-            $runContext->collect()
+            // `shadow`, the same answer the RunMetadata above gives and for the same written
+            // reason: the expectation side is a real replay into a throwaway database. The two
+            // fields used to be filled from different places and could disagree in one document.
+            $runContext->collect(ReportingCaptureMode::Shadow)
                 ->withDriftMode($mode)
                 ->withComparedObjectTypes($catalogReaders->catalog->readableObjectTypes())
                 ->withUndeterminedWaiver(DriftExitPolicy::waived(
@@ -413,7 +429,17 @@ final class DriftCommand extends Command
         return DriftExcludeFile::configuredPath(is_string($configured) ? $configured : null, $app->basePath());
     }
 
-    private function connectionName(Repository $config): string
+    /**
+     * The connection this comparison addresses — the named one, or the one the rest of the package
+     * resolves.
+     *
+     * ⚠️ Through {@see DriverManager::defaultConnectionName()}, never `database.default` directly:
+     * `sqlens.connection` comes first there, and lint, audit, baseline and the agent rules all
+     * follow it. Reading the host default here meant that the moment a project set that key,
+     * `sqlens:drift` COMPARED a different database than `sqlens:lint` linted — and this command
+     * creates a reference database to do it.
+     */
+    private function connectionName(DriverManager $drivers): string
     {
         $named = $this->option('connection');
 
@@ -421,9 +447,7 @@ final class DriftCommand extends Command
             return $named;
         }
 
-        $default = $config->get('database.default');
-
-        return is_string($default) ? $default : '';
+        return $drivers->defaultConnectionName();
     }
 
     private function request(Repository $config): CatalogRequest
@@ -443,7 +467,7 @@ final class DriftCommand extends Command
      */
     private function driver(Repository $config, string $connectionName): string
     {
-        $driver = $config->get('database.connections.'.$connectionName.'.driver');
+        $driver = EffectiveConnectionConfig::driverForConnection($config, $connectionName);
 
         return is_string($driver) ? $driver : '';
     }

@@ -107,6 +107,16 @@ enum RunnerNotice: string implements RunNotice
     case DebtLedgerUnreadable = 'LINT.DEBT.LEDGER_UNREADABLE';
 
     /**
+     * A baseline is configured and the file it names is not there.
+     *
+     * The same shape as the unreadable ledger above, and for the same reason: an empty baseline
+     * and a missing one produce an identical report, and only one of them means the project
+     * accepts nothing. Without this the expensive half stays silent — every accepted finding comes
+     * back at once and the reader has no way to know why.
+     */
+    case BaselineAbsent = 'LINT.BASELINE.ABSENT';
+
+    /**
      * A recording run was asked for from a view that cannot support one.
      *
      * The single-file fast path sees one migration. It cannot tell an open debt from a settled one

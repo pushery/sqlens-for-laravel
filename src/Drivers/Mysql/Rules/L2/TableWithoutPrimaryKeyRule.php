@@ -12,6 +12,7 @@ use Pushery\SQLens\Contracts\DerivesDowntimeClass;
 use Pushery\SQLens\Contracts\JudgesSchemaObjects;
 use Pushery\SQLens\Contracts\ProvidesRemediation;
 use Pushery\SQLens\Contracts\ProvidesSchemaObjectRemediation;
+use Pushery\SQLens\Drivers\Mysql\Canonical\MysqlCanonicalization;
 use Pushery\SQLens\Drivers\Mysql\DowntimeClass\MysqlDowntimeClassSource;
 use Pushery\SQLens\Drivers\Mysql\Rules\AbstractMysqlRule;
 use Pushery\SQLens\Engine\ResolvedServerVersion;
@@ -282,7 +283,7 @@ final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements Decl
             return null;
         }
 
-        return match (TableKeyState::inCreateTable($statement->canonical)) {
+        return match (TableKeyState::inCreateTable($statement->canonical, new MysqlCanonicalization)) {
             TableKeyState::Keyed => null,
             TableKeyState::Unkeyed => 'on_create',
             TableKeyState::Undetermined => 'undetermined',

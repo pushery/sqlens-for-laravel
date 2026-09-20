@@ -30,13 +30,20 @@ final readonly class ConfigRunContextCollector implements RunContextCollector
      * @param  int|null  $timeBudgetMsConsumed  what the whole run cost, for a producer with a time
      *                                          budget; null for the lint and audit runs, which have
      *                                          none
+     *
+     * ⚠️ THE MODE IS A PARAMETER AND NOT A CONFIG READ, and that is the correction rather than a
+     * preference. `sqlens.mode` promised to choose "how SQLens obtains the SQL it reasons about"
+     * and no code path consulted it for that; its single reader was this line, so a key that chose
+     * nothing labeled every run. The label was then wrong wherever it mattered: `sqlens:drift`
+     * replays into a shadow database and `sqlens:postdeploy` captures in pretend, and both
+     * announced whatever the configuration happened to say.
      */
-    public function collect(?array $sessionTimeouts = null, ?string $checkTimings = null, ?int $timeBudgetMsConsumed = null): RunContext
+    public function collect(CaptureMode $mode, ?array $sessionTimeouts = null, ?string $checkTimings = null, ?int $timeBudgetMsConsumed = null): RunContext
     {
         return new RunContext(
             serverVersions: [],
             toolVersions: [],
-            mode: $this->enum('sqlens.mode', CaptureMode::class, CaptureMode::Static),
+            mode: $mode,
             profile: $this->enum('sqlens.profile', RunProfile::class, RunProfile::Local),
             strictTools: $this->config->get('sqlens.strict_tools') === true,
             strictUndetermined: $this->config->get('sqlens.strict_undetermined') === true,

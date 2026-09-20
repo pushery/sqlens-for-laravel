@@ -66,8 +66,8 @@ enum SkipReason: string
      * `text_pattern_ops` and the default class answer different queries over the same key positions.
      * A partial index is compared only against the indexes under its own condition, so on a table
      * that carries another condition the pair between them stays unjudged: deciding whether one
-     * condition implies the other is not built. A MySQL prefix-length key indexes the first bytes of
-     * a column, which no column list can express.
+     * condition implies the other is not built. A MySQL prefix-length key indexes the first
+     * CHARACTERS of a column (bytes, for a binary string), which no column list can express.
      *
      * Not undetermined, and that is the load-bearing half. Nothing was left unanswered by the reading,
      * so the notice for it reports as `not_applicable` and names the comparison that was not made. A

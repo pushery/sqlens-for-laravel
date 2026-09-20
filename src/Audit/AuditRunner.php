@@ -54,7 +54,7 @@ use Pushery\SQLens\Drivers\DriverResolutionFailure;
 use Pushery\SQLens\Drivers\EngineIdentity;
 use Pushery\SQLens\Drivers\ServerVersionFloor;
 use Pushery\SQLens\Exceptions\UnreadableBaseline;
-use Pushery\SQLens\Findings\CredentialRedactor;
+use Pushery\SQLens\Findings\CompositeCredentialRedactor;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Result;
 use Pushery\SQLens\Findings\RunMetadata;
@@ -169,6 +169,15 @@ final readonly class AuditRunner implements AuditRuns
          * canonicalization path" true rather than intended.
          */
         private CanonicalExtensionRegistry $extensions,
+        /**
+         * Both halves of credential redaction, as one object.
+         *
+         * Injected rather than built where it is used, and that is the whole shape of the fix it
+         * comes from: a redactor assembled at the call site is a decision repeated at every call
+         * site, and sixteen of them had made it differently. See
+         * {@see CompositeCredentialRedactor}.
+         */
+        private CompositeCredentialRedactor $redactor,
     ) {}
 
     public function run(
@@ -412,7 +421,7 @@ final readonly class AuditRunner implements AuditRuns
         // Read whatever the project configured, ALWAYS — the bypass decides whether it is applied,
         // never whether it is read. A run that skipped the read could not tell "there was nothing
         // to bypass" from "the bypass worked", and those are opposite facts behind one report.
-        $baseline = new ConfiguredBaseline($this->config)->forRun();
+        $baseline = new ConfiguredBaseline($this->config, $this->manifest->root())->forRun();
 
         // Kept as its own value rather than spread inline below, because this run has TWO answers
         // to report and only one of them is a finding: which rules were asked is a fact about the
@@ -438,6 +447,15 @@ final readonly class AuditRunner implements AuditRuns
             // emergency exit had nothing to open while the exit was doing exactly its job.
             ...($ignoreBaseline && $baseline->entries === []
                 ? [AuditNotices::baselineBypassHadNothingToBypass($this->runContext($activeLevel, 0, $overrides, $activeCategories, $target))]
+                : []),
+            // ⚠️ Independent of the bypass above. That one says a FLAG found nothing to act on;
+            // this says the project's own configuration points at a file that is not there — and
+            // the two can be true at once, for different reasons a reader has to tell apart.
+            ...($this->baselineIsConfiguredButAbsent()
+                ? [AuditNotices::baselineConfiguredButAbsent(
+                    is_string($configuredBaseline = $this->config->get('sqlens.baseline.path')) ? $configuredBaseline : '',
+                    $this->runContext($activeLevel, 0, $overrides, $activeCategories, $target),
+                )]
                 : []),
             ...$this->settingsFindings($settings, $target, $context),
             ...array_map(
@@ -999,7 +1017,7 @@ final readonly class AuditRunner implements AuditRuns
             $context,
             $level,
             0,
-            [AuditNotices::serverUnreachable(new CredentialRedactor()->redact($error->getMessage()), $target, $context)],
+            [AuditNotices::serverUnreachable($this->redactor->fromThrowable($error), $target, $context)],
             $overrides,
             $activeCategories,
         );
@@ -1261,7 +1279,7 @@ final readonly class AuditRunner implements AuditRuns
         }
 
         try {
-            $baseline = new ConfiguredBaseline($this->config)->forRun();
+            $baseline = new ConfiguredBaseline($this->config, $this->manifest->root())->forRun();
         } catch (UnreadableBaseline) {
             // A baseline that cannot be READ has its own refusal, further down and with its own
             // message. Answering it here would replace "this file is unparseable" with "its rule ids
@@ -1828,5 +1846,11 @@ final readonly class AuditRunner implements AuditRuns
             // stopped at this line — one half strict, the other not, from a single flag.
             strictTools: $overrides->strictTools($this->config->get('sqlens.strict_tools') === true),
         );
+    }
+
+    /** Whether a baseline is configured and its file is missing — see {@see AuditNotices::baselineConfiguredButAbsent()}. */
+    private function baselineIsConfiguredButAbsent(): bool
+    {
+        return new ConfiguredBaseline($this->config, $this->manifest->root())->configuredButAbsent();
     }
 }

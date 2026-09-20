@@ -314,6 +314,18 @@ final readonly class Result
         }
 
         foreach ($this->suppressed as $hidden) {
+            // ⚠️ `??= 0` RATHER THAN `++` ON A KEY THAT MAY NOT EXIST, and this is not defensive
+            // padding — it was a fatal waiting for a layer to start working. `ORDER` listed seven
+            // sources while the resolver ran EIGHT, and the eighth (`cross_source_dedupe`) was absent
+            // here. Measured: `$counts['cross_source_dedupe']++` raises "Undefined array key", which
+            // under Laravel's `HandleExceptions` is an ErrorException — so the console and JSON
+            // reports would have died on the first suppression that layer ever made.
+            //
+            // The layer is in ORDER now, so this line is no longer what stands between a working
+            // suppression and a dead report. It stays because the next layer will be added by somebody
+            // who edits the resolver and not this file, and a missing count is a wrong number while a
+            // missing key is a crash.
+            $counts[$hidden->suppression->source] ??= 0;
             $counts[$hidden->suppression->source]++;
         }
 

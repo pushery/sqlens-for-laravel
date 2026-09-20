@@ -165,11 +165,11 @@ final readonly class PgsqlActivityReader implements ActivityReader
             select pid,
                    state,
                    coalesce(state, '') <> '' as state_visible,
-                   round(extract(epoch from (now() - coalesce(xact_start, query_start))) * 1000) as running_for_ms,
-                   count(*) over () as total_rows,
-                   count(state) over () as visible_states
+                   pg_catalog.round(extract(epoch from (pg_catalog.now() - coalesce(xact_start, query_start))) * 1000) as running_for_ms,
+                   pg_catalog.count(*) over () as total_rows,
+                   pg_catalog.count(state) over () as visible_states
               from pg_stat_activity
-             where pid <> pg_backend_pid()
+             where pid <> pg_catalog.pg_backend_pid()
                -- `backend_type` is itself masked for foreign sessions without pg_monitor — measured:
                -- 0 of 8 rows carry it. Filtering on it alone would throw away exactly the rows the
                -- masking check exists to count, so the detector would be defeated by the masking it
@@ -178,7 +178,7 @@ final readonly class PgsqlActivityReader implements ActivityReader
                and (backend_type is null or backend_type = 'client backend')
                and (
                      coalesce(xact_start, query_start) is null
-                     or extract(epoch from (now() - coalesce(xact_start, query_start))) * 1000 >= ?
+                     or extract(epoch from (pg_catalog.now() - coalesce(xact_start, query_start))) * 1000 >= ?
                    )
             SQL;
     }
@@ -207,11 +207,11 @@ final readonly class PgsqlActivityReader implements ActivityReader
                    -- rather than "waiting for an unknown time" -- and the rows below are all waiters
                    -- by construction, so in practice it is the brief window before the server
                    -- records the start.
-                   round(extract(epoch from (now() - w.waitstart)) * 1000) as waiting_for_ms
+                   pg_catalog.round(extract(epoch from (pg_catalog.now() - w.waitstart)) * 1000) as waiting_for_ms
               from pg_locks w
               left join pg_class c on c.oid = w.relation
               left join pg_namespace n on n.oid = c.relnamespace
-              left join lateral unnest(pg_blocking_pids(w.pid)) as blocker(pid) on true
+              left join lateral pg_catalog.unnest(pg_catalog.pg_blocking_pids(w.pid)) as blocker(pid) on true
              where not w.granted
             SQL;
     }
@@ -340,10 +340,10 @@ final readonly class PgsqlActivityReader implements ActivityReader
               join pg_namespace n on n.oid = c.relnamespace
              where l.granted
                and l.pid is not null
-               and l.pid <> pg_backend_pid()
+               and l.pid <> pg_catalog.pg_backend_pid()
                and (
                      n.nspname || '.' || c.relname in ({$this->placeholders($objectCount)})
-                  or (c.relname in ({$this->placeholders($objectCount)}) and pg_table_is_visible(c.oid))
+                  or (c.relname in ({$this->placeholders($objectCount)}) and pg_catalog.pg_table_is_visible(c.oid))
                    )
              order by l.pid, relation
             SQL;
@@ -449,8 +449,8 @@ final readonly class PgsqlActivityReader implements ActivityReader
         $rows = DatabaseErrorTranslator::attemptBounded(
             fn (): array => array_values($session->read(
                 fn (Connection $db): array => $db->select(
-                    'select pg_is_in_recovery() as in_recovery, application_name, state,'
-                    ."  coalesce(round(extract(epoch from replay_lag) * 1000), null) as lag_ms,\n"
+                    'select pg_catalog.pg_is_in_recovery() as in_recovery, application_name, state,'
+                    ."  coalesce(pg_catalog.round(extract(epoch from replay_lag) * 1000), null) as lag_ms,\n"
                     // The same distance in BYTES, which answers a different question: `replay_lag`
                     // is how long ago the replica was current, and on a quiet primary it stays small
                     // no matter how much WAL is outstanding. The byte figure says how much is left
