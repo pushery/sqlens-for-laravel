@@ -112,6 +112,19 @@ final readonly class PgTypeChangeMatrix
         return in_array($this->canonicalize($rawTargetType), $this->narrowing, true);
     }
 
+    /**
+     * The canonical name of a written target type, for a caller that must key on the same value
+     * this matrix keys on.
+     *
+     * Public so a rule can look up a per-target caveat without normalizing the type a second time.
+     * A second normalization is a second truth: it would agree with this one until somebody adds an
+     * alias, and then the caveat would silently stop matching the classification it belongs to.
+     */
+    public function canonicalTarget(string $rawTargetType): string
+    {
+        return $this->canonicalize($rawTargetType);
+    }
+
     /** Lowercased, length/precision stripped, alias folded — the form the matrix is keyed on. */
     private function canonicalize(string $rawTargetType): string
     {

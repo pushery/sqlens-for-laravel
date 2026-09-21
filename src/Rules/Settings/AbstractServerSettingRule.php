@@ -18,6 +18,7 @@ use Pushery\SQLens\Remediation\RemediationSubject;
 use Pushery\SQLens\Rules\AbstractCatalogRule;
 use Pushery\SQLens\Rules\InstanceScope;
 use Pushery\SQLens\Rules\RuleVerdict;
+use Pushery\SQLens\Rules\ServerVersion;
 use Pushery\SQLens\Rules\Suite;
 use Pushery\SQLens\Subjects\SchemaObject;
 use Pushery\SQLens\Subjects\SchemaObjectType;
@@ -210,19 +211,37 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
             return [];
         }
 
+        $version = $object->context()->serverVersion;
+
         $expectation = $this->matrix()->for(
             $this->settingDriver(),
             $this->settingVariable(),
-            $object->context()->serverVersion?->toString(),
+            $version?->toString(),
         );
 
         if (! $expectation instanceof ServerSettingExpectation) {
+            // ⚠️ TWO CASES, ONE `null`, AND THEY SEND AN OPERATOR TO DIFFERENT PLACES. `for()` answers
+            // absent both when the version could not be resolved and when the version IS known and the
+            // shipped matrix holds no row for this variable. Every setting rule used to report the
+            // first for both — so somebody with a perfectly well pinned server was told their version
+            // was the problem, and the sentence beside it said so too.
+            //
+            // What separates them is whether the subject carried a version at all, which is the one
+            // fact `for()` cannot report back through a null.
             return [RuleVerdict::undetermined(
-                sprintf(
-                    'no expectation is on file for %s on this server version, so its value was read but not judged.',
-                    $this->settingVariable(),
-                ),
-                UndeterminedReason::UnknownServerVersion,
+                $version instanceof ServerVersion
+                    ? sprintf(
+                        'this package ships no expectation for %s at server version %s, so its value was read and reported but not judged.',
+                        $this->settingVariable(),
+                        $version->toString(),
+                    )
+                    : sprintf(
+                        'the server version could not be established, so no expectation for %s could be selected and its value was read but not judged.',
+                        $this->settingVariable(),
+                    ),
+                $version instanceof ServerVersion
+                    ? UndeterminedReason::SettingExpectationMissing
+                    : UndeterminedReason::UnknownServerVersion,
             )];
         }
 

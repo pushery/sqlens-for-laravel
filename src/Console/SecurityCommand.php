@@ -30,6 +30,7 @@ use Pushery\SQLens\Security\SecurityRunner;
 use Pushery\SQLens\Severity\Severity;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 use Pushery\SQLens\Subjects\SubjectContext;
+use Pushery\SQLens\Today;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
@@ -110,6 +111,11 @@ final class SecurityCommand extends Command
             return ExitCode::Misconfiguration->value;
         }
 
+        // The run's day, read once here and handed to the header. This command builds its own
+        // context for the run where the audit half never ran, and that is exactly the run whose
+        // day nothing else would state.
+        $today = Today::fromClock();
+
         // Beside it, and for the same reason: a name that resolves to nothing is a run that
         // examined something other than what the project asked for.
         if ($this->refuseUnknownAuditConnection($config)) {
@@ -177,7 +183,7 @@ final class SecurityCommand extends Command
         $reported = false;
 
         try {
-            return $this->examine($runner, $reporter, $exitCodes, $config, $profile, $output, $reported);
+            return $this->examine($runner, $reporter, $exitCodes, $config, $profile, $output, $reported, $today);
         } finally {
             $reported ? $this->closeReportOutput($output) : $this->discardReportOutput($output);
         }
@@ -199,6 +205,7 @@ final class SecurityCommand extends Command
         ProfileSelection $profile,
         OutputInterface $output,
         bool &$reported,
+        Today $today,
     ): int {
         $connection = $this->auditConnection($config);
         $host = $this->option('host');
@@ -216,9 +223,16 @@ final class SecurityCommand extends Command
         // merge of the two: the audit's carries an instance identity and a server version that a
         // fabricated one would have to invent, and inventing them is how a report starts describing
         // a machine it never reached.
-        $context = $outcome->context ?? $this->runContext($config, RunProfile::from((string) $profile->profile), $strictUndetermined, $strictTools);
+        $context = $outcome->context ?? $this->runContext($config, RunProfile::from((string) $profile->profile), $strictUndetermined, $strictTools, $today);
 
-        $result = Result::of($this->findings($outcome, $context, $this->addressedConnection($config)));
+        // The suppressions come from the halves rather than from a resolver here, and there is no
+        // resolver here on purpose: the candidates were judged inside each half and are gone. Passing
+        // the book through is what makes `suppressed_by_source` a real number in this report instead
+        // of a permanent zero that read like "nothing was hidden".
+        $result = Result::of(
+            $this->findings($outcome, $context, $this->addressedConnection($config)),
+            $outcome->suppressed,
+        );
 
         $reporter->report($result, $context, $output);
         $reported = true;
@@ -423,7 +437,7 @@ final class SecurityCommand extends Command
      * a command that built a second one would give one run two headers that drift. This consumes it
      * and adds nothing.
      */
-    private function runContext(Repository $config, RunProfile $profile, ?bool $strictUndetermined, ?bool $strictTools): RunContext
+    private function runContext(Repository $config, RunProfile $profile, ?bool $strictUndetermined, ?bool $strictTools, Today $today): RunContext
     {
         return new RunContext(
             serverVersions: [],
@@ -455,6 +469,8 @@ final class SecurityCommand extends Command
             // which is exactly what the finding above says in prose.
             activeRuleCount: 0,
             guardProfile: ConfigRunContextCollector::guardProfileFrom($config),
+            // The same reading the run was given, never a fresh one here.
+            today: $today,
         );
     }
 }

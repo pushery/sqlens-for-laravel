@@ -9,6 +9,7 @@ use Pushery\SQLens\Deploy\Drift\DriftRunMode;
 use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Severity\Severity;
 use Pushery\SQLens\Subjects\SchemaObjectType;
+use Pushery\SQLens\Today;
 
 /**
  * The immutable parameters of one SQLens run — the single source of the
@@ -331,6 +332,25 @@ final readonly class RunContext
          * and the contract binds that to a minor release, so the JSON half waited for one.
          */
         public ?int $subjectCount = null,
+        /**
+         * The calendar day this run judged on — the one reading the rules also got.
+         *
+         * In {@see self::toArray()} as `run_day` since schema version 7, and it is the LAST key of
+         * the header for that reason: the register guard compares the post-v3 keys in header order,
+         * so a v7 field standing in front of a v6 one would announce itself to a consumer on schema 6.
+         *
+         * ⚠️ NULLABLE, AND NOT BECAUSE A RUN MAY LACK A DAY. Every producer in this package hands one
+         * down; the default exists so the four construction sites and the fixtures were not all
+         * required to change in one commit. A producer that forgets it emits `null` rather than a
+         * wrong day — the same choice `subject_count` above makes — and an architecture arm holds
+         * every production site to passing one, because a silent null here is precisely the
+         * permissive default this package refuses elsewhere.
+         *
+         * ⚠️ It is the OBJECT rather than its string, so the header and the rules can be shown to
+         * carry the same READING. Two `gmdate` calls agree on almost every run and differ across
+         * midnight, which is the one case this field exists to make visible.
+         */
+        public ?Today $today = null,
     ) {}
 
     /**
@@ -677,6 +697,8 @@ final readonly class RunContext
             // AFTER every version-5 field, because the registers pin the key order. Null where the
             // producer states none, which is not zero: zero is a run that judged nothing.
             'subject_count' => $this->subjectCount,
+            // LAST, and the position is the contract rather than tidiness — see the property.
+            'run_day' => $this->today?->value,
         ];
     }
 }

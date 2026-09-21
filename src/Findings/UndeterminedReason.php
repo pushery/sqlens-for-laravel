@@ -939,12 +939,50 @@ enum UndeterminedReason: string
     case MysqlInstrumentationUnavailable = 'mysql_instrumentation_unavailable';
 
     /**
+     * This role cannot see other sessions in `pg_stat_activity`, so a running vacuum cannot be
+     * ruled out.
+     *
+     * ⚠️ NOT THE SAME AS {@see self::ActivityUnreadable}, and the difference is why this case
+     * exists. There the view is withheld and the read THROWS, which is loud. Here it is readable by
+     * PUBLIC and answers cleanly — PostgreSQL MASKS foreign rows rather than refusing them, so
+     * `query` reads `<insufficient privilege>` and a filter on it matches nothing. The reading is
+     * empty, no error is raised, and "no anti-wraparound vacuum is running" is indistinguishable
+     * from "I am not allowed to see one".
+     *
+     * Measured on 18.4 with a role holding only CONNECT: two foreign sessions, both masked, zero
+     * rows through the vacuum filter, no exception. The deciding privilege is `pg_read_all_stats`,
+     * and it is asked for with `pg_has_role` rather than `has_table_privilege` — the question is not
+     * whether the view may be read, which it may, but whether foreign sessions appear in it.
+     *
+     * ⚠️ The condition is not exotic: a least-privilege migration role is exactly what this
+     * package's own `SEC.PRIV.*` rules recommend. Following that advice used to cost this check
+     * silently.
+     */
+    case VacuumActivityNotVisible = 'vacuum_activity_not_visible';
+
+    /**
      * A server setting the check judges could not be read back.
      *
      * Reported per setting rather than as one blanket answer, because "this instance does not
      * expose it" and "this role may not read it" send an operator to different places.
      */
     case SettingUnreadable = 'setting_unreadable';
+
+    /**
+     * The value was read, the server version is known, and the shipped matrix has no expectation for
+     * this variable at that version.
+     *
+     * ⚠️ ITS OWN REASON RATHER THAN {@see self::UnknownServerVersion}, WHICH IS WHAT IT USED TO SAY —
+     * and the difference is not a nuance, it is the operator's next step. "I do not know which server
+     * this is" sends them to the version pin; "I know the server and have nothing on file for this
+     * variable" sends them to the matrix, or to us. Reporting the first for the second sent everybody
+     * to the wrong place, and the sentence beside it said the version was the problem.
+     *
+     * The two cases are one `null` from `ServerSettingMatrix::for()` and were told apart by nothing:
+     * a missing row and an unresolvable version produce the same absent expectation. What separates
+     * them is whether the subject carried a server version at all.
+     */
+    case SettingExpectationMissing = 'setting_expectation_missing';
 
     /**
      * Whether these tables carry a per-table autovacuum override could not be read.
@@ -1085,9 +1123,11 @@ enum UndeterminedReason: string
             self::ActivityUnreadable => 'The run has no activity reader, so what is holding a lock could not be read — which is not the same as nothing holding one.',
             self::MysqlInstrumentationUnavailable => 'This MySQL server does not provide the instrumentation these readings come from, so the metadata-lock holders could not be listed.',
             self::SettingUnreadable => 'A server setting this check judges could not be read back.',
+            self::SettingExpectationMissing => 'The value was read and the server version is known, but this package ships no expectation for this variable at that version — so it was reported rather than judged.',
             self::AutovacuumSettingUnreadable => 'Whether these tables carry a per-table autovacuum override could not be read, and the instance default does not answer for a table that overrides it.',
             self::FilesystemHeadroomUnreadable => 'This instance does not report free space, so disk headroom could not be judged.',
             self::FreezeHorizonUnreadable => 'How close these tables are to their freeze horizon could not be read.',
+            self::VacuumActivityNotVisible => 'This role does not see other sessions in the server\'s activity view, so a running anti-wraparound vacuum could not be ruled out — the reading succeeded, it simply masked the rows it would have judged.',
             self::ReplicationSlotsUnreadable => 'Whether a retired consumer is holding WAL could not be read.',
             self::ReplicationViewsUnreadable => 'The replication views could not be read, so how far a replica has fallen behind is unknown.',
             self::GrantsUnreadable => 'The privilege tables could not be read, so what the migration user may do is unknown.',

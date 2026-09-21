@@ -37,6 +37,7 @@ use Pushery\SQLens\Config\RuleIdReference;
 use Pushery\SQLens\Config\RuleIdValidator;
 use Pushery\SQLens\Console\ExitCode;
 use Pushery\SQLens\Console\ExitCodeResolver;
+use Pushery\SQLens\Contracts\AcceptsRunClock;
 use Pushery\SQLens\Contracts\Captor;
 use Pushery\SQLens\Contracts\Driver;
 use Pushery\SQLens\Contracts\Rule;
@@ -88,6 +89,7 @@ use Pushery\SQLens\Rules\VersionRuleGate;
 use Pushery\SQLens\ServerVersion;
 use Pushery\SQLens\Subjects\CaptureMode;
 use Pushery\SQLens\Subjects\SubjectContext;
+use Pushery\SQLens\Today;
 use Pushery\SQLens\Tools\MissingToolNotice;
 use Pushery\SQLens\Tools\Squawk\SquawkContribution;
 use Pushery\SQLens\Tools\Squawk\SquawkTool;
@@ -141,8 +143,9 @@ final readonly class LintRunner implements LintRuns
      * @param  list<string>|null  $categories  category values to scope to (null = the config's, empty = all)
      * @param  bool  $applyBaseline  whether to suppress against the configured baseline; the baseline command turns this OFF, because it is WRITING that baseline and must see every finding, not the ones the previous baseline already accepted (config and annotation suppression still apply — those findings are handled by other means and need no baselining)
      * @param  bool|null  $includeVendorMigrations  whether a migration discovered inside `vendor/` is enumerated. Null reads `sqlens.security.include_vendor_migrations`, which is what every ordinary caller wants. `sqlens:predeploy` passes TRUE and does not read the config, because a package's migration really does run during a deploy and really can take a lock — see PreflightService for that reasoning. A caller that NAMED its paths gets them unfiltered regardless.
+     * @param  list<Finding>  $crossSuiteFindings  what the AUDIT half of the same security run reported, so the cross-source dedupe can see the catalog side this pass does not produce. Empty for every caller that runs the lint suite on its own, which is the honest answer there: a lone lint run has no catalog half, and a layer that hides a migration finding on its behalf would be hiding it for nobody
      */
-    public function run(?string $connection, ?array $migrationPaths, CaptureMode $mode, ?string $assumeServerVersion = null, ?int $level = null, ?array $categories = null, bool $applyBaseline = true, ?bool $strictTools = null, array $files = [], ?GuardDecision $guard = null, bool $roundtrip = false, ?DebtMode $debt = null, ?bool $includeVendorMigrations = null): LintOutcome
+    public function run(?string $connection, ?array $migrationPaths, CaptureMode $mode, ?string $assumeServerVersion = null, ?int $level = null, ?array $categories = null, bool $applyBaseline = true, ?bool $strictTools = null, array $files = [], ?GuardDecision $guard = null, bool $roundtrip = false, ?DebtMode $debt = null, ?bool $includeVendorMigrations = null, array $crossSuiteFindings = []): LintOutcome
     {
         // The session bound belongs to the RUN, not to the connection — and the connection
         // is the HOST APPLICATION's, which under Octane, a queue worker or a test suite
@@ -156,7 +159,7 @@ final readonly class LintRunner implements LintRuns
         $release = null;
 
         try {
-            return $this->runBounded($release, $connection, $migrationPaths, $mode, $assumeServerVersion, $level, $categories, $applyBaseline, $strictTools, $files, $guard, $roundtrip, $debt, $includeVendorMigrations);
+            return $this->runBounded($release, $connection, $migrationPaths, $mode, $assumeServerVersion, $level, $categories, $applyBaseline, $strictTools, $files, $guard, $roundtrip, $debt, $includeVendorMigrations, $crossSuiteFindings);
         } finally {
             if ($release instanceof Closure) {
                 $release();
@@ -172,10 +175,21 @@ final readonly class LintRunner implements LintRuns
      * @param  list<string>|null  $migrationPaths
      * @param  list<string>  $files
      * @param  list<string>|null  $categories
+     * @param  list<Finding>  $crossSuiteFindings  the audit half's visible findings, when a security run brought them
      */
-    private function runBounded(?Closure &$release, ?string $connection, ?array $migrationPaths, CaptureMode $mode, ?string $assumeServerVersion = null, ?int $level = null, ?array $categories = null, bool $applyBaseline = true, ?bool $strictTools = null, array $files = [], ?GuardDecision $guard = null, bool $roundtrip = false, ?DebtMode $debt = null, ?bool $includeVendorMigrations = null): LintOutcome
+    private function runBounded(?Closure &$release, ?string $connection, ?array $migrationPaths, CaptureMode $mode, ?string $assumeServerVersion = null, ?int $level = null, ?array $categories = null, bool $applyBaseline = true, ?bool $strictTools = null, array $files = [], ?GuardDecision $guard = null, bool $roundtrip = false, ?DebtMode $debt = null, ?bool $includeVendorMigrations = null, array $crossSuiteFindings = []): LintOutcome
     {
         $connectionName = $this->connectionName($connection);
+        // ⚠️ THE RUN'S CLOCK, READ ONCE, HERE — and "here" is load-bearing rather than tidy. Before
+        // this line the day was read wherever it was needed: twice in this class, twice in the audit
+        // runner, once in the postdeploy command. Each of those is its own reading, so a run that
+        // crosses midnight judged a support window on one calendar day and an expired debt
+        // acknowledgment on another, inside one report, with nothing saying which side either was on.
+        //
+        // Created before the first `buildContext()` below, because the header names it too: a second
+        // reading for the header would be the same defect between the report and the rules rather
+        // than between two rule families.
+        $today = Today::fromClock();
         // Whether somebody NAMED these paths, decided before the coalesce below overwrites the
         // evidence. `--path` and `sqlens.migration_paths` are a person saying "these", and a run
         // that silently dropped part of what they named would make the argument advisory. Only
@@ -283,7 +297,7 @@ final readonly class LintRunner implements LintRuns
 
             return $this->refusedConfig(
                 $configViolations,
-                $this->buildContext($connectionName, $mode, $resolvedVersion, $activeLevel, 0, 0, $activeCategories, [], $strict, $roundtrip, guard: $guard),
+                $this->buildContext($connectionName, $today, $mode, $resolvedVersion, $activeLevel, 0, 0, $activeCategories, [], $strict, $roundtrip, guard: $guard),
                 $connectionName,
                 is_string($configured) && $configured !== '' ? $configured : 'unknown',
                 $strict,
@@ -298,7 +312,17 @@ final readonly class LintRunner implements LintRuns
         if ($driver instanceof DriverResolutionFailure) {
             // No tool versions in this header, and not for lack of asking: an engine SQLens does
             // not support has no tool with jurisdiction over it, so there is nothing to name.
-            return $this->unsupported($driver, $this->buildContext($connectionName, $mode, $resolvedVersion, $activeLevel, 0, 0, $activeCategories, [], $strict, $roundtrip, guard: $guard), $connectionName);
+            return $this->unsupported($driver, $this->buildContext($connectionName, $today, $mode, $resolvedVersion, $activeLevel, 0, 0, $activeCategories, [], $strict, $roundtrip, guard: $guard), $connectionName);
+        }
+
+        // Hand the run's day to the driver, so the rules it builds judge on the SAME reading the
+        // header names. The `instanceof` is the whole reason this is a separate interface rather than
+        // a parameter on `Driver::rules()`: two of that method's five callers only ENUMERATE rules
+        // and have no run at all, and a required parameter would make them invent a date — inside an
+        // artifact compared against a golden file. A third-party driver without the interface is not
+        // degraded either; it keeps the documented fallback of one reading per `rules()` call.
+        if ($driver instanceof AcceptsRunClock) {
+            $driver = $driver->withRunClock($today);
         }
 
         // The external tools, diagnosed once and only those with jurisdiction over THIS driver:
@@ -383,7 +407,7 @@ final readonly class LintRunner implements LintRuns
         // thing with the same arithmetic, and `active + hidden == registered` is an invariant a
         // test can hold both of them to. WHY each rule is missing is not lost — the version gate
         // and the statistics axis each report their own named undetermined finding.
-        $context = $this->buildContext($connectionName, $mode, $resolvedVersion, $activeLevel, count($activeRules), count($registry->all()) - count($activeRules), $activeCategories, $toolVersions, $strict, $roundtrip, $floorFailure, $guard);
+        $context = $this->buildContext($connectionName, $today, $mode, $resolvedVersion, $activeLevel, count($activeRules), count($registry->all()) - count($activeRules), $activeCategories, $toolVersions, $strict, $roundtrip, $floorFailure, $guard);
 
         // The resolved version rides into the rule context — the detected version or the
         // pin alike, or a named "could not determine". A rule branches only on the version
@@ -631,7 +655,7 @@ final readonly class LintRunner implements LintRuns
         // every other one. A pass that appended after `Result::of()` would have to rebuild that
         // pipeline, the second copy would drift from the first, and both halves would stay green
         // while a suppressed debt finding came through anyway.
-        $findings = [...$findings, ...$this->debtFindings($debt, $findings, $registry->all(), $driver->key(), $subjectContext, $files !== [])];
+        $findings = [...$findings, ...$this->debtFindings($debt, $findings, $registry->all(), $driver->key(), $subjectContext, $files !== [], $today)];
 
         // A configured baseline whose file is not there. Appended HERE, with the debt notices and
         // before suppression, for the same reason they are: it is a finding, and a finding that
@@ -654,6 +678,7 @@ final readonly class LintRunner implements LintRuns
             $this->candidates($findings, $run, $subjectContext),
             Suite::Lint,
             $unverifiable,
+            $crossSuiteFindings,
         );
 
         // …and each one is NAMED, because "kept in the file" without a word is the same silence as
@@ -1191,7 +1216,7 @@ final readonly class LintRunner implements LintRuns
      * @param  list<string>  $activeCategories
      * @param  array<string, string>  $toolVersions
      */
-    private function buildContext(string $connectionName, CaptureMode $mode, ResolvedServerVersion $resolvedVersion, int $level, int $activeRules, int $hiddenRules, array $activeCategories, array $toolVersions, bool $strictTools, bool $roundtrip, ?DriverResolutionFailure $floorFailure = null, ?GuardDecision $guard = null): RunContext
+    private function buildContext(string $connectionName, Today $today, CaptureMode $mode, ResolvedServerVersion $resolvedVersion, int $level, int $activeRules, int $hiddenRules, array $activeCategories, array $toolVersions, bool $strictTools, bool $roundtrip, ?DriverResolutionFailure $floorFailure = null, ?GuardDecision $guard = null): RunContext
     {
         $base = $this->contextCollector->collect(ReportingCaptureMode::from($mode->value));
 
@@ -1226,6 +1251,10 @@ final readonly class LintRunner implements LintRuns
             // From the base rather than read again: the collector owns that read, and this runner
             // already has its answer in hand.
             guardProfile: $base->guardProfile,
+            // The SAME reading the rules got, not a second one. This method is handed the value the
+            // run created at its door, so the day in the header is the day that was judged on rather
+            // than a re-read that agrees on every run but the one that matters.
+            today: $today,
         );
     }
 
@@ -1308,7 +1337,7 @@ final readonly class LintRunner implements LintRuns
      * @param  list<Rule>  $rules  the rules that ran, so a finding can be traced to the one claiming it
      * @return list<Finding>
      */
-    private function debtFindings(?DebtMode $debt, array $findings, array $rules, string $driverKey, SubjectContext $subjectContext, bool $singleFile): array
+    private function debtFindings(?DebtMode $debt, array $findings, array $rules, string $driverKey, SubjectContext $subjectContext, bool $singleFile, Today $today): array
     {
         if (! $debt instanceof DebtMode || $this->config->get('sqlens.deploy.debt.enabled') !== true) {
             return [];
@@ -1353,7 +1382,7 @@ final readonly class LintRunner implements LintRuns
 
         $reconciliation = DebtReconciliation::of(
             $ledger,
-            DebtRegistrar::candidates($findings, $rules, $canonicalization, gmdate('Y-m-d')),
+            DebtRegistrar::candidates($findings, $rules, $canonicalization, $today->value),
             // This run reads MIGRATIONS. A debt the catalog knows about and no migration explains
             // is invisible here — not absent, invisible — so it is outside what this run may judge.
             // Before the scope existed, recording from lint would have deleted every such entry on
@@ -1432,7 +1461,6 @@ final readonly class LintRunner implements LintRuns
         // An acknowledgment whose review date has passed. Read over the RECORDED set rather than
         // over any one list above, because it applies to an entry whether or not this run still
         // detects the debt — the decision expires on its own schedule.
-        $today = gmdate('Y-m-d');
 
         foreach ($reconciliation->recorded as $entry) {
             if ($entry->state !== DebtState::Acknowledged) {
@@ -1441,7 +1469,7 @@ final readonly class LintRunner implements LintRuns
             if ($entry->reviewAt === null) {
                 continue;
             }
-            if ($entry->reviewAt >= $today) {
+            if ($entry->reviewAt >= $today->value) {
                 continue;
             }
             $notices[] = $this->debtNotice(

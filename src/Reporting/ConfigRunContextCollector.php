@@ -10,6 +10,7 @@ use Pushery\SQLens\Contracts\RunContextCollector;
 use Pushery\SQLens\PackageVersion;
 use Pushery\SQLens\Rules\StabilityGate;
 use Pushery\SQLens\Severity\Severity;
+use Pushery\SQLens\Today;
 
 /**
  * The BASE collector: it reads the run's mode, profile, and strict flags from config (falling back to
@@ -43,7 +44,7 @@ final readonly class ConfigRunContextCollector implements RunContextCollector
      * replays into a shadow database and `sqlens:postdeploy` captures in pretend, and both
      * announced whatever the configuration happened to say.
      */
-    public function collect(CaptureMode $mode, ?array $sessionTimeouts = null, ?string $checkTimings = null, ?int $timeBudgetMsConsumed = null): RunContext
+    public function collect(CaptureMode $mode, ?array $sessionTimeouts = null, ?string $checkTimings = null, ?int $timeBudgetMsConsumed = null, ?Today $today = null): RunContext
     {
         return new RunContext(
             serverVersions: [],
@@ -71,6 +72,12 @@ final readonly class ConfigRunContextCollector implements RunContextCollector
             // header reads exactly like an active one, and a reader scanning for it and finding
             // nothing concludes the field is not emitted by this version.
             guardProfile: self::guardProfileFrom($this->config),
+            // ⚠️ THE DAY IS PASSED IN AND NEVER READ HERE, and the reason is the whole point of the
+            // run clock: this collector is called once per run by five producers, and a `gmdate` on
+            // this line would be a reading that competes with the one the rules got. Three of those
+            // producers report THIS context as their header; the lint runner treats it as a base and
+            // builds its own, so a null from there is not a gap.
+            today: $today,
         );
     }
 

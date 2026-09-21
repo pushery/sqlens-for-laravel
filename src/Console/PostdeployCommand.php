@@ -51,6 +51,7 @@ use Pushery\SQLens\Reporting\ReporterManager;
 use Pushery\SQLens\Rules\ServerVersion;
 use Pushery\SQLens\Severity\Severity;
 use Pushery\SQLens\Subjects\SubjectContext;
+use Pushery\SQLens\Today;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Throwable;
 
@@ -118,6 +119,11 @@ final class PostdeployCommand extends Command
         if ($this->refusesInvalidConfig()) {
             return ExitCode::Misconfiguration->value;
         }
+
+        // The run's day, read once, at the door. The debt pass below judged an expired acknowledgment
+        // on its own reading of the clock, which is a second clock in a command that already has a
+        // run — and across midnight it answers about a different day than the one the run is about.
+        $today = Today::fromClock();
 
         // ⚠️ BEFORE ANYTHING OPENS A CONNECTION, and that ordering is the fix. This block used to sit
         // after `$verifier->verify()`, so a typo in `--format` cost the whole aftercare run against
@@ -287,7 +293,7 @@ final class PostdeployCommand extends Command
         // The debt account, read against the catalog this deploy just touched. After the checks and
         // before the report, so a debt finding travels as a finding through the same reporters,
         // the same axes and the same ordering as every other one.
-        $debt = $this->debtPass($config, $postdeployContext, $findings, $manifest, $drivers);
+        $debt = $this->debtPass($config, $postdeployContext, $findings, $manifest, $drivers, $today);
 
         // Whether the escape hatch actually waived a block, decided BEFORE the report is written so
         // the report can carry it. A waived run and an earned one otherwise share an exit code, a
@@ -309,7 +315,7 @@ final class PostdeployCommand extends Command
         // working in the one report somebody reads while a deploy is still warm.
         $reporter->report(
             Result::of([...$findings, ...$expectation->findings, ...$overrun, ...$debt['findings']]),
-            $runContext->collect(ReportingCaptureMode::Pretend, $timeouts, $report->describeTimings() ?: null, $consumedMs)
+            $runContext->collect(ReportingCaptureMode::Pretend, $timeouts, $report->describeTimings() ?: null, $consumedMs, $today)
                 ->withUndeterminedWaiver($waived)
                 // The comparison as its OWN block rather than mixed into the findings — and present
                 // on every run, including the ones that did not compare. A document holding no
@@ -529,7 +535,7 @@ final class PostdeployCommand extends Command
      * @param  list<Finding>  $reported  this run's own findings, which name the debts still owed
      * @return array{findings: list<Finding>, breaches: bool}
      */
-    private function debtPass(Repository $config, PostdeployContext $context, array $reported, ProjectManifest $manifest, DriverRegistry $drivers): array
+    private function debtPass(Repository $config, PostdeployContext $context, array $reported, ProjectManifest $manifest, DriverRegistry $drivers, Today $today): array
     {
         if ($config->get('sqlens.deploy.debt.enabled') !== true) {
             return ['findings' => [], 'breaches' => false];
@@ -561,7 +567,7 @@ final class PostdeployCommand extends Command
         $collected = DebtCollector::collect(
             $ledger,
             $drivers->debtStandingResolverFor($context->driver, $stillOwed, $context->session),
-            gmdate('Y-m-d'),
+            $today->value,
         );
 
         if ($collected->ledgerMissing) {

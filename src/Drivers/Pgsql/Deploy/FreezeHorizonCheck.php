@@ -159,9 +159,47 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
             }
         }
 
-        return $findings === []
+        if ($findings !== []) {
+            // The age axis answered, and it answered with something. That is a verdict about these
+            // tables whether or not a vacuum is visible, so it is reported as one — the check does
+            // not become undetermined because half of it was masked. {@see self::message()} carries
+            // the caveat into the finding itself.
+            return CheckResult::fail(self::ID, $findings);
+        }
+
+        // Asked only HERE, and only now: the answer can change nothing while there are findings, and
+        // a query bought for an answer nobody reads is a query on somebody's production instance at
+        // the moment before a deploy.
+        try {
+            $vacuumVisible = $this->seesForeignSessions($context);
+        } catch (Throwable $failure) {
+            return CheckResult::undetermined(
+                self::ID,
+                UndeterminedReason::FreezeHorizonUnreadable,
+                'whether this role can see other sessions could not be established, so an empty '
+                .'vacuum reading cannot be read as "none running": '
+                .new CredentialRedactor()->redact($failure->getMessage()),
+            );
+        }
+
+        // ⚠️ NOTHING FOUND IS ONLY A PASS IF BOTH AXES ANSWERED. The age axis reads `pg_class` and
+        // is readable by anyone; the vacuum axis reads `pg_stat_activity`, which MASKS foreign rows
+        // for a role without `pg_read_all_stats` rather than refusing them — so it comes back empty,
+        // without an error, and "no anti-wraparound vacuum is running" cannot be told from "I may
+        // not see one". Reporting a pass there is the silent null this package refuses everywhere,
+        // here in a deploy gate.
+        return $vacuumVisible
             ? CheckResult::pass(self::ID)
-            : CheckResult::fail(self::ID, $findings);
+            : CheckResult::undetermined(
+                self::ID,
+                UndeterminedReason::VacuumActivityNotVisible,
+                'none of the tables this deploy locks is near its freeze horizon, and that half is '
+                .'answered. Whether an anti-wraparound autovacuum is ALREADY running on one of them '
+                .'is not: this role does not hold pg_read_all_stats, so PostgreSQL masks other '
+                .'sessions in pg_stat_activity and the reading comes back empty rather than '
+                .'refused. Grant pg_read_all_stats to the role this check runs as, or read the '
+                .'result as "the age clocks are fine, the vacuum question was not asked".',
+            );
     }
 
     /**
@@ -197,6 +235,32 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
         ));
 
         return array_values(array_map(static fn (mixed $row): object => (object) $row, $rows));
+    }
+
+    /**
+     * Whether this role sees OTHER sessions in `pg_stat_activity` — the question an empty reading
+     * from {@see self::runningAntiWraparound()} cannot answer for itself.
+     *
+     * ⚠️ `pg_has_role` ON `pg_read_all_stats`, DELIBERATELY NOT `has_table_privilege` ON THE VIEW.
+     * The view is readable by PUBLIC, which is exactly why nothing throws: PostgreSQL masks foreign
+     * rows instead of refusing them. So the question is not "may I read it" — I may — but "do
+     * foreign sessions appear in what I read".
+     *
+     * Measured on 18.4 with a role holding only CONNECT: two foreign sessions present, both with
+     * `query` reading `<insufficient privilege>`, and the vacuum filter matching none of them. No
+     * exception anywhere on that path.
+     *
+     * A superuser answers true through role membership, so the check does not need a second arm
+     * for it.
+     */
+    #[RawSql(reason: 'asks pg_has_role about pg_read_all_stats; whether this role sees foreign sessions is a server fact with no model equivalent')]
+    private function seesForeignSessions(PreflightContext $context): bool
+    {
+        $row = $context->session->read(static fn (Connection $db): array => $db->select(
+            "select pg_catalog.pg_has_role(current_user, 'pg_read_all_stats', 'USAGE') as visible",
+        ));
+
+        return ($row[0] ?? null) !== null && (bool) ((array) $row[0])['visible'];
     }
 
     /**

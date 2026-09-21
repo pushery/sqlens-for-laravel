@@ -55,7 +55,7 @@ final readonly class JsonEnvelope
      * published number would depend on the order they merged in — and every other
      * change's pin test would be red until it rebased. One version, one source.
      */
-    public const int SCHEMA_VERSION = 6;
+    public const int SCHEMA_VERSION = 7;
 
     /**
      * The RUN-level fields version 4 introduces.
@@ -226,6 +226,27 @@ final readonly class JsonEnvelope
         // on `fail == 0` had the identical blind spot and no number to see it by, and the run that
         // most needs this field is the one with no terminal attached.
         'subject_count',
+    ];
+
+    /**
+     * The run-level field version 7 introduces: the calendar day the run judged on.
+     *
+     * ⚠️ IT IS A NEW VERSION RATHER THAN A FIELD ON 6, AND THAT IS THE WHOLE COST OF THE CHANGE. The
+     * envelope says why in its own words a few lines up: a field added to a version consumers already
+     * hold would tell them they had it all along. Schema 6 shipped with 0.12.0.
+     *
+     * What it answers is not cosmetic. Rules that judge on a date — a support window closing, a debt
+     * acknowledgment expiring — were reproducible only by luck at a boundary: the report named no day,
+     * so re-examining a verdict meant guessing which side of midnight the run had been on. The clock
+     * is now read once per run and handed to the rules and to this header, so the day in the report is
+     * the day that was judged on rather than a second reading that usually agrees.
+     *
+     * Null on a producer that hands no clock down. Every producer in this package does, and an
+     * architecture arm holds them to it — a null here would be a permissive default, and the run it
+     * matters for is the one nobody is watching.
+     */
+    public const array RUN_FIELDS_ADDED_IN_V7 = [
+        'run_day',
     ];
 
     /**

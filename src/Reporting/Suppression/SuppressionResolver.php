@@ -137,8 +137,11 @@ final readonly class SuppressionResolver
      * @param  list<string>  $unverifiablePrefixes  rule-id prefixes whose SOURCE did not answer
      *                                              this run, so a baseline entry naming one was
      *                                              not checked rather than fixed
+     * @param  list<Finding>  $crossSuiteFindings  what the OTHER half of this same run reported and
+     *                                             this pass will not resolve. Exactly one layer
+     *                                             reads them, and only their catalog side.
      */
-    public function resolve(array $candidates, Suite $suite, array $unverifiablePrefixes = []): SuppressionOutcome
+    public function resolve(array $candidates, Suite $suite, array $unverifiablePrefixes = [], array $crossSuiteFindings = []): SuppressionOutcome
     {
         $visible = [];
         $suppressed = [];
@@ -152,9 +155,18 @@ final readonly class SuppressionResolver
 
         // Beside it, and for the same reason: entitlement to hide a migration finding depends on
         // what the CATALOG half reported in this run, which cannot be answered one finding at a time.
-        $catalogIdentities = CrossSourceDedupeSuppressionSource::catalogIdentities(
-            array_map(static fn (SuppressionCandidate $candidate): Finding => $candidate->finding, $candidates),
-        );
+        //
+        // ⚠️ AND THE CATALOG HALF IS A DIFFERENT PASS, WHICH IS WHY THIS LAYER HAD NEVER FIRED.
+        // `sqlens:security` runs the audit and the lint suite as two sub-runs with a resolver each:
+        // a lint pass sees no catalog candidate, so the set was empty and nothing ever matched; an
+        // audit pass sees no migration candidate, so the layer returned early on every one. The
+        // other half's findings arrive through `$crossSuiteFindings` — and the identity is still
+        // derived HERE, from one list, because two derivation sites for one key is how the two
+        // halves would come to disagree about what counts as the same fact.
+        $catalogIdentities = CrossSourceDedupeSuppressionSource::catalogIdentities([
+            ...array_map(static fn (SuppressionCandidate $candidate): Finding => $candidate->finding, $candidates),
+            ...$crossSuiteFindings,
+        ]);
 
         foreach ($candidates as $candidate) {
             $suppression = $this->firstCovering($candidate, $suite, $matchedBaselineKeys, $usedIgnoreIndices, $reportedIds, $catalogIdentities);

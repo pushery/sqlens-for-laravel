@@ -26,6 +26,7 @@ use Pushery\SQLens\Rules\Pedantic\DocumentationPolicy;
 use Pushery\SQLens\Security\Advisory\EolRepository;
 use Pushery\SQLens\Security\Privacy\RunEnvironment;
 use Pushery\SQLens\Security\Privacy\UnencryptedColumnEvaluator;
+use Pushery\SQLens\Today;
 
 /**
  * The one place the mapping driver key → driver implementation lives, after the
@@ -119,7 +120,7 @@ final class DriverRegistry implements DebtStandingResolvers, SessionDefenses
      * @param  mixed  $uuidGeneratedBy  the raw `sqlens.audit.uuid_generated_by` value — `app`,
      *                                  `server`, or anything else, which reads as "not said".
      */
-    public function __construct(private readonly string $projectRoot = '', mixed $pgsqlExpectedTimeouts = null, mixed $pgsqlMaxLocksPerTransaction = null, mixed $auditExpect = null, mixed $uuidGeneratedBy = null, mixed $moneyColumns = null, mixed $unusedIndex = null, mixed $naming = null, mixed $documentationConfig = null, private readonly ?EolRepository $advisories = null, private readonly ?string $today = null, private readonly ?UnencryptedColumnEvaluator $privacyColumns = null, private readonly ?RunEnvironment $environment = null, mixed $migrationsTable = null)
+    public function __construct(private readonly string $projectRoot = '', mixed $pgsqlExpectedTimeouts = null, mixed $pgsqlMaxLocksPerTransaction = null, mixed $auditExpect = null, mixed $uuidGeneratedBy = null, mixed $moneyColumns = null, mixed $unusedIndex = null, mixed $naming = null, mixed $documentationConfig = null, private readonly ?EolRepository $advisories = null, private readonly ?Today $today = null, private readonly ?UnencryptedColumnEvaluator $privacyColumns = null, private readonly ?RunEnvironment $environment = null, mixed $migrationsTable = null)
     {
         // Built ONCE here and handed to both drivers, rather than each rule reading the config for
         // itself. A rule that read configuration would be a rule whose verdict depends on something
