@@ -17,11 +17,34 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ## Identity is the whole difficulty, and the rule id is NOT it
  *
- * The only thing two such findings are guaranteed to share is the rule id, and merging on that alone
- * is the wrong merge: two different tables, one rule, collapsed into an entry that is true of
- * neither. So this matches on the rule id AND the schema object, and a finding that names no object
- * is never matched — "no target" is not an agreement, it is an absence, and treating the two alike
- * is exactly the substitution this package refuses everywhere else.
+ * Merging on the rule id alone is the wrong merge: two different tables, one rule, collapsed into an
+ * entry that is true of neither. So this matches on the rule id AND the schema object, and a finding
+ * that names no object is never matched — "no target" is not an agreement, it is an absence, and
+ * treating the two alike is exactly the substitution this package refuses everywhere else.
+ *
+ * ## ⚠️ NO SHIPPED RULE REACHES THIS LAYER, AND FOR GRANTS THAT IS A DECISION, NOT A GAP
+ *
+ * The two halves of a grant finding share none of the three fields this matches on. The migration
+ * side's id carries an `_IN_MIGRATION` suffix (`SEC.PRIV.GRANT_PUBLIC_IN_MIGRATION` against
+ * `SEC.PRIV.GRANT_PUBLIC`), it names the statement's table where the catalog names a `Grant`, and so
+ * the names differ too. Measured over the whole `SEC.PRIV.*` family, 7 rules against 15. Pairing them
+ * looked like the missing half of this layer, and it is not wanted:
+ *
+ * The migration half of `sqlens:security` judges the PENDING set. A pending `GRANT … TO PUBLIC` is
+ * not the live grant reported a second time; it is the next deploy granting it again. The two
+ * findings carry two remedies, revoke the live grant and change the migration, and suppressing the
+ * second as "the same fact" would hide that the first does not survive the next deploy.
+ *
+ * The privilege question that pairing raised is answered for the day a migration half reads
+ * migrations that have already run: a grant finding's identity carries its privilege set, and the
+ * migration side is the same fact only when its set is CONTAINED in the catalog's. Equality is too
+ * strict, because the catalog may hold more from another route, and any overlap is too loose, because
+ * a live `SELECT` does not report a migration's `INSERT`. `ALL` compares through the catalog's own
+ * `all_privileges`, because the set it expands to depends on the object and the server version.
+ *
+ * What the layer covers is the case where both halves name the same rule and the same object, the
+ * shape it was written for and the shape the arms pin. No rule in the security category produces it
+ * today: the rules that report from both halves under one id are schema rules outside it.
  *
  * A migration statement legitimately has no single target: several relations, a `DO $$` block. Those
  * findings stay standing, on purpose, and stay standing beside each other — two of them agreeing on

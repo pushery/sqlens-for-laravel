@@ -186,7 +186,9 @@ final class UnencryptedColumnRule extends AbstractCatalogRule implements Declare
                 .'checked for an encrypted cast — this is not a clean result. Reported once for the '
                 .'run rather than once per column: the fact is about the run, and repeating it for '
                 .'every column would bury every other finding in the report.',
-                UndeterminedReason::ModelNotFound,
+                // Not `model_not_found`: that sends a reader to the application's models, and no model
+                // was looked for. The gap is in how the run was assembled.
+                UndeterminedReason::ModelReadingNotWired,
             )];
         }
 

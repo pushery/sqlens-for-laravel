@@ -162,9 +162,30 @@ final class ParameterizationAnalyzer
     private function countPlaceholders(string $sql): int
     {
         $withoutCasts = str_replace('::', '', $sql);
+        $named = preg_match_all('/:[a-zA-Z_]\w*/', $withoutCasts);
 
-        return substr_count($withoutCasts, '?')
-            + (int) preg_match_all('/:[a-zA-Z_]\w*/', $withoutCasts);
+        return $this->placeholderTotal($named, $withoutCasts);
+    }
+
+    /**
+     * The count, from the engine's answer about the named placeholders.
+     *
+     * `false` is the engine giving up, and `(int) false` is zero — an UNDER-count, the one failure
+     * direction this count must not have, because an under-count can agree with the bindings and
+     * pass. -1 instead: no binding array has that many elements, so the comparison in coherent()
+     * reads it as the mismatch it is, and a mismatch is `undetermined`.
+     *
+     * Its own method so the answer can be handed in. The pattern cannot be made to give up from a
+     * test on every build: measured on PCRE2 10.44, a backtrack limit of 1 makes it answer `false`
+     * with JIT off and still match with JIT on, which is how CI runs it.
+     */
+    private function placeholderTotal(int|false $named, string $sql): int
+    {
+        if ($named === false) {
+            return -1;
+        }
+
+        return substr_count($sql, '?') + $named;
     }
 
     /**

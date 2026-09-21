@@ -15,7 +15,7 @@ use Pushery\SQLens\Rules\CatalogVerdicts;
  * The distinction looks like it could be read off a rule id: `SEC.CFG.*` is the server, `SEC.RLS.*`
  * is the schema. It cannot, and a prefix list would be wrong within a release. `SEC.PRIV.*` holds
  * both — `SEC.PRIV.ROLE_SUPERUSER` is an attribute of the connecting role, while
- * `SEC.PRIV.GRANT_TO_PUBLIC` is a grant on a table the migrations created and is as real on a
+ * `SEC.PRIV.GRANT_PUBLIC` is a grant on a table the migrations created and is as real on a
  * container as anywhere. A rule knows which of the two it is; an id does not.
  *
  * The same argument {@see DeclaresConfigurationReach} makes for its own axis: a second model of the

@@ -24,11 +24,10 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * Scope is deliberately the positions it can identify with certainty from the
  * grammar output: quoted identifiers and dot-qualified chains — which is exactly
  * what the schema grammar emits (it quotes every identifier). A STANDALONE bare
- * word is left untouched: telling a bare identifier from a keyword needs the
- * keyword list and is the keyword-casing stage's concern; a bare identifier's
- * folding is carried by the Identifier value object, exercised directly. Whitespace
- * inside a string literal, dollar-quoted body, comment or the identifier itself is
- * never mistaken for an identifier position.
+ * word is left to the keyword-casing stage: telling a bare identifier from a
+ * keyword needs the keyword list, and that stage folds it per driver once the
+ * keywords are known. Whitespace inside a string literal, dollar-quoted body,
+ * comment or the identifier itself is never mistaken for an identifier position.
  *
  * Three-valued: an unterminated or malformed quote, an over-qualified reference
  * (`a.b.c`), or a driver with no identifier quote abort with a named

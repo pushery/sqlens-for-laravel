@@ -148,8 +148,10 @@ final readonly class Identifier
             // A quoted identifier is exact — folding never applies inside quotes.
             $effectiveName = str_replace($quote.$quote, $quote, substr($segment, 1, -1));
         } else {
+            // ASCII only, because that is what the server does: in a multibyte encoding PostgreSQL
+            // downcases A to Z and leaves every other letter alone, so `Élan` names `Élan`.
             $effectiveName = $driver->foldsUnquotedIdentifiersToLowerCase()
-                ? mb_strtolower($segment)
+                ? strtolower($segment)
                 : $segment;
         }
 
@@ -172,7 +174,7 @@ final readonly class Identifier
 
         $bareSafe = self::isBareIdentifier($name)
             && ! in_array(mb_strtoupper($name), $driver->keywords(), true)
-            && (! $driver->foldsUnquotedIdentifiersToLowerCase() || mb_strtolower($name) === $name);
+            && (! $driver->foldsUnquotedIdentifiersToLowerCase() || strtolower($name) === $name);
 
         return $bareSafe
             ? $name

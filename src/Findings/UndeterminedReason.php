@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Findings;
 
+use Pushery\SQLens\Rules\ServerVersion;
 use Pushery\SQLens\Security\OriginBinding;
 
 /**
@@ -18,6 +19,22 @@ enum UndeterminedReason: string
 {
     case MissingPrivilege = 'missing_privilege';
     case ServerUnreachable = 'server_unreachable';
+
+    /**
+     * No server version could be established: the server reported none, or reported a banner with no
+     * version number in it.
+     *
+     * Absent and unreadable share this reason on purpose, and the parser decides that rather than any
+     * one rule: {@see ServerVersion::parse()} answers both with this case. For a check that reasons
+     * from the run's version they are one gap with one remedy, because `assume_server_version`
+     * replaces the reading whatever the reading was. Two reasons would ask a pipeline to branch where
+     * the operator's next step does not.
+     *
+     * Kept apart from {@see self::SettingValueUnrecognized}. There a value WAS read, a TLS protocol
+     * name or the version string the end-of-life check compares, and this build has no place for it.
+     * Those checks judge the live value rather than the version the run reasons about, so a pin changes
+     * nothing there, and the remedy sits on this side rather than on the server's.
+     */
     case UnknownServerVersion = 'unknown_server_version';
     case PretendLimit = 'pretend_limit';
     case UnsupportedEngine = 'unsupported_engine';
@@ -72,6 +89,18 @@ enum UndeterminedReason: string
      * would cost more than an honest unknown.
      */
     case CatalogReadFailed = 'catalog_read_failed';
+
+    /**
+     * The catalog answered without refusing, and what it returned cannot describe the server that
+     * answered.
+     *
+     * An authentication-rule view with no rules at all is the case it exists for: a PostgreSQL with no
+     * host-based authentication rules accepts no connections, and the run arrived over one. Kept apart
+     * from {@see self::CatalogReadFailed}, the catch-all for an error nothing anticipated, which carries
+     * the database's error code. This case is anticipated and there is no error. What is suspect is the
+     * reading, and the next step is to confirm what the server actually loaded.
+     */
+    case CatalogReadingImplausible = 'catalog_reading_implausible';
 
     /**
      * The statistics reading came back WITHOUT the object a finding names, so it could not be weighed.
@@ -175,6 +204,18 @@ enum UndeterminedReason: string
      * demonstrably did not look at.
      */
     case ModelNotFound = 'model_not_found';
+
+    /**
+     * The run was assembled without the reading of the application's models, so no column was checked
+     * at all.
+     *
+     * A fact about the RUN, where {@see self::ModelNotFound} is a fact about one table: that one means
+     * the reading ran and no model claims the table, and its remedies live in the application, such as
+     * a model outside the conventional directory or a table another service owns. Here there is nothing
+     * to look for in the application. The package's own commands wire the reading, and a runner
+     * assembled by hand has to pass it in.
+     */
+    case ModelReadingNotWired = 'model_reading_not_wired';
 
     /**
      * A model class maps to the table and could not be constructed.
@@ -293,6 +334,17 @@ enum UndeterminedReason: string
      * send somebody to revoke a privilege their deploy depends on.
      */
     case NotConfigured = 'not_configured';
+
+    /**
+     * Both connections are named, and who they authenticate as could not be read in this run.
+     *
+     * Distinct from {@see self::NotConfigured}: that one is a question nobody has answered, this one is
+     * an answer the run cannot see. Credentials resolved from the environment at runtime look like this,
+     * because the configuration names both connections and their user, host and database are empty
+     * wherever the run reads them. Nothing is missing from the configuration, so a reason that pointed
+     * at a setting would send somebody looking for a gap that is not there.
+     */
+    case ConnectionIdentityUnresolved = 'connection_identity_unresolved';
 
     /**
      * A pinned host could not be checked against the one the server named.
@@ -985,6 +1037,21 @@ enum UndeterminedReason: string
     case SettingExpectationMissing = 'setting_expectation_missing';
 
     /**
+     * A setting this check judges was read, and its value has no place in what this build knows: a TLS
+     * protocol name nobody has measured, a version string that does not begin with a release series.
+     *
+     * None of the neighbors fits it. Not {@see self::SettingUnreadable}, because the value came back.
+     * Not {@see self::UnknownServerVersion}, which is a run with no version to reason from and is
+     * answered by a pin; this check judges the live value itself, so a pin changes nothing. And not
+     * `unsupported_engine`, which the TLS case used to report about a fully supported PostgreSQL. The
+     * engine is fine, and so is the server, which accepted the value.
+     *
+     * The remedy sits on this side. A newer build may know the value, and if the newest does not, the
+     * value is worth reporting, because the next build learns it from exactly that.
+     */
+    case SettingValueUnrecognized = 'setting_value_unrecognized';
+
+    /**
      * Whether these tables carry a per-table autovacuum override could not be read.
      *
      * Its own reason rather than {@see self::SettingUnreadable}: the global setting being readable
@@ -1124,6 +1191,7 @@ enum UndeterminedReason: string
             self::MysqlInstrumentationUnavailable => 'This MySQL server does not provide the instrumentation these readings come from, so the metadata-lock holders could not be listed.',
             self::SettingUnreadable => 'A server setting this check judges could not be read back.',
             self::SettingExpectationMissing => 'The value was read and the server version is known, but this package ships no expectation for this variable at that version — so it was reported rather than judged.',
+            self::SettingValueUnrecognized => 'A setting this check judges was read, and its value is one this build does not know — the server accepted it, nothing there is wrong, and a newer SQLens may know it.',
             self::AutovacuumSettingUnreadable => 'Whether these tables carry a per-table autovacuum override could not be read, and the instance default does not answer for a table that overrides it.',
             self::FilesystemHeadroomUnreadable => 'This instance does not report free space, so disk headroom could not be judged.',
             self::FreezeHorizonUnreadable => 'How close these tables are to their freeze horizon could not be read.',
@@ -1144,6 +1212,7 @@ enum UndeterminedReason: string
             self::OriginUnknown => 'The statement carries no file this run can attribute it to, so a rule that means one thing in a migration and another outside it has nothing to decide on.',
             self::ValueOriginUnknown => 'The run could not tell whether a value in this statement was written into the file or supplied at the call site, and the two are the same text by the time a rule reads them.',
             self::NotConfigured => 'The check needs a setting this project has not made, and guessing it would name the wrong thing.',
+            self::ConnectionIdentityUnresolved => 'Both connections are named, and who they authenticate as could not be read in this run, so whether they are one identity or two is unknown — no setting is missing.',
             self::TransactionPooled => 'The connection multiplexes statements across server backends, so a reading cannot be attributed to one server.',
             self::SettingChangePendingRestart => 'The server carries a change to this setting that applies at the next restart, so the value judged is the running one and this answer expires when it is restarted; the decided value is in the configuration file rather than in the catalog.',
             self::PinnedHostUnverifiable => 'The pinned host and the host the server named cannot be compared, so the identity of the audited instance is unconfirmed.',
@@ -1156,6 +1225,7 @@ enum UndeterminedReason: string
             self::DebtObjectNotFound => 'A recorded debt names an object the catalog does not show, so whether it was settled, dropped, or simply out of this run\'s scope cannot be said.',
             self::DebtLedgerMissing => 'The debt account was expected on this machine and is not there, so whether the project has open debts is unknown — not answered with "none".',
             self::ModelNotFound => 'No Eloquent model in this application maps to that table, so whether the column is encrypted could not be read — not answered with "unprotected".',
+            self::ModelReadingNotWired => 'This run was assembled without the reading of the application\'s models, so no column was checked for an encrypted cast — a fact about the run, not about any model.',
             self::ModelNotConstructible => 'A model maps to that table and could not be constructed, so its cast list was never available; the reason names the class.',
             self::ModelCastsNotStatic => 'The model reported different casts on two constructions, so its cast list describes no fixed schema fact and none of it was used.',
             self::CustomCastOpaque => 'The column is cast through a custom castable class, which may or may not encrypt; the package will not execute it to find out.',
@@ -1203,6 +1273,7 @@ enum UndeterminedReason: string
             self::ShadowTeardownFailed => 'The throwaway shadow database could not be dropped after the run and may need manual removal.',
             self::CatalogReadBudgetExceeded => 'The catalog read hit the time budget SQLens set for itself, so the reading stopped before it was complete.',
             self::CatalogReadFailed => 'The catalog read failed for a reason nothing anticipated; the database error code is reported with it.',
+            self::CatalogReadingImplausible => 'The catalog answered without refusing, and what it returned cannot describe the server that answered, so the reading itself is suspect; confirm what the server loaded.',
             self::ObjectStatisticsUnread => 'The statistics reading came back without this object, so the finding about it could not be weighed against its size. A table nobody has run ANALYZE on is the commonest cause; the verdict itself stands exactly as a run without a database would have reported it.',
             self::ConfiguredPrefixMatchedNothing => 'A table prefix is configured and no object in the audited schemas carries it, so the audit examined nothing.',
             self::MissingPrivilege => 'The connecting role lacks the privilege the check needs.',

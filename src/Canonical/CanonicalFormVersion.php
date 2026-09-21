@@ -66,8 +66,31 @@ final readonly class CanonicalFormVersion
      * strings — two fingerprints for one statement, and a baseline entry that stopped matching the
      * moment somebody reformatted a migration. The words appear in no shipped rule pattern (measured,
      * with a control), so nothing was mis-reported; what moved was the fingerprint.
+     *
+     * Went to 5 for the bare words PostgreSQL folds. An unquoted name that was not a keyword was left
+     * exactly as written, so one table had as many canonical forms as it had spellings, while the
+     * server creates the same object from all of them. Measured before and after:
+     *
+     *     CREATE TABLE Orders (id integer)
+     *       form 4 -> CREATE TABLE Orders (id INTEGER)
+     *       form 5 -> CREATE TABLE orders (id INTEGER)
+     *
+     *     CREATE TABLE "orders" (id integer)
+     *       form 4 -> CREATE TABLE orders (id INTEGER)
+     *       form 5 -> CREATE TABLE orders (id INTEGER)
+     *
+     * The second did not move and the first now agrees with it. MySQL does not fold, because whether
+     * `Orders` and `orders` are one table there depends on `lower_case_table_names`, and none of its
+     * forms moved. The keyword lists did not change either, so the guard that pins them records form
+     * 5 with the same lists as form 4.
+     *
+     * Form 5 also folds ASCII only, in a qualified name as much as in a bare one. Measured on
+     * PostgreSQL 18.0 with a UTF-8 database, `create table Élan (Id int)` creates `Élan` with a
+     * column `id`: the server downcases A to Z and nothing else. `mb_strtolower` had folded the `É`
+     * too, so `Élan` and `"élan"`, two tables, shared a form. It went in before form 5 was
+     * released, so it is part of 5 rather than a 6.
      */
-    public const int CURRENT = 4;
+    public const int CURRENT = 5;
 
     public function __construct(public int $version) {}
 

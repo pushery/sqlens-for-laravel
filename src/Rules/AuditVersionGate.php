@@ -59,7 +59,7 @@ final readonly class AuditVersionGate
      * Why a rule did not run, in a sentence a reader can act on — or null when it did.
      *
      * The version and the window are both named. "Skipped by version" tells somebody that something
-     * was skipped; `PG.L6.PK.UUID_V4 needs PostgreSQL 18 or newer, and this server is 17.4` tells
+     * was skipped; `PG.L6.PK_UUID_V4 needs PostgreSQL 18 or newer, and this server is 17.4` tells
      * them whether to care.
      */
     public function reason(Rule $rule): ?string

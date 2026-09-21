@@ -838,7 +838,7 @@ return [
          * `sqlens:predeploy` — the command that reads the same facts on the host that will actually
          * be operated. Which rules those are is declared by the rules themselves, never by a prefix
          * list here: `SEC.PRIV.ROLE_SUPERUSER` is an attribute of the connecting role and is
-         * withheld, while `SEC.PRIV.GRANT_TO_PUBLIC` is a grant on a table this project's own
+         * withheld, while `SEC.PRIV.GRANT_PUBLIC` is a grant on a table this project's own
          * migrations created and reports exactly as it would anywhere.
          *
          * ⚠️ It withholds a verdict about the SERVER and about nothing else. Every finding about

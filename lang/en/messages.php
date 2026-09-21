@@ -74,6 +74,7 @@ return [
         'roundtrip_connection_conflict' => '--roundtrip cannot be pointed at a named connection with --connection: it runs only against the throwaway database it creates itself.',
         'roundtrip_file_conflict' => '--roundtrip cannot be combined with --file: the fast path lints one migration without a database, and a roundtrip needs one it may break.',
         'defaulted_config' => 'The sqlens configuration does not set :count key(s); the shipped default applies to each. Harmless — but if your published config was meant to set them, re-add them:',
+        'retired_config' => 'The sqlens configuration carries :count key(s) this package no longer reads; each is ignored and the run continues. Delete them from your published config:',
         'invalid_config' => 'The sqlens configuration has :count problem(s). Nothing ran — a key this package does not understand is a key it ignores, silently:',
         'invalid_level' => 'Invalid --level ":level": the level must be an integer from 0 to 9.',
         'invalid_budget' => 'Invalid --budget ":budget": the budget is a whole number of milliseconds above zero. Nothing ran — a value this command cannot read is one it would silently replace with the configured default, and you would believe you had bounded the run.',

@@ -105,7 +105,7 @@ final class HbaParseErrorRule extends AbstractHbaRule
             .'connections, and this audit arrived over one. Nothing about how this server authenticates '
             .'has been checked — confirm the file the server is actually reading (SHOW hba_file) before '
             .'reading this run as clean.',
-            UndeterminedReason::CatalogReadFailed,
+            UndeterminedReason::CatalogReadingImplausible,
         )];
     }
 

@@ -109,7 +109,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * IMPLEMENTS with an index — `UNIQUE` and `PRIMARY KEY` — whose columns the classifier now carries
  * for exactly this reason. Without them the textbook pivot table was a false positive:
  * `$table->unique(['team_id', 'user_id'])` covers the key on `team_id`, the rule reported it
- * anyway, and the index it recommended is one `PG.L7.REDUNDANT_INDEX` then reports as redundant to
+ * anyway, and the index it recommended is one `PG.L7.INDEX_REDUNDANT` then reports as redundant to
  * the unique it was already covered by. The remaining gap is narrow and hand-written: a constraint
  * spelled in a form this profile reads no column list off — measured, `UNIQUE NULLS NOT DISTINCT (…)`
  * is one — is not counted as coverage. Laravel's grammar emits no such form.

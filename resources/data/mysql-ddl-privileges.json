@@ -60,6 +60,14 @@
         {
             "privilege": "CREATE USER",
             "why": "Account management rather than schema. It is administration of the SERVER and belongs to SEC.PRIV.GRANT_SERVER_ADMIN — two rules about one fact is the double report this catalog refuses."
+        },
+        {
+            "privilege": "CREATE ROLE",
+            "why": "Account management rather than schema, like CREATE USER beside it: a role is a named bundle of grants on the SERVER, not an object in any schema. It belongs to SEC.PRIV.GRANT_SERVER_ADMIN, which reads it from the admin vocabulary — two rules about one fact is the double report this catalog refuses."
+        },
+        {
+            "privilege": "DROP ROLE",
+            "why": "The other half of CREATE ROLE, and the same answer: removing a role is administration of the server, not a change to any schema. SEC.PRIV.GRANT_SERVER_ADMIN reports it."
         }
     ]
 }

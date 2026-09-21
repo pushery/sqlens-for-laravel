@@ -46,6 +46,17 @@ enum ConfigViolationKind: string
      */
     case DefaultedKey = 'defaulted_key';
 
+    /**
+     * A key this package used to read and has retired: named, ignored, and the run continues.
+     *
+     * Its own kind rather than a flavor of {@see UnknownKey}, because the two need opposite advice.
+     * An unknown key is a typo and is fixed by correcting it; a retired key was written correctly
+     * against an older schema and is fixed by deleting it. Reported as unknown, an upgrade is refused
+     * as though the project had misspelled a key it spelled exactly as the documentation once did --
+     * which is what 0.20.0 shipped for `mode` after announcing the opposite.
+     */
+    case RetiredKey = 'retired_key';
+
     case WrongType = 'wrong_type';
 
     case OutOfRange = 'out_of_range';
@@ -60,6 +71,7 @@ enum ConfigViolationKind: string
             self::DottedLiteralKey => 'literal dotted key (Laravel config nests sections as arrays; it does not split a dotted key into one)',
             self::MissingKey => 'missing key (a published config section replaces the package default wholesale, so re-add every key of the section)',
             self::DefaultedKey => 'not set, so the shipped default applies (harmless; re-add the key to your published config if you meant to set it)',
+            self::RetiredKey => 'retired key (this package no longer reads it, so it is ignored and the run continues; delete it from your published config)',
             self::WrongType => 'wrong type',
             self::OutOfRange => 'value out of range',
         };

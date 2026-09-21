@@ -13,10 +13,10 @@ use Pushery\SQLens\Rules\Settings\ServerSettingMatrix;
  *
  * The matrix exists so no rule hard-codes its own expectation. That only holds if something checks
  * it, and the check needs to pair each rule with its entry. Inferring the pair from the rule id
- * would work today — `MY.L1.SQL_MODE` does contain `sql_mode` — and would be a guard that catches
- * only the mistakes somebody already thought of: a rule id that abbreviates, a variable whose name
- * appears inside another's, a rule covering a variable whose name is not id-shaped at all. Each of
- * those passes the heuristic while pairing nothing.
+ * would work today — `MY.L5.SQL_MODE_NOT_STRICT` does contain `sql_mode` — and would be a guard
+ * that catches only the mistakes somebody already thought of: a rule id that abbreviates, a
+ * variable whose name appears inside another's, a rule covering a variable whose name is not
+ * id-shaped at all. Each of those passes the heuristic while pairing nothing.
  *
  * So the pairing is DECLARED. A rule naming a variable the matrix does not have is then a hard
  * error rather than a silent non-match, which is the direction that matters: the failure mode this

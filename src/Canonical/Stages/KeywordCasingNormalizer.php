@@ -13,20 +13,28 @@ use Pushery\SQLens\Subjects\SubjectContext;
 /**
  * Folds keyword casing to one canonical form (upper case) so `select`, `SELECT`
  * and `SeLeCt` are the same keyword to a rule — the last piece of grammar-casing
- * drift a rule must never see. It touches ONLY keywords: an identifier is left
- * exactly as written, because under PostgreSQL upper-casing `"user"` would change
- * which object it names — a semantic error that would otherwise pass as "just
- * formatting".
+ * drift a rule must never see. A QUOTED identifier is left exactly as written,
+ * because under PostgreSQL upper-casing `"user"` would change which object it
+ * names — a semantic error that would otherwise pass as "just formatting".
+ *
+ * A bare word that is not a keyword is folded the way the driver's server folds
+ * it: to lower case on PostgreSQL, which does exactly that to every unquoted name
+ * before anything reads it, and not at all on MySQL, where a table name may be
+ * case-sensitive and a bare word's position is not known yet. Without it,
+ * `CREATE TABLE Orders` and `CREATE TABLE "orders"` named one PostgreSQL table in
+ * two canonical forms, and so with two fingerprints: the identifier stage leaves a
+ * standalone bare word to this one, and this one used to leave everything that is
+ * not a keyword alone.
  *
  * It reads the keyword list from the driver — no list, no `match`, no engine name
- * lives in the core. It runs AFTER identifier normalization, which is what makes
- * the keyword/identifier split decidable: an identifier that shares a name with a
- * keyword is already quoted by that stage (a bare `key` column becomes `"key"`),
- * so a BARE word matching a keyword is unambiguously the keyword — and folding it
- * is safe on both engines (PostgreSQL folds it anyway; MySQL requires a
- * keyword-named identifier to be quoted). A quoted identifier — mixed case and all
- * — survives byte-exact, as does any keyword-looking word inside a string literal,
- * a comment, or a dollar-quoted body.
+ * lives in the core. It runs AFTER identifier normalization, which keeps a
+ * keyword-named identifier in quotes when it was written quoted (`"key"` stays
+ * `"key"`). A BARE word matching a keyword is folded as the keyword even where it
+ * names a column: telling the two apart needs the grammar position, which only the
+ * classifier knows, and folding it is harmless on both engines (PostgreSQL folds it
+ * anyway; MySQL requires a keyword-named identifier to be quoted). Any
+ * keyword-looking word inside a string literal, a comment, or a dollar-quoted body
+ * survives byte-exact.
  *
  * Three-valued: a driver with no keyword list (a missing artifact) or an
  * unterminated dollar-quoted body — whose tagged delimiter leaves the position of
@@ -57,6 +65,7 @@ final readonly class KeywordCasingNormalizer implements CanonicalizationStage
 
         /** @var array<string, true> $keywordSet */
         $keywordSet = array_fill_keys(array_map(mb_strtoupper(...), $keywords), true);
+        $foldsBareWords = $this->driver->foldsUnquotedIdentifiersToLowerCase();
 
         $quote = $this->driver->quotingCharacter();
         $literals = $this->driver->stringLiteralDelimiters();
@@ -126,7 +135,14 @@ final readonly class KeywordCasingNormalizer implements CanonicalizationStage
                 $end = $this->bareWordEnd($sql, $i);
                 $word = substr($sql, $i, $end - $i);
                 $upper = mb_strtoupper($word);
-                $out .= isset($keywordSet[$upper]) ? $upper : $word;
+                // The same fold as a qualified name gets from the Identifier value object, so a
+                // bare `Orders` and a qualified `public.Orders` agree on what they name. ASCII only,
+                // like the server in a multibyte encoding: `Élan` keeps its `É` there.
+                $out .= match (true) {
+                    isset($keywordSet[$upper]) => $upper,
+                    $foldsBareWords => strtolower($word),
+                    default => $word,
+                };
                 $i = $end;
 
                 continue;
