@@ -323,6 +323,7 @@ final class DoctorCommand extends Command
             'status' => $inspection->isValid() ? 'ok' : 'invalid',
             'violations' => array_map($entry, $inspection->violations),
             'notices' => array_map($entry, $inspection->notices),
+            'retired' => array_map($entry, $inspection->retired),
         ];
     }
 
@@ -339,6 +340,11 @@ final class DoctorCommand extends Command
 
         foreach ($inspection->notices as $notice) {
             $lines[] = 'config '.$notice->path.': absent — '.$notice->expected;
+        }
+
+        // Not under the loop above: that one says "absent", and a retired key is present.
+        foreach ($inspection->retired as $retired) {
+            $lines[] = 'config '.$retired->path.': retired — '.$retired->expected;
         }
 
         foreach ($inspection->violations as $violation) {

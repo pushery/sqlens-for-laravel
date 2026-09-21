@@ -108,6 +108,19 @@ trait ValidatesConfig
             }
         }
 
+        // A retired key is the opposite case to a defaulted one and gets its own header for it: the
+        // key IS set, and the advice is to delete it. Under the defaulted header it would be told to
+        // re-add the one line it should remove.
+        if ($inspection->retired !== []) {
+            $this->configStream()->writeln($this->configMessage('sqlens::messages.commands.retired_config', [
+                'count' => (string) count($inspection->retired),
+            ]));
+
+            foreach ($inspection->retired as $retired) {
+                $this->configStream()->writeln('  '.$retired->message());
+            }
+        }
+
         if ($inspection->isValid()) {
             return true;
         }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Rules\Security;
 
+use LogicException;
 use Pushery\SQLens\Contracts\DeclaresJudgedObjectTypes;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
@@ -178,11 +179,12 @@ abstract class AbstractPatchLevelRule extends AbstractSchemaObjectSecurityRule i
                 .'new major is not out of support, and an ancient one is not fine',
                 (string) $assessment->cycle,
             ),
-            default => sprintf(
+            PatchVerdict::VersionUnparsable => sprintf(
                 'the version string "%s" could not be read as a release series, so there was nothing '
                 .'to look up',
                 $assessment->reported,
             ),
+            PatchVerdict::Ended, PatchVerdict::BehindLatestPatch, PatchVerdict::Current => throw $this->notAGap($assessment->verdict),
         };
 
         return sprintf('the server reports %s, and %s (%s).', $assessment->reported, $why, $assessment->provenance());
@@ -194,7 +196,24 @@ abstract class AbstractPatchLevelRule extends AbstractSchemaObjectSecurityRule i
             // The data was read and simply does not carry the answer — a property of the artifact,
             // which is exactly what this reason names.
             PatchVerdict::PatchLevelUnknown, PatchVerdict::CycleUnknown => UndeterminedReason::AdvisoryDataUnavailable,
-            default => UndeterminedReason::UnknownServerVersion,
+            // The version setting was read, and no release series could be read out of it. Not
+            // `unknown_server_version`: a pin answers that one, and this check judges the live value,
+            // which a pin does not replace.
+            PatchVerdict::VersionUnparsable => UndeterminedReason::SettingValueUnrecognized,
+            PatchVerdict::Ended, PatchVerdict::BehindLatestPatch, PatchVerdict::Current => throw $this->notAGap($verdict),
         };
+    }
+
+    /**
+     * The three verdicts that are not gaps have no sentence and no reason, and asking for one is a
+     * defect in the caller rather than a state of the server.
+     *
+     * Both methods above used to end in a `default`, and the default hid that only one of the four
+     * remaining verdicts ever arrives. A subclass that judged `Current` would have reported a current
+     * server as a version string nobody could read.
+     */
+    private function notAGap(PatchVerdict $verdict): LogicException
+    {
+        return new LogicException(sprintf('%s is not a gap, so it has no undetermined sentence or reason', $verdict->name));
     }
 }

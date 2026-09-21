@@ -139,7 +139,7 @@ final class UnseparatedConnectionsRule extends AbstractSchemaObjectSecurityRule 
                 .'nobody could see.',
                 $runtime,
                 $migration,
-            ), UndeterminedReason::NotConfigured)],
+            ), UndeterminedReason::ConnectionIdentityUnresolved)],
 
             false => [],
         };

@@ -537,10 +537,10 @@ final readonly class MysqlSecurityReader implements SecurityReader
     /**
      * The connecting account's own grants, parsed from `SHOW GRANTS`.
      *
-     * A parser, because MySQL answers this one in SQL text rather than in rows — `GRANT SELECT, INSERT
-     * ON `app`.* TO `x`@`%` WITH GRANT OPTION`. It is deliberately narrow: it reads the three parts it
-     * needs and treats anything it cannot place as a privilege name, which keeps an unfamiliar line
-     * from being dropped.
+     * MySQL answers this one in SQL text rather than in rows — `GRANT SELECT, INSERT ON `app`.* TO
+     * `x`@`%` WITH GRANT OPTION` — and {@see MysqlGrantLine} splits each line by its structure, with
+     * backticked names opaque, because a name may carry a space and a pattern built on `\S+` dropped
+     * the grant that carried one.
      *
      * @param  list<CatalogSkip>  $skips
      * @return list<GrantObject>
@@ -557,39 +557,35 @@ final readonly class MysqlSecurityReader implements SecurityReader
             $skips,
         );
 
-        $grants = [];
+        $lines = [];
 
         foreach ($rows as $row) {
             // The column is named after the account (`Grants for root@localhost`), so it cannot be
             // selected by name — the row's first value is the line.
             $values = array_values((array) $row);
             $first = $values[0] ?? null;
-            $line = is_scalar($first) ? (string) $first : '';
+            $lines[] = is_scalar($first) ? (string) $first : '';
+        }
 
-            if (! preg_match('/^GRANT (.+) ON (\S+) TO (\S+)(.*)$/i', $line, $parts)) {
-                // A role grant (`GRANT `r`@`%` TO `u`@`%``) has no ON clause and is a MEMBERSHIP rather
-                // than a privilege — it belongs to the role reading, not here. Skipping it silently is
-                // safe because nothing about a grant is lost: the same edge is what role reachability
-                // reads.
-                continue;
-            }
+        $grants = [];
 
-            [, $privileges, $object, $grantee, $tail] = $parts;
-
+        // Split by structure rather than matched by a pattern — MysqlGrantLine says which names a
+        // pattern dropped. A role membership is skipped there, and a line that may grant a privilege
+        // and still does not parse is named in $skips rather than dropped.
+        foreach (MysqlGrantLine::read($lines, $skips) as $grant) {
             $mapped = [];
 
-            foreach (explode(',', $privileges) as $name) {
-                $name = trim($name);
+            foreach ($grant->privileges as $name) {
                 $mapped[$name] = Privilege::fromMysql($name);
             }
 
             $grants[] = GrantObject::of(
-                str_replace('`', "'", $grantee),
-                str_contains($object, '.*') ? SchemaObjectType::Database : SchemaObjectType::Table,
-                trim(str_replace('`', '', $object)),
+                str_replace('`', "'", $grant->grantee),
+                str_contains($grant->object, '.*') ? SchemaObjectType::Database : SchemaObjectType::Table,
+                trim(str_replace('`', '', $grant->object)),
                 $mapped,
                 Readability::complete(),
-                grantable: stripos($tail, 'with grant option') !== false,
+                grantable: $grant->grantable,
             );
         }
 

@@ -110,7 +110,9 @@ final class TlsMinVersionRule extends AbstractSettingSecurityRule
                 $value,
                 TlsProtocolVersion::ORDER[2],
             ),
-            UndeterminedReason::UnsupportedEngine,
+            // The value was read and the engine is supported; what is missing is this build's knowledge
+            // of the name. `unsupported_engine` said the opposite about a fully supported PostgreSQL.
+            UndeterminedReason::SettingValueUnrecognized,
         );
     }
 

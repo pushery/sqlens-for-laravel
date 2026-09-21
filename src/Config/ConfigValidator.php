@@ -64,6 +64,10 @@ final class ConfigValidator
      *
      * The half that was actually load-bearing is untouched. An UNKNOWN key is still fatal,
      * because a typo that silently enables nothing is the failure this validator exists for.
+     *
+     * A RETIRED key is not unknown and is not treated as one: it was written correctly against a
+     * schema that has since moved, so it is named and ignored — see
+     * {@see ConfigSchema::RETIRED_TOP_LEVEL_KEYS}.
      */
     public function inspect(mixed $config): ConfigInspection
     {
@@ -88,15 +92,25 @@ final class ConfigValidator
             $violations = [...$violations, ...$this->keyViolations($key, $config[$key])];
         }
 
+        $retired = [];
+
         foreach (array_keys($config) as $key) {
             $key = (string) $key;
 
-            if (! in_array($key, ConfigSchema::TOP_LEVEL_KEYS, true)) {
-                $violations[] = $this->unknownTopLevelKey($key);
+            if (in_array($key, ConfigSchema::TOP_LEVEL_KEYS, true)) {
+                continue;
             }
+
+            if (array_key_exists($key, ConfigSchema::RETIRED_TOP_LEVEL_KEYS)) {
+                $retired[] = ConfigViolation::retiredKey('sqlens.'.$key, ConfigSchema::RETIRED_TOP_LEVEL_KEYS[$key], $config[$key]);
+
+                continue;
+            }
+
+            $violations[] = $this->unknownTopLevelKey($key);
         }
 
-        return new ConfigInspection($violations, $this->notices);
+        return new ConfigInspection($violations, $this->notices, $retired);
     }
 
     /** @return list<ConfigViolation> */

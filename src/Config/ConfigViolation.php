@@ -133,6 +133,22 @@ final readonly class ConfigViolation
         );
     }
 
+    /**
+     * A key this package used to read and has retired: reported, ignored, and the run continues.
+     *
+     * The found value is described like any other, because a project deleting the line wants to be
+     * sure it is deleting the one it thinks it is.
+     */
+    public static function retiredKey(string $path, string $since, mixed $found): self
+    {
+        return new self(
+            kind: ConfigViolationKind::RetiredKey,
+            path: $path,
+            expected: sprintf('no such key (retired in %s; nothing reads it any more)', $since),
+            found: self::describe($found),
+        );
+    }
+
     public static function wrongType(string $path, string $expected, mixed $found): self
     {
         return new self(
