@@ -57,6 +57,7 @@ final readonly class ShadowCaptor implements Captor
         private ?PoolerProbe $poolerProbe = null,
         private bool $hasDirectConnection = false,
         private bool $directConnectionElsewhere = false,
+        private bool $shadowConnectionCollides = false,
         private bool $roundtrip = false,
         private ?ShadowOrphanSweeper $sweeper = null,
     ) {}
@@ -76,6 +77,25 @@ final readonly class ShadowCaptor implements Captor
         // shadow run.
         if (! $this->provisioner instanceof ShadowProvisioner) {
             return $this->allUndetermined($pending, $section, UndeterminedReason::UnsupportedEngine);
+        }
+
+        // ⚠️ THE WORST MISCONFIGURATION THIS PACKAGE CAN HAVE, and it had no check at all until
+        // now: a shadow connection pointed at the SAME place as the connection being
+        // examined. The direct-connection check further down refuses a link that builds somewhere
+        // nobody named; this one refuses a link that builds — and then DROPS — on the instance the
+        // run was supposed to be comparing.
+        //
+        // `ShadowTargetIdentity` was written for exactly this and calls itself "the second lock …
+        // mechanical rather than advisory: a collision is a refusal, never a warning". It had no
+        // caller.
+        //
+        // ⚠️ AHEAD OF THE REPLICA PROBE, and deliberately: this is decided from CONFIGURATION
+        // alone and opens nothing, while the probe opens a connection. A misconfiguration that is
+        // knowable without touching a server should not wait behind a round trip that can fail for
+        // its own reasons — the run would then stop with a connection error where a sentence about
+        // the setting belongs.
+        if ($this->shadowConnectionCollides) {
+            return $this->allUndetermined($pending, $section, UndeterminedReason::ShadowConnectionCollides);
         }
 
         // A read replica has a different state than its primary and forbids the

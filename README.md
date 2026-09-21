@@ -231,9 +231,22 @@ failing build, and it is opt-in for exactly that reason.
 
 Suppression stops a finding from blocking. It does not remove it from the report and does not
 remove it from the counts — the run still says what was suppressed and by which source, so a
-baseline cannot quietly become a way of not knowing. Four sources suppress, applied broadest
-first: a repository baseline, a config ignore, an annotation in the migration itself, and the
-opt-in that lets a project consent to destructive operations once instead of per migration.
+baseline cannot quietly become a way of not knowing. Five sources suppress, and the first one
+that covers a finding wins:
+
+| # | Source | What it is |
+| --- | --- | --- |
+| 1 | `config` | the project's `sqlens.ignore` list |
+| 2 | `audit_ignore` | the audit suite's own ignore list |
+| 3 | `baseline` | a recorded entry in `.sqlens-baseline.json` |
+| 4 | `annotation` | a `#[SqlensIgnore]` attribute on a migration class |
+| 5 | `destructive_opt_in` | the project's standing consent to a destructive operation |
+
+**The baseline is third, not first, and the position is the design rather than an accident.** A
+baseline records findings somebody intends to fix and is meant to shrink; an ignore list records
+that a rule never applies here and is meant to stay. If the baseline won a tie, a standing
+decision would land on a burn-down list it can never leave. Standing before temporary.
+
 Deduplication sits beside them rather than among them — it stops one problem from being reported
 twice and suppresses nothing.
 

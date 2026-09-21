@@ -14,6 +14,7 @@ use Pushery\SQLens\Contracts\PreflightCheck;
 use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PreflightContext;
+use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
@@ -134,7 +135,7 @@ final readonly class LockBlockerCheck implements PreflightCheck
                 self::ID,
                 UndeterminedReason::ActivityUnreadable,
                 'the activity views could not be read, so what is holding locks '
-                .'on the target tables is unknown: '.$failure->getMessage(),
+                .'on the target tables is unknown: '.new CredentialRedactor()->redact($failure->getMessage()),
             );
         }
 

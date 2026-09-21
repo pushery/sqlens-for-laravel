@@ -212,6 +212,7 @@ final readonly class DriverCaptorFactory
             $key === 'pgsql' ? new PgsqlPoolerProbe($this->database) : null,
             is_string($this->config->get('sqlens.capture.shadow.direct_connection')),
             $this->directConnectionIsElsewhere($connectionName),
+            $this->shadowConnectionCollides($connectionName),
             $roundtrip,
             $this->sweeperFor($key, $connectionName),
         );
@@ -363,7 +364,25 @@ final readonly class DriverCaptorFactory
     private function connectionConfig(string $connectionName): array
     {
         $direct = $this->config->get('sqlens.capture.shadow.direct_connection');
-        $source = is_string($direct) && $direct !== '' ? $direct : $connectionName;
+        $shadow = $this->config->get('sqlens.capture.shadow.connection');
+
+        // ⚠️ `capture.shadow.connection` IS READ HERE, AND IT WAS PREVIOUSLY READ BY NOTHING AT ALL.
+        // The shipped config describes it ("the connection to clone") and the shadow-mode page
+        // tells a project to point shadow mode at a dedicated CREATEDB role through it — the
+        // pattern Prisma calls a `shadowDatabaseUrl`. A project that followed that advice got
+        // provisioning, the maintenance link and the template connection built on the role and the
+        // server of the connection UNDER EXAMINATION instead.
+        //
+        // `direct_connection` still wins when both are named, and that order is mechanical rather
+        // than a preference: template operations and CREATE DATABASE break behind a transaction
+        // pooler, so the connection that provably bypasses one has to be the link they run on. A
+        // project that names only `connection` gets it; a project that names both has already said
+        // which of the two must not be pooled.
+        $source = match (true) {
+            is_string($direct) && $direct !== '' => $direct,
+            is_string($shadow) && $shadow !== '' => $shadow,
+            default => $connectionName,
+        };
         $config = $this->config->get('database.connections.'.$source);
         $keyed = [];
 
@@ -454,6 +473,32 @@ final readonly class DriverCaptorFactory
 
         return ! ShadowTargetIdentity::sameInstance(
             $this->rawConnectionConfig($direct),
+            $this->rawConnectionConfig($connectionName),
+        );
+    }
+
+    /**
+     * Whether `capture.shadow.connection` resolves to the same place as the connection being
+     * examined — the collision {@see ShadowTargetIdentity} was written to refuse.
+     *
+     * The FULL identity is compared here, database included, unlike the instance-only comparison
+     * the direct connection gets. The two questions are different: a direct connection legitimately
+     * names another database on the same server, while a shadow connection that reaches the very
+     * database under examination is the failure this refuses.
+     *
+     * An unconfigured key is not a collision — there is nothing pointed anywhere. No connection is
+     * opened either way, so the check cannot become a reason a run stops.
+     */
+    private function shadowConnectionCollides(string $connectionName): bool
+    {
+        $shadow = $this->config->get('sqlens.capture.shadow.connection');
+
+        if (! is_string($shadow) || $shadow === '') {
+            return false;
+        }
+
+        return ShadowTargetIdentity::collide(
+            $this->rawConnectionConfig($shadow),
             $this->rawConnectionConfig($connectionName),
         );
     }
@@ -566,9 +611,13 @@ final readonly class DriverCaptorFactory
 
     /**
      * The context every canonical statement carries — the driver whose grammar it
-     * describes, the run profile, and the strict-tools flag. The parsed server
-     * version is not attached yet; it arrives with the version-pin unit, so a rule
-     * that needs a version still yields a named undetermined until then.
+     * describes, the run profile, and the strict-tools flag. It carries NO server version, and the
+     * runner attaches the resolved one immediately (`LintRunner` calls
+     * `withResolvedServerVersion()` on what this returns) — because only the runner has resolved it.
+     *
+     * ⚠️ THIS SAID the version "arrives with the version-pin unit, so a rule that needs a version
+     * still yields a named undetermined until then". That unit shipped. A rule reached from a lint run
+     * has the version; the absence here is the seam, not a stage on the way to something.
      *
      * Public because it is the ONE source of a run's subject context: the captor is
      * canonicalized under it, and the finding collector must build its subjects under

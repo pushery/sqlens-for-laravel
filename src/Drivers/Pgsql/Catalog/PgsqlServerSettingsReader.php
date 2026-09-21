@@ -52,7 +52,7 @@ final readonly class PgsqlServerSettingsReader implements ServerSettingsReader
             // Without it a consumer finding no entry cannot tell a setting this server does not
             // have from one it was not allowed to see — and only the second is fixable.
             $privilege = $this->session->read(static fn (Connection $db): mixed => $db->selectOne(
-                "select pg_has_role(current_user, 'pg_read_all_settings', 'member') as ok"
+                "select pg_catalog.pg_has_role(current_user, 'pg_read_all_settings', 'member') as ok"
             ));
             $sawEverything = is_object($privilege) && ($privilege->ok ?? false) === true;
 

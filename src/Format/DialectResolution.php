@@ -44,13 +44,20 @@ final readonly class DialectResolution
     /**
      * No connection to ask.
      *
-     * NOT an error. The dialect-neutral core formats without one, and a run that refused here would
-     * make `sqlens:format` need a database to reformat a text file.
+     * ⚠️ THIS SAID "NOT an error. The dialect-neutral core formats without one" — and the core is not
+     * dialect-neutral. `SqlTokenizer` switches comment syntax on the dialect and `SqlToken` switches
+     * keyword case on it, so formatting without one rewrote the file for whichever engine the guess
+     * picked. `sqlens:format` refuses instead now.
+     *
+     * The objection it was answering is real and is answered elsewhere: a run that named its dialect
+     * never reads a connection at all (see {@see DialectResolver::resolve()}), so reformatting a text
+     * file still needs no database. It needs one sentence of configuration.
      */
     public static function unknown(): self
     {
         return new self(null, 'format_dialect_unknown', 'no connection named a driver, so the '
-            .'dialect could not be resolved. A dialect-neutral backend formats anyway; name '
-            .'--dialect if you want a dialect-specific one.');
+            .'dialect could not be resolved. Name it with --dialect=pgsql, --dialect=mysql, or in '
+            .'sqlens.format.dialect — it is not guessed, because comment syntax and keyword case '
+            .'differ per dialect and a guess rewrites the file for the wrong engine.');
     }
 }

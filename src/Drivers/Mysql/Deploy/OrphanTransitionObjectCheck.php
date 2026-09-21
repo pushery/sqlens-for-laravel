@@ -12,6 +12,7 @@ use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\OnlineSchemaChangeArtifacts;
 use Pushery\SQLens\Deploy\PostdeployContext;
+use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
@@ -93,7 +94,7 @@ final readonly class OrphanTransitionObjectCheck implements PostdeployCheck
                 self::ID,
                 UndeterminedReason::CatalogReadFailed,
                 'information_schema could not be read, so whether an online-schema-change tool left '
-                .'artifacts behind is unknown: '.$failure->getMessage(),
+                .'artifacts behind is unknown: '.new CredentialRedactor()->redact($failure->getMessage()),
             );
         }
 

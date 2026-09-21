@@ -147,16 +147,6 @@ final readonly class MysqlDriver implements Driver
     }
 
     /**
-     * Empty for now — the MySQL catalog readers land later.
-     *
-     * @return iterable<object>
-     */
-    public function readers(): iterable
-    {
-        return [];
-    }
-
-    /**
      * None, and that is an answer rather than a gap.
      *
      * There is no MySQL equivalent of Squawk or the Postgres Language Server in this build. Saying

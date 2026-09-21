@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Drivers;
 
 use Closure;
+use Pushery\SQLens\Capture\MigrationsTable;
 use Pushery\SQLens\Catalog\ReaderSession;
 use Pushery\SQLens\Contracts\DebtStandingResolvers;
 use Pushery\SQLens\Contracts\Driver;
@@ -167,8 +168,18 @@ final class DriverRegistry implements DebtStandingResolvers, SessionDefenses
         // the name itself (the historical form) or an array carrying it under `table` (Laravel 11
         // and later). Anything else -- absent, a number, a list -- reads as "not said", and the
         // rules fall back to the framework's default rather than exempting a table nobody named.
-        $ledger = is_array($migrationsTable) ? ($migrationsTable['table'] ?? null) : $migrationsTable;
-        $ledger = is_string($ledger) && trim($ledger) !== '' ? trim($ledger) : null;
+        //
+        // Narrowed through {@see MigrationsTable}, which is the one place that knows the two
+        // shapes. It used to be narrowed here by hand, seven lines below a binding that passed the
+        // literal `'migrations'` — the knowledge existed and the caller that needed it most did
+        // not have it.
+        //
+        // ⚠️ `null` rather than the default here, and that difference is deliberate: a RULE that
+        // was told nothing must not exempt a table nobody named, while a RESOLVER that was told
+        // nothing still has to look somewhere. So the shared narrowing answers the name, and this
+        // reader turns "the default" back into "not said".
+        $ledger = MigrationsTable::from($migrationsTable);
+        $ledger = $ledger === MigrationsTable::DEFAULT && ! $this->namesDefaultLedger($migrationsTable) ? null : $ledger;
 
         $this->register('pgsql', fn (): Driver => new PgsqlDriver($this->projectRoot, $expectedTimeouts, $maxLocks, $uuid, $dictionary, $days, $this->advisories, $this->today, $this->environment, $this->privacyColumns, $convention, $documentation, $ledger));
         // Narrowed to string keys rather than asserted: `is_array()` admits a LIST, and the
@@ -319,5 +330,19 @@ final class DriverRegistry implements DebtStandingResolvers, SessionDefenses
         }
 
         $this->creators[$key] = $creator;
+    }
+
+    /**
+     * Whether the configuration REALLY says `migrations`, as opposed to saying nothing.
+     *
+     * The two are the same name and not the same statement. A rule that exempts the framework's
+     * ledger must not exempt a table the application never named — and a configuration that is
+     * absent, a number or a list named nothing at all.
+     */
+    private function namesDefaultLedger(mixed $configured): bool
+    {
+        $name = is_array($configured) ? ($configured['table'] ?? null) : $configured;
+
+        return is_string($name) && trim($name) === MigrationsTable::DEFAULT;
     }
 }

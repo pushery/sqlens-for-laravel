@@ -21,11 +21,11 @@ final readonly class PgsqlReplicaProbe implements ReplicaProbe
 {
     public function __construct(private ConnectionResolverInterface $connections) {}
 
-    #[RawSql(reason: 'asks pg_is_in_recovery(), because writing to a replica is the one mistake the shadow harness must never make')]
+    #[RawSql(reason: 'asks pg_catalog.pg_is_in_recovery(), because writing to a replica is the one mistake the shadow harness must never make')]
     public function isReplica(string $connectionName): bool
     {
         $row = $this->connections->connection($connectionName)
-            ->selectOne('select pg_is_in_recovery() as in_recovery');
+            ->selectOne('select pg_catalog.pg_is_in_recovery() as in_recovery');
 
         // A boolean column comes back as a PHP bool or the string 't'/'f'/'1'/'0'
         // depending on the driver's casting; normalize either into a clean bool

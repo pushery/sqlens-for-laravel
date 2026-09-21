@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Format;
 
 use Illuminate\Contracts\Config\Repository;
+use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 
 /**
  * Which dialect a run formats for, from the connection it is pointed at.
@@ -48,7 +49,7 @@ final readonly class DialectResolver
             return DialectResolution::unknown();
         }
 
-        $driver = $this->config->get('database.connections.'.$connection.'.driver');
+        $driver = EffectiveConnectionConfig::driverForConnection($this->config, $connection);
 
         if (! is_string($driver) || $driver === '') {
             return DialectResolution::unknown();

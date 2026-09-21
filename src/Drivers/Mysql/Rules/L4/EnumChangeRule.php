@@ -35,13 +35,32 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * | inserting a member in the middle | COPY | **no** |
  * | removing a member | COPY | **no** |
  * | reordering members | COPY | **no** |
- * | RENAMING a member in place | **INSTANT** | **no** |
+ * | RESPELLING a member equivalently under its collation (`'b'`→`'B'`) | **INSTANT** | **no** |
+ * | RENAMING a member to a different word (`'b'`→`'x'`) | **COPY**, and it ABORTS | **no** |
  *
- * The last row is the one that matters and the one nobody expects. A rename is the CHEAPEST change
- * MySQL offers here and one of the most dangerous: the stored values are ordinals, so renaming
- * `'b'` to `'B'` rewrites nothing and takes no lock — and every row that read `'b'` a moment ago
- * now reads `'B'`, in an application that has not been redeployed. Cost and compatibility are not
- * the same axis, and a rule that reported only the cost would call this one free.
+ * ⚠️ THE LAST TWO ROWS WERE ONE ROW SAYING "RENAMING a member in place | INSTANT", and that was the
+ * collation-equivalent special case sold as the general rule. The engine compares member names
+ * positionally under the column's collation (`Field_enum::is_equal` → `compare_type_names`), so only a
+ * respelling that the collation calls EQUAL is a no-op. Measured on MySQL 8.4.10 — the FLOOR server the
+ * suite runs against, which on a development machine is not the one a bare `mysql` client reaches:
+ * `MySqlTestCase` says so in its own docblock, "the default port is 3308 — Herd's MySQL 8.4 — never the
+ * conventional 3306, which on a dev machine is often a legacy sub-floor server". A measurement taken on
+ * 3306 here describes a version this package refuses to support.
+ *
+ *   'b' → 'B'  ALGORITHM=INSTANT   accepted
+ *   'b' → 'x'  ALGORITHM=INSTANT   ERROR 1846  "Need to rebuild the table to change column type"
+ *   'b' → 'x'  default algorithm   ERROR 1265  "Data truncated for column 's' at row 2"
+ *
+ * ⚠️ AND THE SECOND ERROR IS THE OPPOSITE OF WHAT THE RULE USED TO WARN ABOUT. A real rename is a
+ * COPY, and during the copy the old member is no longer in the definition, so every row still holding
+ * it truncates — under `STRICT_TRANS_TABLES`, which is in the default `sql_mode`, the `ALTER` simply
+ * FAILS. The rule warned about a silent reinterpretation and said nothing about an abort.
+ *
+ * The respelling row is still the one nobody expects, and it is where the old text's danger really
+ * lives: the stored values are ordinals, so `'b'`→`'B'` rewrites nothing and takes no lock — and every
+ * row that read `'b'` a moment ago now reads `'B'`, in an application that has not been redeployed.
+ * Cost and compatibility are not the same axis, and a rule that reported only the cost would call this
+ * one free.
  *
  * That is why this rule sits at level 4 (backward compatibility) rather than with its
  * cost-oriented siblings at level 2: what it is about is the running application, and the table
@@ -169,9 +188,12 @@ final class EnumChangeRule extends AbstractMysqlRule implements DerivesDowntimeC
         return 'This redefines an enumerated column\'s member list, and the statement names the whole list rather '
             .'than the change — so which kind of change it is can only be seen by comparing against the live '
             .'column. Appending a member at the end is safe and instant. Everything else is not: inserting in the '
-            .'middle, removing a member and reordering all rewrite the table, and RENAMING a member is the '
-            .'cheapest change MySQL offers here and one of the most dangerous — the stored values are ordinals, so '
-            .'a rename takes no lock at all and every row that read the old name now reads the new one, in an '
+            .'middle, removing a member and reordering all rewrite the table. RENAMING a member to a different word '
+            .'rewrites it too, and on a table that still holds the old member the rewrite TRUNCATES — under the '
+            .'default sql_mode the ALTER fails outright rather than running. The one genuinely instant member change '
+            .'besides an append is a RESPELLING the column collation treats as equal, such as \'b\' to \'B\' under '
+            .'utf8mb4_0900_ai_ci: nothing is rewritten and no lock is taken, and that is what makes it dangerous — '
+            .'the stored values are ordinals, so every row that read the old spelling now reads the new one, in an '
             .'application that has not been redeployed. Append at the end, or stage the change: add the new member, '
             .'deploy the code that accepts it, migrate the rows, then remove the old one in a later release. '
             .'(An append-only change is reported here too — the statement does not say which kind it is.)';

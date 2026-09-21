@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Drivers\Pgsql\Catalog;
 
-use Closure;
 use Illuminate\Database\Connection;
 use Pushery\SQLens\Attributes\RawSql;
 use Pushery\SQLens\Catalog\PoolerReading;
-use Pushery\SQLens\Catalog\SessionBudget;
 use Pushery\SQLens\Contracts\PoolerReader;
 use Throwable;
 
@@ -60,28 +58,35 @@ final readonly class PgsqlPoolerReader implements PoolerReader
     /** Host-name fragments that say somebody put a pooler there on purpose. */
     private const array POOLER_HOST_FRAGMENTS = ['pgbouncer', 'pooler'];
 
-    public function __construct(private Connection $connection, private ?SessionBudget $budget = null) {}
+    /**
+     * ⚠️ No session budget. The probe used to take one and bound itself with a session
+     * `SET statement_timeout`; see {@see self::read()} for why that bound was the very leak the
+     * probe exists to detect, and what is carried instead.
+     */
+    public function __construct(private Connection $connection) {}
 
     #[RawSql(reason: 'detects a connection pooler by setting a session setting and reading it back on what should be the same backend; SET has no builder verb')]
     public function read(): PoolerReading
     {
         $convention = $this->conventionSignals();
 
-        // Declared before the try so the finally below can always call it, including on a throw
-        // from the bounding statement itself.
-        $restore = static function (): void {};
-
         try {
-            // Bounded BEFORE the first probe statement, and this is the only place in an audit
-            // where that has to be arranged by hand: every other read runs inside ReaderSession,
-            // which seals and bounds the session on the way in. The pooler probe cannot use it —
-            // pooling is invisible inside a transaction, which is exactly what ReaderSession opens
-            // — so these statements were the four an audit sent a production server unbounded.
+            // ⚠️ NOT bounded by a session `SET statement_timeout`, and that is the decision this
+            // block used to make the other way.
             //
-            // Each of them is constant-time, so the bound is not about a slow query: it is about
-            // never holding a connection open with no limit at all, which is the promise, and about
-            // a pooler that accepts the connection and then never answers.
-            $restore = $this->bound();
+            // The probe is the one read in the package that cannot run inside a transaction —
+            // pooling is invisible in one, which is the guarantee a pooler exists to give — so
+            // `SET LOCAL`, which every other reader uses, is not available here. That left a plain
+            // session `SET`, and on the connection this probe is most needed on it is precisely the
+            // leak being measured: the `SET` lands on one backend, the restore looks for it on
+            // another, and the HOST APPLICATION inherits a timeout it never chose. Performed by the
+            // code whose job is to detect that this can happen.
+            //
+            // What is given up is named rather than waved away: four constant-time statements now
+            // run with whatever bound the connection already carries, usually none. That is a risk
+            // to THIS run — a pooler that accepts a connection and never answers holds it — and the
+            // leak was a risk to somebody else's session. Between a hazard we carry and one we hand
+            // to a stranger, the package takes its own.
 
             // Two SEPARATE statements, outside any transaction. Inside one, a transaction pooler
             // behaves exactly like a direct connection — which is the guarantee it exists to give.
@@ -111,11 +116,6 @@ final readonly class PgsqlPoolerReader implements PoolerReader
                 'the probe could not run: '.$error->getMessage(),
                 ...$convention,
             ]);
-        } finally {
-            // The connection is the HOST APPLICATION's, so the bound is put back on every path —
-            // including the two that return early. A timeout left behind would make an unrelated
-            // query fail later for a reason the application never chose.
-            $restore();
         }
 
         // Measured direct. The convention travels anyway when it disagrees, because a reader
@@ -145,54 +145,22 @@ final readonly class PgsqlPoolerReader implements PoolerReader
     }
 
     /**
-     * Bound this connection for the probe, and hand back the undo.
+     * ⚠️ `pg_catalog.`-qualified, like every call this probe makes. An unqualified catalog
+     * function can be outranked by a user function whose signature matches more closely, and this
+     * probe runs OUTSIDE a transaction, where nothing else covers it.
      *
-     * A closure rather than a snapshot value, so the caller cannot forget which setting it was and
-     * cannot restore it to something it invented.
-     *
-     * @return Closure(): void
+     * Measured on PostgreSQL 18.0 rather than assumed: a user `public.pg_backend_pid()` does NOT
+     * outrank the catalog one, and neither does a `public.current_setting(text)` — for an IDENTICAL
+     * signature `pg_catalog` is searched first and wins. So neither call here was exploitable. The
+     * qualification is still worth its four characters: it makes that a property of the line rather
+     * than of an argument type, and the day one of these takes a parameter whose type stops being
+     * an exact match, nothing silently changes answer.
      */
-    #[RawSql(
-        reason: 'reads the backend the session is actually bound to, which is the whole evidence a pooler leaves behind',
-        interpolation: 'the setting name is a constant of this class, and SET takes no parameter for one',
-    )]
-    private function bound(): Closure
-    {
-        if (! $this->budget instanceof SessionBudget) {
-            return static function (): void {};
-        }
-
-        $previous = $this->currentTimeout();
-        $this->connection->statement(sprintf("SET statement_timeout = '%dms'", $this->budget->statementTimeoutMs));
-
-        return function () use ($previous): void {
-            try {
-                $this->connection->statement(sprintf("SET statement_timeout = '%s'", addslashes($previous)));
-            } catch (Throwable) {
-                // The run is over and its result stands; the connection dying is itself the restore.
-            }
-        };
-    }
-
-    /** The statement timeout in force before the probe, as PostgreSQL reports it. */
-    #[RawSql(reason: 'reads a timeout through current_setting(); a builder cannot ask for a GUC')]
-    private function currentTimeout(): string
-    {
-        try {
-            $row = $this->connection->selectOne('SHOW statement_timeout');
-            $value = is_object($row) ? array_values(get_object_vars($row))[0] ?? null : null;
-
-            return is_scalar($value) ? (string) $value : '0';
-        } catch (Throwable) {
-            return '0';
-        }
-    }
-
     #[RawSql(reason: 'asks pg_backend_pid() -- the value the pooler probe compares across statements')]
     private function backendPid(): int
     {
         /** @var object{pid?: int|string|null}|null $row */
-        $row = $this->connection->selectOne('select pg_backend_pid() as pid');
+        $row = $this->connection->selectOne('select pg_catalog.pg_backend_pid() as pid');
 
         return is_object($row) ? (int) ($row->pid ?? 0) : 0;
     }
@@ -203,7 +171,7 @@ final readonly class PgsqlPoolerReader implements PoolerReader
         // The second argument makes an unset GUC answer NULL rather than raising, so a setting that
         // vanished is an ordinary answer here rather than an exception caught somewhere else.
         /** @var object{value?: string|null}|null $row */
-        $row = $this->connection->selectOne(sprintf("select current_setting('%s', true) as value", self::PROBE_SETTING));
+        $row = $this->connection->selectOne(sprintf("select pg_catalog.current_setting('%s', true) as value", self::PROBE_SETTING));
 
         return is_object($row) && is_string($row->value ?? null) ? $row->value : null;
     }

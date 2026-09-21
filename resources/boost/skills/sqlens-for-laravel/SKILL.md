@@ -60,8 +60,11 @@ php artisan sqlens:doctor
 ```
 
 `sqlens:doctor` reports the versions SQLens reasons about — PHP, Laravel, the
-package, the OS — and, per configured connection, the driver and the real server
-version. It is read-only: it opens no write and takes no lock. A connection it
+package, the OS — and, per configured connection, the driver. **The real server
+version needs `--probe`**, which is what opens a connection: without it that field
+is `undetermined (no connection is open — pass --probe to open one)`, which is the
+honest answer and not a failure. It is read-only either way: it opens no write and
+takes no lock. A connection it
 cannot reach is reported as `undetermined` with a named reason, never a silent
 "ok". Run it first to confirm the tool sees the database you expect.
 
@@ -115,9 +118,13 @@ php artisan sqlens:lint --connection=pgsql --path=database/migrations --level=4 
   `safety`, `performance`, `idiom`, `convention`, `security`, `privacy` (defaults to
   `sqlens.categories`; empty means all). A scope that matches no rule is reported as
   `undetermined`, never a silent pass.
-- `--format=console|json|github` chooses the output (defaults to
+- `--format=console|json|github|sarif|agent` chooses the output (defaults to
   `sqlens.reporting.default_format`); `--format=github` emits pull-request
-  annotations for CI. `--output=<file>` writes the report to a file.
+  annotations for CI, `--format=sarif` the document GitHub code scanning ingests,
+  and `--format=agent` the one built for you — see the agent section below.
+  `--output=<file>` writes the report to a file. `--show-remediation` applies to
+  `console` only. (`sqlens:format` and `sqlens:doctor` take a narrower set; each is
+  documented in its own section.)
 - `--strict-tools` / `--no-strict-tools` decide what a missing optional external
   tool means (defaults to `sqlens.strict_tools`): strict makes it an error so a CI
   run cannot pass with fewer rules than intended, non-strict reports it as a named
@@ -161,10 +168,12 @@ php artisan sqlens:audit --connection=pgsql --level=5
   error, not a fallback.
 - Same options as the lint suite where they mean the same thing: `--connection`,
   `--profile`, `--level`, `--category`, `--format`, `--output`.
-- **`--strict` is an audit option only.** It treats an undetermined result as a failure.
-  The lint suite has no `--strict`; its nearest equivalent is `--strict-tools`, which is
-  a different question — what to do about a missing external tool, not what to do about a
-  check that could not conclude.
+- **`--strict` is an audit option only, and it is the ONLY option with that name.** It
+  treats an undetermined result as a failure. The lint suite has no `--strict`; its nearest
+  equivalent is `--strict-tools`, which is a different question — what to do about a missing
+  external tool, not what to do about a check that could not conclude. `sqlens:doctor` spells
+  the tools question `--strict-tools` too; it used to spell it `--strict`, which made this
+  sentence false while it read as true.
 
 The report header states which instance answered, its role, the server version, the
 profile, and everything the reading could not cover — read it before the findings.

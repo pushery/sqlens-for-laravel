@@ -245,8 +245,25 @@ final readonly class SystemProcessRunner implements ProcessRunner
     }
 
     /**
-     * The `$PATH` entries, empty segments dropped. An unset PATH coerces to an empty
-     * string and yields no directories, so a locate simply finds nothing.
+     * The ABSOLUTE `$PATH` entries. An unset PATH coerces to an empty string and yields no
+     * directories, so a locate simply finds nothing.
+     *
+     * ⚠️ **A relative entry is dropped, and that is a credential boundary rather than tidiness.**
+     * This filtered only EMPTY segments, so `.`, `node_modules/.bin` and `vendor/bin` were joined
+     * like any other directory — CWE-427, an uncontrolled search path element. Whatever the process
+     * happens to be sitting in decides which binary runs.
+     *
+     * The version fence does not close it: `ToolLocator` compares a `--version` string and
+     * authenticates nothing, so any binary printing the expected line passes.
+     *
+     * And one tool makes this concrete. `pgls` is the only adapter handed the audited connection's
+     * password — it goes out as `PGPASSWORD` — and it ships ENABLED with `path => null`, resolved
+     * through `$PATH`. So before this filter, the first `postgrestools` on the search path received
+     * the database password, and a `.` entry made "the first one" mean "whatever is in this
+     * directory".
+     *
+     * Absoluteness is tested the way {@see SingleFileResolver::absolutePath()} already tests it in
+     * this package, rather than with a second spelling of the same question.
      *
      * @return list<string>
      */
@@ -254,7 +271,8 @@ final readonly class SystemProcessRunner implements ProcessRunner
     {
         return array_values(array_filter(
             explode(PATH_SEPARATOR, (string) getenv('PATH')),
-            static fn (string $directory): bool => $directory !== '',
+            static fn (string $directory): bool => str_starts_with($directory, '/')
+                || preg_match('#^[A-Za-z]:[\\\\/]#', $directory) === 1,
         ));
     }
 }

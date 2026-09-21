@@ -15,7 +15,6 @@ use Pushery\SQLens\Exceptions\UndeclaredConfigPath;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Format\FormatDiscovery;
 use Pushery\SQLens\Reporting\Baseline\StaleBaselinePolicy;
-use Pushery\SQLens\Reporting\CaptureMode;
 use Pushery\SQLens\Reporting\RunProfile;
 use Pushery\SQLens\Rules\RuleIdFormat;
 use Pushery\SQLens\Rules\ServerVersion;
@@ -31,7 +30,7 @@ use Pushery\SQLens\Severity\Severity;
  * consume the sections declared here and never re-describe them.
  *
  * Value ranges come from the same enums and parsers the engine runs on
- * (Severity, CaptureMode, RunProfile, Suite, RuleIdFormat, ServerVersion), so
+ * (Severity, RunProfile, Suite, RuleIdFormat, ServerVersion), so
  * the validator can never accept what the engine would reject or vice versa —
  * one source, no drift.
  */
@@ -52,7 +51,6 @@ final readonly class ConfigSchema
         'level',
         'categories',
         'stability',
-        'mode',
         'profile',
         'strict_tools',
         'strict_undetermined',
@@ -416,7 +414,6 @@ final readonly class ConfigSchema
             'security.privacy.extra_terms-item' => 'a term to add to the dictionary (a non-empty string)',
             'security.privacy.ignore_columns-item' => 'a QUALIFIED column name — for example "orders.iban". Unqualified would silence every column with that name, including ones nobody looked at',
             'stability-item' => 'one of: '.$this->enumValues(StabilityTier::class),
-            'mode' => 'one of: '.$this->enumValues(CaptureMode::class),
             'profile' => 'one of: '.$this->enumValues(RunProfile::class).', or null (each command then uses its own default)',
             'strict_tools', 'strict_undetermined' => 'a boolean',
             'allow_destructive' => 'a boolean — whether destructive operations are allowed project-wide (shown as a named suppression, never hidden)',
@@ -499,7 +496,7 @@ final readonly class ConfigSchema
             'pgsql.expected_timeouts-item' => 'one of: '.implode(', ', self::PGSQL_TIMEOUT_NAMES),
             'pgsql.max_locks_per_transaction' => 'a positive integer — how many distinct existing tables one migration transaction may strong-lock before it is flagged',
             'security' => 'an array with the keys: audit_connection, min_severity, include_vendor_migrations, advisories, runtime_connection, migration_connection, analyse, rls, privacy',
-            'security.audit_connection' => "a connection name from config/database.php for the security readers to RUN ON, or null for the run's own connection. Not to be confused with runtime_connection and migration_connection beside it, which name connections this suite ANALYSES. A name no database config defines is refused rather than fallen back from: falling back would examine a different instance and report it as clean",
+            'security.audit_connection' => "a connection name from config/database.php for the security readers to RUN ON, or null for the run's own connection. Not to be confused with runtime_connection and migration_connection beside it, which name connections this suite ANALYZES. A name no database config defines is refused rather than fallen back from: falling back would examine a different instance and report it as clean",
             'security.advisories' => 'an array with the keys: path, source',
             'security.advisories.source' => 'an https URL serving a document in this package\'s advisory format, or null — no default ships',
             'security.advisories.path' => 'an absolute path to an end-of-life data file, or null to use the published or bundled copy',
@@ -694,7 +691,6 @@ final readonly class ConfigSchema
                 fn (string $item): bool => $item !== '' && ! $this->isAbsolutePath($item),
                 'migration_paths-item',
             ),
-            'mode' => $this->enumLeaf($path, $expected, CaptureMode::class, $value),
             // null is the shipped value and means "nobody chose": a configured name outranks every
             // command's own default, so shipping one made `sqlens:predeploy` run as `local` in every
             // project that never picked a profile.

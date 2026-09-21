@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Rules\Keys;
 
+use Pushery\SQLens\Catalog\TableMembers;
 use Pushery\SQLens\Rules\Coverage\ForeignKeyIndexCoverage;
 use Pushery\SQLens\Subjects\SchemaObject;
 
@@ -40,13 +41,61 @@ final readonly class NarrowIntegerPrimaryKey
     public const array WIDE = ['bigint'];
 
     /**
+     * The largest value each narrow type holds, signed and unsigned.
+     *
+     * ⚠️ **MEASURED, not transcribed.** Every one of these eight was verified against MySQL 8.4.10 by
+     * inserting the value and then the value plus one: the first is accepted, the second refused
+     * under a strict mode. A ceiling table copied from memory is exactly the kind of number a reader
+     * checks — and the message that carried the SIGNED `int` ceiling for an `INT UNSIGNED` key was
+     * wrong by a factor of two, on the commonest shape the rule meets.
+     *
+     * The signed column is PostgreSQL's too: `smallint` stops at 32,767 and `integer` at
+     * 2,147,483,647 there as well. The unsigned column is MySQL-only, because PostgreSQL has no
+     * unsigned integers — so a PostgreSQL caller reads the signed side by construction rather than
+     * by a rule somebody has to remember.
+     *
+     * @var array<string, array{signed: int, unsigned: int}>
+     */
+    public const array CEILING = [
+        'tinyint' => ['signed' => 127, 'unsigned' => 255],
+        'smallint' => ['signed' => 32767, 'unsigned' => 65535],
+        'mediumint' => ['signed' => 8388607, 'unsigned' => 16777215],
+        'int' => ['signed' => 2147483647, 'unsigned' => 4294967295],
+        'integer' => ['signed' => 2147483647, 'unsigned' => 4294967295],
+    ];
+
+    /**
+     * The ceiling of one narrow key, grouped for reading.
+     *
+     * Returns an empty string for a type this table does not know, and the caller then says nothing
+     * about a limit rather than a wrong one. A missing entry is a gap in THIS table, not a fact about
+     * the column, and inventing a number for it is the failure the whole class exists against.
+     */
+    public static function ceiling(string $type, bool $unsigned): string
+    {
+        $row = self::CEILING[strtolower($type)] ?? null;
+
+        if ($row === null) {
+            return '';
+        }
+
+        return number_format($unsigned ? $row['unsigned'] : $row['signed'], 0, '.', ',');
+    }
+
+    /**
      * The single-column integer primary key that is too narrow, or null.
      *
      * Single-column only, and deliberately. A composite key's range is the product of its parts, so
      * "too narrow" stops being a property of one column — and a rule that reported one anyway would
      * be arithmetic nobody asked it to do.
      *
-     * @return array{column: string, type: string}|null
+     * ⚠️ **`unsigned` comes from the CATALOG, never from the type name.** The MySQL message names a
+     * ceiling, and the signed one is half the unsigned one — so a rule that guessed would be wrong by
+     * a factor of two on the commonest shape it meets, `increments()`, which produces `INT UNSIGNED`.
+     * It is always `false` on PostgreSQL, which has no unsigned integers; a caller must treat that as
+     * the answer rather than as a gap.
+     *
+     * @return array{column: string, type: string, unsigned: bool}|null
      */
     public static function of(SchemaObject $table): ?array
     {
@@ -63,9 +112,28 @@ final readonly class NarrowIntegerPrimaryKey
 
         // An unread type is not a narrow one. A column nobody looked at must not become a finding,
         // or a gap in the reading decides what the report says.
-        return in_array($type, self::NARROW, true)
-            ? ['column' => $column, 'type' => $type]
-            : null;
+        if (! in_array($type, self::NARROW, true)) {
+            return null;
+        }
+
+        return ['column' => $column, 'type' => $type, 'unsigned' => self::isUnsigned($table, $column)];
+    }
+
+    /**
+     * Whether the catalog reported this column as UNSIGNED.
+     *
+     * Read off `unsigned_columns`, the projection {@see TableMembers} carries
+     * for exactly this question. Absent or empty means signed — which is the right default and the
+     * only honest one on PostgreSQL, where no integer is unsigned.
+     */
+    private static function isUnsigned(SchemaObject $table, string $column): bool
+    {
+        $encoded = $table->getString('unsigned_columns') ?? '';
+
+        return in_array($column, array_filter(
+            array_map(trim(...), explode(';', $encoded)),
+            static fn (string $c): bool => $c !== '',
+        ), true);
     }
 
     /**

@@ -186,9 +186,11 @@ final readonly class JsonEnvelope
         // prose to find out, which is the shape this package refuses everywhere else.
         //
         // It is not a new measurement: both deploy commands have computed it since the budget
-        // existed, and it went into `RunMetadata` — projected by `Result::toArray()`, which this
-        // envelope does not emit and which no shipped code calls at all. Two source comments told
-        // the reader `run.time_budget_ms_consumed` was already here.
+        // existed, and it went into a second, thinner header called `RunMetadata` — projected by
+        // `Result::toArray()`, which this envelope does not emit and which no shipped code called at
+        // all. Two source comments told the reader `run.time_budget_ms_consumed` was already here.
+        //
+        // ⚠️ That duplicate is GONE, so `RunContext` is the only place this can come from.
         //
         // ⚠️ It reads as if it belonged beside `check_timings`, and in the HEADER it cannot: these
         // registers are concatenated in order to pin the header's key order, so a field declared in

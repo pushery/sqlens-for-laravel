@@ -40,6 +40,8 @@ use Symfony\Component\Console\Output\ConsoleOutputInterface;
 final class PredeployCommand extends Command
 {
     use ResolvesProfile;
+    use ResolvesRunBudget;
+    use ValidatesConfig;
 
     protected $signature = 'sqlens:predeploy
         {--connection= : The database connection to check; defaults to the resolved preflight connection}
@@ -55,8 +57,21 @@ final class PredeployCommand extends Command
         ReporterManager $reporters,
         Repository $config,
     ): int {
+        // FIRST, before the reporter, before the profile, before anything opens a connection. A
+        // misconfiguration that surfaces after twenty seconds of catalog reading is one people
+        // check for less often — and a key this package does not know is one it IGNORES, silently.
+        if ($this->refusesInvalidConfig()) {
+            return ExitCode::Misconfiguration->value;
+        }
+
         $requested = $this->option('connection');
-        $budget = $this->option('budget');
+
+        // Refused by name rather than dropped. `--budget=abc` used to become `null` and therefore the
+        // configured default: the gate ran, reported nothing about it, and an operator believed they
+        // had bounded the run they were about to gate a deploy on.
+        if (($budgetMs = $this->validatedBudgetMs()) === false) {
+            return ExitCode::Misconfiguration->value;
+        }
 
         // The same resolution every other suite command uses -- flag over SQLENS_PROFILE over the
         // configured profile -- with `predeploy` underneath as this command's own default rather
@@ -77,10 +92,37 @@ final class PredeployCommand extends Command
             return ExitCode::Misconfiguration->value;
         }
 
+        // ⚠️ BEFORE THE RUN, and the ordering is the whole point of moving it here. This block used
+        // to sit AFTER `$preflight->run()`, so a typo in `--format` cost a full catalog reading
+        // against the production instance before the error was named — at the moment before a
+        // deploy, which is the worst moment this command has. `sqlens:drift` already resolved its
+        // reporter first and said so in its own comment: the message was available before any of
+        // that work started.
+        //
+        // The report goes through the SAME reporters everything else uses, and that is the point
+        // rather than reuse: a gate with its own output format would drift from the one a pipeline
+        // already parses, and the day the two disagree nobody can tell which is right.
+        //
+        // The findings travel as findings. A preflight verdict is not a new kind of thing — it is
+        // the same three-valued statement about a database that `lint` and `audit` produce, and
+        // giving it a private shape would make `downtime_class` and the severity axis stop working
+        // exactly where a deploy needs them most.
+        //
+        // Refused, never fallen back from. A quiet fall back to console is the worst available
+        // answer: the run succeeds, the output is the wrong shape, and whatever was parsing it gets
+        // nothing — silently.
+        try {
+            $reporter = $reporters->reporter(is_string($format = $this->option('format')) ? $format : null);
+        } catch (UnknownReporterFormat $error) {
+            $this->outputErrorLine($error->getMessage());
+
+            return ExitCode::Misconfiguration->value;
+        }
+
         $outcome = $preflight->run(
             connection: is_string($requested) && $requested !== '' ? $requested : null,
             profile: $profile->profile,
-            budgetMs: is_string($budget) && ctype_digit($budget) ? (int) $budget : null,
+            budgetMs: $budgetMs,
         );
 
         // A run that never happened is a misconfiguration, not a finding: nothing was learned about
@@ -92,25 +134,6 @@ final class PredeployCommand extends Command
         // The check is the language's requirement, not a second decision about the same fact.
         if (! $outcome->report instanceof PreflightReport || ! $outcome->result instanceof Result || ! $outcome->context instanceof RunContext) {
             $this->outputErrorLine((string) $outcome->refusal);
-
-            return ExitCode::Misconfiguration->value;
-        }
-
-        // The report goes through the SAME reporters everything else uses, and that is the point
-        // rather than reuse: a gate with its own output format would drift from the one a pipeline
-        // already parses, and the day the two disagree nobody can tell which is right.
-        //
-        // The findings travel as findings. A preflight verdict is not a new kind of thing — it is
-        // the same three-valued statement about a database that `lint` and `audit` produce, and
-        // giving it a private shape would make `downtime_class` and the severity axis stop working
-        // exactly where a deploy needs them most.
-        try {
-            $reporter = $reporters->reporter(is_string($format = $this->option('format')) ? $format : null);
-        } catch (UnknownReporterFormat $error) {
-            // Refused, never fallen back from. A quiet fall back to console is the worst available
-            // answer: the run succeeds, the output is the wrong shape, and whatever was parsing it
-            // gets nothing — silently, at the moment before a deploy.
-            $this->outputErrorLine($error->getMessage());
 
             return ExitCode::Misconfiguration->value;
         }

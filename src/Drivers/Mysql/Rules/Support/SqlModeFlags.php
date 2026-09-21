@@ -21,9 +21,20 @@ namespace Pushery\SQLens\Drivers\Mysql\Rules\Support;
  * MySQL expands `TRADITIONAL` and friends on assignment, so a server that was set with a combination
  * word reports the individual flags back. What arrives from `performance_schema` or `SHOW` is
  * therefore already the expanded list, and expanding again here would be inventing an answer the
- * server did not give — the shape of guess this package refuses. A value that somehow still carried
- * a combination word would fail the `has()` check and produce a finding, which is the cautious
- * direction: it says "I do not see this flag", not "this flag is absent".
+ * server did not give — the shape of guess this package refuses.
+ *
+ * ⚠️ THE COMBINATION WORD COMES BACK TOO, ALONGSIDE ITS EXPANSION — this paragraph used to treat that
+ * as a remote case ("a value that somehow still carried a combination word"), and it is the NORMAL
+ * state of any server set that way. Measured on 8.4.10, over all three read paths:
+ *
+ *     SET SESSION sql_mode = 'TRADITIONAL'
+ *       -> STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,
+ *          ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_ENGINE_SUBSTITUTION
+ *
+ * It costs nothing, because `has('STRICT_TRANS_TABLES')` finds the expansion. What the old wording
+ * got backwards is the conclusion: it said such a value "would fail the `has()` check and produce a
+ * finding". It does not, and that is correct — but anyone building a guard on the old sentence would
+ * pin an untruth, namely that this value never carries a combination word.
  */
 final readonly class SqlModeFlags
 {

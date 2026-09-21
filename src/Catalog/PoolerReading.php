@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Catalog;
 
+use Pushery\SQLens\Findings\CredentialRedactor;
+
 /**
  * A pooler verdict together with the signals that produced it.
  *
@@ -29,10 +31,32 @@ final readonly class PoolerReading
         return new self(PoolerVerdict::None, $signals);
     }
 
-    /** @param  list<string>  $signals */
+    /**
+     * ⚠️ The detail is REDACTED here rather than at the caller, and that is the whole shape of
+     * the fix: eighteen producers wrote `Throwable::getMessage()` into this field with no
+     * redactor at all, and `QueryException::formatMessage()` appends ` (Connection: …, Host: …,
+     * Port: …, Database: …, SQL: …)` to every query exception on both engines. A refused catalog
+     * read on a managed instance — which the collectors' own comments call the ordinary case —
+     * therefore arrived wearing the connection's coordinates.
+     *
+     * At the sink, because a nineteenth producer inherits the redaction without knowing it exists.
+     * Not at {@see Finding}, which would be a filter rather than a sink: the shape redactor removes
+     * `role "…"`, `user "…"` and `database "…"`, and that is precisely what a SECURITY finding
+     * about a role or a database is made of. This field carries error text and nothing else.
+     *
+     * Only this factory: `pooled()` and `direct()` carry signals this package composes itself, and
+     * the probe's failure path is the one that carries a driver's words.
+     *
+     * @param  list<string>  $signals
+     */
     public static function undetermined(array $signals): self
     {
-        return new self(PoolerVerdict::Undetermined, $signals);
+        $redactor = new CredentialRedactor;
+
+        return new self(
+            PoolerVerdict::Undetermined,
+            array_map($redactor->redact(...), $signals),
+        );
     }
 
     /** Whether the audit has to withhold every instance-scoped judgment. */

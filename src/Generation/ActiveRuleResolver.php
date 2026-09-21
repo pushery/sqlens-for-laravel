@@ -14,6 +14,7 @@ use Pushery\SQLens\Config\RuleIdValidator;
 use Pushery\SQLens\Contracts\Driver;
 use Pushery\SQLens\Contracts\Rule;
 use Pushery\SQLens\Drivers\DriverRegistry;
+use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Levels\LevelGate;
@@ -152,7 +153,7 @@ final readonly class ActiveRuleResolver
                 ?? $this->stringConfig('database.default')
                 ?? 'default';
 
-            $driverKey = $this->stringConfig('database.connections.'.$connection.'.driver');
+            $driverKey = EffectiveConnectionConfig::driverForConnection($this->config, $connection);
 
             if ($driverKey === null) {
                 throw UnresolvableRuleCatalog::noDriverConfigured($connection);

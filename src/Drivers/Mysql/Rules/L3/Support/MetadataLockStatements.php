@@ -6,6 +6,8 @@ namespace Pushery\SQLens\Drivers\Mysql\Rules\L3\Support;
 
 use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Canonical\StatementTarget;
+use Pushery\SQLens\Canonical\StringLiteralMask;
+use Pushery\SQLens\Drivers\Mysql\Canonical\MysqlCanonicalization;
 use Pushery\SQLens\Subjects\MigrationContext;
 use Pushery\SQLens\Subjects\MigrationStatementDigest;
 use Pushery\SQLens\Subjects\SchemaObjectType;
@@ -105,11 +107,31 @@ final readonly class MetadataLockStatements
      * the confusion this rule family exists to prevent.
      *
      * Read off the canonical string because a plain `SET` is not a classified DDL kind.
+     *
+     * ⚠️ **Over the MASKED string, and that is the whole difference between a rule and a grep.** This
+     * scanned `$digest->canonical` directly, so a statement that merely CONTAINED the words counted
+     * as setting the timeout:
+     *
+     * ```sql
+     * INSERT INTO notes (body) VALUES ('set lock_wait_timeout = 5');
+     * ALTER TABLE users MODIFY email VARCHAR(320);
+     * ```
+     *
+     * Both patterns match inside the literal, `timeoutSetBefore()` therefore reports a preamble that
+     * does not exist, and MY.L3.MISSING_LOCK_WAIT_TIMEOUT goes silent on the ALTER — a false green on
+     * the one rule whose entire job is to notice the missing bound.
+     *
+     * It needs no raw SQL and no double quote: `->insert()` with that string produces it, and the
+     * false silence survives for the rest of the migration because the gate index only has to be
+     * larger. The double-quote delimiter this was found beside makes it reachable a second way; the
+     * single-quoted form was reachable all along.
      */
     public static function setsTimeout(MigrationStatementDigest $digest, string $timeout): bool
     {
-        return preg_match('/(?<![a-z_])'.preg_quote($timeout, '/').'\b\s*(?:=|:=)/i', $digest->canonical) === 1
-            && preg_match('/\bSET\b/i', $digest->canonical) === 1;
+        $canonical = StringLiteralMask::forDriver(new MysqlCanonicalization)->apply($digest->canonical);
+
+        return preg_match('/(?<![a-z_])'.preg_quote($timeout, '/').'\b\s*(?:=|:=)/i', $canonical) === 1
+            && preg_match('/\bSET\b/i', $canonical) === 1;
     }
 
     /** Whether every table this statement names was created earlier in the same migration. */

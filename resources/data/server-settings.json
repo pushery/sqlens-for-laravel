@@ -1,6 +1,6 @@
 {
     "schema_version": 1,
-    "about": "Per-variable expectations for the server-baseline rules, so no rule hard-codes one. Every entry is written here in our own words with the vendor page it rests on; nothing is copied. `sqlens_expectation` may be null, which means the value is worth READING but not worth judging — usually because the right answer depends on the deployment. `changeable` is load-bearing rather than descriptive: an `initdb` variable cannot be altered afterwards, so a rule about one must report a fact to plan around instead of proposing a change that is impossible.",
+    "about": "Per-variable expectations for the server-baseline rules, so no rule hard-codes one. Every entry is written here in our own words with the vendor page it rests on; nothing is copied. `sqlens_expectation` may be null, which means the value is worth READING but not worth judging — usually because the right answer depends on the deployment. `changeable` is load-bearing rather than descriptive: an `initdb` variable cannot be altered afterwards, so a rule about one must report a fact to plan around instead of proposing a change that is impossible. `offline` is the middle case and was missing until 2026-09-20: changeable in place, but only while the server is stopped. Without it `data_checksums` fell into the most expensive bucket and the finding recommended a new cluster and a dump/restore for something `pg_checksums --enable` does in a maintenance window.",
     "entries": [
         {
             "variable": "character_set_server",
@@ -154,9 +154,9 @@
             "vendor_default": "TLSv1.2,TLSv1.3",
             "sqlens_expectation": null,
             "scope": "instance",
-            "changeable": "restart",
+            "changeable": "reload",
             "source_url": "https://dev.mysql.com/doc/refman/8.4/en/encrypted-connection-protocols-ciphers.html",
-            "note": "Which TLS protocol versions the server will negotiate. Measured on 8.4.10: TLSv1.2,TLSv1.3 with VARIABLE_SOURCE=COMPILED -- 8.4 removed TLSv1 and TLSv1.1 outright, so the vendor default carries no deprecated version and the common finding on older servers cannot occur here. NOT judged for now, because the honest check is a SET comparison rather than a value comparison: an operator may legitimately narrow this to TLSv1.3 alone, which is stronger and would read as a mismatch against any single expected string. A rule wanting to judge it needs set semantics first; until then this entry exists so the value is READ and reportable rather than absent."
+            "note": "Which TLS protocol versions the server will negotiate. Measured on 8.4.10: TLSv1.2,TLSv1.3 with VARIABLE_SOURCE=COMPILED -- 8.4 removed TLSv1 and TLSv1.1 outright, so the vendor default carries no deprecated version and the common finding on older servers cannot occur here. NOT judged for now, because the honest check is a SET comparison rather than a value comparison: an operator may legitimately narrow this to TLSv1.3 alone, which is stronger and would read as a mismatch against any single expected string. A rule wanting to judge it needs set semantics first; until then this entry exists so the value is READ and reportable rather than absent. CHANGEABLE was \"restart\" and is measured to be \"reload\": on 8.4.10 SET SESSION is refused (\"is a GLOBAL variable\"), SET GLOBAL is accepted, and ALTER INSTANCE RELOAD TLS is what makes a new value reach new connections -- a reload, with no downtime to plan. The old value is 5.7-era heritage. It matters because changeable words the remediation: the same field once carried initdb for data_checksums, and that finding told a reader to migrate a cluster where pg_checksums --enable would do. Swept with controls over every changeable:restart entry; secure_file_priv is READ ONLY in both scopes and correctly stays restart."
         },
         {
             "variable": "TimeZone",
@@ -178,9 +178,9 @@
             "vendor_default": "on",
             "sqlens_expectation": "on",
             "scope": "cluster",
-            "changeable": "initdb",
+            "changeable": "offline",
             "source_url": "https://www.postgresql.org/docs/18/runtime-config-preset.html",
-            "note": "On since 18 by default. It cannot be turned on later without re-initializing the cluster, so a rule about it reports a fact to plan around rather than a change to make."
+            "note": "On since 18 by default. ⚠️ THIS ENTRY SAID IT CANNOT BE TURNED ON LATER WITHOUT RE-INITIALIZING THE CLUSTER, AND THAT HAS BEEN WRONG SINCE PostgreSQL 12: pg_checksums --enable turns them on in the existing data directory, with the server cleanly shut down. Verified rather than read off the page -- pg_checksums --help on 18.0 lists -e, --enable, and run against a running cluster the tool answers \"cluster must be shut down\". So this is changeable OFFLINE, not fixed at initdb, and the difference is a maintenance window against a new cluster plus a dump/restore -- two plans that differ by orders of magnitude, decided on the strength of this sentence."
         },
         {
             "variable": "default_transaction_isolation",

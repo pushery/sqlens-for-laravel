@@ -19,6 +19,7 @@ use Pushery\SQLens\Capture\CaptureFindingCollector;
 use Pushery\SQLens\Capture\CaptureRun;
 use Pushery\SQLens\Capture\CaptureSection;
 use Pushery\SQLens\Capture\MigrationPaths;
+use Pushery\SQLens\Capture\MigrationsTable;
 use Pushery\SQLens\Capture\PendingMigration;
 use Pushery\SQLens\Capture\PendingMigrationResolver;
 use Pushery\SQLens\Capture\PendingResolution;
@@ -53,6 +54,7 @@ use Pushery\SQLens\Drivers\Capture\DriverCaptorFactory;
 use Pushery\SQLens\Drivers\DriverManager;
 use Pushery\SQLens\Drivers\DriverResolutionFailure;
 use Pushery\SQLens\Drivers\DriverResolutionReason;
+use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Drivers\EngineIdentity;
 use Pushery\SQLens\Drivers\ServerVersionFloor;
 use Pushery\SQLens\Engine\ResolvedServerVersion;
@@ -61,7 +63,6 @@ use Pushery\SQLens\Exceptions\UnreadableBaseline;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
 use Pushery\SQLens\Findings\Result;
-use Pushery\SQLens\Findings\RunMetadata;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Levels\LevelGate;
@@ -278,12 +279,11 @@ final readonly class LintRunner implements LintRuns
         ];
 
         if ($configViolations !== []) {
-            $configured = $this->config->get("database.connections.{$connectionName}.driver");
+            $configured = EffectiveConnectionConfig::driverForConnection($this->config, $connectionName);
 
             return $this->refusedConfig(
                 $configViolations,
                 $this->buildContext($connectionName, $mode, $resolvedVersion, $activeLevel, 0, 0, $activeCategories, [], $strict, $roundtrip, guard: $guard),
-                $mode,
                 $connectionName,
                 is_string($configured) && $configured !== '' ? $configured : 'unknown',
                 $strict,
@@ -298,7 +298,7 @@ final readonly class LintRunner implements LintRuns
         if ($driver instanceof DriverResolutionFailure) {
             // No tool versions in this header, and not for lack of asking: an engine SQLens does
             // not support has no tool with jurisdiction over it, so there is nothing to name.
-            return $this->unsupported($driver, $this->buildContext($connectionName, $mode, $resolvedVersion, $activeLevel, 0, 0, $activeCategories, [], $strict, $roundtrip, guard: $guard), $mode, $connectionName);
+            return $this->unsupported($driver, $this->buildContext($connectionName, $mode, $resolvedVersion, $activeLevel, 0, 0, $activeCategories, [], $strict, $roundtrip, guard: $guard), $connectionName);
         }
 
         // The external tools, diagnosed once and only those with jurisdiction over THIS driver:
@@ -398,7 +398,7 @@ final readonly class LintRunner implements LintRuns
         // the misconfiguration code. A platform with no build for the tool never trips
         // this (it is a documented degradation, not a fixable absence).
         if ($strict && $this->hasStrictFailure($diagnostics)) {
-            return $this->strictToolStop($diagnostics, $connectionName, $subjectContext, $context, $mode);
+            return $this->strictToolStop($diagnostics, $connectionName, $subjectContext, $context);
         }
 
         // The mode decides the SOURCE of the SQL and nothing else: pretend collects it
@@ -412,7 +412,7 @@ final readonly class LintRunner implements LintRuns
         // A driver the manager supports but the factory has no capture wiring for
         // (a registered third-party without a formatter) is the same named stop.
         if (! $captor instanceof Captor) {
-            return $this->unsupported($captor, $context, $mode, $connectionName);
+            return $this->unsupported($captor, $context, $connectionName);
         }
 
         // The subject source is the ONLY thing the fast path changes: a single --file
@@ -429,7 +429,7 @@ final readonly class LintRunner implements LintRuns
                 // reader with a report whose denominator is wrong — and this is a misconfiguration,
                 // which is a thing to fix before running, not a partial result to interpret.
                 if ($single instanceof SingleFileFailure) {
-                    return $this->fileMisconfiguration($single, $named, $context, $mode, $connectionName);
+                    return $this->fileMisconfiguration($single, $named, $context, $connectionName);
                 }
 
                 // Numbered in the order they were NAMED. The pending path numbers by migration
@@ -478,13 +478,13 @@ final readonly class LintRunner implements LintRuns
                 // because `SessionGuard::restore()` happens to be idempotent, which is not a
                 // property this path should be relying on. The type checker found it the moment
                 // `$release` stopped being nullable at this point.
-                return $this->unsupported($engine, $context, $mode, $connectionName);
+                return $this->unsupported($engine, $context, $connectionName);
             }
 
             $resolution = $this->resolvePending($connectionName, $migrationPaths, $includeVendorMigrations);
 
             if (! $resolution->isResolved()) {
-                return $this->skipped($resolution, $connectionName, $migrationPaths, $subjectContext, $context, $mode);
+                return $this->skipped($resolution, $connectionName, $migrationPaths, $subjectContext, $context);
             }
         }
 
@@ -633,7 +633,15 @@ final readonly class LintRunner implements LintRuns
         // while a suppressed debt finding came through anyway.
         $findings = [...$findings, ...$this->debtFindings($debt, $findings, $registry->all(), $driver->key(), $subjectContext, $files !== [])];
 
-        // The three-stage suppression chain (baseline · config · annotation) is
+        // A configured baseline whose file is not there. Appended HERE, with the debt notices and
+        // before suppression, for the same reason they are: it is a finding, and a finding that
+        // bypassed the suppression chain would be a second pipeline that drifts from the first.
+        //
+        // ⚠️ It cannot be suppressed BY the missing baseline, which is the shape that would have
+        // made it useless — there is nothing in an absent file to accept it with.
+        $findings = [...$findings, ...$this->baselineAbsenceNotice($subjectContext)];
+
+        // The suppression chain (config · audit ignore · baseline · annotation · destructive opt-in) is
         // applied here, after the rule engine and before the reporter, so a second
         // run after a baseline shows only NEW findings — and never suppresses one
         // silently: the hidden findings and the stale instructions ride on the Result.
@@ -662,11 +670,9 @@ final readonly class LintRunner implements LintRuns
 
         $result = Result::of(
             $visible,
-            $this->metadata($mode),
             $suppression->suppressed,
             $suppression->staleBaselineEntries,
-            $suppression->unusedIgnoreRules,
-        );
+            $suppression->unusedIgnoreRules);
 
         // What a baseline entry that matched nothing COSTS — the project's answer, read from the same
         // key the audit reads and applied through the same policy object, because one file cannot
@@ -758,15 +764,12 @@ final readonly class LintRunner implements LintRuns
         $connection = $this->database->connection($connectionName);
 
         $budget = new CaptureConnectionResolver($this->drivers, $this->config)->sessionBudget();
-        $guard = new SessionGuard($budget);
 
-        // Snapshot BEFORE applying, or the snapshot records our own bound and "restoring"
-        // would cement exactly what it is supposed to undo.
-        $snapshot = $guard->snapshot($connection);
-
-        $guard->apply($connection);
-
-        return static fn () => $guard->restore($connection, $snapshot);
+        // Through the one seam, which owns the order (snapshot before apply) AND the precondition:
+        // on a connection that measures as multiplexed nothing is written at all, because a `SET`
+        // there lands on a backend this run will never see again and the restore would look for it
+        // on a third. See SessionGuard::mayWriteSessionState().
+        return new SessionGuard($budget)->bind($connection);
     }
 
     /**
@@ -797,8 +800,16 @@ final readonly class LintRunner implements LintRuns
             $this->database,
             $this->migrator,
             $migrationPaths,
-            'migrations',
+            // From the configuration, through the one place that narrows it — see
+            // {@see MigrationsTable}. The literal that stood here overrode a decision the
+            // application had already made.
+            MigrationsTable::from($this->config->get('database.migrations')),
             $this->projectRoot(),
+            // The same budget `boundSourceSession()` above already applied, from the same resolver
+            // rather than a second reading of the config. The inner bound is therefore identical to
+            // the outer one on this path, which is why nesting them restores the outer value and
+            // not the pre-run one.
+            new SessionGuard(new CaptureConnectionResolver($this->drivers, $this->config)->sessionBudget()),
             $includeVendorMigrations,
         );
 
@@ -817,9 +828,9 @@ final readonly class LintRunner implements LintRuns
     }
 
     /** The `--file`-could-not-resolve outcome: no findings, the failure carried, misconfiguration exit. */
-    private function fileMisconfiguration(SingleFileFailure $failure, string $file, RunContext $context, CaptureMode $mode, string $connectionName): LintOutcome
+    private function fileMisconfiguration(SingleFileFailure $failure, string $file, RunContext $context, string $connectionName): LintOutcome
     {
-        $result = Result::of([], $this->metadata($mode));
+        $result = Result::of([]);
 
         return new LintOutcome($result, $context, $this->exitCodes->resolve($result, $context, true), $connectionName, fileFailure: $failure, fileFailurePath: $file);
     }
@@ -839,7 +850,7 @@ final readonly class LintRunner implements LintRuns
     private function baselineViolations(): array
     {
         try {
-            $baseline = new ConfiguredBaseline($this->config)->forRun();
+            $baseline = new ConfiguredBaseline($this->config, $this->projectRoot())->forRun();
         } catch (UnreadableBaseline) {
             return [];
         }
@@ -1078,7 +1089,7 @@ final readonly class LintRunner implements LintRuns
      *
      * @param  list<ConfigViolation>  $violations
      */
-    private function refusedConfig(array $violations, RunContext $context, CaptureMode $mode, string $connectionName, string $configuredDriver, bool $strict, ResolvedServerVersion $resolvedVersion): LintOutcome
+    private function refusedConfig(array $violations, RunContext $context, string $connectionName, string $configuredDriver, bool $strict, ResolvedServerVersion $resolvedVersion): LintOutcome
     {
         $findings = array_map(
             // UNDETERMINED, not a fail, and that is the same choice the audit half makes. The run
@@ -1109,13 +1120,13 @@ final readonly class LintRunner implements LintRuns
             $violations,
         );
 
-        return new LintOutcome(Result::of($findings, $this->metadata($mode)), $context, ExitCode::Misconfiguration, $connectionName);
+        return new LintOutcome(Result::of($findings), $context, ExitCode::Misconfiguration, $connectionName);
     }
 
     /** The unsupported-engine outcome: no findings, the failure carried, misconfiguration exit. */
-    private function unsupported(DriverResolutionFailure $failure, RunContext $context, CaptureMode $mode, string $connectionName): LintOutcome
+    private function unsupported(DriverResolutionFailure $failure, RunContext $context, string $connectionName): LintOutcome
     {
-        $result = Result::of([], $this->metadata($mode));
+        $result = Result::of([]);
 
         return new LintOutcome($result, $context, $this->exitCodes->resolve($result, $context, true), $connectionName, $failure);
     }
@@ -1126,13 +1137,13 @@ final readonly class LintRunner implements LintRuns
      *
      * @param  list<string>  $migrationPaths
      */
-    private function skipped(PendingResolution $resolution, string $connectionName, array $migrationPaths, SubjectContext $subjectContext, RunContext $context, CaptureMode $mode): LintOutcome
+    private function skipped(PendingResolution $resolution, string $connectionName, array $migrationPaths, SubjectContext $subjectContext, RunContext $context): LintOutcome
     {
         // A skipped resolution always carries a reason (the type enforces it); the
         // throw guards that invariant rather than inventing a default.
         $reason = $resolution->skip ?? throw new LogicException('An unresolved pending resolution without a skip reason is unconstructible.');
 
-        $result = Result::of([$this->skipFinding($reason, $connectionName, $migrationPaths, $subjectContext)], $this->metadata($mode));
+        $result = Result::of([$this->skipFinding($reason, $connectionName, $migrationPaths, $subjectContext)]);
 
         return new LintOutcome($result, $context, $this->exitCodes->resolve($result, $context, false), $connectionName);
     }
@@ -1182,7 +1193,7 @@ final readonly class LintRunner implements LintRuns
      */
     private function buildContext(string $connectionName, CaptureMode $mode, ResolvedServerVersion $resolvedVersion, int $level, int $activeRules, int $hiddenRules, array $activeCategories, array $toolVersions, bool $strictTools, bool $roundtrip, ?DriverResolutionFailure $floorFailure = null, ?GuardDecision $guard = null): RunContext
     {
-        $base = $this->contextCollector->collect();
+        $base = $this->contextCollector->collect(ReportingCaptureMode::from($mode->value));
 
         return new RunContext(
             // The marker rides IN the version string rather than in a new header key. One
@@ -1255,7 +1266,7 @@ final readonly class LintRunner implements LintRuns
      *
      * @param  list<ToolDiagnostic>  $diagnostics
      */
-    private function strictToolStop(array $diagnostics, string $connectionName, SubjectContext $subjectContext, RunContext $context, CaptureMode $mode): LintOutcome
+    private function strictToolStop(array $diagnostics, string $connectionName, SubjectContext $subjectContext, RunContext $context): LintOutcome
     {
         $findings = [];
 
@@ -1265,7 +1276,7 @@ final readonly class LintRunner implements LintRuns
             }
         }
 
-        $result = Result::of($findings, $this->metadata($mode));
+        $result = Result::of($findings);
 
         return new LintOutcome($result, $context, $this->exitCodes->resolve($result, $context, true), $connectionName);
     }
@@ -1546,7 +1557,11 @@ final readonly class LintRunner implements LintRuns
      * The suppression chain for this run, built from the lint context: the resolved
      * baseline file, the `ignore` config block, the reasons a project has explicitly
      * accepted living without, and whether it has opted in project-wide to destructive
-     * operations. The order (baseline · config · annotation · destructive opt-in) and
+     * operations. ⚠️ The order is `config · audit ignore · baseline · annotation · destructive opt-in`
+     * — config FIRST and the baseline THIRD, which is the resolver's own `ORDER`. This comment named
+     * the baseline first for as long as it existed, and so did the README: a reader who predicted
+     * which layer a report would blame got the wrong answer, and a baseline burn-down counted
+     * differently than they expected. Standing before temporary is the mnemonic. The order and
      * the mechanism are owned by the suppression layer; this only wires them.
      */
     private function suppressionResolver(bool $applyBaseline): SuppressionResolver
@@ -1613,7 +1628,7 @@ final readonly class LintRunner implements LintRuns
      */
     private function baselineFile(): BaselineFile
     {
-        return new ConfiguredBaseline($this->config)->forRun();
+        return new ConfiguredBaseline($this->config, $this->projectRoot())->forRun();
     }
 
     /**
@@ -1812,7 +1827,7 @@ final readonly class LintRunner implements LintRuns
     /** The connection's configured driver key, for driver-aware version parsing. */
     private function driverKey(string $connectionName): string
     {
-        $driver = $this->config->get("database.connections.{$connectionName}.driver");
+        $driver = EffectiveConnectionConfig::driverForConnection($this->config, $connectionName);
 
         return is_string($driver) ? $driver : 'unknown';
     }
@@ -1860,7 +1875,7 @@ final readonly class LintRunner implements LintRuns
         return Finding::undetermined(
             $rule->id(),
             $rule->messagePrefix(),
-            sprintf('%s reasons about the server statistics, but no statistics reader is available in this build, so it was not evaluated. It will run once the audit suite lands.', $rule->id()),
+            sprintf('%s reasons about the server statistics, and this run has no statistics reader: a lint run reads migration source and opens no catalog session. Run it under sqlens:audit or sqlens:predeploy, which do.', $rule->id()),
             UndeterminedReason::StatisticsUnavailable,
             Location::inCallsite($rule->id(), 0, 'connection '.$connectionName, $this->projectRoot()),
             $rule->category(),
@@ -1979,21 +1994,51 @@ final readonly class LintRunner implements LintRuns
         );
     }
 
-    private function metadata(CaptureMode $mode): RunMetadata
-    {
-        $profile = $this->config->get('sqlens.profile');
-
-        return new RunMetadata(
-            serverVersions: [],
-            toolVersions: [],
-            mode: $mode,
-            profile: is_string($profile) ? $profile : 'local',
-            strictTools: $this->config->get('sqlens.strict_tools') === true,
-        );
-    }
-
     private function projectRoot(): string
     {
         return $this->app->basePath();
+    }
+
+    /**
+     * A notice when a baseline is configured and its file is missing.
+     *
+     * An empty baseline and an absent one produce the same report, and they mean opposite things:
+     * one is a project that accepts nothing, the other is a project whose accepted findings have
+     * all come back at once. The reader sees a wall of new findings either way.
+     *
+     * Not an error. `sqlens:baseline` has to be runnable before the file exists — that is how a
+     * project creates one — so an absent file on a configured path is an ordinary state on the way
+     * to having one, and the honest report is a notice rather than a refusal.
+     *
+     * @return list<Finding>
+     */
+    private function baselineAbsenceNotice(SubjectContext $subjectContext): array
+    {
+        if (! new ConfiguredBaseline($this->config, $this->projectRoot())->configuredButAbsent()) {
+            return [];
+        }
+
+        $configured = $this->config->get('sqlens.baseline.path');
+        $path = is_string($configured) ? $configured : '';
+        $notice = RunnerNotice::BaselineAbsent;
+
+        return [Finding::undetermined(
+            $notice->value,
+            RunnerNotice::MESSAGE_PREFIX,
+            sprintf(
+                'a baseline is configured at "%s" and no file is there, so this run accepted nothing — which '
+                .'is also what a project with no baseline looks like. Every finding the baseline had accepted '
+                .'is in this report. The path is resolved from the application root; if the baseline has not '
+                .'been created yet, sqlens:baseline creates it and this goes away.',
+                $path,
+            ),
+            UndeterminedReason::BaselineAbsent,
+            Location::inCallsite('baseline:'.$path, 0, $notice->value, $this->projectRoot()),
+            $notice->category(),
+            $notice->level(),
+            $notice->stability(),
+            $notice->documentationUrl(),
+            $subjectContext,
+        )];
     }
 }

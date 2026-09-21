@@ -38,18 +38,18 @@ use Pushery\SQLens\Deploy\PostdeployVerifier;
 use Pushery\SQLens\Deploy\TimeBudgetNotice;
 use Pushery\SQLens\Drivers\Capture\DriverCaptorFactory;
 use Pushery\SQLens\Drivers\DriverRegistry;
+use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Exceptions\UnknownReporterFormat;
 use Pushery\SQLens\Exceptions\UnreadableDriftExcludes;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Result;
-use Pushery\SQLens\Findings\RunMetadata;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Lint\ShadowClearance;
+use Pushery\SQLens\Reporting\CaptureMode as ReportingCaptureMode;
 use Pushery\SQLens\Reporting\ConfigRunContextCollector;
 use Pushery\SQLens\Reporting\ReporterManager;
 use Pushery\SQLens\Rules\ServerVersion;
 use Pushery\SQLens\Severity\Severity;
-use Pushery\SQLens\Subjects\CaptureMode;
 use Pushery\SQLens\Subjects\SubjectContext;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Throwable;
@@ -81,9 +81,13 @@ use Throwable;
  */
 final class PostdeployCommand extends Command
 {
+    use ResolvesProfile;
+    use ResolvesRunBudget;
+    use ValidatesConfig;
+
     protected $signature = 'sqlens:postdeploy
         {--connection= : The database connection to verify; defaults to the resolved preflight connection}
-        {--profile=postdeploy : The environment profile}
+        {--profile= : The environment profile — local, ci or predeploy. Unset, this command uses predeploy: it runs in the deploy window. SQLENS_PROFILE and a configured profile still win over that}
         {--format= : The report format — console, json, github, sarif, or agent (defaults to the configured format)}
         {--budget= : The whole run\'s time budget in milliseconds; the default is configured}
         {--expect-shadow : Also PROVE the schema matches the migrations, by replaying them into a shadow database. Off by default: it creates one, which puts the run behind the production guard}
@@ -108,6 +112,71 @@ final class PostdeployCommand extends Command
         ShadowClearance $clearance,
         Application $app,
     ): int {
+        // FIRST, before the reporter, before the profile, before anything opens a connection. A
+        // misconfiguration that surfaces after twenty seconds of catalog reading is one people
+        // check for less often — and a key this package does not know is one it IGNORES, silently.
+        if ($this->refusesInvalidConfig()) {
+            return ExitCode::Misconfiguration->value;
+        }
+
+        // ⚠️ BEFORE ANYTHING OPENS A CONNECTION, and that ordering is the fix. This block used to sit
+        // after `$verifier->verify()`, so a typo in `--format` cost the whole aftercare run against
+        // the production instance before the error was named. `sqlens:drift` already did it in this
+        // order and said why in its own comment.
+        //
+        // Refused, never fallen back from. A quiet fall back to console succeeds, emits the wrong
+        // shape, and leaves whatever was parsing it with nothing.
+        try {
+            $reporter = $reporters->reporter(is_string($format = $this->option('format')) ? $format : null);
+        } catch (UnknownReporterFormat $error) {
+            $this->outputErrorLine($error->getMessage());
+
+            return ExitCode::Misconfiguration->value;
+        }
+
+        // Refused by name rather than dropped, and the two gates now share one implementation:
+        // `sqlens:postdeploy` required `> 0` while `sqlens:predeploy` accepted `0`, so the same flag
+        // meant two different things depending on which gate you typed it at.
+        if ($this->validatedBudgetMs() === false) {
+            return ExitCode::Misconfiguration->value;
+        }
+
+        // The same resolution every other suite command uses -- flag over SQLENS_PROFILE over the
+        // configured profile -- with `predeploy` underneath as this command's own default.
+        //
+        // ⚠️ IT USED TO READ `--profile=postdeploy` STRAIGHT OFF AN OPTION DEFAULT, and that is the
+        // defect `sqlens:predeploy` records in its own comment one file over, unfixed here. As an
+        // option default the name was ALWAYS the flag, so `SQLENS_PROFILE=ci sqlens:postdeploy` ran
+        // as postdeploy with nothing saying so; `--profile=bogus` was accepted and written into
+        // every subject context, where every other command answers `Misconfiguration`; and the name
+        // never became the SETTINGS, because nothing resolved it. The header said one thing
+        // (`sqlens.profile`, unset, so `local`) while each finding's subject said another.
+        //
+        // `postdeploy` was never a profile: `RunProfile` has three cases and `sqlens.profiles` has
+        // three blocks, none of them this name. So the name it announced could not have selected
+        // anything even if something had looked it up.
+        //
+        // ⚠️ THE DEFAULT IS `predeploy` AND NOT `local`, WHICH IS WHAT THE CONFIG PROSE SAID.
+        // That sentence answers for the commands it was written about; this one runs in the deploy
+        // window, one step after the gate that already uses that profile. On the shipped base it
+        // changes nothing -- `predeploy` overrides only `security.min_severity`, to the value the
+        // base already ships. What it buys is the reason `ci` and `predeploy` name that key at all:
+        // a project that lowers its base floor while working through a backlog no longer lowers
+        // this gate with it, silently.
+        $profile = $this->resolveProfile($config, 'predeploy');
+
+        // Narrowed on the property rather than through `isValid()`, for the reason the sister
+        // command writes out at its own outcome check: a method returning bool tells the analyzer
+        // nothing about the nullable property every line below reads. The check is the language's
+        // requirement here, not a second decision about the same fact.
+        if ($profile->profile === null) {
+            $this->outputErrorLine($this->profileRejectionMessage($profile));
+
+            return ExitCode::Misconfiguration->value;
+        }
+
+        $profileName = $profile->profile;
+
         $resolution = PreflightConnection::resolve($config);
         $requested = $this->option('connection');
         $name = is_string($requested) && $requested !== '' ? $requested : $resolution->name;
@@ -120,8 +189,6 @@ final class PostdeployCommand extends Command
 
             return ExitCode::Misconfiguration->value;
         }
-
-        $profileName = is_string($profile = $this->option('profile')) ? $profile : 'postdeploy';
 
         $preflight = $connections->forPreflight(
             $defenses,
@@ -152,16 +219,6 @@ final class PostdeployCommand extends Command
         );
 
         $report = $verifier->verify($postdeployContext);
-
-        try {
-            $reporter = $reporters->reporter(is_string($format = $this->option('format')) ? $format : null);
-        } catch (UnknownReporterFormat $error) {
-            // Refused, never fallen back from. A quiet fall back to console succeeds, emits the
-            // wrong shape, and leaves whatever was parsing it with nothing.
-            $this->outputErrorLine($error->getMessage());
-
-            return ExitCode::Misconfiguration->value;
-        }
 
         // What the CHECKS cost, from the START rather than from what is left of the budget — and
         // measured here, deliberately before the expectation comparison below.
@@ -251,15 +308,8 @@ final class PostdeployCommand extends Command
         // database, and a private shape would make `downtime_class` and the severity axis stop
         // working in the one report somebody reads while a deploy is still warm.
         $reporter->report(
-            Result::of([...$findings, ...$expectation->findings, ...$overrun, ...$debt['findings']], new RunMetadata(
-                serverVersions: [],
-                toolVersions: [],
-                mode: CaptureMode::Pretend,
-                profile: $profileName,
-                strictTools: false,
-                timeBudgetMsConsumed: $consumedMs,
-            )),
-            $runContext->collect($timeouts, $report->describeTimings() ?: null, $consumedMs)
+            Result::of([...$findings, ...$expectation->findings, ...$overrun, ...$debt['findings']]),
+            $runContext->collect(ReportingCaptureMode::Pretend, $timeouts, $report->describeTimings() ?: null, $consumedMs)
                 ->withUndeterminedWaiver($waived)
                 // The comparison as its OWN block rather than mixed into the findings — and present
                 // on every run, including the ones that did not compare. A document holding no
@@ -446,7 +496,7 @@ final class PostdeployCommand extends Command
      */
     private function driverFor(Repository $config, string $connectionName): string
     {
-        $driver = $config->get('database.connections.'.$connectionName.'.driver');
+        $driver = EffectiveConnectionConfig::driverForConnection($config, $connectionName);
 
         return is_string($driver) ? $driver : '';
     }
@@ -583,27 +633,27 @@ final class PostdeployCommand extends Command
     }
 
     /**
-     * The run's budget.
+     * The run's budget, from `sqlens.deploy.postdeploy.budget_ms`.
      *
-     * Shares `sqlens.preflight.budget_ms` on purpose: it is the same session, the same reader and
-     * the same promise about not outstaying its welcome on a live instance. A second key would be a
-     * second number to keep in step, and the day they differed nobody could say which one a deploy
-     * recipe was honoring.
+     * ⚠️ THIS DOCBLOCK ARGUED THE OPPOSITE OF THE CODE, AND BOTH CARRIED A REASON. It said the budget
+     * "shares `sqlens.preflight.budget_ms` on purpose … a second key would be a second number to keep
+     * in step", while the comment three lines below it says the command read that key until
+     * 2026-08-24 and was moved off it because "two commands making two promises need two numbers".
+     * The move happened; the docblock was the half nobody updated, and a reader who trusted it would
+     * have tuned the wrong key.
      */
     private function budgetMs(Repository $config): int
     {
-        $requested = $this->option('budget');
-
-        if (is_string($requested) && ctype_digit($requested) && (int) $requested > 0) {
-            return (int) $requested;
+        // Validated by the shared resolver at the top of `handle()`, so by the time this runs the
+        // value is either a positive integer or absent — never the silently dropped `abc`.
+        if (is_int($requested = $this->validatedBudgetMs())) {
+            return $requested;
         }
 
         // The POST-deploy key, not the pre-deploy one. This command read `preflight.budget_ms` until
         // 2026-08-24, so raising the gate's allowance silently raised the aftercare's too and
         // lowering it silently squeezed a run that had nothing to do with the change. Two commands
         // making two promises need two numbers.
-        $configured = $config->get('sqlens.deploy.postdeploy.budget_ms');
-
-        return is_int($configured) && $configured > 0 ? $configured : 5_000;
+        return $this->configuredBudgetMs($config, 'sqlens.deploy.postdeploy.budget_ms', 5_000);
     }
 }

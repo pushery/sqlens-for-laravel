@@ -6,9 +6,11 @@ namespace Pushery\SQLens\Drivers\Mysql\Rules\L2;
 
 use Override;
 use Pushery\SQLens\Canonical\StatementTarget;
+use Pushery\SQLens\Canonical\StringLiteralMask;
 use Pushery\SQLens\Contracts\DerivesDowntimeClass;
 use Pushery\SQLens\Contracts\ProvidesRemediation;
 use Pushery\SQLens\Deploy\Contracts\DeclaresOperationClass;
+use Pushery\SQLens\Drivers\Mysql\Canonical\MysqlCanonicalization;
 use Pushery\SQLens\Drivers\Mysql\DowntimeClass\MysqlDowntimeClassSource;
 use Pushery\SQLens\Drivers\Mysql\Remediation\CharsetMigrationTemplate;
 use Pushery\SQLens\Drivers\Mysql\Rules\AbstractMysqlRule;
@@ -36,9 +38,20 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * | Statement | MySQL 8.4 runs it | Existing rows |
  * |---|---|---|
- * | `CONVERT TO CHARACTER SET utf8mb4` | COPY | re-encoded |
+ * | `CONVERT TO CHARACTER SET utf8mb4` **from latin1** | COPY | re-encoded |
+ * | `CONVERT TO CHARACTER SET utf8mb4` **from utf8mb3** | INPLACE, `LOCK=NONE` accepted | re-encoded |
  * | `DEFAULT CHARACTER SET utf8mb4` | INPLACE | **untouched** — verified: a `latin1` column stays `latin1` |
  * | `DEFAULT COLLATE …` | INPLACE | untouched |
+ *
+ * ⚠️ **THE SOURCE CHARSET IS IN THAT TABLE NOW, AND IT USED TO BE ABSENT.** The row said COPY without
+ * saying from what, and it was measured on a latin1 table — true for the pair anyone runs this on, and
+ * false for utf8mb3, which 8.4 accepts in place with `LOCK=NONE`. Re-measured on 8.4.10 over four pairs:
+ * only utf8mb3 to utf8mb4 is accepted in place; latin1, ascii and the narrowing back to utf8mb3 are all
+ * refused with error 1846 and fall back to a copy.
+ *
+ * ⚠️ **This rule cannot tell which case a reader is in**, and that is not a gap to be closed: it lints a
+ * migration statement, and the source charset lives in the catalog. So the message names both and gives
+ * the one instruction that works without knowing — issue it with `LOCK=NONE` and let the server refuse.
  *
  * So a table default is a statement about FUTURE columns and nothing else, and this rule stays
  * silent on it. That silence is the rule's main false-positive defense, not an oversight: flagging
@@ -159,7 +172,7 @@ final class CopyAlterCharsetRule extends AbstractMysqlRule implements DeclaresOp
             return false;
         }
 
-        $masked = preg_replace("/'(?:[^']|'')*'/", "''", $statement->canonical) ?? $statement->canonical;
+        $masked = StringLiteralMask::forDriver(new MysqlCanonicalization)->apply($statement->canonical);
 
         return preg_match('/^ALTER TABLE \S+ .*\bCONVERT TO CHARACTER SET\b/', $masked) === 1;
     }
@@ -168,7 +181,9 @@ final class CopyAlterCharsetRule extends AbstractMysqlRule implements DeclaresOp
     {
         return 'CONVERT TO CHARACTER SET re-encodes every value in every string column, so InnoDB copies the whole '
             .'table row by row under a shared lock: writes queue for the entire run, and the run grows with the '
-            .'table. The tables people run this on are the old ones, which is exactly where it hurts most. Take a '
+            .'table. The one exception is a utf8mb3 source, which MySQL 8.4 accepts in place with LOCK=NONE — and '
+            .'this rule reads a migration statement, so it cannot see which of the two you have. The tables people '
+            .'run this on are the old ones, which is exactly where it hurts most. Take a '
             .'real maintenance window for it, or convert column by column so each statement covers less data and '
             .'the work can be spread over several deploys — and issue it as a raw statement carrying LOCK=NONE if '
             .'the table must stay writable, so MySQL refuses rather than silently locking it. Setting the table\'s '

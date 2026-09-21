@@ -32,22 +32,23 @@ interface Driver
     public function documentationUrl(): string;
 
     /**
-     * The rules this driver contributes. Empty for now — a deliberately documented
-     * intermediate state, filled later by the PostgreSQL and MySQL rule packs.
-     * The manager must never read an empty seam as "checked, all clean".
+     * The rules this driver contributes.
+     *
+     * ⚠️ THIS DOCBLOCK SAID "EMPTY FOR NOW" UNTIL THE PACKS HAD BEEN SHIPPED FOR EIGHT MONTHS.
+     * It was accurate when written — a deliberately documented intermediate state — and a sentence
+     * that describes an intermediate state has to be retired when the state is left, or it starts
+     * describing the reader's expectations instead of the code. Both shipped drivers compose a full
+     * pack here — measured rather than estimated: 108 rules from the PostgreSQL driver and 100 from
+     * the MySQL one, each composing its engine pack with the driver-neutral lifecycle and security
+     * sets.
+     *
+     * What does still hold is the rule the old sentence carried: the manager must never read an
+     * empty seam as "checked, all clean". An empty list from a driver is a driver that contributes
+     * nothing, which is a fact about that driver and never a verdict about a database.
      *
      * @return iterable<Rule>
      */
     public function rules(): iterable;
-
-    /**
-     * The live-catalog readers this driver contributes. Empty for now, filled
-     * later — the same documented intermediate state as rules(), never a silent
-     * pass.
-     *
-     * @return iterable<object>
-     */
-    public function readers(): iterable;
 
     /**
      * The external tools this driver can lean on — the third thing a driver brings, beside its

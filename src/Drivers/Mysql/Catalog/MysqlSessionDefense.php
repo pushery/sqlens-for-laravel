@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Drivers\Mysql\Catalog;
 
+use Pushery\SQLens\Capture\Shadow\SessionTimeoutDetector;
 use Pushery\SQLens\Catalog\SessionBudget;
 use Pushery\SQLens\Contracts\SessionDefense;
 
@@ -28,12 +29,6 @@ final readonly class MysqlSessionDefense implements SessionDefense
 {
     /** Refused because the transaction is read-only. */
     private const string READ_ONLY_SQL_STATE = '25006';
-
-    /** The statement hit `max_execution_time` and was killed. */
-    private const string QUERY_INTERRUPTED_SQL_STATE = '70100';
-
-    /** The lock wait hit `innodb_lock_wait_timeout`. */
-    private const string LOCK_WAIT_SQL_STATE = 'HY000';
 
     public function sessionStatements(SessionBudget $budget): array
     {
@@ -86,8 +81,10 @@ final readonly class MysqlSessionDefense implements SessionDefense
         return $sqlState === '42000';
     }
 
-    public function isTimeout(string $sqlState): bool
+    public function isTimeout(string $sqlState, ?int $driverCode): bool
     {
-        return $sqlState === self::QUERY_INTERRUPTED_SQL_STATE || $sqlState === self::LOCK_WAIT_SQL_STATE;
+        // Through the ONE classifier. Both engines' answers used to live here, and both were
+        // wrong in opposite directions — see SessionDefense::isTimeout().
+        return SessionTimeoutDetector::matchesTimeout($sqlState, $driverCode);
     }
 }

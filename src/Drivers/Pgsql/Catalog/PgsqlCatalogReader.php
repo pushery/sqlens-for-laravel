@@ -380,7 +380,7 @@ final readonly class PgsqlCatalogReader implements CatalogReader
     {
         $rows = $this->rows(
             $reader,
-            'SELECT nspname FROM pg_namespace WHERE nspname = ANY (current_schemas(false)) ORDER BY nspname',
+            'SELECT nspname FROM pg_namespace WHERE nspname = ANY (pg_catalog.current_schemas(false)) ORDER BY nspname',
             [],
         );
 
@@ -419,7 +419,7 @@ final readonly class PgsqlCatalogReader implements CatalogReader
      */
     private function resolvedServerVersion(Connection $reader): ResolvedServerVersion
     {
-        $row = $this->rows($reader, "SELECT current_setting('server_version_num') AS v", [])[0] ?? [];
+        $row = $this->rows($reader, "SELECT pg_catalog.current_setting('server_version_num') AS v", [])[0] ?? [];
         $num = (int) $this->str($row, 'v');
 
         return ResolvedServerVersion::detected(ServerVersion::of(intdiv($num, 10000), $num % 10000, 0, 'pgsql'));
@@ -443,7 +443,7 @@ final readonly class PgsqlCatalogReader implements CatalogReader
                    -- The table's comment, and NULL when it has none. Nullable on purpose: a table
                    -- with an empty comment and a table with no comment are different states, and a
                    -- rule about missing documentation has to be able to tell them apart.
-                   obj_description(c.oid, 'pg_class') AS comment,
+                   pg_catalog.obj_description(c.oid, 'pg_class') AS comment,
                    COALESCE((
                        SELECT e.extname FROM pg_depend d
                        JOIN pg_extension e ON e.oid = d.refobjid
@@ -456,7 +456,7 @@ final readonly class PgsqlCatalogReader implements CatalogReader
                    -- cluster's setting, which is not the same as one that carries `true`, and a rule
                    -- must not read "nobody said" as "somebody said yes".
                    COALESCE((
-                       SELECT o.option_value FROM pg_options_to_table(c.reloptions) o
+                       SELECT o.option_value FROM pg_catalog.pg_options_to_table(c.reloptions) o
                        WHERE o.option_name = 'autovacuum_enabled'
                        LIMIT 1
                    ), '')              AS autovacuum_enabled
@@ -500,15 +500,15 @@ final readonly class PgsqlCatalogReader implements CatalogReader
             SELECT n.nspname                                    AS schema,
                    c.relname                                    AS relation,
                    a.attname                                    AS name,
-                   format_type(a.atttypid, a.atttypmod)         AS raw_type,
+                   pg_catalog.format_type(a.atttypid, a.atttypmod)         AS raw_type,
                    a.attnotnull                                 AS not_null,
-                   pg_get_expr(d.adbin, d.adrelid)              AS default_expression,
+                   pg_catalog.pg_get_expr(d.adbin, d.adrelid)              AS default_expression,
                    a.attidentity                                AS identity,
                    a.attgenerated                               AS generated,
                    co.collname                                  AS collation,
                    -- Read separately from the table's, because they answer different questions and a
                    -- project may require one without the other.
-                   col_description(a.attrelid, a.attnum)        AS comment,
+                   pg_catalog.col_description(a.attrelid, a.attnum)        AS comment,
                    -- The half of `serial` that no type name reveals. `serial` is a MACRO, not a
                    -- type: it expands to a column, a sequence, a default, and an AUTO dependency
                    -- tying the sequence's lifetime to the column's. `format_type` reports `bigint`
@@ -633,9 +633,9 @@ final readonly class PgsqlCatalogReader implements CatalogReader
                 $reset = $this->rows($reader, <<<'SQL'
                     SELECT stats_reset::text AS reset_at,
                            CASE WHEN stats_reset IS NULL THEN NULL
-                                ELSE FLOOR(EXTRACT(EPOCH FROM (now() - stats_reset)) / 86400)::int
+                                ELSE pg_catalog.FLOOR(EXTRACT(EPOCH FROM (pg_catalog.now() - stats_reset)) / 86400)::int
                            END AS window_days
-                    FROM pg_stat_database WHERE datname = current_database()
+                    FROM pg_stat_database WHERE datname = pg_catalog.current_database()
                     SQL, []);
             } catch (Throwable) {
                 // Named, never swallowed as an empty reading. A role that cannot see the statistics
@@ -689,27 +689,27 @@ final readonly class PgsqlCatalogReader implements CatalogReader
                    -- flag a redundancy rule would tell somebody to drop the index that carries the
                    -- payload, in favor of the one that does not.
                    (x.indnatts > x.indnkeyatts)           AS has_include,
-                   pg_get_expr(x.indpred, x.indrelid)     AS predicate,
-                   -- An expression index indexes lower(email), not email. Read as the expression
+                   pg_catalog.pg_get_expr(x.indpred, x.indrelid)     AS predicate,
+                   -- An expression index indexes pg_catalog.lower(email), not email. Read as the expression
                    -- itself rather than as a flag: a reader told only "this is an expression" can
                    -- say nothing useful about it, and the text is what a finding has to quote.
-                   pg_get_expr(x.indexprs, x.indrelid)     AS expression,
+                   pg_catalog.pg_get_expr(x.indexprs, x.indrelid)     AS expression,
                    -- Only the NON-default classes. text_pattern_ops serves LIKE 'foo%' and the
                    -- default class does not, so two indexes on one column with different classes
                    -- are two different indexes. Measured: a GIN index over an array reports none,
                    -- because array_ops IS gin's default — the signal stays orthogonal to the method.
-                   (SELECT string_agg(o.opcname, ', ' ORDER BY o.opcname)
-                      FROM unnest(x.indclass::oid[]) c
+                   (SELECT pg_catalog.string_agg(o.opcname, ', ' ORDER BY o.opcname)
+                      FROM pg_catalog.unnest(x.indclass::oid[]) c
                       JOIN pg_opclass o ON o.oid = c
                      WHERE NOT o.opcdefault)             AS operator_classes,
                    -- The KEY columns, in order, without the INCLUDE payload — measured:
                    -- indnkeyatts excludes it while indnatts does not, and an INCLUDE column
                    -- covers no lookup, so counting it would make a foreign key look indexed
-                   -- when it is not. pg_get_indexdef() per position yields the expression for
+                   -- when it is not. pg_catalog.pg_get_indexdef() per position yields the expression for
                    -- an expression index, which is why it is used instead of reading attnames.
-                   (SELECT string_agg(pg_get_indexdef(x.indexrelid, n, true), ', ' ORDER BY n)
-                      FROM generate_series(1, x.indnkeyatts) AS n) AS key_columns,
-                   pg_get_indexdef(x.indexrelid)          AS definition
+                   (SELECT pg_catalog.string_agg(pg_catalog.pg_get_indexdef(x.indexrelid, n, true), ', ' ORDER BY n)
+                      FROM pg_catalog.generate_series(1, x.indnkeyatts) AS n) AS key_columns,
+                   pg_catalog.pg_get_indexdef(x.indexrelid)          AS definition
             FROM pg_index x
             JOIN pg_class i ON i.oid = x.indexrelid
             JOIN pg_class t ON t.oid = x.indrelid
@@ -767,8 +767,8 @@ final readonly class PgsqlCatalogReader implements CatalogReader
                -- The constraint's own columns, in the order it declares them. A foreign
                -- key is covered only by an index whose LEFT PREFIX is this list, so the
                -- order is the fact and not a detail.
-               (SELECT string_agg(a.attname, ', ' ORDER BY c.ord)
-                  FROM unnest(k.conkey) WITH ORDINALITY AS c(attnum, ord)
+               (SELECT pg_catalog.string_agg(a.attname, ', ' ORDER BY c.ord)
+                  FROM pg_catalog.unnest(k.conkey) WITH ORDINALITY AS c(attnum, ord)
                   JOIN pg_attribute a ON a.attrelid = k.conrelid AND a.attnum = c.attnum)
                                                 AS key_columns,
                -- The far end of a foreign key, which PostgreSQL records and this reader did
@@ -790,11 +790,11 @@ final readonly class PgsqlCatalogReader implements CatalogReader
                -- the referenced column 0, and a name-ordered list would pair the wrong ends the
                -- moment the two tables spell their columns differently.
                CASE WHEN k.contype = 'f'
-                    THEN (SELECT string_agg(ra.attname, ', ' ORDER BY rc.ord)
-                            FROM unnest(k.confkey) WITH ORDINALITY AS rc(attnum, ord)
+                    THEN (SELECT pg_catalog.string_agg(ra.attname, ', ' ORDER BY rc.ord)
+                            FROM pg_catalog.unnest(k.confkey) WITH ORDINALITY AS rc(attnum, ord)
                             JOIN pg_attribute ra ON ra.attrelid = k.confrelid AND ra.attnum = rc.attnum)
                END                              AS referenced_columns,
-               pg_get_constraintdef(k.oid)      AS definition
+               pg_catalog.pg_get_constraintdef(k.oid)      AS definition
         FROM pg_constraint k
         JOIN pg_class t ON t.oid = k.conrelid
         JOIN pg_namespace n ON n.oid = t.relnamespace
@@ -957,7 +957,7 @@ final readonly class PgsqlCatalogReader implements CatalogReader
             SELECT n.nspname                        AS schema,
                    c.relname                        AS table_name,
                    t.tgname                         AS name,
-                   pg_get_triggerdef(t.oid)         AS definition,
+                   pg_catalog.pg_get_triggerdef(t.oid)         AS definition,
                    t.tgenabled                      AS enabled
             FROM pg_trigger t
             JOIN pg_class c ON c.oid = t.tgrelid
@@ -1036,12 +1036,12 @@ final readonly class PgsqlCatalogReader implements CatalogReader
         $rows = $this->rows($reader, <<<'SQL'
             SELECT n.nspname                                  AS schema,
                    p.proname                                  AS name,
-                   pg_get_function_identity_arguments(p.oid)  AS arguments,
+                   pg_catalog.pg_get_function_identity_arguments(p.oid)  AS arguments,
                    p.prokind                                  AS kind,
                    l.lanname                                  AS language,
                    p.provolatile                              AS volatility,
                    p.prosecdef                                AS security_definer,
-                   pg_get_function_result(p.oid)              AS result,
+                   pg_catalog.pg_get_function_result(p.oid)              AS result,
                    p.prosrc                                   AS body,
                    COALESCE((
                        SELECT e.extname FROM pg_depend d
@@ -1126,9 +1126,9 @@ final readonly class PgsqlCatalogReader implements CatalogReader
                    d.datlocprovider                                        AS provider,
                    d.datcollate                                            AS locale,
                    COALESCE(d.datcollversion, '')                          AS recorded,
-                   COALESCE(pg_database_collation_actual_version(d.oid), '') AS actual
+                   COALESCE(pg_catalog.pg_database_collation_actual_version(d.oid), '') AS actual
             FROM pg_database d
-            WHERE d.datname = current_database()
+            WHERE d.datname = pg_catalog.current_database()
             UNION ALL
             SELECT 'object'                                                AS scope,
                    c.collname                                              AS name,
@@ -1136,7 +1136,7 @@ final readonly class PgsqlCatalogReader implements CatalogReader
                    c.collprovider                                          AS provider,
                    c.collcollate                                           AS locale,
                    COALESCE(c.collversion, '')                             AS recorded,
-                   COALESCE(pg_collation_actual_version(c.oid), '')        AS actual
+                   COALESCE(pg_catalog.pg_collation_actual_version(c.oid), '')        AS actual
             FROM pg_collation c
             JOIN pg_namespace n ON n.oid = c.collnamespace
             WHERE n.nspname <> ALL (?)

@@ -23,6 +23,7 @@ enum UndeterminedReason: string
     case UnsupportedEngine = 'unsupported_engine';
     case MissingExternalTool = 'missing_external_tool';
     case ManagedDatabaseRestriction = 'managed_database_restriction';
+    case LocalSocketConnection = 'local_socket_connection';
     /**
      * An external tool reported a finding under a rule this build's map does not describe.
      *
@@ -114,6 +115,18 @@ enum UndeterminedReason: string
      * package refuses.
      */
     case DebtLedgerUnreadable = 'debt_ledger_unreadable';
+
+    /**
+     * A baseline is configured and the file it names is not there.
+     *
+     * Named rather than folded into a general "configuration" reason, because it is the one a
+     * project can WAIT OUT: `sqlens:baseline` has to be runnable before the file exists, so an
+     * absent file on a configured path is an ordinary state on the way to having one. A project
+     * that knows that about itself can name this reason in `allow_undetermined`; one that does not
+     * gets told, which is the whole point — an empty baseline and an absent one produce the same
+     * report and mean opposite things.
+     */
+    case BaselineAbsent = 'baseline_absent';
 
     /**
      * How long a debt has been outstanding could not be established.
@@ -341,6 +354,8 @@ enum UndeterminedReason: string
      */
     case UnclassifiedTypeChange = 'unclassified_type_change';
 
+    case UnclassifiedConstraintShape = 'unclassified_constraint_shape';
+
     /**
      * `assume_server_version` is set but cannot be read as a version.
      *
@@ -482,11 +497,16 @@ enum UndeterminedReason: string
 
     /**
      * A rule that reasons about the server's table statistics ran with statistics
-     * turned on (`use_statistics`), but no statistics reader is available in this
-     * build to answer it — the reader arrives with the audit suite. "Could not read
-     * the statistics" and "the statistics say you are fine" are different results, so
-     * the check is a named undetermined, never a silent pass. With `use_statistics`
-     * off, such a rule does not run at all, which is a deliberate scope, not a skip.
+     * turned on (`use_statistics`) and no reader answered it.
+     *
+     * ⚠️ THIS USED TO SAY "the reader arrives with the audit suite", and that suite has shipped.
+     * The reason is not a schedule, it is the RUN: a lint run reads migration source and opens no
+     * catalog session, so it has no statistics to read however complete the package is. The audit
+     * and preflight runs do open one.
+     *
+     * "Could not read the statistics" and "the statistics say you are fine" are different results,
+     * so the check is a named undetermined, never a silent pass. With `use_statistics` off, such a
+     * rule does not run at all, which is a deliberate scope, not a skip.
      */
     case StatisticsUnavailable = 'statistics_unavailable';
 
@@ -607,6 +627,18 @@ enum UndeterminedReason: string
      * BEFORE any DDL, from configuration alone — no connection is opened to find out.
      */
     case ShadowDirectConnectionElsewhere = 'shadow_direct_connection_elsewhere';
+
+    /**
+     * `capture.shadow.connection` names the same place as the connection being examined.
+     *
+     * ⚠️ THE SECOND LOCK ON THE ONLY PATH THAT CREATES AND DROPS DATABASES, and until now it had no
+     * caller. `ShadowTargetIdentity` was written for exactly this — its docblock calls itself "the
+     * second lock … mechanical rather than advisory: a collision is a refusal, never a warning" —
+     * and the key it names was read by nothing at all. A developer who pointed it at the wrong
+     * entry in `config/database.php` passed every question the production guard asks and then had
+     * the tool build a scratch database on the instance it was supposed to be comparing.
+     */
+    case ShadowConnectionCollides = 'shadow_connection_collides';
 
     /**
      * The role provisioning would connect as lacks the privilege to create a
@@ -1079,6 +1111,7 @@ enum UndeterminedReason: string
             self::AdvisoryDataUnavailable => 'The end-of-life data could not be read, so the server version was compared against nothing; the reason names which file was tried.',
             self::DebtLedgerSchemaUnsupported => 'The debt ledger declares a schema version this build cannot act on, so it was not read at all; upgrade SQLens or migrate the file.',
             self::DebtLedgerUnreadable => 'The debt ledger file exists but is not a ledger, so what the project owes could not be read; repair it from version control or delete it deliberately.',
+            self::BaselineAbsent => 'A baseline is configured and no file is there, so nothing was accepted; every finding the baseline held is in this report until sqlens:baseline creates it.',
             self::DebtAgeUnknown => 'The debt records a first-seen date this build cannot read, or one that lies after the instant measured against, so how long it has been outstanding is unknown.',
             self::DebtObjectNotFound => 'A recorded debt names an object the catalog does not show, so whether it was settled, dropped, or simply out of this run\'s scope cannot be said.',
             self::DebtLedgerMissing => 'The debt account was expected on this machine and is not there, so whether the project has open debts is unknown — not answered with "none".',
@@ -1100,7 +1133,7 @@ enum UndeterminedReason: string
             self::PreScanFlagged => 'The static pre-scan flagged this migration, so it was not pretend-executed; resolve it in shadow mode.',
             self::NoActiveRules => 'A filter (the requested categories or the level) left no rules active for this run, so nothing was checked; widen the selection.',
             self::NoMigrationsRead => 'No migration was read, so the run judged nothing; --path lints the PENDING migrations of a connection, and nothing is pending once they have all run.',
-            self::StatisticsUnavailable => 'The check needs the server table statistics, but no statistics reader is available in this build; it will run once the audit suite lands.',
+            self::StatisticsUnavailable => 'The check needs the server table statistics, and this run has no reader for them: a lint run opens no catalog session. The audit and preflight runs do.',
             self::ShadowGuardBlocked => 'The production guard blocked the shadow capture, so nothing was run.',
             self::TargetIsReplica => 'The target connection is a read replica, which a database-creating mode cannot run against.',
             self::InstanceScopeUnanswerable => 'The rule speaks about this instance and its write path, and the instance that answered is not on it, so the question could not be answered here.',
@@ -1113,6 +1146,7 @@ enum UndeterminedReason: string
             self::ShadowSessionTimeout => 'A shadow session hit its own statement, lock, or idle-transaction timeout.',
             self::ShadowTransactionPooling => 'The shadow target sits behind a transaction pooler; configure a direct connection under capture.shadow.direct_connection.',
             self::ShadowDirectConnectionElsewhere => 'capture.shadow.direct_connection addresses a different server than the connection under examination; it must reach the same server, bypassing the pooler.',
+            self::ShadowConnectionCollides => 'capture.shadow.connection resolves to the same place as the connection under examination, so building the reference there would create and then DROP a database on the instance being compared. Point it at a separate server or a separate database.',
             self::ShadowInsufficientPrivileges => 'The provisioning role lacks the privilege to create a database (PostgreSQL CREATEDB).',
             self::ShadowTemplateInUse => 'The template database has other active connections, so it cannot be cloned; disconnect them and retry.',
             self::DriftSideUnreadable => 'One object type could not be read on one side of the comparison, so that part of the schema was not compared at all; finding no drift in it would have been a claim this run cannot make.',
@@ -1144,8 +1178,10 @@ enum UndeterminedReason: string
             self::ToolRuleUnmapped => 'An external tool reported a rule this build does not know, so no category, level or severity of ours applies to it.',
             self::ToolPositionUnmappable => 'An external tool reported a position that could not be traced back to a statement of a migration.',
             self::ManagedDatabaseRestriction => 'A managed database blocks the catalog or setting the check reads.',
+            self::LocalSocketConnection => 'The connection runs over a Unix-domain socket, so the server reports no address — nothing is blocked, there is simply nothing to report.',
             self::StructurallyNotApplicable => 'The object the check targets does not exist in this schema.',
             self::UnclassifiedOnlineDdlOperation => 'The migration performs a DDL operation the online-DDL matrix does not classify, so its downtime class is unknown.',
+            self::UnclassifiedConstraintShape => 'The statement adds a constraint whose kind SQLens does not classify, so whether it validates existing rows under a lock is unknown.',
             self::OperationKeyUnmapped => 'The statement changes the schema, but which operation it performs could not be derived from its canonical form, so the online-DDL matrix cannot be consulted.',
             self::OnlineDdlVersionOutOfRange => 'The online-DDL matrix classifies this operation, but not for the server version the run reasons about.',
             self::OnlineDdlConditionUndecidable => 'The matrix entry holds only under a table or session fact the static capture cannot see, so its classification is undetermined.',

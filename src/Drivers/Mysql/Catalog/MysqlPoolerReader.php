@@ -41,6 +41,23 @@ final readonly class MysqlPoolerReader implements PoolerReader
     /** Host-name fragments that say somebody put a multiplexer there on purpose. */
     private const array POOLER_HOST_FRAGMENTS = ['proxysql', 'maxscale', 'proxy', 'pooler'];
 
+    /**
+     * ⚠️ No session budget, and the reason is the one {@see PgsqlPoolerReader} carries at length.
+     *
+     * This probe is the one read in the package that cannot run inside a transaction — pooling is
+     * invisible in one, which is the guarantee a pooler exists to give — so the `SET LOCAL` every other
+     * reader uses is not available. That leaves a plain session `SET`, and on the connection this probe
+     * is most needed on it is precisely the leak being measured: the `SET` lands on one backend, the
+     * restore looks for it on another, and the host application inherits a limit it never chose.
+     *
+     * So the four constant-time statements run with whatever bound the connection already carries,
+     * usually none. The risk is to THIS run rather than to somebody else's session, which is the trade
+     * the PostgreSQL side states and this side follows.
+     *
+     * ⚠️ **This paragraph is here because its absence was the finding.** Both readers behaved the same
+     * and only one said why, so the obvious next reading of this file was "the MySQL probe forgot its
+     * bound" — and adding one would rebuild the leak the other side removed deliberately.
+     */
     public function __construct(private Connection $connection) {}
 
     #[RawSql(reason: 'detects a connection pooler by setting a session variable and reading it back on what should be the same session; SET has no builder verb, and the probe only means anything as the same statement pair every time')]

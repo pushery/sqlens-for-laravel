@@ -85,6 +85,9 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * - `foreign_key_collations` — the one fact here that is NOT the table's own: each foreign key's
  *   text columns paired with the columns they point at, on other tables, both collations named. See
  *   {@see self::edges()} for why a table has to be handed it and what an omission means.
+ * - `unsigned_columns` — the columns the catalog reported as UNSIGNED. MySQL only; empty on
+ *   PostgreSQL, which has no unsigned integers. It decides which ceiling a narrow integer key is
+ *   actually near, and the value was read long before anything carried it.
  * - `columns` and `nullable_columns` — a column missing from the first was never read, which is a
  *   different answer from being read and nullable. Whether a unique index can stand in for a
  *   primary key turns on its columns being NOT NULL, so a rule that could not tell "nullable" from
@@ -132,6 +135,7 @@ final readonly class TableMembers
     {
         $columns = [];
         $nullable = [];
+        $unsigned = [];
         $types = [];
         $defaultFunctions = [];
         $charsets = [];
@@ -170,6 +174,20 @@ final readonly class TableMembers
 
                 if ($object->getBool('not_null') === false) {
                     $nullable[$parent][] = self::shortName($object);
+                }
+
+                // ⚠️ THE CATALOG READS THIS AND NOTHING CARRIED IT, so the one rule that needs it
+                // could not ask. `MY.L6.PK_NOT_BIGINT` named the SIGNED limit for every `int` key —
+                // and Laravel's `increments()`, the commonest shape that rule ever meets, produces
+                // `INT UNSIGNED`, which reaches twice as far. The value was already on the column
+                // object; only the projection was missing.
+                //
+                // Carried as a column SET like `nullable_columns` rather than folded into
+                // `column_types`, because the canonical type vocabulary is shared between engines and
+                // `int unsigned` is not a type name in it. PostgreSQL has no unsigned integers, so
+                // this is empty there — which is the honest answer rather than an absent key.
+                if ($object->getBool('unsigned') === true) {
+                    $unsigned[$parent][] = self::shortName($object);
                 }
 
                 $type = $object->getString('type');
@@ -323,6 +341,7 @@ final readonly class TableMembers
                 'unique_indexes' => self::encode($unique[$name] ?? []),
                 'columns' => self::encode($columns[$name] ?? []),
                 'nullable_columns' => self::encode($nullable[$name] ?? []),
+                'unsigned_columns' => self::encode($unsigned[$name] ?? []),
                 'column_types' => self::encode($types[$name] ?? []),
                 'column_default_functions' => self::encode($defaultFunctions[$name] ?? []),
                 'column_charsets' => self::encode($charsets[$name] ?? []),

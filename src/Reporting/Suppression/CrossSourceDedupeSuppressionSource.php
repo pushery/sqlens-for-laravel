@@ -45,7 +45,15 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  */
 final readonly class CrossSourceDedupeSuppressionSource
 {
-    public const string SOURCE = 'cross-source-dedupe';
+    // ⚠️ SNAKE_CASE, AND IT WAS THE ONLY HYPHENATED ONE OF EIGHT. Its seven siblings spell themselves
+    // `audit_ignore`, `destructive_opt_in`, `rls_dedupe`, `paired_view_dedupe` — and this string is a KEY
+    // in the JSON envelope's `suppressed_by_source` object, so one hyphen among eight underscores is a
+    // shape a consumer has to special-case forever.
+    //
+    // Renamed now because it is FREE now: this layer has never fired in any run, so no consumer has ever
+    // seen the old spelling in output. The same rename after it starts working is a breaking change to a
+    // published envelope.
+    public const string SOURCE = 'cross_source_dedupe';
 
     /**
      * The identity of every catalog finding in this run — the set a migration finding may match.

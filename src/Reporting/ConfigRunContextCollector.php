@@ -12,12 +12,17 @@ use Pushery\SQLens\Rules\StabilityGate;
 use Pushery\SQLens\Severity\Severity;
 
 /**
- * The trivial collector for now: it reads the run's mode, profile, and strict flags
- * from config (falling back to safe defaults) and the package version from Composer's
- * installed-versions manifest. It probes NO server and discovers NO tools yet — the
- * server- and tool-version collection lands with the capture and audit suites, so
- * those two lists are empty here. Reading no live state also keeps it deterministic
- * and side-effect-free, which is exactly what a reproducibility header needs.
+ * The BASE collector: it reads the run's mode, profile, and strict flags from config (falling back to
+ * safe defaults) and the package version from Composer's installed-versions manifest. It probes NO
+ * server and discovers NO tools, so those two lists leave here empty — and each runner fills them
+ * afterwards from what it actually addressed (`LintRunner::buildContext`, `AuditRunner`). Reading no
+ * live state keeps this deterministic and side-effect-free, which is exactly what a reproducibility
+ * header needs.
+ *
+ * ⚠️ THIS SAID "the trivial collector FOR NOW" and that the version collection "LANDS WITH the capture
+ * and audit suites". Both suites shipped, and the collection did not land here — it landed in the
+ * runners, which is the right place, because only a runner knows which instance it addressed. The
+ * emptiness is the design rather than a stage on the way to something.
  */
 final readonly class ConfigRunContextCollector implements RunContextCollector
 {
@@ -30,13 +35,20 @@ final readonly class ConfigRunContextCollector implements RunContextCollector
      * @param  int|null  $timeBudgetMsConsumed  what the whole run cost, for a producer with a time
      *                                          budget; null for the lint and audit runs, which have
      *                                          none
+     *
+     * ⚠️ THE MODE IS A PARAMETER AND NOT A CONFIG READ, and that is the correction rather than a
+     * preference. `sqlens.mode` promised to choose "how SQLens obtains the SQL it reasons about"
+     * and no code path consulted it for that; its single reader was this line, so a key that chose
+     * nothing labeled every run. The label was then wrong wherever it mattered: `sqlens:drift`
+     * replays into a shadow database and `sqlens:postdeploy` captures in pretend, and both
+     * announced whatever the configuration happened to say.
      */
-    public function collect(?array $sessionTimeouts = null, ?string $checkTimings = null, ?int $timeBudgetMsConsumed = null): RunContext
+    public function collect(CaptureMode $mode, ?array $sessionTimeouts = null, ?string $checkTimings = null, ?int $timeBudgetMsConsumed = null): RunContext
     {
         return new RunContext(
             serverVersions: [],
             toolVersions: [],
-            mode: $this->enum('sqlens.mode', CaptureMode::class, CaptureMode::Static),
+            mode: $mode,
             profile: $this->enum('sqlens.profile', RunProfile::class, RunProfile::Local),
             strictTools: $this->config->get('sqlens.strict_tools') === true,
             strictUndetermined: $this->config->get('sqlens.strict_undetermined') === true,

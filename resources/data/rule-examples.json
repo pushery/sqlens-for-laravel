@@ -112,7 +112,7 @@
         },
         "MY.L4.ENUM_CHANGE": {
             "bad": "Schema::table('orders', fn (Blueprint $table) => $table->enum('status', ['draft', 'paid', 'void'])->change());",
-            "good": "// Append at the end, which is the one enum change MySQL applies instantly and the one\n// no deployed code can be surprised by — every existing value keeps its meaning:\nSchema::table('orders', fn (Blueprint $table) => $table->enum('status', ['draft', 'sent', 'paid', 'refunded'])->change());",
+            "good": "// Append at the end. It is instant, and unlike the equally instant respelling above it is the one\n// no deployed code can be surprised by — every existing value keeps its meaning:\nSchema::table('orders', fn (Blueprint $table) => $table->enum('status', ['draft', 'sent', 'paid', 'refunded'])->change());",
             "note": "MySQL stores an ENUM value as its ordinal, so removing, reordering or renaming a member changes what existing rows mean to an application that has not been redeployed — and a rename does it instantly, with no lock and no rewrite to notice. Appending at the end is the only change that leaves every stored value meaning what it did.",
             "false_positives": "An append-only change is reported too, because the statement names the whole member list and not the delta — the rule cannot tell an append from an insertion without the live column. The trade is deliberate: a false positive costs one look at the column, a false negative ships an application reading a value the database no longer has."
         },
@@ -217,7 +217,7 @@
         "MY.L6.PK_NOT_BIGINT": {
             "bad": "Schema::create('events', function (Blueprint $table) {\n    $table->increments('id');\n});",
             "good": "Schema::create('events', function (Blueprint $table) {\n    $table->id();\n});",
-            "note": "increments() gives a 4-byte auto-incrementing key that runs out at 2,147,483,647, with no warning on the way there — the first symptom is an INSERT failing on a table that has worked for years. id() gives a bigint. The fix is due exactly when it is most expensive, because widening the key rewrites the table and every index over it, under a lock, on your largest table.",
+            "note": "increments() gives a 4-byte auto-incrementing INT UNSIGNED key that runs out at 4,294,967,295 — 2,147,483,647 if it were signed — with no warning on the way there — the first symptom is an INSERT failing on a table that has worked for years. id() gives a bigint. The fix is due exactly when it is most expensive, because widening the key rewrites the table and every index over it, under a lock, on your largest table.",
             "false_positives": "A small lookup table will never approach the ceiling, and widening its key buys nothing. Ignore those deliberately rather than widening every table in the schema. Composite and non-integer keys are not reported at all: a composite key's range is the product of its parts, so \"too narrow\" stops being a property of one column."
         },
         "MY.L6.SQL_MODE_ENGINE_SUBSTITUTION": {
@@ -340,9 +340,9 @@
         },
         "PG.L2.SET_NOT_NULL_SCAN": {
             "bad": "DB::statement('ALTER TABLE orders ALTER COLUMN email SET NOT NULL');",
-            "good": "DB::statement('ALTER TABLE orders ADD CONSTRAINT orders_email_not_null CHECK (email IS NOT NULL) NOT VALID');\nDB::statement('ALTER TABLE orders VALIDATE CONSTRAINT orders_email_not_null');",
-            "note": "SET NOT NULL scans the whole table under its lock to prove no row is null; a CHECK (col IS NOT NULL) added NOT VALID and validated afterwards reaches the same guarantee without the blocking scan.",
-            "false_positives": "On a table with few rows the proving scan is instant and the finding still names an outage. Two shapes are already silent and are NOT false positives: the column sitting on a table this migration created, and a migration that adds the matching CHECK (col IS NOT NULL) first — the safe pattern the finding recommends. ADD COLUMN … NOT NULL DEFAULT is a different statement this rule never matches at all."
+            "good": "DB::statement('ALTER TABLE orders ADD CONSTRAINT orders_email_not_null NOT NULL email NOT VALID');\nDB::statement('ALTER TABLE orders VALIDATE CONSTRAINT orders_email_not_null');",
+            "note": "SET NOT NULL reads every row to prove none is null, under an ACCESS EXCLUSIVE lock. On PostgreSQL 18 a not-null constraint is a constraint of its own and accepts NOT VALID, so the two statements above reach NOT NULL with the scan moved into the VALIDATE, which holds only a SHARE UPDATE EXCLUSIVE lock. The reading is not what goes away — measured on 18.0 over two million rows both take about 46 ms — the lock class is. Between the two statements the column already reads as NOT NULL in the catalog while older rows may still be null; the VALIDATE is what proves them, and sqlens:predeploy reports the gap until it runs. The four-statement CHECK detour of PostgreSQL 12 still works and is what to use below 18.",
+            "false_positives": "On a table with few rows the proving scan is instant and the finding still names an outage. Two shapes are already silent and are NOT false positives: the column sitting on a table this migration created, and a migration that adds the matching CHECK (col IS NOT NULL) first — the PostgreSQL 12 detour, which is still safe even though the recommendation is now the shorter 18 form. ADD COLUMN … NOT NULL DEFAULT is a different statement this rule never matches at all."
         },
         "PG.L2.TYPE_CHANGE_REWRITE": {
             "bad": "DB::statement('ALTER TABLE orders ALTER COLUMN total_cents TYPE bigint');",
@@ -506,7 +506,7 @@
         },
         "PG.L6.SERIAL_NOT_IDENTITY": {
             "bad": "Schema::create('orders', function (Blueprint $table) {\n    $table->bigIncrements('id');\n});",
-            "good": "Schema::create('orders', function (Blueprint $table) {\n    $table->id();\n});",
+            "good": "Schema::create('orders', function (Blueprint $table) {\n    $table->bigInteger('id')->generatedAs()->always()->primary();\n});",
             "note": "serial is a macro, not a type: it expands into a column, a sequence, a default and a dependency, and the catalog afterwards reports plain bigint. The three consequences are that the default can be dropped without a trace, the sequence carries its own USAGE grant so another role's INSERT fails at runtime, and an explicit id is accepted silently and collides later. An identity column keeps all three inside the column.",
             "false_positives": "Three neighboring shapes are deliberately not reported. A hand-managed sequence several columns default from is a design, not an escaped serial — the AUTO dependency sits on the owning column, so a check asking whether the TABLE owns a sequence would report the borrowing column. A sequence owned by a column purely so it is dropped with it carries no default and is not reported. An identity column is never reported: its sequence is an INTERNAL dependency and it has no pg_attrdef row at all. A column whose default wraps nextval in a larger expression is reported as undetermined rather than either way, because an identity column cannot express that default."
         },
@@ -906,6 +906,13 @@
             "language": "php",
             "note": "In MySQL an account is a PAIR — the user name and the host it may connect from — and the host half is a real access control rather than a label. Removing it leaves the password carrying the whole defense: with a host restriction a leaked credential is exploitable from inside the network, without one from anywhere the server is reachable. A partial wildcard such as '10.0.%' or '%.internal' is reported too, because MySQL evaluates it as a pattern and it reads like a restriction while being wider than it looks.",
             "false_positives": "A containerized or serverless deployment often has no stable client address to name, which is a real reason to accept this id with a reason rather than to narrow the rule. The rule also reads the GRANT, not the account: a host restriction applied by a separate CREATE USER or RENAME USER statement is invisible to it. PostgreSQL is never reported — its grantees are roles, with no @host half at all."
+        },
+        "SEC.PRIV.PROXY_TO_ADMIN_IN_MIGRATION": {
+                "bad": "DB::statement(\"GRANT PROXY ON 'root'@'localhost' TO 'app_runtime'@'%'\");",
+                "good": "DB::statement(\"GRANT PROXY ON 'app_directory'@'localhost' TO 'app_runtime'@'%'\");",
+                "language": "php",
+                "note": "GRANT PROXY is not a privilege over data or over the server: it is permission to CONNECT AS another account. The grantee authenticates with its own credential and then holds the proxied account's privileges rather than its own, so a proxy onto root is a root session -- with no administrative privilege named anywhere in the statement, which is why it is invisible to a review that reads privilege lists. Its object is an ACCOUNT, never *.*: GRANT PROXY ON *.* is a syntax error, which is also why PROXY cannot live in the administrative-privilege list.",
+                "false_positives": "Proxying is a legitimate authentication arrangement, which is why the rule judges the TARGET rather than the shape. Measured on 8.4.10, a stock server ships root@localhost -> ''@'' in mysql.proxies_priv of its own accord, so a rule reporting every proxy would fire on every installation the day it was installed. What it recognizes is an administrative target by NAME -- the mysql. prefix the server uses for its own accounts, and root. An arbitrary privileged account such as admin@% is therefore not reported: a statement does not say what an account holds, and that question needs the catalog. root is a convention rather than a reserved name, so an installation that renamed it is not reported either. PostgreSQL is never reported: it has no GRANT PROXY."
         },
         "SEC.PRIV.ROLE_BYPASSRLS": {
             "bad": "ALTER ROLE reporting BYPASSRLS;",

@@ -21,12 +21,12 @@ use Pushery\SQLens\Deploy\SessionTimeoutValue;
 final readonly class PgsqlSessionDefenseState implements ReadsSessionDefenseState
 {
     /** @return array<string, int|null> */
-    #[RawSql(reason: 'reads the timeouts this run set back through current_setting(); a builder cannot ask for a GUC, and reading them back is how the check proves the defense applied')]
+    #[RawSql(reason: 'reads the timeouts this run set back through pg_catalog.current_setting(); a builder cannot ask for a GUC, and reading them back is how the check proves the defense applied')]
     public function timeoutsInForce(ReaderSession $session): array
     {
         $row = $session->read(static fn (Connection $db): array => $db->select(
-            "select current_setting('statement_timeout') as statement_timeout,"
-            ." current_setting('lock_timeout') as lock_timeout",
+            "select pg_catalog.current_setting('statement_timeout') as statement_timeout,"
+            ." pg_catalog.current_setting('lock_timeout') as lock_timeout",
         ))[0] ?? null;
 
         if (! is_object($row)) {

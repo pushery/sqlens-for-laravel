@@ -91,7 +91,7 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 .' r.rolcanlogin, r.rolreplication, r.rolinherit, r.rolvaliduntil,'
                 // The memberships, aggregated server-side and ordered there too: two round trips
                 // would make the pairing of a role and its memberships a coincidence of timing.
-                .' coalesce((select array_agg(g.rolname order by g.rolname) from pg_auth_members m'
+                .' coalesce((select pg_catalog.array_agg(g.rolname order by g.rolname) from pg_auth_members m'
                 .'   join pg_roles g on g.oid = m.roleid where m.member = r.oid), array[]::name[]) as memberships,'
                 // OWNERSHIP, in the same statement for the same reason as the memberships above: it
                 // is a property of the role, and a second round trip would make the pairing a
@@ -107,7 +107,7 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 // multiply one fact into several. `nspname not like 'pg\_%'` excludes the catalog and
                 // every TOAST schema in one predicate; the grants reading above names the two schemas
                 // it excludes, and that form would let pg_toast through here.
-                .' coalesce((select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace'
+                .' coalesce((select pg_catalog.count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace'
                 ."   where c.relowner = r.oid and c.relkind in ('r', 'p')"
                 ."   and n.nspname not like 'pg\\_%' and n.nspname <> 'information_schema'), 0) as owned_tables"
                 .' from pg_roles r order by r.rolname'
@@ -200,34 +200,34 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 // repeat a default is still recognized as the default it repeats.
                 'with init as ('
                 .' select p.classoid, p.objoid, p.privtype, a.grantee, a.privilege_type'
-                .' from pg_init_privs p, lateral aclexplode(p.initprivs) a where p.objsubid = 0'
+                .' from pg_init_privs p, lateral pg_catalog.aclexplode(p.initprivs) a where p.objsubid = 0'
                 .')'
                 ." select 'table' as kind, n.nspname||'.'||c.relname as object_name,"
-                .' a.privilege_type, a.is_grantable, pg_get_userbyid(a.grantor) as grantor,'
-                ." case when a.grantee = 0 then '' else pg_get_userbyid(a.grantee) end as grantee,"
+                .' a.privilege_type, a.is_grantable, pg_catalog.pg_get_userbyid(a.grantor) as grantor,'
+                ." case when a.grantee = 0 then '' else pg_catalog.pg_get_userbyid(a.grantee) end as grantee,"
                 ." coalesce(i.privtype::text, case when a.grantee = c.relowner then 'o' end) as origin"
                 .' from pg_class c join pg_namespace n on n.oid = c.relnamespace'
                 // CROSS JOIN LATERAL rather than a comma: the LEFT JOIN below has to see `c`, and a
                 // comma-joined item is out of scope for the join that follows it.
-                .' cross join lateral aclexplode(c.relacl) a'
+                .' cross join lateral pg_catalog.aclexplode(c.relacl) a'
                 ." left join init i on i.classoid = 'pg_class'::regclass and i.objoid = c.oid"
                 .' and i.grantee = a.grantee and i.privilege_type = a.privilege_type'
                 // The system catalogs' own ACLs are the server's, not the project's, and every install
                 // has hundreds of them. Including them would bury the rows a reader can act on.
                 ." where c.relacl is not null and n.nspname not in ('pg_catalog', 'information_schema')"
                 .' union all'
-                ." select 'schema', n.nspname, a.privilege_type, a.is_grantable, pg_get_userbyid(a.grantor),"
-                ." case when a.grantee = 0 then '' else pg_get_userbyid(a.grantee) end,"
+                ." select 'schema', n.nspname, a.privilege_type, a.is_grantable, pg_catalog.pg_get_userbyid(a.grantor),"
+                ." case when a.grantee = 0 then '' else pg_catalog.pg_get_userbyid(a.grantee) end,"
                 ." coalesce(i.privtype::text, case when a.grantee = n.nspowner then 'o' end)"
-                .' from pg_namespace n cross join lateral aclexplode(n.nspacl) a'
+                .' from pg_namespace n cross join lateral pg_catalog.aclexplode(n.nspacl) a'
                 ." left join init i on i.classoid = 'pg_namespace'::regclass and i.objoid = n.oid"
                 .' and i.grantee = a.grantee and i.privilege_type = a.privilege_type'
                 ." where n.nspacl is not null and n.nspname not in ('pg_catalog', 'information_schema')"
                 .' union all'
-                ." select 'routine', n.nspname||'.'||p.proname, a.privilege_type, a.is_grantable, pg_get_userbyid(a.grantor),"
-                ." case when a.grantee = 0 then '' else pg_get_userbyid(a.grantee) end,"
+                ." select 'routine', n.nspname||'.'||p.proname, a.privilege_type, a.is_grantable, pg_catalog.pg_get_userbyid(a.grantor),"
+                ." case when a.grantee = 0 then '' else pg_catalog.pg_get_userbyid(a.grantee) end,"
                 ." coalesce(i.privtype::text, case when a.grantee = p.proowner then 'o' end)"
-                .' from pg_proc p join pg_namespace n on n.oid = p.pronamespace cross join lateral aclexplode(p.proacl) a'
+                .' from pg_proc p join pg_namespace n on n.oid = p.pronamespace cross join lateral pg_catalog.aclexplode(p.proacl) a'
                 ." left join init i on i.classoid = 'pg_proc'::regclass and i.objoid = p.oid"
                 .' and i.grantee = a.grantee and i.privilege_type = a.privilege_type'
                 ." where p.proacl is not null and n.nspname not in ('pg_catalog', 'information_schema')"
@@ -235,11 +235,11 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 // `pg_init_privs` does not cover databases, so the one default PostgreSQL ships there is
                 // recognized by its shape instead: CONNECT and TEMPORARY to PUBLIC is what every
                 // database is created with. Anything else on a database is somebody's decision.
-                ." select 'database', d.datname, a.privilege_type, a.is_grantable, pg_get_userbyid(a.grantor),"
-                ." case when a.grantee = 0 then '' else pg_get_userbyid(a.grantee) end,"
+                ." select 'database', d.datname, a.privilege_type, a.is_grantable, pg_catalog.pg_get_userbyid(a.grantor),"
+                ." case when a.grantee = 0 then '' else pg_catalog.pg_get_userbyid(a.grantee) end,"
                 ." case when a.grantee = 0 and a.privilege_type in ('CONNECT', 'TEMPORARY') then 'i'"
                 ." when a.grantee = d.datdba then 'o' end"
-                .' from pg_database d cross join lateral aclexplode(d.datacl) a'
+                .' from pg_database d cross join lateral pg_catalog.aclexplode(d.datacl) a'
                 .' where d.datacl is not null'
                 .' order by 1, 2, 6, 3'
             ))),
@@ -318,9 +318,9 @@ final readonly class PgsqlSecurityReader implements SecurityReader
     {
         /** @var list<object> $rows */
         $rows = $this->session->read(static fn (Connection $db): array => $db->select(
-            "select k.kind, string_agg(distinct a.privilege_type, ',') as privileges"
+            "select k.kind, pg_catalog.string_agg(distinct a.privilege_type, ',') as privileges"
             ." from (values ('table', 'r'), ('schema', 'n'), ('routine', 'f'), ('database', 'd')) as k(kind, objtype)"
-            .' cross join lateral aclexplode(acldefault(k.objtype::"char", 0)) a'
+            .' cross join lateral pg_catalog.aclexplode(pg_catalog.acldefault(k.objtype::"char", 0)) a'
             .' group by k.kind'
         ));
 
@@ -429,18 +429,18 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 // The OWNER by name, resolved by the server rather than joined by hand: `relowner` is
                 // an oid, and the rule that matters most here — the application connects as the role
                 // that owns its tables — is a comparison against a NAME.
-                .' pg_get_userbyid(c.relowner) as owner,'
+                .' pg_catalog.pg_get_userbyid(c.relowner) as owner,'
                 .' p.polname, p.polcmd, p.polpermissive,'
                 // The EXPRESSIONS, deparsed by the server. `pg_get_expr` rebuilds the stored parse
                 // tree, so `USING ( TRUE )`, `using(true)` and `USING (TRUE)` all come back as `true`
                 // — measured. That is the canonicalization a rule would otherwise fake with a regex
                 // over whatever somebody typed, done correctly because the server is printing the tree
                 // it will actually evaluate.
-                .' pg_get_expr(p.polqual, p.polrelid) as using_expr,'
-                .' pg_get_expr(p.polwithcheck, p.polrelid) as check_expr,'
+                .' pg_catalog.pg_get_expr(p.polqual, p.polrelid) as using_expr,'
+                .' pg_catalog.pg_get_expr(p.polwithcheck, p.polrelid) as check_expr,'
                 // Role oid 0 is PUBLIC — the same pseudo-role a grant names, and the same reason it
                 // cannot be left to a join that would simply find nothing.
-                .' (select array_agg(r.rolname order by r.rolname) from pg_roles r'
+                .' (select pg_catalog.array_agg(r.rolname order by r.rolname) from pg_roles r'
                 .'  where r.oid = any(p.polroles) and r.oid <> 0) as roles'
                 .' from pg_class c join pg_namespace n on n.oid = c.relnamespace'
                 .' left join pg_policy p on p.polrelid = c.oid'
@@ -453,7 +453,7 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 // table, and reporting n partitions would multiply one finding by however many exist.
                 .' where c.relkind in (\'r\', \'p\') and c.relispartition = false'
                 .' and (n.nspname||\'.\'||c.relname = any(?)'
-                .' or (n.nspname = current_schema() and c.relname = any(?)))'
+                .' or (n.nspname = pg_catalog.current_schema() and c.relname = any(?)))'
                 .' order by 1, p.polname',
                 [$qualifiedList, $bareList],
             ))),
@@ -655,8 +655,8 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 .' g.rolsuper, g.rolcreaterole, g.rolcreatedb, g.rolbypassrls, g.rolcanlogin,'
                 .' g.rolreplication, g.rolinherit,'
                 // The path as names, in order, so the finding can print it verbatim.
-                .' (select array_agg(p.rolname order by step.ord)'
-                .'  from unnest(reach.path) with ordinality as step(oid, ord)'
+                .' (select pg_catalog.array_agg(p.rolname order by step.ord)'
+                .'  from pg_catalog.unnest(reach.path) with ordinality as step(oid, ord)'
                 .'  join pg_roles p on p.oid = step.oid) as path'
                 .' from reach join pg_roles b on b.oid = reach.base'
                 .' join pg_roles g on g.oid = reach.reached'
@@ -854,8 +854,8 @@ final readonly class PgsqlSecurityReader implements SecurityReader
             /** @return list<object> */
             fn (): array => array_values($this->session->read(static fn (Connection $db): array => $db->select(
                 'select rule_number, file_name, line_number, type,'
-                .' array_to_string(database, \',\') as databases,'
-                .' array_to_string(user_name, \',\') as users,'
+                .' pg_catalog.array_to_string(database, \',\') as databases,'
+                .' pg_catalog.array_to_string(user_name, \',\') as users,'
                 .' address, netmask, auth_method,'
                 .' error'
                 .' from pg_hba_file_rules order by rule_number',
@@ -936,10 +936,10 @@ final readonly class PgsqlSecurityReader implements SecurityReader
             /** @return list<object> */
             fn (): array => array_values($this->session->read(fn (Connection $db): array => $db->select(
                 'select n.nspname as routine_schema, p.proname as routine_name,'
-                .' pg_get_userbyid(p.proowner) as owner, p.prosecdef as definer,'
+                .' pg_catalog.pg_get_userbyid(p.proowner) as owner, p.prosecdef as definer,'
                 // Joined server-side like the pg_hba array columns, and for the same reason: proconfig
                 // is `text[]` and PDO hands those over as PostgreSQL array literals.
-                .' array_to_string(p.proconfig, \'|\') as settings'
+                .' pg_catalog.array_to_string(p.proconfig, \'|\') as settings'
                 .' from pg_proc p join pg_namespace n on n.oid = p.pronamespace'
                 // The catalog's own routines are the server's, not the project's, and a stock install
                 // has thousands. `pg_temp_*` is a session's own scratch schema.

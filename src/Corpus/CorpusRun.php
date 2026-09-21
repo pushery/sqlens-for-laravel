@@ -17,7 +17,7 @@ use Pushery\SQLens\Findings\Outcome;
  * where the shipped runner is subtle, and it would drift silently, because both would keep passing
  * their own tests.
  *
- * So nothing in this class analyses anything. It receives the findings a real lint run produced and
+ * So nothing in this class analyzes anything. It receives the findings a real lint run produced and
  * lines them up against the ground truth. Everything above it — resolving migrations, capturing
  * statements, applying rules — is the shipped runner, unmodified.
  *

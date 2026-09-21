@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Drivers\Pgsql\Rules\Support;
 
+use Pushery\SQLens\Contracts\DriverCanonicalization;
+use Pushery\SQLens\Drivers\Pgsql\Canonical\PgsqlCanonicalization;
 use Pushery\SQLens\Rules\Data\BulkWrite;
 use Pushery\SQLens\Rules\Data\BulkWriteBounds;
 
@@ -62,5 +64,10 @@ final readonly class PgsqlBulkWriteBounds implements BulkWriteBounds
         }
 
         return preg_match('/\bBETWEEN\b/', $masked) === 1;
+    }
+
+    public function canonicalization(): DriverCanonicalization
+    {
+        return new PgsqlCanonicalization;
     }
 }

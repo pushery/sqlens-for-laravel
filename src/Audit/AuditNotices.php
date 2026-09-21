@@ -701,6 +701,31 @@ final readonly class AuditNotices
     }
 
     /**
+     * A baseline is configured and the file it names is not there.
+     *
+     * ⚠️ Distinct from the notice below, which is about a FLAG having nothing to act on. This one
+     * is about the project's own configuration: every finding it had accepted comes back in this
+     * report, and an empty baseline and an absent one look identical from the outside.
+     *
+     * Not an error, because `sqlens:baseline` has to be runnable before the file exists — that is
+     * how a project creates one. The run continues and says what it could not find.
+     */
+    public static function baselineConfiguredButAbsent(string $path, RunContext $runContext): Finding
+    {
+        return self::runNotice(
+            AuditNotice::BaselineAbsent->id(),
+            sprintf(
+                'A baseline is configured at "%s" and no file is there, so this run accepted nothing — which '
+                .'is also what a project with no baseline looks like. Every finding the baseline had accepted '
+                .'is in this report. The path is resolved from the application root; if the baseline has not '
+                .'been created yet, sqlens:baseline creates it and this goes away.',
+                $path,
+            ),
+            $runContext,
+        );
+    }
+
+    /**
      * The run was told to bypass the baseline, and this suite applies none.
      *
      * Reported rather than silently accepted, which is the whole difference between a flag and a

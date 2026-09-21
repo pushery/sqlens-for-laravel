@@ -42,7 +42,7 @@ use Pushery\SQLens\Rules\RuleDocumentationUrl;
  *   against.
  * - **An excluded path.** A project that excluded a directory from the duty must not get findings
  *   from that directory as a consequence of excluding it.
- * - **A file with no collected data at all.** PHPStan analyses a set of paths, and an annotation in
+ * - **A file with no collected data at all.** PHPStan analyzes a set of paths, and an annotation in
  *   a file the run never opened has no evidence either way. This rule reads only files the run
  *   produced justifications for, so the case cannot arise — stated because "the run did not look"
  *   and "the run looked and found nothing" are the distinction this whole package is built on.

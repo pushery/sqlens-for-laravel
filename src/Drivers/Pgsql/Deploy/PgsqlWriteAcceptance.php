@@ -20,12 +20,12 @@ use Pushery\SQLens\Deploy\WriteAcceptance;
  */
 final readonly class PgsqlWriteAcceptance implements ReadsWriteAcceptance
 {
-    #[RawSql(reason: 'reads pg_is_in_recovery() and default_transaction_read_only -- a server function and a GUC, neither of which has a builder expression')]
+    #[RawSql(reason: 'reads pg_catalog.pg_is_in_recovery() and default_transaction_read_only -- a server function and a GUC, neither of which has a builder expression')]
     public function writeAcceptance(ReaderSession $session): WriteAcceptance
     {
         $row = $session->read(static fn (Connection $db): array => $db->select(
-            'select pg_is_in_recovery() as in_recovery,'
-            .' current_setting(\'default_transaction_read_only\') as read_only',
+            'select pg_catalog.pg_is_in_recovery() as in_recovery,'
+            .' pg_catalog.current_setting(\'default_transaction_read_only\') as read_only',
         ))[0] ?? null;
 
         if (! is_object($row)) {
@@ -38,7 +38,7 @@ final readonly class PgsqlWriteAcceptance implements ReadsWriteAcceptance
         // not the one they should be talking to at all.
         if (in_array($this->text($row, 'in_recovery'), ['1', 't', 'true', 'on'], true)) {
             return WriteAcceptance::refused(
-                'pg_is_in_recovery()',
+                'pg_catalog.pg_is_in_recovery()',
                 'a standby — this instance replays from a primary and accepts no writes of its own',
             );
         }

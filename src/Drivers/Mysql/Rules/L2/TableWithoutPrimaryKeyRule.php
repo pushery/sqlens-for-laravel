@@ -12,6 +12,7 @@ use Pushery\SQLens\Contracts\DerivesDowntimeClass;
 use Pushery\SQLens\Contracts\JudgesSchemaObjects;
 use Pushery\SQLens\Contracts\ProvidesRemediation;
 use Pushery\SQLens\Contracts\ProvidesSchemaObjectRemediation;
+use Pushery\SQLens\Drivers\Mysql\Canonical\MysqlCanonicalization;
 use Pushery\SQLens\Drivers\Mysql\DowntimeClass\MysqlDowntimeClassSource;
 use Pushery\SQLens\Drivers\Mysql\Rules\AbstractMysqlRule;
 use Pushery\SQLens\Engine\ResolvedServerVersion;
@@ -282,7 +283,7 @@ final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements Decl
             return null;
         }
 
-        return match (TableKeyState::inCreateTable($statement->canonical)) {
+        return match (TableKeyState::inCreateTable($statement->canonical, new MysqlCanonicalization)) {
             TableKeyState::Keyed => null,
             TableKeyState::Unkeyed => 'on_create',
             TableKeyState::Undetermined => 'undetermined',
@@ -349,9 +350,28 @@ final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements Decl
      * Ordered, not merely present: a key added BEFORE the drop is the key being dropped. The
      * stream carries the statements in capture order, so "after" is a fact the rule can read
      * rather than assume.
+     *
+     * ⚠️ **AND THE RESTORE CAN SIT IN THE SAME STATEMENT, WHICH THIS USED TO MISS — REPORTING THE
+     * SAFER MIGRATION.** MySQL accepts `ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (id)`, and
+     * that form is better than the two-statement one on both counts: the table is rebuilt once
+     * instead of twice, and there is no moment when it has no primary key — which is the state this
+     * rule warns about. The statement scan below could never see it, because there IS no later
+     * statement: measured, the canonical model classifies the whole multi-action `ALTER` as ONE
+     * statement of kind `drop_constraint`, and the add is not reflected in the kind at all.
+     *
+     * So the rule reported the form it should approve of and stayed silent on the form that really
+     * does open the window. Reading the canonical text is the same move {@see dropsThePrimaryKey()}
+     * already makes one method up, and for the same reason: the kind is too coarse to tell these
+     * apart, and the text is where the information actually is.
      */
     private function keyIsRestored(MigrationStatementView $statement): bool
     {
+        // The same statement, first. A multi-action ALTER carries its own restore, and asking the
+        // stream about it would be asking the wrong question.
+        if (preg_match('/\bADD PRIMARY KEY\b/', $statement->canonical) === 1) {
+            return true;
+        }
+
         $table = $statement->soleTarget(SchemaObjectType::Table);
 
         if (! $table instanceof StatementTarget) {

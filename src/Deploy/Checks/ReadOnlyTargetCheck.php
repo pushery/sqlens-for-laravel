@@ -11,6 +11,7 @@ use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PreflightContext;
 use Pushery\SQLens\Deploy\WriteAcceptance;
+use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
@@ -106,7 +107,7 @@ final readonly class ReadOnlyTargetCheck implements PreflightCheck
             return CheckResult::undetermined(
                 self::ID,
                 UndeterminedReason::WriteAcceptanceUnreadable,
-                'the server would not say whether it accepts writes ('.$error->getMessage().'). '
+                'the server would not say whether it accepts writes ('.new CredentialRedactor()->redact($error->getMessage()).'). '
                 .'Nothing follows from that: an unread setting is not a permissive one, and a deploy '
                 .'sent at a standby fails whether or not this gate could see it coming.',
             );

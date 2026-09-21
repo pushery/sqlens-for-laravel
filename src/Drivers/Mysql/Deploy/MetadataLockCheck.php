@@ -15,6 +15,7 @@ use Pushery\SQLens\Contracts\PreflightCheck;
 use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PreflightContext;
+use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
@@ -37,9 +38,17 @@ use Throwable;
  *
  * ## Why silence has to be earned here more than anywhere else
  *
- * `performance_schema` can be off, and its `metadata_locks` instrument is disabled by default in
- * several distributions. Both produce an EMPTY reading, not an error — so "no blocker" and "the
+ * `performance_schema` can be off, and its `metadata_locks` instrument can be switched off
+ * independently of it. Both produce an EMPTY reading, not an error — so "no blocker" and "the
  * instrument that would have told me is switched off" arrive as the same answer.
+ *
+ * ⚠️ THIS USED TO SAY "disabled by default in several distributions", AND THAT IS 5.7 HERITAGE. The
+ * default flipped in 8.0: measured on 8.4.10, `wait/lock/metadata/sql/mdl` is `ENABLED=YES` out of
+ * the box, with 480 of 1259 instruments off — so the query does see disabled ones and the reading is
+ * not an artifact. The load-bearing reason is that both can be turned OFF, not that either ships
+ * that way, and the distinction matters in the direction that costs: a reader who measures the
+ * default, finds YES and believes the old sentence concludes that silence is now trustworthy and
+ * simplifies the check away.
  *
  * That is why this check consults {@see ActivitySnapshot::silenceIsTrustworthy()} before reporting a
  * clean result. An empty snapshot with a named gap is `undetermined`; an empty snapshot with no gaps
@@ -112,7 +121,7 @@ final readonly class MetadataLockCheck implements PreflightCheck
             return CheckResult::undetermined(
                 self::ID,
                 UndeterminedReason::MysqlInstrumentationUnavailable,
-                'the activity views could not be read: '.$failure->getMessage(),
+                'the activity views could not be read: '.new CredentialRedactor()->redact($failure->getMessage()),
             );
         }
 

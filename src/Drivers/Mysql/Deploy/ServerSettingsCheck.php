@@ -11,6 +11,7 @@ use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PreflightContext;
 use Pushery\SQLens\Drivers\Mysql\Catalog\MysqlServerSettingsReader;
+use Pushery\SQLens\Drivers\Mysql\Rules\Support\SqlModeFlags;
 use Pushery\SQLens\Findings\Confidence;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
@@ -269,7 +270,7 @@ final readonly class ServerSettingsCheck implements PreflightCheck
                 Severity::High,
                 DowntimeClass::Online,
             ),
-            'sql_mode' => fn (string $value, PreflightContext $context, bool $pending): ?Finding => str_contains($value, 'STRICT_TRANS_TABLES') || str_contains($value, 'STRICT_ALL_TABLES') ? null : $this->finding(
+            'sql_mode' => fn (string $value, PreflightContext $context, bool $pending): ?Finding => SqlModeFlags::parse($value)->has('STRICT_TRANS_TABLES') || SqlModeFlags::parse($value)->has('STRICT_ALL_TABLES') ? null : $this->finding(
                 $context,
                 $pending,
                 'SQL_MODE_NOT_STRICT',

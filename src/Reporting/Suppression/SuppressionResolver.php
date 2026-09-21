@@ -76,6 +76,18 @@ final readonly class SuppressionResolver
         // only ever hides one of OURS, so no finding can be covered by both. The order is still
         // written down, because a precedence nobody wrote down is one the next reader has to guess.
         PairedViewDedupeSuppressionSource::SOURCE,
+        // ⚠️ THE THIRD DE-DUPLICATION LAYER, AND IT WAS MISSING FROM THIS LIST WHILE THE RESOLVER RAN
+        // IT. `Result::countsBySuppressionSource()` seeds its counters from exactly this constant and
+        // then increments per suppression, so the first finding this layer ever hid incremented a key
+        // that did not exist — an "Undefined array key" warning, which under Laravel's
+        // `HandleExceptions` is an ErrorException, in the console and JSON reporters. The layer being
+        // unreachable is what kept that from happening.
+        //
+        // Position: after the other two, for the reason given above them — a human decision deserves
+        // to be the recorded reason whenever both apply. Among the three the order is immaterial by
+        // construction: RLS hides a FOREIGN id, paired-view hides one of OURS in the catalog half, and
+        // this one hides a MIGRATION finding whose fact the catalog half already reports.
+        CrossSourceDedupeSuppressionSource::SOURCE,
     ];
 
     /** @param  list<UndeterminedReason>  $allowUndetermined */

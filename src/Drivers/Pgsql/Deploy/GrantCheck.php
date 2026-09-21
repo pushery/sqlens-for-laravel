@@ -16,6 +16,7 @@ use Pushery\SQLens\Deploy\PreflightContext;
 use Pushery\SQLens\Deploy\PrivilegeClass;
 use Pushery\SQLens\Deploy\PrivilegeRequirement;
 use Pushery\SQLens\Deploy\RequiredPrivileges;
+use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
@@ -139,7 +140,7 @@ final readonly class GrantCheck implements PreflightCheck
                 $allowed = $this->isAllowed($context, $role, $requirement);
             } catch (Throwable $failure) {
                 $unanswered[] = $requirement->object.': the server refused the privilege question ('
-                    .$failure->getMessage().')';
+                    .new CredentialRedactor()->redact($failure->getMessage()).')';
 
                 continue;
             }
@@ -191,7 +192,7 @@ final readonly class GrantCheck implements PreflightCheck
     private function ownsSchema(PreflightContext $context, string $role, string $schema): bool
     {
         $row = $context->session->read(static fn (Connection $db): array => $db->select(
-            'select pg_has_role(?, n.nspowner, \'USAGE\') as allowed from pg_namespace n where n.nspname = ?',
+            'select pg_catalog.pg_has_role(?, n.nspowner, \'USAGE\') as allowed from pg_namespace n where n.nspname = ?',
             [$role, $schema],
         ))[0] ?? null;
 
@@ -227,7 +228,7 @@ final readonly class GrantCheck implements PreflightCheck
     }
 
     /** Whether the role may do this, asked of the server rather than reasoned about here. */
-    #[RawSql(reason: 'asks has_table_privilege() and friends -- server functions that answer the exact question a preflight has, without the reader having to reimplement ACL resolution')]
+    #[RawSql(reason: 'asks pg_catalog.has_table_privilege() and friends -- server functions that answer the exact question a preflight has, without the reader having to reimplement ACL resolution')]
     private function isAllowed(PreflightContext $context, string $role, PrivilegeRequirement $requirement): bool
     {
         $object = $requirement->object;
@@ -249,7 +250,7 @@ final readonly class GrantCheck implements PreflightCheck
         // a migration that creates a table names exactly such an object — so the absent case is
         // judged at the schema, which is the right question for a CREATE anyway.
         $exists = $context->session->read(static fn (Connection $db): array => $db->select(
-            'select to_regclass(?) is not null as present',
+            'select pg_catalog.to_regclass(?) is not null as present',
             [$object],
         ))[0] ?? null;
 
@@ -257,32 +258,47 @@ final readonly class GrantCheck implements PreflightCheck
 
         [$sql, $bindings] = match (true) {
             ! $present, $requirement->class === PrivilegeClass::Create => [
-                'select has_schema_privilege(?, ?, \'CREATE\') as allowed',
+                'select pg_catalog.has_schema_privilege(?, ?, \'CREATE\') as allowed',
                 [$role, $schema],
             ],
             $requirement->class === PrivilegeClass::Ownership => [
                 // Not a privilege. `ALTER TABLE` requires OWNERSHIP, and no GRANT produces it — so
                 // the question is membership in the owning role, which is what PostgreSQL itself
                 // checks before it allows the statement.
-                'select pg_has_role(?, c.relowner, \'USAGE\') as allowed'
-                .' from pg_class c where c.oid = to_regclass(?)',
+                'select pg_catalog.pg_has_role(?, c.relowner, \'USAGE\') as allowed'
+                .' from pg_class c where c.oid = pg_catalog.to_regclass(?)',
                 [$role, $object],
             ],
             $requirement->class === PrivilegeClass::References => [
-                'select has_table_privilege(?, ?, \'REFERENCES\') as allowed',
+                'select pg_catalog.has_table_privilege(?, ?, \'REFERENCES\') as allowed',
                 [$role, $object],
             ],
             $requirement->class === PrivilegeClass::Write => [
-                'select has_table_privilege(?, ?, \'INSERT\') and has_table_privilege(?, ?, \'UPDATE\') as allowed',
+                'select pg_catalog.has_table_privilege(?, ?, \'INSERT\') and pg_catalog.has_table_privilege(?, ?, \'UPDATE\') as allowed',
                 [$role, $object, $role, $object],
             ],
-            // Drop, like Alter, is not grantable on PostgreSQL: it needs ownership. Kept as its own
-            // arm rather than folded into the one above, because the two classes exist so a project
-            // can be told which of them it is short of.
+            // DROP is not grantable on PostgreSQL either, but ownership of the TABLE is not the only
+            // thing that permits it — the SCHEMA owner may drop a table inside their schema whoever
+            // created it. `DROP TABLE`'s own description says so: "only the table owner, the schema
+            // owner, and superuser can drop a table."
+            //
+            // ⚠️ THIS ARM ASKED ONLY ABOUT `relowner`, AND THAT BLOCKED A LEGITIMATE DEPLOY. A
+            // migration role that owns the schema while another role created the tables is refused
+            // with `OWNERSHIP_MISSING` at Critical, and sent to `ALTER TABLE … OWNER TO` — an
+            // ownership transfer it does not need. Measured on 18.0: with the table owned by one role
+            // and the schema by another, the old question answers `false`, this one answers `true`,
+            // and the server accepts the DROP.
+            //
+            // ⚠️ AND THE ALTER ARM ABOVE MUST NOT BE LOOSENED THE SAME WAY, which the same
+            // measurement settles: `ALTER TABLE … ADD COLUMN` by the schema owner is refused with
+            // "must be owner of table". The two classes are kept apart so a project is told which of
+            // them it is short of, and now they really do ask different questions.
             default => [
-                'select pg_has_role(?, c.relowner, \'USAGE\') as allowed'
-                .' from pg_class c where c.oid = to_regclass(?)',
-                [$role, $object],
+                'select pg_catalog.pg_has_role(?, c.relowner, \'USAGE\')'
+                .' or pg_catalog.pg_has_role(?, n.nspowner, \'USAGE\') as allowed'
+                .' from pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace'
+                .' where c.oid = pg_catalog.to_regclass(?)',
+                [$role, $role, $object],
             ],
         };
 
@@ -328,24 +344,40 @@ final readonly class GrantCheck implements PreflightCheck
         // names, and watch the next deploy fail identically.
         $ownership = $class === PrivilegeClass::Ownership || $class === PrivilegeClass::Drop;
 
-        $needs = $ownership
-            ? sprintf(
-                'must OWN `%s`, and ownership cannot be granted — `ALTER TABLE` and `DROP` require '
-                .'it, and no `GRANT` produces it. Either `ALTER TABLE %s OWNER TO %s`, or make %s a '
-                .'member of the role that owns it',
+        // ⚠️ AND THE TWO OWNERSHIP CASES NEED DIFFERENT SENTENCES, which this used to give one.
+        // `DROP TABLE` accepts the SCHEMA owner as well as the table owner — measured on 18.0 — so
+        // telling a schema owner they "must OWN the table" is advice for a transfer they do not need.
+        // `ALTER TABLE` really does need the table, and the same measurement shows it: the schema
+        // owner is refused with "must be owner of table".
+        $needs = match (true) {
+            $class === PrivilegeClass::Drop => sprintf(
+                'must own `%s` or the schema it lives in — `DROP TABLE` accepts either, and no `GRANT` '
+                .'produces it. Either `ALTER TABLE %s OWNER TO %s`, make %s the owner of the schema, or '
+                .'make %s a member of a role that is one of the two',
                 $requirement->object,
                 $requirement->object,
                 $role,
                 $role,
-            )
-            : sprintf(
+                $role,
+            ),
+            $ownership => sprintf(
+                'must OWN `%s`, and ownership cannot be granted — `ALTER TABLE` requires the TABLE '
+                .'itself, which owning the schema does not give, and no `GRANT` produces it. Either '
+                .'`ALTER TABLE %s OWNER TO %s`, or make %s a member of the role that owns it',
+                $requirement->object,
+                $requirement->object,
+                $role,
+                $role,
+            ),
+            default => sprintf(
                 'needs %s on `%s` — `GRANT %s ON %s TO %s`',
                 strtoupper($class->value),
                 $requirement->object,
                 strtoupper($class->value),
                 $requirement->object,
                 $role,
-            );
+            ),
+        };
 
         return Finding::fail(
             ruleId: $ownership ? self::OWNERSHIP_ID : self::ID,

@@ -71,7 +71,7 @@ final readonly class PglsContribution implements ToolContribution
             )];
         }
 
-        $result = $this->runner->run($diagnostic->path, new PglsInvocation($connection, $this->timeout()));
+        $result = $this->runner->run($diagnostic->path, new PglsInvocation($connection, $this->timeout(), $connectionName));
 
         if (! $result->produced()) {
             return [...$own, $this->mapper->unavailable(

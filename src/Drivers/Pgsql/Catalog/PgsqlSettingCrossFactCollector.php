@@ -213,7 +213,7 @@ final readonly class PgsqlSettingCrossFactCollector implements SettingCrossFactC
                 .'      when s.setrole = 0 then \'database\''
                 .'      else \'role_in_database\' end as scope'
                 .' from pg_db_role_setting s'
-                .' where (s.setdatabase = 0 or s.setdatabase = (select oid from pg_database where datname = current_database()))'
+                .' where (s.setdatabase = 0 or s.setdatabase = (select oid from pg_database where datname = pg_catalog.current_database()))'
                 .' and (s.setrole = 0 or s.setrole = (select oid from pg_roles where rolname = current_user))',
             ));
         } catch (Throwable $exception) {

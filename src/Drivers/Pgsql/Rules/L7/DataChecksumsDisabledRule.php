@@ -32,12 +32,19 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * change here would be proposing something impossible, and a tool that suggests impossible fixes
  * gets dismissed — along with its correct findings.
  *
+ * ⚠️ **But it is not UNFIXABLE, and the sentence a reader actually saw said it was.** This paragraph
+ * has been right since it was written; `changeable` was `initdb`, and that enum case renders *moving
+ * it means a new cluster and a dump/restore*. So the docblock described `pg_checksums` while the
+ * finding recommended a migration. It is `SettingChangeCost::Offline` now — changeable in place, with
+ * the server stopped — which is the distinction between a maintenance window and a data migration,
+ * and those differ by orders of magnitude.
+ *
  * That is also why this rule carries NO `downtime_class`. The field describes what an OPERATION
- * costs, and there is no operation here: the setting is fixed at `initdb`. Stamping it `online`
- * because the finding is harmless to produce would be read literally by a deploy script or an agent
- * payload as "this correction is free", which is the opposite of true. The load-bearing fact is
- * `changeable: initdb`, which the matrix carries and {@see AbstractServerSettingRule::remediation()}
- * turns into the honest sentence.
+ * costs, and the operation here is not a migration step at all — it is a stopped server and a pass
+ * over the data directory. Stamping it `online` because the finding is harmless to produce would be
+ * read literally by a deploy script or an agent payload as "this correction is free", which is the
+ * opposite of true. The load-bearing fact is `changeable: offline`, which the matrix carries and
+ * {@see AbstractServerSettingRule::remediation()} turns into the honest sentence.
  */
 final class DataChecksumsDisabledRule extends AbstractServerSettingRule
 {

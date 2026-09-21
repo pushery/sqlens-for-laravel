@@ -811,9 +811,16 @@ final readonly class MysqlCatalogReader implements CatalogReader
                    INDEX_TYPE    AS index_type,
                    IS_VISIBLE    AS is_visible,
                    -- The PREFIX LENGTH, and it is not a detail: `KEY (email(20))` indexes the first
-                   -- 20 bytes, not the column, and reports the column name exactly as a full-column
-                   -- key does. A reader that skipped this would hand a redundancy rule two indexes
-                   -- it cannot tell apart, and the rule would advise dropping the wrong one.
+                   -- 20 CHARACTERS (bytes, for a binary string), not the column, and reports the
+                   -- column name exactly as a full-column key does. A reader that skipped this would
+                   -- hand a redundancy rule two indexes it cannot tell apart, and the rule would
+                   -- advise dropping the wrong one.
+                   --
+                   -- The unit is the engine's, not a choice: the INFORMATION_SCHEMA STATISTICS page
+                   -- defines SUB_PART as "the number of indexed CHARACTERS if the column is only
+                   -- partly indexed". Under utf8mb4 those
+                   -- 20 characters are up to 80 bytes, and prefix length is exactly the decision
+                   -- somebody makes while reading this.
                    SUB_PART      AS sub_part,
                    EXPRESSION    AS expression
             FROM information_schema.STATISTICS
@@ -831,8 +838,8 @@ final readonly class MysqlCatalogReader implements CatalogReader
 
             if ($this->nullableInt($row, 'sub_part') !== null) {
                 // ANY prefixed column makes the whole index one this package will not compare: a
-                // key over the first 20 bytes of a column answers a different question from a key
-                // over the column, and the two are indistinguishable by name alone.
+                // key over the first 20 characters of a column answers a different question from a
+                // key over the column, and the two are indistinguishable by name alone.
                 $grouped[$key]['prefixed'] = true;
             }
 
@@ -898,9 +905,9 @@ final readonly class MysqlCatalogReader implements CatalogReader
                     // so this is constantly false and STATED rather than left absent, for the same
                     // reason as the flag above: an absent attribute would read as "unknown".
                     'has_include' => false,
-                    // Read from SUB_PART: an index over the first N bytes of a column, which reports
-                    // the same column NAME as a full-column key. MySQL's own shape, with no
-                    // PostgreSQL counterpart.
+                    // Read from SUB_PART: an index over the first N characters of a column (bytes,
+                    // for a binary string), which reports the same column NAME as a full-column key.
+                    // MySQL's own shape, with no PostgreSQL counterpart.
                     'prefixed_columns' => $index['prefixed'],
                     'columns' => $canonicalizer->indexColumns($index['columns']),
                     // Names only, in order — the shape a foreign-key coverage question compares

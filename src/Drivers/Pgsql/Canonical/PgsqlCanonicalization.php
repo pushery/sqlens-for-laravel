@@ -79,6 +79,18 @@ final class PgsqlCanonicalization implements DriverCanonicalization
             // comment is a whole statement shape that folded nothing at all.
             'BIGSERIAL', 'COMMENT', 'IDENTITY', 'IS',
 
+            // The GENERATED-column vocabulary, and it slipped through for the reason this file has
+            // already recorded twice: the keyword guard's corpus is generated from the SCHEMA
+            // builder, and `GENERATED ALWAYS AS IDENTITY` is written by hand or through `->change()`
+            // rather than by the builder's ordinary path. So no corpus statement ever carried these
+            // words, and `generated always as identity` folded only its `AS` — one statement, two
+            // canonical forms, two fingerprints, and a baseline entry that stops matching when
+            // somebody reformats a migration.
+            //
+            // Measured before and after rather than reasoned: with these absent, the same DDL in two
+            // casings produced two different canonical strings.
+            'ALWAYS', 'GENERATED', 'STORED', 'VIRTUAL',
+
             // TYPE names and the words that ride with them. Without these, `varchar(100)` and
             // `VARCHAR(100)` canonicalize differently — ONE statement, TWO fingerprints — and a
             // baseline entry stops matching the moment someone reformats a migration. Measured from

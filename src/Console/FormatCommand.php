@@ -70,6 +70,7 @@ use Symfony\Component\Console\Output\ConsoleOutputInterface;
 final class FormatCommand extends Command
 {
     use ResolvesStrictTools;
+    use ValidatesConfig;
 
     /**
      * The formats this command answers to — its own set, deliberately narrower than the registry's.
@@ -108,6 +109,13 @@ final class FormatCommand extends Command
 
     public function handle(Repository $config, FormatterRegistry $formatters, DialectResolver $dialects, MigrationPaths $paths, Filesystem $filesystem): int
     {
+        // FIRST, before the reporter, before the profile, before anything opens a connection. A
+        // misconfiguration that surfaces after twenty seconds of catalog reading is one people
+        // check for less often — and a key this package does not know is one it IGNORES, silently.
+        if ($this->refusesInvalidConfig()) {
+            return ExitCode::Misconfiguration->value;
+        }
+
         // BEFORE anything is resolved, scanned or written. A typo in `--format` must not first
         // rewrite two hundred files and then complain about the option it was told at the start —
         // the same placement rule the strict-backend refusal below follows, for the same reason.
@@ -133,20 +141,46 @@ final class FormatCommand extends Command
         $requested = is_string($flag = $this->option('dialect')) && $flag !== '' ? $flag : $settings->dialect;
         $resolved = $dialects->resolve($requested);
 
-        // ⚠️ An unresolved dialect is NOT a refusal. `sqlens:format` with no database at all is the
-        // north-star this suite is built around — a formatter that needed a connection to reformat a
-        // text file would be unusable in exactly the setting it is most useful in: a fresh checkout,
-        // a pre-commit hook, a Windows machine with nothing installed.
+        // ⚠️ AN UNRESOLVED DIALECT IS A REFUSAL, and this line used to read `?? Dialect::Pgsql` while
+        // the comment above it promised the run "says so rather than silently choosing one". It chose
+        // one. What that cost is not a worse-formatted file, it is a WRONG one: the core is not
+        // dialect-neutral at two points that change bytes.
         //
-        // What it costs is the dialect-SPECIFIC backends, and the run says so rather than silently
-        // choosing one. The dialect-neutral core formats anyway, which is why it exists.
-        $dialect = $resolved->dialect ?? Dialect::Pgsql;
-
+        //   - Comment syntax. Under pgsql `# …` is not a comment and gets re-set as tokens, and
+        //     `5--1` becomes one (`SqlTokenizer`).
+        //   - Keyword case. Under pgsql every keyword is upper-cased, including the MySQL-unreserved
+        //     words `SqlToken` protects on purpose, "because MySQL on Linux compares table names by
+        //     case".
+        //
+        // So a MySQL project with a table called `comment`, `view` or `json` had
+        // `INSERT INTO comment` WRITTEN BACK as `INSERT INTO COMMENT` — and on a Linux MySQL with
+        // `lower_case_table_names=0` the file now names a table that does not exist. Without
+        // `--check` the original is already overwritten.
+        //
+        // ⚠️ AND REFUSING DOES NOT COST THE NO-DATABASE NORTH-STAR, which is the objection this had
+        // to answer. `DialectResolver` says where that property actually lives: "an explicit dialect
+        // short-circuits everything: the connection is never read … That is the property the
+        // north-star rests on." A fresh checkout, a pre-commit hook and a machine with nothing
+        // installed all keep working — they name the dialect once, in a flag or in config, instead of
+        // having one guessed for them. The guess was never what made them work.
+        //
+        // Placed with the other up-front refusals rather than after the loop, for the reason stated
+        // there: a run that is going to fail should not first rewrite two hundred files.
         if (! $resolved->dialect instanceof Dialect) {
-            $this->report('sqlens:format: '.$resolved->reason.' — '.$resolved->detail);
+            $this->report(sprintf(
+                'sqlens:format: %s — %s. Name the dialect to format for: --dialect=pgsql, --dialect=mysql, '
+                .'or set sqlens.format.dialect. It is not guessed, because the formatter changes comment '
+                .'syntax and keyword case per dialect and would rewrite the file for the wrong engine.',
+                $resolved->reason,
+                $resolved->detail,
+            ));
+
+            return ExitCode::Misconfiguration->value;
         }
 
-        $resolution = $formatters->resolve($backend, $dialect, $settings->style, dialectResolved: $resolved->dialect instanceof Dialect);
+        $dialect = $resolved->dialect;
+
+        $resolution = $formatters->resolve($backend, $dialect, $settings->style);
 
         // NAMED before anything is formatted, and the strict refusal happens here rather than after
         // the loop: a run that is going to fail because a backend is missing should not first
@@ -447,7 +481,14 @@ final class FormatCommand extends Command
         // survival condition of a committed artifact: a diff on every run and a team stops reading.
         usort($files, static fn (array $left, array $right): int => strcmp($left['path'], $right['path']));
 
-        $this->line((string) json_encode([
+        // ⚠️ THE FLAGS, for the reason DoctorCommand records at its own call: a `(string)` cast over
+        // a `false` return prints a BLANK LINE and the exit code still comes from the verdict, so a
+        // consumer gets an empty document with a status that says nothing went wrong.
+        //
+        // Here the bytes come from the FILESYSTEM -- `files[].path` -- and a non-UTF-8 filename is
+        // legal on Linux. Substituting keeps the document valid and readable; THROW stays for the
+        // structural failures substitution cannot produce.
+        $this->line(json_encode([
             'run' => $run,
             'files' => $files,
             'summary' => [
@@ -456,7 +497,7 @@ final class FormatCommand extends Command
                 'unchanged' => count($unchanged),
                 'undetermined' => count($undetermined),
             ],
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        ], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     /**

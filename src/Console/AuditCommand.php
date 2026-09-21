@@ -10,6 +10,7 @@ use Illuminate\Contracts\Translation\Translator;
 use Pushery\SQLens\Audit\AuditRuns;
 use Pushery\SQLens\Contracts\Reporter;
 use Pushery\SQLens\Drivers\DriverResolutionFailure;
+use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Drivers\UnsupportedDriverMessage;
 use Pushery\SQLens\Exceptions\UnknownReporterFormat;
 use Pushery\SQLens\Reporting\ReporterManager;
@@ -49,6 +50,7 @@ final class AuditCommand extends Command
     use ResolvesDebtMode;
     use ResolvesProfile;
     use SharesRunOptions;
+    use ValidatesConfig;
 
     /** @var string */
     protected $signature = 'sqlens:audit
@@ -74,7 +76,7 @@ final class AuditCommand extends Command
         // IGNORED, and ignoring is silent — a `levl: 3` typo produces a green run that checked
         // less, and nothing on screen says so. The machinery for this existed and was tested from
         // the day it was written; what it never had was a caller.
-        if (! $this->configIsValid($config->get('sqlens'))) {
+        if ($this->refusesInvalidConfig()) {
             return ExitCode::Misconfiguration->value;
         }
 
@@ -192,7 +194,7 @@ final class AuditCommand extends Command
         if ($failure instanceof DriverResolutionFailure) {
             // An unsupported engine is a message, not a finding: nothing was audited, so there is
             // nothing to report — only to say why, translated and safe to paste.
-            $driver = $config->get("database.connections.{$outcome->connectionName}.driver");
+            $driver = EffectiveConnectionConfig::driverForConnection($config, $outcome->connectionName);
 
             $this->stderr()->writeln(new UnsupportedDriverMessage($translator)->for(
                 $failure,

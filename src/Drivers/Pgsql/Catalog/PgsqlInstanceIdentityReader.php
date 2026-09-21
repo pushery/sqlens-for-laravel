@@ -53,11 +53,11 @@ final readonly class PgsqlInstanceIdentityReader implements InstanceIdentityRead
                 // WITH its netmask — `127.0.0.1/32`, `::1/128` — which is a network, not a host. It
                 // would reach the report header as the server's identity and would fail every
                 // address comparison, including the pinned-host check, while looking almost right.
-                'select host(inet_server_addr()) as host,'
+                'select pg_catalog.host(pg_catalog.inet_server_addr()) as host,'
             .' inet_server_port() as port,'
-            .' current_database() as db,'
-            .' current_setting(\'server_version\') as version,'
-                .' pg_is_in_recovery() as in_recovery'
+            .' pg_catalog.current_database() as db,'
+            .' pg_catalog.current_setting(\'server_version\') as version,'
+                .' pg_catalog.pg_is_in_recovery() as in_recovery'
             ));
 
             $host = $this->text($row, 'host');
@@ -80,7 +80,18 @@ final readonly class PgsqlInstanceIdentityReader implements InstanceIdentityRead
             readOnly: $readOnly,
             // A local socket has no address to report. Named rather than blank, so a reader can
             // tell "connected over a socket" from "the reading could not say".
-            unavailable: $host === null ? ['host' => UndeterminedReason::ManagedDatabaseRestriction] : [],
+            //
+            // ⚠️ THIS NAMED `ManagedDatabaseRestriction`, AND THAT REASON SAYS THE OPPOSITE OF THE
+            // COMMENT CHOOSING IT: "a managed database blocks the catalog or setting the check
+            // reads". The comment knows it is a local socket; the reason told the reader their
+            // provider was withholding something. `inet_server_addr()` is documented to return NULL
+            // over a Unix-domain socket, so this is not a restriction at all — there is no address
+            // to report.
+            //
+            // And it is not a corner: it is every developer machine connecting over a socket, which
+            // is the most ordinary local setup there is. The intent — named rather than blank — was
+            // right; the name was not.
+            unavailable: $host === null ? ['host' => UndeterminedReason::LocalSocketConnection] : [],
         );
     }
 

@@ -91,7 +91,7 @@ final readonly class InstanceTarget
      * socket.
      *
      * The HOST is deliberately compared only when both sides are present and the driver reports the
-     * dialled address rather than its own name. On MySQL `@@hostname` is the server's machine name —
+     * dialed address rather than its own name. On MySQL `@@hostname` is the server's machine name —
      * measured — so comparing it against a configured `127.0.0.1` would flag every correct setup.
      *
      * @return array<string, array{configured: string, observed: string}>

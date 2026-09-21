@@ -51,7 +51,7 @@ use PHPStan\Type\Type;
  *
  * ## Why the payload is an array and not the value object the plan asked for
  *
- * Collected data crosses a process boundary — PHPStan analyses in parallel workers and serializes
+ * Collected data crosses a process boundary — PHPStan analyzes in parallel workers and serializes
  * what a collector returns. A value object does not survive that reliably, so the shape is plain
  * data and the rules read it by key.
  *
