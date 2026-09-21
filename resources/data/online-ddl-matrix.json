@@ -114,6 +114,10 @@
                 {
                     "id": "character_set_encoding_unchanged",
                     "text": "In place ONLY when the stored bytes stay valid — measured on 8.4.10: utf8mb3 to utf8mb4 is accepted without a rebuild, while latin1 and ascii to utf8mb4 are refused in place and fall back to COPY."
+                },
+                {
+                    "id": "column_has_index",
+                    "text": "Not available for a column covered by an index — measured on 8.4.10: utf8mb3 to utf8mb4 is accepted in place on an unindexed column and refused with error 1846 once a plain KEY covers it. Distinct from the encoding condition above, which refuses latin1 to utf8mb4 even WITHOUT an index; that control was measured in the same run."
                 }
             ],
             "sources": [
@@ -181,6 +185,10 @@
                     "text": "Not available for a column covered by a functional index, which takes the drop off its instant path."
                 },
                 {
+                    "id": "column_has_index",
+                    "text": "Not available for a column covered by ANY index, functional or ordinary — measured on 8.4.10 with the algorithm pinned: the same statement that is accepted on an unindexed column is refused with error 1845 once a plain KEY covers it. The matrix named only the functional case; the server refuses both."
+                },
+                {
                     "id": "instant_row_version_limit_reached",
                     "text": "Runs INSTANT only while the table still has room for another row version; once that budget is spent the statement is refused outright rather than falling back."
                 },
@@ -218,6 +226,10 @@
                     "text": "Not available for a column covered by a functional index, which takes the drop off its instant path."
                 },
                 {
+                    "id": "column_has_index",
+                    "text": "Not available for a column covered by ANY index, functional or ordinary — measured on 8.4.10 with the algorithm pinned: the same statement that is accepted on an unindexed column is refused with error 1845 once a plain KEY covers it. The matrix named only the functional case; the server refuses both."
+                },
+                {
                     "id": "instant_row_version_limit_reached",
                     "text": "Runs INSTANT only while the table still has room for another row version; once that budget is spent the statement is refused outright rather than falling back."
                 },
@@ -237,7 +249,7 @@
                     "retrieved": "2026-07-24"
                 }
             ],
-            "notes": "Dropping a STORED generated column was recorded here as an in-place rebuild, on the reasoning that the materialized values have to come out of every row. The server says otherwise: on 8.4.10 it accepts ALGORITHM=INSTANT and the table keeps its storage identity, so nothing is rewritten -- the column simply stops being part of the row format, exactly like an ordinary column drop. That the clause is being evaluated rather than ignored was checked separately: this statement rejects ALGORITHM=COPY with LOCK=NONE, which the statements that ignore the clause accept. It therefore carries the same instant-drop conditions as a plain column drop, because it IS one.",
+            "notes": "Dropping a STORED generated column was recorded here as an in-place rebuild, on the reasoning that the materialized values have to come out of every row. The server says otherwise: on 8.4.10 it accepts ALGORITHM=INSTANT and the table keeps its storage identity, so nothing is rewritten -- the column simply stops being part of the row format, exactly like an ordinary column drop. That the clause is being evaluated rather than ignored was checked separately: this statement rejects ALGORITHM=COPY with LOCK=NONE, which the statements that ignore the clause accept. It therefore carries the same instant-drop conditions as a plain column drop, because it IS one. ⚠️ The instant path is what the server does WHEN ASKED: measured without an ALGORITHM pin, the same drop rebuilds the table. So algorithm=instant and rebuilds_table=false describe the best reachable outcome with a pin, not the default — a migration that does not pin gets the cost this entry rules out.",
             "stability": "stable"
         },
         {
@@ -253,6 +265,10 @@
                 {
                     "id": "column_has_functional_index",
                     "text": "Not available for a column covered by a functional index, which takes the drop off its instant path."
+                },
+                {
+                    "id": "column_has_index",
+                    "text": "Not available for a column covered by ANY index, functional or ordinary — measured on 8.4.10 with the algorithm pinned: the same statement that is accepted on an unindexed column is refused with error 1845 once a plain KEY covers it. The matrix named only the functional case; the server refuses both."
                 },
                 {
                     "id": "table_is_partitioned",

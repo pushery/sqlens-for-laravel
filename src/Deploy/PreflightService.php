@@ -19,6 +19,7 @@ use Pushery\SQLens\Reporting\CredentialRedaction;
 use Pushery\SQLens\Rules\ServerVersion;
 use Pushery\SQLens\Subjects\CaptureMode;
 use Pushery\SQLens\Subjects\SubjectContext;
+use Pushery\SQLens\Today;
 use Throwable;
 
 /**
@@ -60,6 +61,9 @@ final readonly class PreflightService implements PreflightRuns
 
     public function run(?string $connection = null, ?string $profile = null, ?int $budgetMs = null): PreflightOutcome
     {
+        // The run's day, read once at the door and handed to the header. A `gmdate` further down
+        // would be a second reading, and across midnight it names a day this run was not about.
+        $today = Today::fromClock();
         $resolution = PreflightConnection::resolve($this->config);
         $name = $connection !== null && $connection !== '' ? $connection : $resolution->name;
         $profileName = $profile !== null && $profile !== '' ? $profile : 'predeploy';
@@ -198,7 +202,7 @@ final readonly class PreflightService implements PreflightRuns
             // `pretend`, because that is what this run DID: it lints the pending migrations with
             // Laravel's --pretend and then reads the catalog. The header used to say whatever
             // `sqlens.mode` held, for a run that never consulted it.
-            $this->runContext->collect(ReportingCaptureMode::Pretend, $timeouts, $report->describeTimings() ?: null, $budget - $remaining),
+            $this->runContext->collect(ReportingCaptureMode::Pretend, $timeouts, $report->describeTimings() ?: null, $budget - $remaining, $today),
         );
     }
 

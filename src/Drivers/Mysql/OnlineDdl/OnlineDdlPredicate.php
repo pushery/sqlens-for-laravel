@@ -68,6 +68,28 @@ enum OnlineDdlPredicate: string
     case ColumnHasFunctionalIndex = 'column_has_functional_index';
 
     /**
+     * An ORDINARY index covers the column — not only a functional one.
+     *
+     * ⚠️ KEPT APART FROM {@see self::ColumnHasFunctionalIndex} BECAUSE THE MATRIX NAMED ONLY THAT
+     * ONE AND THE SERVER REFUSES BOTH. Measured on 8.4.10, with the algorithm pinned:
+     *
+     *     drop column <stored generated>    no index -> accepted INSTANT, no rebuild
+     *     drop column <stored generated>    indexed  -> REFUSED, error 1845
+     *     modify … character set utf8mb4    no index -> accepted INPLACE, no rebuild
+     *     modify … character set utf8mb4    indexed  -> REFUSED, error 1846
+     *
+     * Control, so the two refusals are not confused with the one the matrix already knows:
+     * `latin1 -> utf8mb4` WITHOUT an index is refused too (1846), and that is
+     * {@see self::CharacterSetEncodingUnchanged}. The rows above are a pair that changes no stored
+     * byte and still fails — the index is the whole difference.
+     *
+     * Folding it into the functional-index predicate would give one name two meanings and make the
+     * undetermined reason say "functional" about a plain index, which sends a reader to look for
+     * something that is not there.
+     */
+    case ColumnHasIndex = 'column_has_index';
+
+    /**
      * A character-set change leaves the STORED ENCODING alone, so no byte has to be rewritten.
      *
      * Measured on a real MySQL 8.4.10 rather than reasoned about, because the obvious rule is
@@ -106,6 +128,7 @@ enum OnlineDdlPredicate: string
             self::TableIsPartitioned,
             self::ColumnReferencedByForeignKey,
             self::ColumnHasFunctionalIndex,
+            self::ColumnHasIndex,
             self::FirstFulltextIndexOnTable => false,
         };
     }

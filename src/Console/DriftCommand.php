@@ -34,6 +34,7 @@ use Pushery\SQLens\Reporting\ConfigRunContextCollector;
 use Pushery\SQLens\Reporting\ReporterManager;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 use Pushery\SQLens\Subjects\SubjectContext;
+use Pushery\SQLens\Today;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
 
 /**
@@ -120,6 +121,9 @@ final class DriftCommand extends Command
             return ExitCode::Misconfiguration->value;
         }
 
+        // The run's day, read once at the door and handed to the header. A `gmdate` further down
+        // would be a second reading, and across midnight it names a day this run was not about.
+        $today = Today::fromClock();
         $connectionName = $this->connectionName($drivers);
 
         // FIRST, before anything reaches a database — and earlier than the sibling deploy commands
@@ -306,7 +310,7 @@ final class DriftCommand extends Command
             // a throwaway database. This used to be stated twice — here and in a second header called
             // `RunMetadata` — filled from different places and free to disagree in one document. The
             // duplicate is gone, so this is the only statement of it.
-            $runContext->collect(ReportingCaptureMode::Shadow)
+            $runContext->collect(ReportingCaptureMode::Shadow, today: $today)
                 ->withDriftMode($mode)
                 ->withComparedObjectTypes($catalogReaders->catalog->readableObjectTypes())
                 ->withUndeterminedWaiver(DriftExitPolicy::waived(

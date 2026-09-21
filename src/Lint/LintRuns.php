@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Lint;
 
 use Pushery\SQLens\Capture\Shadow\GuardDecision;
 use Pushery\SQLens\Deploy\DebtMode;
+use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Subjects\CaptureMode;
 
 /**
@@ -30,6 +31,7 @@ interface LintRuns
      * @param  list<string>  $files  the migration files this run judges instead of the pending set (empty = the pending set)
      * @param  list<string>|null  $categories  category values to scope to (null = the config's, empty = all)
      * @param  bool  $applyBaseline  whether to suppress against the configured baseline
+     * @param  list<Finding>  $crossSuiteFindings  the audit half's visible findings, when a security run brought them
      */
     public function run(
         ?string $connection,
@@ -74,5 +76,20 @@ interface LintRuns
          * filtered, whatever this says: naming a path is a person saying "these".
          */
         ?bool $includeVendorMigrations = null,
+        /**
+         * What the AUDIT half of the same security run reported and still shows.
+         *
+         * Only the cross-source dedupe reads them, and only their catalog side: it hides a migration
+         * finding about a `GRANT … TO PUBLIC` when the catalog half reported that same grant. That
+         * layer had never once fired, because `sqlens:security` resolves its two halves in separate
+         * passes and neither pass could see both sides of one fact.
+         *
+         * Empty for every caller that runs the lint suite alone, and that is the honest value rather
+         * than an unset one: a lone lint run HAS no catalog half, so there is nothing a collapse
+         * could stand in for.
+         *
+         * @var list<Finding>
+         */
+        array $crossSuiteFindings = [],
     ): LintOutcome;
 }

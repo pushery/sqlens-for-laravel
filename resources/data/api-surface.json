@@ -2660,7 +2660,7 @@
         "UndeterminedInStrictMode": 3
     },
     "baseline_schema_version": 2,
-    "report_schema_version": 6,
+    "report_schema_version": 7,
     "remediation_schema_version": 3,
     "remediation_schema_stability": "preview",
     "extension_contracts": {

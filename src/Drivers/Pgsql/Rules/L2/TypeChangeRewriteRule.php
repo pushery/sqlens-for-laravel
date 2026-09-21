@@ -49,6 +49,54 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  */
 final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements DeclaresOperationClass, ProvidesRemediation
 {
+    /**
+     * Targets whose rewrite is CONDITIONAL, with the condition written so a reader can answer it.
+     *
+     * ## Why this exists at all, and why it is only two entries
+     *
+     * The matrix is a heuristic keyed on the target and its DOMINANT REAL CASE — it says so itself.
+     * For these two that dominant case is the FREE one, and this package is the reason: `PG.L6`
+     * tells a project to run on UTC, and since PostgreSQL 12 a timestamp/timestamptz change under a
+     * UTC session is metadata-only. A project that followed our own advice got an outage warning for
+     * a change that does not lock its table.
+     *
+     * Measured on 18.4 over 50,000 rows, rewrite detected by a change of `relfilenode`:
+     *
+     *     UTC            timestamp -> timestamptz    no rewrite    0.7 ms
+     *     Europe/Berlin  timestamp -> timestamptz    REWRITE      25.9 ms
+     *     Asia/Tokyo     timestamp -> timestamptz    REWRITE
+     *     UTC            timestamptz -> timestamp    no rewrite
+     *
+     * with controls in both directions so "no rewrite" is a reading rather than a blind detector:
+     * `int -> bigint` rewrote, `varchar(10) -> varchar(20)` did not.
+     *
+     * ## ⚠️ The wording carries the whole risk, and it is deliberate
+     *
+     * A heuristic that names its exception is EASIER TO WAVE AWAY — someone not on UTC reads "this
+     * may not apply" and stops there. So the sentence does not offer an excuse, it hands over the
+     * decision procedure: one command, in the session that will run the migration. A caveat you can
+     * answer in a second is not an invitation to skip the check; an unanswerable one is.
+     *
+     * ## Why it is not in the matrix artifact
+     *
+     * The matrix maps target -> impact. This is neither: it is what a reader should DO about an
+     * impact that depends on something no lint run can see. Putting prose in the artifact would also
+     * mean a schema change to a shipped file for a sentence only this rule reads.
+     *
+     * The definitive answer belongs to the audit suite, which HAS a connection and could read
+     * `TimeZone` — and that is not built here because the rule receives no server state at all
+     * (`__construct(string $projectRoot, ?PgTypeChangeMatrix)`). Handing a rule runtime state would
+     * be the first time any rule receives it, so it waits for that seam to exist rather than growing
+     * a private channel for one caveat.
+     *
+     * ⚠️ BOTH directions, because the measurement covered both: `timestamptz -> timestamp` under a
+     * UTC session is free as well. Listing only the one the ticket named would have left the other
+     * half reporting an outage nobody gets.
+     *
+     * @var list<string>
+     */
+    private const array CONDITIONAL_ON_SESSION_TIMEZONE = ['timestamp', 'timestamp with time zone'];
+
     private readonly PgTypeChangeMatrix $matrix;
 
     /** The staged retyping this rule hands over, built once — it resolves the citation itself. */
@@ -65,6 +113,29 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
     public function id(): string
     {
         return 'PG.L2.TYPE_CHANGE_REWRITE';
+    }
+
+    /**
+     * The condition sentence for a target whose rewrite depends on the session, or an empty string.
+     *
+     * Keyed through {@see PgTypeChangeMatrix::canonicalTarget()} rather than on the written text, so
+     * `TIMESTAMPTZ`, `timestamp with time zone` and `timestamp(3) with time zone` all reach the same
+     * entry — and so an alias added to the matrix cannot make the caveat stop matching the
+     * classification it belongs to.
+     */
+    private function sessionTimeZoneCaveat(string $rawTargetType): string
+    {
+        if (! in_array($this->matrix->canonicalTarget($rawTargetType), self::CONDITIONAL_ON_SESSION_TIMEZONE, true)) {
+            return '';
+        }
+
+        return ' ⚠️ THIS ONE DEPENDS ON THE SESSION THAT RUNS THE MIGRATION: since PostgreSQL 12 a '
+            .'timestamp/timestamptz change is metadata-only when TimeZone is UTC, and a rewrite '
+            .'otherwise. Measured on 18.4 over 50,000 rows: UTC 0.7 ms and no rewrite, Europe/Berlin '
+            .'25.9 ms and a rewrite. Answer it rather than assume it — run SHOW TimeZone; in the '
+            .'session that will run this migration. SQLens itself recommends UTC (PG.L6.TIMEZONE_NOT_UTC), '
+            .'so a project that took that advice is probably in the free case; probably is not a plan '
+            .'for an ACCESS EXCLUSIVE lock.';
     }
 
     /**
@@ -184,7 +255,8 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
             TypeChangeImpact::Rewrite => RuleVerdict::flag(
                 'ALTER COLUMN … TYPE to this type rewrites the whole table under an ACCESS EXCLUSIVE '
                 .'lock, for a full pass over every row — an outage on a large, live table. If the '
-                .'change is unavoidable, take a maintenance window or stage it through a new column.',
+                .'change is unavoidable, take a maintenance window or stage it through a new column.'
+                .$this->sessionTimeZoneCaveat($change->targetType()),
             ),
             TypeChangeImpact::MetadataOnly => null,
             TypeChangeImpact::Unknown => RuleVerdict::undetermined(

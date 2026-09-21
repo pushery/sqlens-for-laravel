@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Security;
 
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Reporting\RunContext;
+use Pushery\SQLens\Reporting\Suppression\SuppressedFinding;
 
 /**
  * The result of one security run: every finding its halves produced, and which halves ran.
@@ -21,7 +22,10 @@ use Pushery\SQLens\Reporting\RunContext;
  */
 final readonly class SecurityOutcome
 {
-    /** @param  list<Finding>  $findings */
+    /**
+     * @param  list<Finding>  $findings
+     * @param  list<SuppressedFinding>  $suppressed
+     */
     public function __construct(
         public array $findings,
         public ?RunContext $context,
@@ -35,6 +39,17 @@ final readonly class SecurityOutcome
          * have forced dozens of call sites to answer a question they were never asked.
          */
         public bool $analyseReached = false,
+        /**
+         * Every finding the halves HID, concatenated.
+         *
+         * Concatenated rather than re-resolved, and the difference matters. A suppression belongs to
+         * the pass that made it — the candidates it judged are gone by now — so a second pass over
+         * the aggregate could only guess. Each entry was made exactly once by exactly one half, so
+         * the sum is the run's real book and `sqlens:audit` on its own keeps the count it always had.
+         *
+         * @var list<SuppressedFinding>
+         */
+        public array $suppressed = [],
     ) {}
 
     /**

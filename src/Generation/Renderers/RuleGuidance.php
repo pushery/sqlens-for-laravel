@@ -60,6 +60,23 @@ final readonly class RuleGuidance
      * The version note is included when there is one. A catalog produced without a pin lists rules
      * it could not place, and a reader who does not know that will treat every line as certain.
      *
+     * ⚠️ THE PACKAGE VERSION IS DELIBERATELY ABSENT, AND THE LINE SAYING SO IS THE POINT. A reader
+     * asked for it, which is fair — and `--check` compares the WHOLE generated content
+     * (`AgentRulesCommand::deliver()`, `$desired !== $existing`), not the `catalog=` hash. So a
+     * version anywhere in this block turns `--check` red on every release of this package, whether
+     * or not it feeds the hash: the "in the block but out of the hash" middle does not exist. This
+     * fleet's updater merges in-house packages without a waiting period, so the concrete cost is a
+     * red integration branch per release per consumer.
+     *
+     * A version-blind comparison is the other way out and this command refuses it in its own class
+     * docblock: check and write are one path, because two would agree until they did not.
+     *
+     * And nothing is lost. A green `--check` already establishes that the list matches the INSTALLED
+     * rule set, and which version that is takes one `composer show`. What the line prevents is the
+     * failure actually measured in a consumer: a hand-written version beside generated content, 12 of
+     * 14 markers reading `never` against an installed version three minors ahead, because prose
+     * outside the block is unguarded.
+     *
      * @return list<string>
      */
     private static function context(RuleCatalogSnapshot $snapshot): array
@@ -74,6 +91,11 @@ final readonly class RuleGuidance
                 .($snapshot->versionDependentIds === [] ? '' : ', of which '.count($snapshot->versionDependentIds).' depend on the server version'),
             '- **By suite:** '.self::perSuite($snapshot)
                 .' — a rule can belong to more than one suite, so these do not add up to the total.',
+            '- **Package version:** not recorded here, on purpose — ask '
+                .'`composer show pushery/sqlens-for-laravel`. A green `sqlens:agent-rules --check` '
+                .'already proves this list matches the rule set of the version you have installed, '
+                .'so a version line here would add no fact and would go stale the moment one is '
+                .'written by hand beside it.',
         ];
 
         $note = $context->versionNote();

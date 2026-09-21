@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Drivers\Pgsql;
 
+use Pushery\SQLens\Contracts\AcceptsRunClock;
 use Pushery\SQLens\Contracts\Driver;
 use Pushery\SQLens\Contracts\Rule;
 use Pushery\SQLens\Docs\DocumentationSite;
@@ -17,6 +18,7 @@ use Pushery\SQLens\Rules\Security\SecurityRuleSet;
 use Pushery\SQLens\Security\Advisory\EolRepository;
 use Pushery\SQLens\Security\Privacy\RunEnvironment;
 use Pushery\SQLens\Security\Privacy\UnencryptedColumnEvaluator;
+use Pushery\SQLens\Today;
 use Pushery\SQLens\Tools\Pgls\PglsTool;
 use Pushery\SQLens\Tools\Squawk\SquawkTool;
 use Pushery\SQLens\Tools\Tool;
@@ -30,7 +32,7 @@ use Pushery\SQLens\Tools\Tool;
  * versa. The two drivers never know about each other — that isolation is the
  * insurance for the later core+driver split, and it must never hold "only almost".
  */
-final readonly class PgsqlDriver implements Driver
+final class PgsqlDriver implements AcceptsRunClock, Driver
 {
     /**
      * @param  string  $projectRoot  so a rule's finding location is repo-relative; the
@@ -48,7 +50,7 @@ final readonly class PgsqlDriver implements Driver
      *                                       threshold (`pgsql.max_locks_per_transaction`);
      *                                       defaults to the shipped 1.
      */
-    public function __construct(private string $projectRoot = '', private ?ExpectedTimeouts $expectedTimeouts = null, private int $maxLocksPerTransaction = 1, private ?string $uuidGeneratedBy = null, private ?MoneyColumnDictionary $moneyColumns = null, private ?int $unusedIndexMinDays = null,
+    public function __construct(private readonly string $projectRoot = '', private readonly ?ExpectedTimeouts $expectedTimeouts = null, private readonly int $maxLocksPerTransaction = 1, private readonly ?string $uuidGeneratedBy = null, private readonly ?MoneyColumnDictionary $moneyColumns = null, private readonly ?int $unusedIndexMinDays = null,
         /**
          * The end-of-life data the patch-currency rules judge against, and today's date.
          *
@@ -58,9 +60,15 @@ final readonly class PgsqlDriver implements Driver
          * disagree about what a malformed one means. Null falls back to the bundled copy, which is
          * what an unconfigured project reads anyway.
          */
-        private ?EolRepository $advisories = null,
-        /** ISO-8601. Null reads the clock ONCE, here, rather than once per rule across midnight. */
-        private ?string $today = null,
+        private readonly ?EolRepository $advisories = null,
+        /**
+         * The run's day, handed down by the runner through {@see self::withRunClock()}.
+         *
+         * Null is the documented fallback and stays so: `SecurityRuleSet::forProjectRoot()` then
+         * resolves one reading per `rules()` call, which is what every driver did before the run
+         * clock existed and what a third-party driver without the interface still gets.
+         */
+        private ?Today $today = null,
         /**
          * Which environment this run is looking at, for the privacy rules.
          *
@@ -69,7 +77,7 @@ final readonly class PgsqlDriver implements Driver
          * guessed would report a pass about a server nobody placed. Absent, the privacy
          * rules answer `undetermined`.
          */
-        private ?RunEnvironment $environment = null,
+        private readonly ?RunEnvironment $environment = null,
         /**
          * The privacy pack's column reading, built where a container is in reach.
          *
@@ -77,7 +85,7 @@ final readonly class PgsqlDriver implements Driver
          * framework-free, and a reading that discovers models off the filesystem cannot be built
          * here. Absent, SEC.PII.UNENCRYPTED_COLUMN answers undetermined rather than nothing.
          */
-        private ?UnencryptedColumnEvaluator $privacyColumns = null,
+        private readonly ?UnencryptedColumnEvaluator $privacyColumns = null,
         /**
          * The identifier convention the project configured, or the shipped one.
          *
@@ -85,19 +93,19 @@ final readonly class PgsqlDriver implements Driver
          * rules, one per engine, and they share one judgment — so a rule reading configuration
          * would give this package two places that could disagree about the same key.
          */
-        private ?NamingConvention $naming = null,
+        private readonly ?NamingConvention $naming = null,
         /**
          * What the project asked to be documented, built once for the same reason as the naming
          * convention beside it: two engines share one comment rule, and a rule that read
          * configuration would have a verdict its own tests cannot see.
          */
-        private ?DocumentationPolicy $documentation = null,
+        private readonly ?DocumentationPolicy $documentation = null,
         /**
          * The application's `database.migrations.table`, so the one table Laravel creates for
          * itself is not judged by a rule an application cannot act on. Null reads as Laravel's own
          * default, which is what an unconfigured project has anyway.
          */
-        private ?string $migrationsTable = null) {}
+        private readonly ?string $migrationsTable = null) {}
 
     public function key(): string
     {
@@ -135,8 +143,33 @@ final readonly class PgsqlDriver implements Driver
             // …and the security family, from the same kind of single Core source. It is appended here
             // rather than folded into the pack above because a security rule is weighed on the
             // SEVERITY axis: inside the pack it would sit in a set whose contract is the level gate.
-            ...SecurityRuleSet::forProjectRoot($this->projectRoot, $this->advisories, $this->today, $this->environment, $this->privacyColumns)->all(),
+            ...SecurityRuleSet::forProjectRoot($this->projectRoot, $this->advisories, $this->today?->value, $this->environment, $this->privacyColumns)->all(),
         ];
+    }
+
+    /**
+     * A copy of this driver whose rules judge on the RUN's day.
+     *
+     * ⚠️ `clone` PLUS AN ASSIGNMENT, NOT `clone($this, [...])`, AND NOT A CONSTRUCTOR CALL. The
+     * clone-with form reads better and is **PHP 8.5**; this package declares `php: ^8.4`, and the
+     * development machine happens to run 8.5 — so `php -l` and a local Pint both accepted it and the
+     * CI, on 8.4, answered with a parse error. A local syntax check measures the machine, not the
+     * floor the package promises.
+     *
+     * A constructor call re-passing every promoted parameter is the other 8.4-safe shape, and it is
+     * worse: thirteen arguments here, twelve next door, and a wither that rebuilds by hand silently
+     * drops the next parameter somebody adds. Cloning copies every other field by construction.
+     *
+     * That is why the class-level `readonly` is gone and each property carries its own instead: a
+     * readonly CLASS leaves no field a wither can write on 8.4. Every guarantee is kept except for
+     * the one field this method exists to set.
+     */
+    public function withRunClock(Today $today): static
+    {
+        $clone = clone $this;
+        $clone->today = $today;
+
+        return $clone;
     }
 
     /**

@@ -35,6 +35,7 @@ use Pushery\SQLens\Config\RuleIdReference;
 use Pushery\SQLens\Config\RuleIdValidator;
 use Pushery\SQLens\Console\ExitCode;
 use Pushery\SQLens\Console\ExitCodeResolver;
+use Pushery\SQLens\Contracts\AcceptsRunClock;
 use Pushery\SQLens\Contracts\Driver;
 use Pushery\SQLens\Contracts\Rule;
 use Pushery\SQLens\Contracts\SecurityReader;
@@ -86,6 +87,7 @@ use Pushery\SQLens\Severity\Severity;
 use Pushery\SQLens\Subjects\SchemaObject;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 use Pushery\SQLens\Subjects\SubjectContext;
+use Pushery\SQLens\Today;
 use Pushery\SQLens\Tools\MissingToolNotice;
 use Pushery\SQLens\Tools\Squawk\SquawkRuleIds;
 use Pushery\SQLens\Tools\ToolContributions;
@@ -192,6 +194,12 @@ final readonly class AuditRunner implements AuditRuns
         // booleans passed by hand through a dozen private helpers is a shape where forgetting one
         // at one site compiles and produces a run that ignores the flag it was given.
         $overrides = new RunOverrides($strictUndetermined, $strictTools);
+        // ⚠️ THE RUN'S CLOCK, READ ONCE, HERE — and beside $overrides for the same stated reason:
+        // a value threaded by hand through a dozen private helpers is a shape where forgetting one
+        // site compiles. This class read the clock TWICE inside one debt pass, so a run crossing
+        // midnight registered candidates against one calendar day and collected standings against
+        // another, with nothing in the report saying which side either was on.
+        $today = Today::fromClock();
         // FIRST, so every header this method can produce — including the refusals below, which never
         // reach a rule — states the scope the operator asked for. The audit used to resolve this
         // deep inside the rule filter and never report it at all, which made a run narrowed to one
@@ -207,14 +215,14 @@ final readonly class AuditRunner implements AuditRuns
         $misconfigured = [...$this->ignoreListViolations(), ...$this->baselineViolations($ignoreBaseline)];
 
         if ($misconfigured !== []) {
-            return $this->refusedConfig($misconfigured, $level, $overrides, $activeCategories);
+            return $this->refusedConfig($misconfigured, $level, $overrides, $activeCategories, $today);
         }
 
         // Also before anything connects, and for the same reason: there is no safe default tenant to
         // fall back on. Every tenant is the wrong one to pick on a project's behalf, so the run
         // stops rather than producing a report about one customer that reads like a report about
         // the application.
-        $tenancy = $this->tenancyRefusal($level, $overrides, $activeCategories);
+        $tenancy = $this->tenancyRefusal($level, $overrides, $activeCategories, $today);
 
         if ($tenancy instanceof AuditOutcome) {
             return $tenancy;
@@ -224,7 +232,7 @@ final readonly class AuditRunner implements AuditRuns
         $target = $resolution->target;
 
         if (! $target instanceof InstanceTarget) {
-            return $this->refused($resolution, $level, $overrides, $activeCategories);
+            return $this->refused($resolution, $level, $overrides, $activeCategories, $today);
         }
 
         $activeLevel = $level ?? $this->configuredLevel();
@@ -250,7 +258,7 @@ final readonly class AuditRunner implements AuditRuns
         try {
             $session->getPdo();
         } catch (Throwable $error) {
-            return $this->unreachable($target, $context, $error, $activeLevel, $overrides, $activeCategories);
+            return $this->unreachable($target, $context, $error, $activeLevel, $overrides, $activeCategories, $today);
         }
 
         $readers = $this->readers->for($target->driver, $session, $this->connections->budget(), $context);
@@ -287,7 +295,7 @@ final readonly class AuditRunner implements AuditRuns
         // producing one. Checked before the catalog read on purpose: reading a server the operator
         // did not choose is itself the harm, not merely a reporting mistake.
         if ($target->pinVerdict() === PinVerdict::Divergent) {
-            return $this->refusedPin($target, $context, $activeLevel, $overrides, $activeCategories);
+            return $this->refusedPin($target, $context, $activeLevel, $overrides, $activeCategories, $today);
         }
 
         // The engine, checked AFTER the pin verdict and before a single catalog row is read.
@@ -299,6 +307,14 @@ final readonly class AuditRunner implements AuditRuns
         // every rule below this line would judge it against a contract it never made. The
         // banner comes from the identity read that already happened — this opens nothing.
         $engineDriver = $this->drivers->resolve($target->driver);
+
+        // The run's day, to the driver whose rules actually JUDGE. The other three
+        // `drivers->resolve()` sites in this class enumerate rules for the header counts and are
+        // deliberately left alone — they have no run, and handing them a day would be the fabricated
+        // date the separate interface exists to avoid.
+        if ($engineDriver instanceof AcceptsRunClock) {
+            $engineDriver = $engineDriver->withRunClock($today);
+        }
 
         // Only when the instance actually NAMED a version. `check()` answers
         // `unverifiedEngineIdentity` for a null banner, and turning that into a refusal here would
@@ -313,7 +329,7 @@ final readonly class AuditRunner implements AuditRuns
             : null;
 
         if ($engine instanceof DriverResolutionFailure) {
-            return $this->refusedEngine($engine, $target, $context, $activeLevel, $overrides, $activeCategories);
+            return $this->refusedEngine($engine, $target, $context, $activeLevel, $overrides, $activeCategories, $today);
         }
 
         $snapshot = $readers->catalog->read($this->request());
@@ -438,13 +454,13 @@ final readonly class AuditRunner implements AuditRuns
             ...$this->securitySkipFindings($securitySkips, $target, $context),
             ...$this->versionSkewFindings($target, $context),
             ...$this->belowFloorFindings($target, $context),
-            ...$this->orphanedIgnoreFindings($snapshot, $target, $activeCategories, $overrides),
+            ...$this->orphanedIgnoreFindings($snapshot, $target, $activeCategories, $overrides, $today),
             // Only when the flag was given AND there was genuinely nothing to bypass. Before the
             // audit could read a baseline at all this fired on every such run, which was honest
             // then and would be a lie now: a project with a real baseline would be told its
             // emergency exit had nothing to open while the exit was doing exactly its job.
             ...($ignoreBaseline && $baseline->entries === []
-                ? [AuditNotices::baselineBypassHadNothingToBypass($this->runContext($activeLevel, 0, $overrides, $activeCategories, $target))]
+                ? [AuditNotices::baselineBypassHadNothingToBypass($this->runContext($today, $activeLevel, 0, $overrides, $activeCategories, $target))]
                 : []),
             // ⚠️ Independent of the bypass above. That one says a FLAG found nothing to act on;
             // this says the project's own configuration points at a file that is not there — and
@@ -452,7 +468,7 @@ final readonly class AuditRunner implements AuditRuns
             ...($this->baselineIsConfiguredButAbsent()
                 ? [AuditNotices::baselineConfiguredButAbsent(
                     is_string($configuredBaseline = $this->config->get('sqlens.baseline.path')) ? $configuredBaseline : '',
-                    $this->runContext($activeLevel, 0, $overrides, $activeCategories, $target),
+                    $this->runContext($today, $activeLevel, 0, $overrides, $activeCategories, $target),
                 )]
                 : []),
             ...$this->settingsFindings($settings, $target, $context),
@@ -495,7 +511,7 @@ final readonly class AuditRunner implements AuditRuns
         // spoken and before `outcome()` applies suppression — for the same reason the lint pass
         // sits where it does: a debt finding is a finding, and it goes through the same baseline,
         // ignore list, gates and ordering as every other one.
-        $findings = [...$findings, ...$this->debtFindings($target, $session, $context, $debt)];
+        $findings = [...$findings, ...$this->debtFindings($target, $session, $context, $debt, $today)];
 
         // A scope that admits no rule is a MISCONFIGURATION, not a clean run. The finding alone
         // would not be enough: an undetermined only moves the exit code under strict_undetermined,
@@ -513,6 +529,7 @@ final readonly class AuditRunner implements AuditRuns
             $findings,
             $overrides,
             $activeCategories,
+            $today,
             misconfigured: $rules === [],
             skips: [...$this->reportedSkips($snapshot), ...$this->reportedSecuritySkips($securitySkips)],
             // The switch is applied HERE, where it was read, and never inside the reader or the
@@ -536,7 +553,7 @@ final readonly class AuditRunner implements AuditRuns
      * @param  list<string>  $activeCategories
      * @return list<Finding>
      */
-    private function orphanedIgnoreFindings(CatalogSnapshot $snapshot, InstanceTarget $target, array $activeCategories, RunOverrides $overrides): array
+    private function orphanedIgnoreFindings(CatalogSnapshot $snapshot, InstanceTarget $target, array $activeCategories, RunOverrides $overrides, Today $today): array
     {
         $ignore = IgnoreList::fromConfig(
             $this->config->get('sqlens.audit.ignore'),
@@ -575,7 +592,7 @@ final readonly class AuditRunner implements AuditRuns
 
         return $orphans === []
             ? []
-            : [AuditNotices::orphanedIgnorePatterns($orphans, $this->runContext($this->configuredLevel(), 0, $overrides, $activeCategories, $target))];
+            : [AuditNotices::orphanedIgnorePatterns($orphans, $this->runContext($today, $this->configuredLevel(), 0, $overrides, $activeCategories, $target))];
     }
 
     /**
@@ -1009,6 +1026,7 @@ final readonly class AuditRunner implements AuditRuns
         int $level,
         RunOverrides $overrides,
         array $activeCategories,
+        Today $today,
     ): AuditOutcome {
         return $this->outcome(
             $target,
@@ -1018,6 +1036,7 @@ final readonly class AuditRunner implements AuditRuns
             [AuditNotices::serverUnreachable($this->redactor->fromThrowable($error), $target, $context)],
             $overrides,
             $activeCategories,
+            $today,
         );
     }
 
@@ -1031,7 +1050,7 @@ final readonly class AuditRunner implements AuditRuns
      *
      * @param  list<string>  $activeCategories
      */
-    private function refusedEngine(DriverResolutionFailure $failure, InstanceTarget $target, SubjectContext $context, int $level, RunOverrides $overrides, array $activeCategories): AuditOutcome
+    private function refusedEngine(DriverResolutionFailure $failure, InstanceTarget $target, SubjectContext $context, int $level, RunOverrides $overrides, array $activeCategories, Today $today): AuditOutcome
     {
         return $this->outcome(
             $target,
@@ -1041,6 +1060,7 @@ final readonly class AuditRunner implements AuditRuns
             [AuditNotices::unsupportedEngine($failure, $target, $context)],
             $overrides,
             $activeCategories,
+            $today,
             misconfigured: true,
         );
     }
@@ -1050,7 +1070,7 @@ final readonly class AuditRunner implements AuditRuns
      *
      * @param  list<string>  $activeCategories
      */
-    private function refusedPin(InstanceTarget $target, SubjectContext $context, int $level, RunOverrides $overrides, array $activeCategories): AuditOutcome
+    private function refusedPin(InstanceTarget $target, SubjectContext $context, int $level, RunOverrides $overrides, array $activeCategories, Today $today): AuditOutcome
     {
         return $this->outcome(
             $target,
@@ -1060,6 +1080,7 @@ final readonly class AuditRunner implements AuditRuns
             [AuditNotices::divergentPin($target, $context)],
             $overrides,
             $activeCategories,
+            $today,
             misconfigured: true,
         );
     }
@@ -1158,11 +1179,11 @@ final readonly class AuditRunner implements AuditRuns
      *
      * @param  list<string>  $activeCategories
      */
-    private function tenancyRefusal(?int $level, RunOverrides $overrides, array $activeCategories): ?AuditOutcome
+    private function tenancyRefusal(?int $level, RunOverrides $overrides, array $activeCategories, Today $today): ?AuditOutcome
     {
         $mode = $this->config->get('sqlens.audit.tenancy.mode');
         $reference = $this->config->get('sqlens.audit.tenancy.reference');
-        $context = $this->runContext($level ?? $this->configuredLevel(), 0, $overrides, $activeCategories);
+        $context = $this->runContext($today, $level ?? $this->configuredLevel(), 0, $overrides, $activeCategories);
 
         if ($mode === 'explicit') {
             return is_string($reference) && trim($reference) !== ''
@@ -1321,9 +1342,9 @@ final readonly class AuditRunner implements AuditRuns
      * @param  list<ConfigViolation>  $violations
      * @param  list<string>  $activeCategories
      */
-    private function refusedConfig(array $violations, ?int $level, RunOverrides $overrides, array $activeCategories): AuditOutcome
+    private function refusedConfig(array $violations, ?int $level, RunOverrides $overrides, array $activeCategories, Today $today): AuditOutcome
     {
-        $context = $this->runContext($level ?? $this->configuredLevel(), 0, $overrides, $activeCategories);
+        $context = $this->runContext($today, $level ?? $this->configuredLevel(), 0, $overrides, $activeCategories);
 
         $findings = array_map(
             static fn (ConfigViolation $violation): Finding => AuditNotices::invalidIgnoreList($violation, $context),
@@ -1343,9 +1364,9 @@ final readonly class AuditRunner implements AuditRuns
      *
      * @param  list<string>  $activeCategories
      */
-    private function refused(InstanceResolution $resolution, ?int $level, RunOverrides $overrides, array $activeCategories): AuditOutcome
+    private function refused(InstanceResolution $resolution, ?int $level, RunOverrides $overrides, array $activeCategories, Today $today): AuditOutcome
     {
-        $context = $this->runContext($level ?? $this->configuredLevel(), 0, $overrides, $activeCategories);
+        $context = $this->runContext($today, $level ?? $this->configuredLevel(), 0, $overrides, $activeCategories);
         $findings = match (true) {
             $resolution->ambiguous => [AuditNotices::ambiguousInstance($resolution->candidates, $context)],
             $resolution->ambiguousHosts => [AuditNotices::ambiguousReadHosts($resolution->hosts, $context)],
@@ -1381,7 +1402,7 @@ final readonly class AuditRunner implements AuditRuns
      *
      * @return list<Finding>
      */
-    private function debtFindings(InstanceTarget $target, DatabaseConnection $connection, SubjectContext $context, DebtMode $debt): array
+    private function debtFindings(InstanceTarget $target, DatabaseConnection $connection, SubjectContext $context, DebtMode $debt, Today $today): array
     {
         if ($this->config->get('sqlens.deploy.debt.enabled') !== true) {
             return [];
@@ -1442,7 +1463,7 @@ final readonly class AuditRunner implements AuditRuns
             $report->findings(),
             $claimants,
             $this->extensions->forDriver($target->driver),
-            gmdate('Y-m-d'),
+            $today->value,
         );
 
         // The SCOPE, and without it this whole path would be a data-loss bug. This run reads the
@@ -1458,7 +1479,7 @@ final readonly class AuditRunner implements AuditRuns
         $collected = DebtCollector::collect(
             $ledger,
             $this->drivers->debtStandingResolverFor($target->driver, $stillOwed, $session),
-            gmdate('Y-m-d'),
+            $today->value,
         );
 
         if ($collected->ledgerMissing) {
@@ -1514,6 +1535,7 @@ final readonly class AuditRunner implements AuditRuns
         array $findings,
         RunOverrides $overrides,
         array $activeCategories,
+        Today $today,
         bool $misconfigured = false,
         array $skips = [],
         ?BaselineFile $baseline = null,
@@ -1595,6 +1617,7 @@ final readonly class AuditRunner implements AuditRuns
             $suppression->suppressed,
             $suppression->staleBaselineEntries);
         $context = $this->runContext(
+            $today,
             $level,
             $activeRules,
             $overrides,
@@ -1661,6 +1684,7 @@ final readonly class AuditRunner implements AuditRuns
      * @param  array<string, string>  $toolVersions  the tools this run located; empty when it never looked
      */
     private function runContext(
+        Today $today,
         int $level,
         int $activeRules,
         RunOverrides $overrides,
@@ -1769,6 +1793,10 @@ final readonly class AuditRunner implements AuditRuns
             // nothing, which is a different and much louder statement than "there was no run".
             evaluatedRuleIds: $evaluatedRuleIds,
             guardProfile: ConfigRunContextCollector::guardProfileFrom($this->config),
+            // The SAME reading the rules got. This method is handed the value the run created at its
+            // door rather than reading a clock of its own, so the day in the header is the day that
+            // was judged on — not a second reading that agrees on every run but the one that matters.
+            today: $today,
         );
     }
 

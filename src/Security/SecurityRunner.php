@@ -88,7 +88,18 @@ final readonly class SecurityRunner
     public function run(?string $connection = null, ?array $migrationPaths = null, ?bool $strictUndetermined = null, ?bool $strictTools = null, ?string $host = null): SecurityOutcome
     {
         $audit = $this->audit($connection, $strictUndetermined, $strictTools, $host);
-        $lint = $this->lint($connection, $migrationPaths, $strictTools);
+
+        // The audit half runs FIRST and its VISIBLE findings ride into the lint half, which is what
+        // finally lets the cross-source dedupe fire: the layer hides a migration finding about a
+        // `GRANT … TO PUBLIC` when the catalog half reported the same grant, and until now no pass
+        // ever held both sides at once.
+        //
+        // ⚠️ VISIBLE, NOT EVERY AUDIT FINDING, AND THAT CHOICE IS THE WHOLE SAFETY OF THIS LAYER.
+        // Feeding the hidden ones too would mean a baseline entry on the catalog side silently takes
+        // the migration side down with it — the one fact leaves the report entirely, accepted in one
+        // place and erased in another. A suppression says "this finding is accounted for", so only an
+        // accounted-for finding that is still ON THE REPORT can stand in for its twin.
+        $lint = $this->lint($connection, $migrationPaths, $strictTools, $audit->findings);
         $analyse = $this->analyse($audit->context ?? $lint->context);
 
         return new SecurityOutcome(
@@ -104,6 +115,10 @@ final readonly class SecurityRunner
             $audit->reached,
             $lint->reached,
             $analyse->reached,
+            // Not sorted, and not deduped: a suppression is a book entry rather than a report line.
+            // Its order is the order the halves made them in, and two halves cannot make the same
+            // entry — each resolved a disjoint candidate set.
+            [...$audit->suppressed, ...$lint->suppressed],
         );
     }
 
@@ -201,7 +216,7 @@ final readonly class SecurityRunner
             return SecuritySubRun::failed(SecurityRunNotices::subRunRefused('audit', $outcome->result->findings));
         }
 
-        return SecuritySubRun::reached($outcome->result->findings, $outcome->context);
+        return SecuritySubRun::reached($outcome->result->findings, $outcome->context, $outcome->result->suppressed);
     }
 
     /**
@@ -227,7 +242,7 @@ final readonly class SecurityRunner
             return SecuritySubRun::failed(SecurityRunNotices::subRunRefused('lint', $outcome->result->findings));
         }
 
-        return SecuritySubRun::reached($outcome->result->findings, $outcome->context);
+        return SecuritySubRun::reached($outcome->result->findings, $outcome->context, $outcome->result->suppressed);
     }
 
     /**
@@ -283,8 +298,10 @@ final readonly class SecurityRunner
      * the tool doing the thing it exists to warn about, so the choice is made here and not exposed.
      *
      * @param  list<string>|null  $migrationPaths
+     * @param  list<Finding>  $auditFindings  what the catalog half reported and still shows, so the
+     *                                        cross-source dedupe has the side this pass cannot see
      */
-    private function lint(?string $connection, ?array $migrationPaths, ?bool $strictTools): SecuritySubRun
+    private function lint(?string $connection, ?array $migrationPaths, ?bool $strictTools, array $auditFindings = []): SecuritySubRun
     {
         try {
             $outcome = $this->lint->run(
@@ -295,6 +312,7 @@ final readonly class SecurityRunner
                 null,
                 [self::CATEGORY],
                 strictTools: $strictTools,
+                crossSuiteFindings: $auditFindings,
             );
 
             return $this->fromLint($outcome, $connection);
