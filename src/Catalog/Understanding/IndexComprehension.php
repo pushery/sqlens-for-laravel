@@ -141,8 +141,9 @@ final readonly class IndexComprehension
             return new self(false, 'non-default operator class: '.$opclasses, SkipReason::NotComparable);
         }
 
-        // A MySQL PREFIX-LENGTH key — `KEY (email(20))` — indexes the first 20 bytes rather than
-        // the column, and `information_schema` reports the same COLUMN_NAME either way. So two
+        // A MySQL PREFIX-LENGTH key — `KEY (email(20))` — indexes the first 20 CHARACTERS rather
+        // than the column (bytes, for a binary string), and `information_schema` reports the same
+        // COLUMN_NAME either way. So two
         // indexes that differ entirely look identical from their column lists, and a redundancy
         // heuristic would advise dropping one of them.
         //
@@ -151,7 +152,7 @@ final readonly class IndexComprehension
         // false positive that corpus exists to catch. PostgreSQL has no counterpart, so the flag is
         // simply absent there and this arm never fires.
         if ($index->getBool('prefixed_columns') === true) {
-            return new self(false, 'prefix-length key — it indexes the first bytes of a column, not the column', SkipReason::NotComparable);
+            return new self(false, 'prefix-length key — it indexes the first characters of a column, not the column', SkipReason::NotComparable);
         }
 
         return self::complete();

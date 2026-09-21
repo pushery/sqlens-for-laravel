@@ -163,10 +163,13 @@ final readonly class RunContext
          * to make a consumer do everywhere else.
          *
          * The number was computed by both deploy commands from the day the budget existed and
-         * reached nobody: it went into `RunMetadata`, which is projected by `Result::toArray()`,
-         * which the JSON envelope does not emit and no shipped code calls at all. A
-         * value that is measured and discarded is the same defect as a check that runs and says
-         * nothing — and two source comments already told the reader this key was here.
+         * reached nobody: it went into a second, thinner header called `RunMetadata`, projected by
+         * `Result::toArray()`, which the JSON envelope does not emit and which no shipped code called
+         * at all. A value that is measured and discarded is the same defect as a check that runs and
+         * says nothing — and two source comments already told the reader this key was here.
+         *
+         * ⚠️ That duplicate is GONE. It said `pretend` for runs that capture no migration and carried
+         * empty version lists, so every value in it was wrong; this object is now the only header.
          *
          * Null for every producer without a time budget, which is every lint and audit run. Null
          * rather than 0, because 0 ms is a claim about a run that happened.

@@ -25,8 +25,11 @@ use Pushery\SQLens\Audit\AuditRunner;
 use Pushery\SQLens\Audit\AuditRuns;
 use Pushery\SQLens\Audit\ProjectManifest;
 use Pushery\SQLens\Canonical\Extensions\CanonicalExtensionRegistry;
+use Pushery\SQLens\Capture\CaptureConnectionResolver;
 use Pushery\SQLens\Capture\MigrationPaths;
+use Pushery\SQLens\Capture\MigrationsTable;
 use Pushery\SQLens\Capture\PendingMigrationResolver;
+use Pushery\SQLens\Capture\SessionGuard;
 use Pushery\SQLens\Capture\Shadow\ApplicationShadowClearance;
 use Pushery\SQLens\Capture\Shadow\ProductionConnectionDetector;
 use Pushery\SQLens\Catalog\CatalogReaderFactory;
@@ -102,6 +105,7 @@ use Pushery\SQLens\Drivers\Pgsql\Deploy\PostdeployInvalidIndexCheck;
 use Pushery\SQLens\Drivers\Pgsql\Deploy\PostdeployNotValidConstraintCheck;
 use Pushery\SQLens\Drivers\Pgsql\Deploy\ReplicationSlotCheck;
 use Pushery\SQLens\Drivers\Pgsql\Deploy\ServerSettingsCheck;
+use Pushery\SQLens\Findings\CompositeCredentialRedactor;
 use Pushery\SQLens\Format\DialectResolver;
 use Pushery\SQLens\Format\FormatConfig;
 use Pushery\SQLens\Format\FormatterRegistry;
@@ -220,10 +224,24 @@ final class SQLensServiceProvider extends ServiceProvider
                 // above: a rule that read configuration would have a verdict its own tests cannot
                 // see.
                 new EolRepository($app->make(Repository::class), $app->basePath()),
-                // Today, read ONCE per container rather than once per rule. A support window closes
-                // on a date, and two rules reading the clock either side of midnight would give one
-                // database two answers with nothing in the report to say which.
-                date('Y-m-d'),
+                // ⚠️ TODAY IS NOT INJECTED, AND THIS LINE USED TO CALL THE LOCAL-TIME DATE. The reasoning
+                // was right and the placement was wrong: a support window closes ON a date, and two
+                // rules reading the clock either side of midnight would give one database two answers.
+                // What that argues for is one value per RUN — and this is a singleton closure, so the
+                // value was computed once per CONTAINER. Under Octane, in a queue worker or across a
+                // long test suite the container outlives the day, and the date was then not merely
+                // local but stale.
+                //
+                // `Driver::rules()` is called fresh on every run and `SecurityRuleSet::forProjectRoot`
+                // resolves its default exactly once per call, handing the same value to every rule it
+                // builds. So passing nothing gives the property the old comment wanted AND a value
+                // that cannot go stale. It was also `date()` rather than `gmdate()`, which is the
+                // second half of the same defect — see that default.
+                //
+                // ⚠️ The local-time call is NOT spelled out above, deliberately: the acceptance for
+                // this change is a grep for it over `src/`, and a comment naming the pattern is the
+                // trap this repository keeps rediscovering — prose about a check answers the check.
+                null,
                 // The privacy pack's COLUMN reading. Built here because this is the only place that
                 // knows both the configuration and the application: discovering models means asking
                 // the container where the application keeps its classes, and neither the rule
@@ -312,7 +330,7 @@ final class SQLensServiceProvider extends ServiceProvider
                     new PgsqlSettingCrossFactCollector($session),
                     // The pooler reader takes the CONNECTION, not the session: transaction pooling
                     // is invisible inside a transaction, which is where the session always operates.
-                    pooler: new PgsqlPoolerReader($connection, $budget),
+                    pooler: new PgsqlPoolerReader($connection),
                     // The security reader shares the session too. What a security reading sees depends
                     // on the ROLE it connects as, so a reading over a second connection could report a
                     // different server than the one the rest of the audit describes.
@@ -359,6 +377,18 @@ final class SQLensServiceProvider extends ServiceProvider
         $this->app->singleton(
             ProjectManifest::class,
             static fn (Application $app): ProjectManifest => new ProjectManifest($app->basePath()),
+        );
+
+        // Credential redaction, assembled ONCE. The two halves are blind in different places —
+        // one knows the configured values, the other knows the drivers' message shapes — and the
+        // order between them is a correctness property rather than a preference, stated in the
+        // class. Bound rather than auto-wired so that the composition is a declaration somebody
+        // can find, not an accident of reflection.
+        $this->app->singleton(
+            CompositeCredentialRedactor::class,
+            static fn (Application $app): CompositeCredentialRedactor => new CompositeCredentialRedactor(
+                new CredentialRedaction($app->make('config')),
+            ),
         );
 
         // What `sqlens:audit` actually runs. Bound here so the command depends on the seam and
@@ -432,7 +462,11 @@ final class SQLensServiceProvider extends ServiceProvider
 
         $this->app->singleton(
             ShadowClearance::class,
-            static fn (Application $app): ShadowClearance => new ApplicationShadowClearance($app, $app->make('config')),
+            static fn (Application $app): ShadowClearance => new ApplicationShadowClearance(
+                $app,
+                $app->make('config'),
+                $app->make(DriverManager::class),
+            ),
         );
 
         $this->app->bind(
@@ -450,8 +484,23 @@ final class SQLensServiceProvider extends ServiceProvider
                 $app->make(DatabaseManager::class),
                 $app->make(Migrator::class),
                 new MigrationPaths($app, $app->make(Migrator::class), $app->make('config'))->all(),
-                'migrations',
+                // From the configuration, through the one place that narrows it. The literal that
+                // stood here was not a default — it OVERRODE a decision the application had
+                // already made, and an application that renames its ledger got a
+                // `NoMigrationTable` skip over a table that exists.
+                MigrationsTable::from($app->make(Repository::class)->get('database.migrations')),
                 (string) $app->basePath(),
+                // ⚠️ THIS IS THE BINDING `sqlens:drift` AND `sqlens:postdeploy --expect-shadow`
+                // RESOLVE, and until now neither bounded the session it read the pending state on.
+                // The budget comes from the shared capture resolver, so all three commands wait
+                // exactly as long as the project configured — not as long as whichever call site
+                // remembered to say so.
+                new SessionGuard(
+                    new CaptureConnectionResolver(
+                        $app->make(DriverManager::class),
+                        $app->make('config'),
+                    )->sessionBudget(),
+                ),
             ),
         );
 

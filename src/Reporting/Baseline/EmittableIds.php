@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Reporting\Baseline;
 
 use JsonException;
 use Pushery\SQLens\Catalog\RuleRegistryExport;
+use Pushery\SQLens\Resources\ShippedJson;
 use Pushery\SQLens\Tools\Squawk\SquawkRuleIds;
 
 /**
@@ -47,12 +48,19 @@ final readonly class EmittableIds
     ) {}
 
     /**
-     * Read from the shipped artifact.
+     * Read from the shipped artifact, which must be there.
      *
-     * An unreadable or malformed artifact yields an EMPTY set rather than an exception, and the
-     * caller treats an empty set as "cannot judge" rather than as "nothing is known" — a set that
-     * failed to load looks exactly like one in which every id is unknown, and the second reading
-     * would refuse every baseline on earth.
+     * ⚠️ THIS SAID an unreadable artifact "yields an EMPTY set rather than an exception", and its
+     * reasoning was sound about the DANGER and wrong about the remedy: an empty set really would make
+     * every id unknown and refuse every baseline on earth — so the caller treats empty as "cannot
+     * judge" instead. But that leaves the other half of the asymmetry unaddressed. `BaselineRuleIds`
+     * reads the same empty set and returns no findings at all, so the baseline-id check switches
+     * itself off, while the `RuleIdValidator` path calls every `CAP.*` and `SQUAWK.*` ignore id
+     * unknown. One empty set, two opposite conclusions, neither of them "the file is missing".
+     *
+     * Refusing says the true thing once, in the one place that can know it. The tolerance stays on
+     * {@see self::fromFile()}, where a suite legitimately supplies an absent or truncated artifact —
+     * the difference being whether the path was a parameter.
      */
     public static function shipped(): self
     {
@@ -64,7 +72,14 @@ final readonly class EmittableIds
         static $bundled = null;
 
         if (! $bundled instanceof self) {
-            $bundled = self::fromFile(dirname(__DIR__, 3).'/'.RuleRegistryExport::BUNDLED_FILE);
+            $path = dirname(__DIR__, 3).'/'.RuleRegistryExport::BUNDLED_FILE;
+
+            // Strict here, tolerant in `fromFile()` — the difference is whether the path was a
+            // parameter. The decode result is discarded on purpose: this call is the REFUSAL, and the
+            // parsing below stays where it already was.
+            ShippedJson::decode($path);
+
+            $bundled = self::fromFile($path);
         }
 
         return $bundled;

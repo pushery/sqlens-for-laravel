@@ -14,6 +14,7 @@ use Pushery\SQLens\Deploy\PreflightContext;
 use Pushery\SQLens\Deploy\PrivilegeClass;
 use Pushery\SQLens\Deploy\PrivilegeRequirement;
 use Pushery\SQLens\Deploy\RequiredPrivileges;
+use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
@@ -125,7 +126,7 @@ final readonly class GrantCheck implements PreflightCheck
                 self::ID,
                 UndeterminedReason::GrantsUnreadable,
                 'the privilege tables could not be read, so what the migration '
-                .'user may do is unknown: '.$failure->getMessage(),
+                .'user may do is unknown: '.new CredentialRedactor()->redact($failure->getMessage()),
             );
         }
 
@@ -214,11 +215,32 @@ final readonly class GrantCheck implements PreflightCheck
     #[RawSql(reason: 'reads the privileges the deploying account actually holds; a preflight that guessed would pass a deploy that then fails halfway')]
     private function heldPrivileges(PreflightContext $context, string $role): array
     {
+        // ⚠️ A PREFIX COMPARISON, not `LIKE`, and not `substring_index` either. `GRANTEE` is
+        // rendered as `'user'@'host'`, so the account is everything up to and including the `'@`
+        // that follows its closing quote.
+        //
+        // `LIKE "'{$role}'@%"` was the original and it failed OPEN: in LIKE an underscore is a
+        // SINGLE-CHARACTER WILDCARD, so `'sqlens_grant_x'` also matched `'sqlens-grant-x'` and a
+        // neighbor's `ALTER` answered for this account. A deploy gate that passes a deploy which
+        // then dies halfway through `migrate --force` is worse than no gate: it replaces the check
+        // somebody would otherwise have made by hand. MEASURED on MySQL 8.4.10, exactly that pair.
+        //
+        // `substring_index(grantee, '@', 1)` is the obvious repair and is also wrong, in the other
+        // direction. It splits at the FIRST `@`, so an email-shaped account — `sqlens@mail.test`,
+        // an ordinary thing to call a user — is cut in half and matches nothing at all. Measured on
+        // the same server: it returned the account's privileges as an empty set, which this check
+        // reads as "holds nothing" and turns into a false MISSING_PRIVILEGE finding.
+        //
+        // The prefix comparison has no wildcard to escape and no separator to guess at. It is bound
+        // twice because the length and the value are both parameters; `char_length` counts
+        // characters rather than bytes, which is what `substring` also counts.
+        $prefix = "'".$role."'@";
+
         $rows = $context->session->read(static fn (Connection $db): array => $db->select(
-            'select privilege_type as p from information_schema.USER_PRIVILEGES where grantee like ?
-             union select privilege_type from information_schema.SCHEMA_PRIVILEGES where grantee like ?
-             union select privilege_type from information_schema.TABLE_PRIVILEGES where grantee like ?',
-            array_fill(0, 3, "'".$role."'@%"),
+            'select privilege_type as p from information_schema.USER_PRIVILEGES where substring(grantee, 1, char_length(?)) = ?
+             union select privilege_type from information_schema.SCHEMA_PRIVILEGES where substring(grantee, 1, char_length(?)) = ?
+             union select privilege_type from information_schema.TABLE_PRIVILEGES where substring(grantee, 1, char_length(?)) = ?',
+            array_fill(0, 6, $prefix),
         ));
 
         $held = [];

@@ -52,7 +52,13 @@ final class UnresolvableRuleCatalog extends RuntimeException
     {
         return new self(sprintf(
             'The rule catalog needs a database driver, and the connection "%s" declares none. '
-            .'Set database.connections.%s.driver, or name a connection with sqlens.connection.',
+            // Both ways, because only one of them was named and the other is the one a hosted
+            // deployment uses: Laravel derives the driver from a `url`'s SCHEME when the key is
+            // absent, so `pgsql://…` configures one just as much as `driver => pgsql` does. Advice
+            // that named only the key sent somebody to add a second source of truth beside a url
+            // that was already correct.
+            .'Set database.connections.%s.driver, give it a url whose scheme names the driver, '
+            .'or name a connection with sqlens.connection.',
             $connection,
             $connection,
         ));

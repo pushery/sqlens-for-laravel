@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Drivers\Mysql\Rules\Support;
 
+use Pushery\SQLens\Contracts\DriverCanonicalization;
+use Pushery\SQLens\Drivers\Mysql\Canonical\MysqlCanonicalization;
 use Pushery\SQLens\Rules\Data\BulkWrite;
 use Pushery\SQLens\Rules\Data\BulkWriteBounds;
 
@@ -38,5 +40,10 @@ final readonly class MysqlBulkWriteBounds implements BulkWriteBounds
     {
         return preg_match('/\bLIMIT\b/', BulkWrite::withoutParenthesizedGroups($masked)) === 1
             || preg_match('/\bBETWEEN\b/', $masked) === 1;
+    }
+
+    public function canonicalization(): DriverCanonicalization
+    {
+        return new MysqlCanonicalization;
     }
 }

@@ -189,7 +189,7 @@
                 "type": "doc",
                 "url": "https://dev.mysql.com/doc/refman/8.4/en/enum.html",
                 "applies_to": "MySQL 8.4",
-                "note": "MySQL stores an ENUM value as its ORDINAL position in the member list, not as the string. That single fact is what makes a rename the cheapest and most dangerous change available here: the stored data does not move, so nothing is rewritten and no lock is taken, while every row that read the old name now reads the new one. It is also why inserting or removing a member in the middle shifts every later ordinal and forces a rewrite."
+                "note": "MySQL stores an ENUM value as its ORDINAL position in the member list, not as the string. That single fact is what makes an equivalent RESPELLING the cheapest and most dangerous change available here: the engine compares member names positionally under the column's collation, so a change the collation calls equal leaves the stored ordinals untouched, rewrites nothing and takes no lock, while the application reads a different string back. A rename to a DIFFERENT word is not that case: it changes the type, so it is a table copy, and the copy truncates every row still holding the old member -- measured on 8.4.10, ALGORITHM=INSTANT is refused with 1846 and the default algorithm fails with 1265 under the default sql_mode, while every row that read the old name now reads the new one. It is also why inserting or removing a member in the middle shifts every later ordinal and forces a rewrite."
             },
             {
                 "type": "doc",
@@ -621,7 +621,7 @@
                 "type": "incident",
                 "url": "https://gocardless.com/blog/zero-downtime-postgres-migrations-the-hard-parts",
                 "applies_to": "PostgreSQL 18",
-                "note": "GoCardless documented an outage from adding a foreign key: the server takes an AccessExclusive lock on both the referencing table and the one it references while it installs the enforcing triggers. A read query already running against the referenced table held that lock in a queue, and because AccessExclusive conflicts with every other lock, all traffic to the table stalled behind it for around fifteen seconds until the migration cleared. Adding the constraint NOT VALID first shrinks that window to a brief metadata lock, and a lock_timeout aborts the deploy rather than the application when the lock cannot be taken."
+                "note": "GoCardless documented a roughly fifteen-second outage from adding a foreign key. ANCHORED HERE FOR THE MECHANISM AND THE REMEDY, NOT FOR THE LOCK LEVEL, which has changed: on the server of that time the referenced table was locked ACCESS EXCLUSIVE, which conflicts with every other lock, so a read query already running against it stalled all traffic. PostgreSQL 9.5 weakened that to SHARE ROW EXCLUSIVE on both sides, and measured on 18.0 that is what ADD FOREIGN KEY takes -- it blocks writers and lets readers through, so a maintenance window planned for a read outage is the wrong window. What still holds on 18 is why the incident happened at all: the validation runs while the lock is held, and every lock request arriving behind it waits, so writers pile up behind a slow scan. Adding the constraint NOT VALID first shrinks the window to a brief metadata lock, and a lock_timeout aborts the deploy rather than the application when the lock cannot be taken."
             }
         ],
         "PG.L2.DROP_INDEX_NOT_CONCURRENT": [
@@ -1761,6 +1761,20 @@
                 "applies_to": "MySQL 8.4",
                 "note": "The access-control chapter documents that the server matches an incoming connection against the host pattern of each account, which is what makes a pattern such as %.example.com satisfiable by any host whose name resolves into it."
             }
+        ],
+        "SEC.PRIV.PROXY_TO_ADMIN_IN_MIGRATION": [
+                {
+                        "type": "doc",
+                        "url": "https://dev.mysql.com/doc/refman/8.4/en/proxy-users.html",
+                        "applies_to": "MySQL 8.4",
+                        "note": "The proxy-users page states that a proxy user assumes the privileges of the proxied user: it authenticates with its own credential and then has the proxied account's privileges rather than its own, which is why the proxied account is what decides the severity here."
+                },
+                {
+                        "type": "doc",
+                        "url": "https://dev.mysql.com/doc/refman/8.4/en/grant.html",
+                        "applies_to": "MySQL 8.4",
+                        "note": "The GRANT reference gives PROXY its own syntax, where the object is an account rather than a privilege level -- GRANT PROXY ON 'proxied'@'host' TO 'proxy'@'host'. Measured on 8.4.10: GRANT PROXY ON *.* is rejected with ERROR 1064, which is why PROXY cannot be carried as an entry in the administrative-privilege list."
+                }
         ],
         "SEC.PRIV.ROLE_BYPASSRLS": [
             {

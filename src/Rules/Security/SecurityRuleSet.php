@@ -55,7 +55,8 @@ final readonly class SecurityRuleSet
      *   tests cannot see, and because the file is resolved once per run rather than once per rule;
      * - today's date, because a support window closes ON a date and a rule that read the clock
      *   would give two answers to one database across midnight, with nothing in the report to say
-     *   which side it was on.
+     *   which side it was on. It defaults to `gmdate` — UTC, the same clock the debt ledger reads —
+     *   and is resolved once per call so every rule of one run shares it.
      *
      * Both default, and the defaults are the truth rather than a stub: an unconfigured project
      * reads the bundled file, which is exactly what {@see EolRepository::bundled()} does.
@@ -63,7 +64,16 @@ final readonly class SecurityRuleSet
     public static function forProjectRoot(string $projectRoot, ?EolRepository $advisories = null, ?string $today = null, ?RunEnvironment $environment = null, ?UnencryptedColumnEvaluator $privacyColumns = null): self
     {
         $advisories ??= EolRepository::bundled();
-        $today ??= date('Y-m-d');
+        // ⚠️ `gmdate`, NOT `date`, AND THAT WAS A SECOND CLOCK IN ONE PACKAGE. The debt ledger judges
+        // an expired acknowledgment on `gmdate('Y-m-d')`; this line judged a support window on the
+        // LOCAL one. An application whose `app.timezone` sits east of UTC therefore saw two different
+        // calendar days around midnight — `PatchEolRule` flipping on one and
+        // `LINT.DEBT.ACKNOWLEDGMENT_EXPIRED` on the other — and nothing in the report said which.
+        //
+        // Resolved HERE rather than injected, and that is deliberate: this runs once per
+        // `Driver::rules()` call, so every rule of one run gets the same value, and the next run gets
+        // a fresh one. An injected value came from a container singleton and went stale.
+        $today ??= gmdate('Y-m-d');
 
         return new self([
             // The privacy rules take the environment and NOTHING is defaulted in for it. Unlike the
@@ -76,6 +86,10 @@ final readonly class SecurityRuleSet
             new DefinerWithoutSearchPathRule($projectRoot),
             new BroadGrantScopeRule($projectRoot),
             new AdminPrivilegeInMigrationRule($projectRoot),
+            // The other shape an account acquires server power in: not a privilege in a list,
+            // but permission to BE another account. `PROXY` reads as administrative and cannot
+            // live in that list -- its object is an account, never `*.*`.
+            new ProxyToAdminAccountInMigrationRule($projectRoot),
             new WildcardHostGranteeRule($projectRoot),
             new PasswordLiteralRule($projectRoot),
             new StatementLoggingRule($projectRoot, $environment),

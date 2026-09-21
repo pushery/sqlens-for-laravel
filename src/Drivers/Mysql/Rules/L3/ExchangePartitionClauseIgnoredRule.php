@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Drivers\Mysql\Rules\L3;
 
 use Override;
+use Pushery\SQLens\Canonical\StringLiteralMask;
 use Pushery\SQLens\Contracts\DerivesDowntimeClass;
 use Pushery\SQLens\Contracts\ProvidesRemediation;
+use Pushery\SQLens\Drivers\Mysql\Canonical\MysqlCanonicalization;
 use Pushery\SQLens\Drivers\Mysql\DowntimeClass\MysqlDowntimeClassSource;
 use Pushery\SQLens\Drivers\Mysql\Rules\AbstractMysqlRule;
 use Pushery\SQLens\Engine\ResolvedServerVersion;
@@ -185,6 +187,6 @@ final class ExchangePartitionClauseIgnoredRule extends AbstractMysqlRule impleme
      */
     private function withoutStringLiterals(string $canonical): string
     {
-        return preg_replace("/'(?:[^']|'')*'/", "''", $canonical) ?? $canonical;
+        return StringLiteralMask::forDriver(new MysqlCanonicalization)->apply($canonical);
     }
 }

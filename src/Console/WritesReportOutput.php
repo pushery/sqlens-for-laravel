@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Console;
 
-use Pushery\SQLens\Config\ConfigValidator;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Output\StreamOutput;
 
@@ -27,67 +26,9 @@ use Symfony\Component\Console\Output\StreamOutput;
  */
 trait WritesReportOutput
 {
-    /**
-     * Whether `config('sqlens')` is a configuration this package understands.
-     *
-     * ## The failure this exists to stop
-     *
-     * A key the package does not know is a key the package IGNORES, and ignoring is silent. A run
-     * with `levl: 3` uses the default level and comes back green because it checked less. A run
-     * with `audit.tenancy.mode: 'explicits'` compares unequal to `'explicit'`, falls into the
-     * signal branch, and behaves as if the project had declared no reference tenant at all — while
-     * the project believes it declared one. Neither produces a message. That is the most expensive
-     * green there is: the user configured the tool, and the tool disagreed without saying so.
-     *
-     * ## Why HERE, and why first
-     *
-     * In the shared trait rather than in each command, because two copies would eventually
-     * disagree about what "before the first check" means, and each command's own test would still
-     * pass. Before the reporter, before the profile, before anything opens a connection — the same
-     * rule the ignore-list validator and the tenancy guard follow. A misconfiguration that surfaces
-     * after twenty seconds of catalog reading is one people check for less often.
-     *
-     * It must also run before {@see ResolvesProfile}, whose docblock states that the validator has
-     * already rejected an unknown profile. That sentence was true of the design and false of the
-     * run: nothing called the validator at all.
-     *
-     * ## Every violation, not the first
-     *
-     * The validator already collects them all, deterministically. Reporting one at a time turns a
-     * config with three typos into three round trips, and somebody stops after the first.
-     */
-    private function configIsValid(mixed $config): bool
-    {
-        $inspection = new ConfigValidator()->inspect($config);
-
-        // The notices first, and they are printed whether or not the run goes on. A key that is
-        // absent takes the shipped default — harmless for an upgrade, and exactly
-        // the state a published config that dropped a section is in. Saying so once per key is
-        // what keeps the leniency from being the silent kind.
-        if ($inspection->notices !== []) {
-            $this->stderr()->writeln($this->translate('sqlens::messages.commands.defaulted_config', [
-                'count' => (string) count($inspection->notices),
-            ]));
-
-            foreach ($inspection->notices as $notice) {
-                $this->stderr()->writeln('  '.$notice->message());
-            }
-        }
-
-        if ($inspection->isValid()) {
-            return true;
-        }
-
-        $this->stderr()->writeln($this->translate('sqlens::messages.commands.invalid_config', [
-            'count' => (string) count($inspection->violations),
-        ]));
-
-        foreach ($inspection->violations as $violation) {
-            $this->stderr()->writeln('  '.$violation->message());
-        }
-
-        return false;
-    }
+    // ⚠️ `configIsValid()` used to live here, and that is why it reached only the three commands
+    // that write a report. It is {@see ValidatesConfig} now, which every command uses — see that
+    // trait for what the narrow reach cost.
 
     /** The stream the report is written to, or null when `--output` names a path that cannot be opened. */
     private function reportOutput(): ?OutputInterface

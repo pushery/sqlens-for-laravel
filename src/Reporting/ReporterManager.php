@@ -20,9 +20,11 @@ use Pushery\SQLens\Reporting\Sarif\SarifReporter;
 
 /**
  * Resolves a format name to a reporter — the Laravel Manager idiom the fleet uses
- * for cache and queue drivers. `console`, `json`, `github` and `sarif` are built in; later reporters
- * register through the inherited extend() point (an extension seam, not yet public
- * API). The default format comes from `sqlens.reporting.default_format`.
+ * for cache and queue drivers. `console`, `json`, `github`, `agent` and `sarif` are built in — FIVE,
+ * and this sentence named four until `agent` had shipped for months, omitting the one format the
+ * README recommends to an agent. Later reporters register through the inherited extend() point (an
+ * extension seam, not yet public API). The default format comes from
+ * `sqlens.reporting.default_format`.
  *
  * An unknown format is a hard error naming every available format — never a silent
  * fallback to console, which would hide a typo in `--format` behind a run that

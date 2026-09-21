@@ -14,7 +14,6 @@ use Pushery\SQLens\Exceptions\UnknownReporterFormat;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
 use Pushery\SQLens\Findings\Result;
-use Pushery\SQLens\Findings\RunMetadata;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\PackageVersion;
@@ -29,7 +28,6 @@ use Pushery\SQLens\Security\Advisory\AdvisoryRefresher;
 use Pushery\SQLens\Security\SecurityOutcome;
 use Pushery\SQLens\Security\SecurityRunner;
 use Pushery\SQLens\Severity\Severity;
-use Pushery\SQLens\Subjects\CaptureMode as SubjectCaptureMode;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 use Pushery\SQLens\Subjects\SubjectContext;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -80,6 +78,7 @@ final class SecurityCommand extends Command
     use ResolvesMinSeverity;
     use ResolvesProfile;
     use ResolvesStrictTools;
+    use ValidatesConfig;
 
     // Adopted now that `--format` and `--output` arrive. This command's byte-identical copies of
     // `configIsValid()` and `stderr()` are gone with them; what it cannot take is SharesRunOptions
@@ -107,7 +106,7 @@ final class SecurityCommand extends Command
         // Before anything else, and before anything connects. An unknown config key is a key that
         // gets IGNORED, and ignoring is silent — a typo produces a run that checked less, with
         // nothing on screen to say so.
-        if (! $this->configIsValid($config->get('sqlens'))) {
+        if ($this->refusesInvalidConfig()) {
             return ExitCode::Misconfiguration->value;
         }
 
@@ -219,7 +218,7 @@ final class SecurityCommand extends Command
         // a machine it never reached.
         $context = $outcome->context ?? $this->runContext($config, RunProfile::from((string) $profile->profile), $strictUndetermined, $strictTools);
 
-        $result = Result::of($this->findings($outcome, $context, $this->addressedConnection($config)), $this->metadata($context));
+        $result = Result::of($this->findings($outcome, $context, $this->addressedConnection($config)));
 
         $reporter->report($result, $context, $output);
         $reported = true;
@@ -456,18 +455,6 @@ final class SecurityCommand extends Command
             // which is exactly what the finding above says in prose.
             activeRuleCount: 0,
             guardProfile: ConfigRunContextCollector::guardProfileFrom($config),
-        );
-    }
-
-    private function metadata(RunContext $context): RunMetadata
-    {
-        return new RunMetadata(
-            serverVersions: [],
-            toolVersions: [],
-            mode: SubjectCaptureMode::Pretend,
-            profile: $context->profile->value,
-            strictTools: $context->strictTools,
-            timeBudgetMsConsumed: 0,
         );
     }
 }

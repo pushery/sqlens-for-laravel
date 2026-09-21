@@ -160,7 +160,30 @@ final class ReaderSession
     {
         $state = self::sqlStateOf($error);
 
-        return $state !== null && $this->defense->isTimeout($state);
+        // The DRIVER CODE travels with the SQLSTATE, because on MySQL the SQLSTATE alone says
+        // nothing: every timeout AND every lost connection arrives as the general `HY000`. Read
+        // here rather than inside the defense so the extraction stays beside `sqlStateOf()`, which
+        // already knows how a driver error is wrapped on the way up.
+        return $state !== null && $this->defense->isTimeout($state, self::driverCodeOf($error));
+    }
+
+    /**
+     * The driver's own error number, walking the chain the way {@see self::sqlStateOf()} does.
+     *
+     * Both the wrapped and the bare shape: Laravel puts the `PDOException` behind a
+     * `QueryException`, and several catalog readers catch the PDO error directly. A lookup that
+     * only knew the wrapped one returned null for half the callers — and null, on MySQL, means
+     * every timeout reads as a database failure.
+     */
+    public static function driverCodeOf(Throwable $error): ?int
+    {
+        for ($current = $error; $current instanceof Throwable; $current = $current->getPrevious()) {
+            if ($current instanceof PDOException && isset($current->errorInfo[1]) && is_int($current->errorInfo[1])) {
+                return $current->errorInfo[1];
+            }
+        }
+
+        return null;
     }
 
     /** The SQLSTATE a throwable carries, or null when it is not a database error at all. */

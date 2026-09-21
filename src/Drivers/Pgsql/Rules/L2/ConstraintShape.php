@@ -28,6 +28,12 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  * index with `USING INDEX`. Those are the exact sequences the templates recommend, so firing on
  * them would cry wolf on our own advice; keeping that exit beside the classification is what stops
  * a later reader from re-deciding it one way in the rule and another in the template.
+ *
+ * ⚠️ **AND `null` USED TO MEAN A SECOND THING, WHICH IS THE DEFECT THIS CLASS CARRIED.** The final
+ * `return` handed back the same `null` for any form the arms did not recognize, so an unconsidered
+ * constraint kind was indistinguishable from a considered-and-cleared one. {@see self::Unrecognized}
+ * carries that meaning now, and a rule turns it into an `undetermined` rather than a silent pass.
+ * The deliberate exits stay `null`, each one written down where it is taken.
  */
 enum ConstraintShape
 {
@@ -45,6 +51,37 @@ enum ConstraintShape
 
     /** UNIQUE: the same promotion, under its own keyword. */
     case Unique;
+
+    /**
+     * EXCLUDE: blocking, and the only shape here with no safe sequence to offer.
+     *
+     * The server builds the backing index under `AccessExclusiveLock` — measured on 18.0, together
+     * with a `ShareLock` on the same table — and `NOT VALID` is not accepted: `ALTER TABLE … EXCLUDE
+     * USING gist (…) NOT VALID` answers *"EXCLUDE constraints cannot be marked NOT VALID"*. There is
+     * no `USING INDEX` promotion either, the way there is for a primary key or a unique.
+     *
+     * So the honest finding names a maintenance window rather than a sequence. Saying nothing was the
+     * old behavior and the worse one: this blocks writes for the whole build, on a live table.
+     */
+    case Exclude;
+
+    /**
+     * An `ADD CONSTRAINT` form this classifier does not know.
+     *
+     * ⚠️ **This case exists because `null` was carrying two meanings, and the second one was a silent
+     * pass.** `null` is the deliberate exit — a safe form, or a table born in this migration. The
+     * final `return` used to hand back the same `null` for anything the arms did not recognize, so a
+     * constraint kind nobody had thought about looked exactly like one that had been considered and
+     * cleared.
+     *
+     * It was not hypothetical. PostgreSQL 18's named not-null constraint fell straight through to it,
+     * and that statement performs the very scan `PG.L2.SET_NOT_NULL_SCAN` exists to report.
+     *
+     * A rule seeing this answers `undetermined` with a reason, never silence. "I do not recognize this
+     * statement" and "this statement is fine" are different sentences, and only one of them is honest
+     * about a form the classifier has never seen.
+     */
+    case Unrecognized;
 
     /**
      * What this statement adds, or null when this rule has nothing to say about it.
@@ -99,7 +136,25 @@ enum ConstraintShape
             return self::PrimaryKey;
         }
 
-        return preg_match('/\bUNIQUE\b/', $canonical) === 1 ? self::Unique : null;
+        if (preg_match('/\bUNIQUE\b/', $canonical) === 1) {
+            return self::Unique;
+        }
+
+        if (preg_match('/\bEXCLUDE\b/', $canonical) === 1) {
+            return self::Exclude;
+        }
+
+        // The named not-null spelling belongs to `PG.L2.SET_NOT_NULL_SCAN`, which reads it through
+        // {@see SetNotNullChange} and reports the identical operation. Returning a shape here would
+        // report one statement twice, under two rule ids, with two different remediations -- and the
+        // scan rule's is the right one, because this IS a not-null validation and not a constraint
+        // whose index has to be built. A deliberate `null`, with the owner named.
+        if (preg_match('/\bADD CONSTRAINT\s+"?[a-z_][a-z0-9_]*"?\s+NOT NULL\b/i', $canonical) === 1) {
+            return null;
+        }
+
+        // Everything else. NOT silence -- see the case's own docblock.
+        return self::Unrecognized;
     }
 
     /** The keyword `ADD CONSTRAINT … USING INDEX` needs, for the two shapes that use it. */

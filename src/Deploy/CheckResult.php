@@ -98,6 +98,20 @@ final readonly class CheckResult
      * they did not print before, which is a deliberate change to their rendered text and the reason
      * five pinned message tests moved with this commit.
      *
+     * ⚠️ THE DETAIL IS **NOT** REDACTED HERE, and that was tried. Fifteen of the forty-three call
+     * sites compose a driver's message into it, so a sink here looked right — and it is not, for a
+     * reason a scan found only at the gate: this field carries the CHECK'S OWN PROSE as well, and
+     * some of that prose quotes an identifier. `GrantCheck` writes "the migration connection names
+     * the role `deploy`", which the shape redactor removes, because removing a quoted role is
+     * exactly its job when the text came from a driver.
+     *
+     * A role name there is not a credential. It is the identifier the reader typed into their own
+     * configuration, and it is the one thing that makes the message actionable.
+     *
+     * So the redaction stays at the SITES that compose a `Throwable`, where the text is a driver's
+     * and nothing else. The measurement that justified a sink here looked for `role "…"` and this
+     * prose uses backticks — one quote style out of the three the redactor handles.
+     *
      * @param  list<Finding>  $findings
      */
     public static function undetermined(string $checkId, UndeterminedReason $reason, string $detail, array $findings = []): self

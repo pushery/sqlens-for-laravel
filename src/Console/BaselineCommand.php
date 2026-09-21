@@ -9,6 +9,7 @@ use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Translation\Translator;
 use Pushery\SQLens\Canonical\Fingerprint;
 use Pushery\SQLens\Drivers\DriverResolutionFailure;
+use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Drivers\UnsupportedDriverMessage;
 use Pushery\SQLens\Exceptions\UnreadableBaseline;
 use Pushery\SQLens\Findings\Outcome;
@@ -18,6 +19,7 @@ use Pushery\SQLens\Reporting\Baseline\BaselineEntry;
 use Pushery\SQLens\Reporting\Baseline\BaselineFile;
 use Pushery\SQLens\Reporting\Baseline\BaselineSerializer;
 use Pushery\SQLens\Reporting\Baseline\BaselineSubject;
+use Pushery\SQLens\Reporting\Baseline\ConfiguredBaseline;
 use Pushery\SQLens\Reporting\Baseline\FindingFingerprint;
 use Pushery\SQLens\Subjects\CaptureMode;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -48,6 +50,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 final class BaselineCommand extends Command
 {
     use ResolvesProfile;
+    use ValidatesConfig;
 
     /** @var string */
     protected $signature = 'sqlens:baseline
@@ -62,6 +65,13 @@ final class BaselineCommand extends Command
 
     public function handle(LintRunner $runner, Translator $translator, Repository $config, BaselineSerializer $serializer): int
     {
+        // FIRST, before the reporter, before the profile, before anything opens a connection. A
+        // misconfiguration that surfaces after twenty seconds of catalog reading is one people
+        // check for less often — and a key this package does not know is one it IGNORES, silently.
+        if ($this->refusesInvalidConfig()) {
+            return ExitCode::Misconfiguration->value;
+        }
+
         // The active profile is resolved the same way here as in the lint command —
         // flag over SQLENS_PROFILE over config over the default — so a baseline is
         // frozen under the same environment profile a lint run would apply, and an
@@ -95,7 +105,7 @@ final class BaselineCommand extends Command
         // the same named misconfiguration the lint command returns.
         if ($outcome->isUnsupported()) {
             $failure = $outcome->unsupported;
-            $driver = $config->get("database.connections.{$outcome->connectionName}.driver");
+            $driver = EffectiveConnectionConfig::driverForConnection($config, $outcome->connectionName);
 
             // isUnsupported() guarantees the failure is present; the guard keeps the type honest.
             if ($failure instanceof DriverResolutionFailure) {
@@ -145,12 +155,20 @@ final class BaselineCommand extends Command
         return ExitCode::Clean->value;
     }
 
-    /** The baseline file to write, from the configured `sqlens.baseline.path`, or null. */
+    /**
+     * The baseline file to WRITE, anchored at the project root, or null.
+     *
+     * ⚠️ Anchored for the same reason the reader is: the config promises a repo-relative path and
+     * the schema refuses an absolute one, so a raw path put the file wherever the process happened
+     * to be started — outside the repository the path exists to keep it portable within.
+     */
     private function resolvePath(Repository $config): ?string
     {
         $configured = $config->get('sqlens.baseline.path');
 
-        return is_string($configured) && $configured !== '' ? $configured : null;
+        return is_string($configured) && $configured !== ''
+            ? ConfiguredBaseline::anchored($configured, (string) $this->laravel->basePath())
+            : null;
     }
 
     /**

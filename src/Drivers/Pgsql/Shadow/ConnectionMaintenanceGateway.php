@@ -79,7 +79,7 @@ final readonly class ConnectionMaintenanceGateway implements MaintenanceGateway,
         // admin database, not the template, but excluding self keeps the count
         // honest regardless of where this connection sits.
         $row = $this->maintenance->selectOne(
-            'select count(*) as total from pg_stat_activity where datname = ? and pid <> pg_backend_pid()',
+            'select pg_catalog.count(*) as total from pg_stat_activity where datname = ? and pid <> pg_catalog.pg_backend_pid()',
             [$database],
         );
 
@@ -101,8 +101,8 @@ final readonly class ConnectionMaintenanceGateway implements MaintenanceGateway,
         $rows = $this->maintenance->select(
             'select pid, coalesce(application_name, \'\') as application_name,'
             .' coalesce(state, \'unknown\') as state,'
-            .' coalesce(to_char(backend_start, \'YYYY-MM-DD"T"HH24:MI:SSOF\'), \'unknown\') as backend_start'
-            .' from pg_stat_activity where datname = ? and pid <> pg_backend_pid()'
+            .' coalesce(pg_catalog.to_char(backend_start, \'YYYY-MM-DD"T"HH24:MI:SSOF\'), \'unknown\') as backend_start'
+            .' from pg_stat_activity where datname = ? and pid <> pg_catalog.pg_backend_pid()'
             .' order by pid',
             [$database],
         );

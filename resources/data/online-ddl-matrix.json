@@ -1021,10 +1021,10 @@
         {
             "id": "mysql.table.convert_character_set",
             "operation": "convert_to_character_set",
-            "algorithm": "inplace",
+            "algorithm": "copy",
             "rebuilds_table": true,
-            "permits_concurrent_dml": true,
-            "lock": "none",
+            "permits_concurrent_dml": false,
+            "lock": "shared",
             "min_version": "8.4",
             "max_version": null,
             "conditions": [],
@@ -1035,7 +1035,7 @@
                     "retrieved": "2026-07-26"
                 }
             ],
-            "notes": "Converting a table's character set rewrites every row, whatever the pair — so the class is `rewrite` either way and this entry needs no condition to say it. What the pair DOES change is how the rewrite runs, measured on 8.4.10: utf8mb3 to utf8mb4 is accepted in place with LOCK=NONE, so writes continue during it, while latin1 or ascii to utf8mb4 is refused in place entirely and becomes a COPY that blocks them. Note ascii is refused even though its bytes are already valid UTF-8, so this is not a subset rule — it is the utf8mb3-to-utf8mb4 pair plus conversions that change nothing. Two further consequences travel with the conversion and the statement shows neither: a text column may be promoted to a longer type to fit the wider encoding, and an index prefix measured in bytes covers fewer characters afterwards.",
+            "notes": "Converting a table's character set rewrites every row, whatever the pair — so the class is `rewrite` either way and this entry needs no condition to say it. What the pair DOES change is how the rewrite runs, measured on 8.4.10: utf8mb3 to utf8mb4 is accepted in place with LOCK=NONE, so writes continue during it, while latin1 or ascii to utf8mb4 is refused in place entirely and becomes a COPY that blocks them. Narrowing back (utf8mb4 to utf8mb3) is refused in place too. Note ascii is refused even though its bytes are already valid UTF-8, so this is not a subset rule — it is the utf8mb3-to-utf8mb4 pair plus conversions that change nothing. ⚠️ THE AXES PUBLISH THE PESSIMISTIC CASE, AND THEY USED TO PUBLISH THE BEST ONE: `inplace`, `permits_concurrent_dml: true`, `lock: none`. That was a deliberate choice — the verification recipe said so out loud, converting from utf8mb3 — and it is the wrong direction for these particular fields. `LockImplication` states what they are for: \"the distinction decides whether a rewrite is an outage or merely slow\". So this is a prediction about a deploy, not an enumeration of what the server can do, and `lock: none` told a consumer their conversion would not block. The pair people actually run this on is the legacy latin1 table, which is exactly where it does. Being wrong pessimistically costs an unnecessary maintenance window; being wrong optimistically costs an outage. A condition was NOT added, deliberately: a violated condition makes the whole resolution undetermined (`MatrixResolver::applyConditions`), and `undetermined` for the commonest case would be worse than a conservative axis — the class `rewrite` is right either way and must survive. Two further consequences travel with the conversion and the statement shows neither: a text column may be promoted to a longer type to fit the wider encoding, and an index prefix measured in characters covers the same count but more bytes afterwards.",
             "stability": "stable"
         },
         {

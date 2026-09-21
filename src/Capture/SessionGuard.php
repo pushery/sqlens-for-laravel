@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Capture;
 
+use Closure;
 use Illuminate\Database\Connection;
 use Pushery\SQLens\Attributes\RawSql;
 use Pushery\SQLens\Contracts\SessionDefense;
@@ -65,6 +66,88 @@ final readonly class SessionGuard
      * @param  array{statement_timeout: int, lock_timeout: int}  $budget  milliseconds
      */
     public function __construct(private array $budget) {}
+
+    /**
+     * Snapshot, bound, and hand back the undo — the whole borrowing, in one call.
+     *
+     * One entry point rather than three, because the three have an order that is easy to get wrong
+     * (`snapshot()` before `apply()`, or the snapshot records this guard's own bound) and a
+     * precondition that is easy to miss: {@see self::mayWriteSessionState()}. A caller that
+     * arranged them by hand could satisfy two of the three and leave the connection worse than it
+     * found it.
+     *
+     * @return Closure(): void the restore, a no-op when nothing was written
+     */
+    public function bind(Connection $connection): Closure
+    {
+        if (! $this->mayWriteSessionState($connection)) {
+            return static function (): void {};
+        }
+
+        // Snapshot BEFORE applying, or the snapshot records our own bound and "restoring" would
+        // cement exactly what it is supposed to undo.
+        $snapshot = $this->snapshot($connection);
+
+        $this->apply($connection);
+
+        return fn () => $this->restore($connection, $snapshot);
+    }
+
+    /**
+     * Whether session state may be written onto this connection at all.
+     *
+     * ⚠️ The question exists because the connection belongs to the HOST APPLICATION. Behind a
+     * transaction pooler a session `SET` lands on whichever backend carried that one statement and
+     * stays there — PgBouncer's `server_reset_query` runs only in session pooling by default, and
+     * `track_extra_parameters` cannot reset a parameter the server does not announce, which
+     * `statement_timeout` and `lock_timeout` are not. The restore then looks for the setting on a
+     * backend that never had it, and some stranger's session inherits a five-second timeout it
+     * never chose. Both halves of the mechanism are broken at once, and neither says so.
+     *
+     * The tell is read-only and conclusive in ONE direction: `pg_backend_pid()` twice, as two
+     * separate statements. A changed backend can only come from multiplexing. The same pid is the
+     * weaker answer — an idle pooler may well hand back the same backend twice — so it is treated
+     * as "no evidence of pooling" rather than as proof of a direct connection, and the guard
+     * proceeds. That is exactly what it did before this check existed, so a false negative costs
+     * nothing that was not already being paid, while the true positive stops the leak.
+     *
+     * A probe that cannot run leaves the guard applying, deliberately: `select pg_backend_pid()`
+     * failing on a live PostgreSQL connection essentially means the connection is gone, and then
+     * `apply()` writes nothing either. Declining on that signal would drop a correct bound on every
+     * direct connection that hiccuped.
+     */
+    public function mayWriteSessionState(Connection $connection): bool
+    {
+        if ($connection->getDriverName() !== 'pgsql') {
+            return true;
+        }
+
+        try {
+            return $this->backendPid($connection) === $this->backendPid($connection);
+        } catch (Throwable) {
+            return true;
+        }
+    }
+
+    /** The backend this statement was served by, or 0 when the server did not say. */
+    #[RawSql(reason: 'asks pg_backend_pid() -- the only read-only tell a transaction pooler cannot hide, and a builder has no verb for a server function called for its own sake')]
+    private function backendPid(Connection $connection): int
+    {
+        /** @var object{pid?: int|string|null}|null $row */
+        // ⚠️ NOT `pg_catalog.`-qualified, and that is the opposite of the rule the pgsql driver
+        // follows — deliberately, for two reasons that point the same way.
+        //
+        // It is not needed: measured on PostgreSQL 18.0, a user function with an IDENTICAL
+        // signature does not outrank the catalog one, and this call takes no arguments at all.
+        // There is no closer match for a substitute to win with.
+        //
+        // And this file is CORE. A schema name here is engine vocabulary in a layer that is meant
+        // to have none; the function name alone is already an exemption the purity register has to
+        // carry a reason for. Adding a second term to buy nothing is the wrong trade.
+        $row = $connection->selectOne('select pg_backend_pid() as pid');
+
+        return is_object($row) ? (int) ($row->pid ?? 0) : 0;
+    }
 
     /**
      * Apply the budget. Returns the statements it ran, so a caller can show them
@@ -159,12 +242,32 @@ final readonly class SessionGuard
      * A non-numeric value on MySQL is quoted anyway rather than interpolated raw: none of
      * the settings this guard touches produces one, and the day one does, a quoted literal
      * is a value the server will reject — not a fragment it will execute.
+     *
+     * ## The quote is DOUBLED, not backslash-escaped
+     *
+     * ⚠️ This used `addslashes()`, which is the wrong escaper for one of the two engines it serves —
+     * and this method is the shared path, so "one of the two" means every PostgreSQL run.
+     *
+     * With `standard_conforming_strings` on, the default since 9.1, a backslash inside `'…'` is an
+     * ordinary character on PostgreSQL. Measured on 18.0: `SELECT 'a\''` answers `ERROR: unterminated
+     * quoted string`, because the `\'` ENDS the literal rather than escaping the quote, and the
+     * trailing quote opens a new one. So `addslashes()` does not merely fail to protect — it converts
+     * a value carrying a quote into a syntax error at best.
+     *
+     * Doubling is correct on both. Measured on MySQL 8.4.10, `SELECT 'a''b', 'a\'b'` returns `a'b`
+     * twice: MySQL accepts either form, PostgreSQL only this one. So there is one idiom for both
+     * engines rather than one per engine, which is what {@see PgsqlSessionDefense} and
+     * {@see BindingSubstitutor} were already doing.
+     *
+     * The values this method actually sees are validated GUC readbacks, so nothing was exploitable
+     * here. The defect is the IDIOM: two escaping forms for one job in one package is one too many,
+     * and the next reader copies whichever they find first.
      */
     private function restoreStatement(string $driver, string $setting, string $value): string
     {
         return $driver === 'mysql' && is_numeric($value)
             ? sprintf('SET SESSION %s = %d', $setting, (int) $value)
-            : sprintf("SET SESSION %s = '%s'", $setting, addslashes($value));
+            : sprintf("SET SESSION %s = '%s'", $setting, str_replace("'", "''", $value));
     }
 
     /** One session value as a string, or the empty string when the server will not say. */

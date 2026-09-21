@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Rules\Data;
 
+use Pushery\SQLens\Canonical\StringLiteralMask;
+
 /**
  * What a canonical data statement says about how much of a table it will touch — and, as always
  * here, what it does not say.
@@ -59,7 +61,7 @@ final readonly class BulkWrite
      */
     public static function parse(string $canonical, BulkWriteBounds $bounds): ?self
     {
-        $masked = self::withoutStringLiterals($canonical);
+        $masked = StringLiteralMask::forDriver($bounds->canonicalization())->apply($canonical);
 
         if (preg_match('/^INSERT INTO \S+.*\bSELECT\b/', $masked) === 1) {
             return new self(true, $bounds->bounds($masked, true));
@@ -103,17 +105,5 @@ final readonly class BulkWrite
         } while ($changed);
 
         return $masked;
-    }
-
-    /**
-     * The statement with its string literals blanked out.
-     *
-     * Not caution for its own sake: the canonicalization leaves literal CONTENT untouched by
-     * design, because inside quotes a word is data rather than syntax. A row whose value is
-     * `'no limit'` would otherwise read as a bounded write.
-     */
-    private static function withoutStringLiterals(string $canonical): string
-    {
-        return preg_replace("/'(?:[^']|'')*'/", "''", $canonical) ?? $canonical;
     }
 }

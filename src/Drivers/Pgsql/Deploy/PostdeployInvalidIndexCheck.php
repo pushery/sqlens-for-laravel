@@ -13,6 +13,7 @@ use Pushery\SQLens\Deploy\Contracts\ProducesDebt;
 use Pushery\SQLens\Deploy\PendingWork;
 use Pushery\SQLens\Deploy\PostdeployContext;
 use Pushery\SQLens\Deploy\PreflightContext;
+use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Outcome;
 use Pushery\SQLens\Findings\UndeterminedReason;
@@ -136,7 +137,7 @@ final readonly class PostdeployInvalidIndexCheck implements PostdeployCheck, Pro
                 UndeterminedReason::ActivityUnreadable,
                 ''.count($result->findings).' index(es) report '
                 .'`indisvalid = false`, and the activity views could not be read, so a build still '
-                .'in flight could not be ruled out: '.$failure->getMessage(),
+                .'in flight could not be ruled out: '.new CredentialRedactor()->redact($failure->getMessage()),
                 $result->findings,
             );
         }

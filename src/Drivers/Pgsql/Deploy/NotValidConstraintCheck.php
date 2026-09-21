@@ -12,6 +12,7 @@ use Pushery\SQLens\Contracts\PreflightCheck;
 use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PreflightContext;
+use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
@@ -93,7 +94,7 @@ final readonly class NotValidConstraintCheck implements PreflightCheck
                 UndeterminedReason::CatalogReadFailed,
                 'the constraint catalog could not be read, so whether this schema carries constraints '
                 .'that were never validated is unknown. A `NOT VALID` constraint that nobody finished '
-                .'looks exactly like one that was: '.$failure->getMessage(),
+                .'looks exactly like one that was: '.new CredentialRedactor()->redact($failure->getMessage()),
             );
         }
 

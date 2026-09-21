@@ -50,37 +50,34 @@ return [
         'undetermined_allowed' => 'undetermined allowed by config',
     ],
     'shadow' => [
+        // ⚠️ ONE KEY, AND SIXTEEN WERE REMOVED — they had no reader in `src/`. The shadow refusals
+        // are built from `UndeterminedReason` and `GuardBlockReason` descriptions, in English prose,
+        // never through the translator, and nothing builds a `shadow.` key from a value. `confirm`
+        // is the one `LintCommand` really asks for.
+        //
+        // The cost was not the space. Whoever set out to change a shadow refusal text found these
+        // keys first, edited one, and nothing happened — the sentence lives in the enum. A key with
+        // no reader sends the next reader to the wrong file.
+        //
+        // ⚠️ `ShadowMessagesTest` listed all seventeen and asserted each RESOLVES, calling them
+        // "LIVE". Resolving is true of any key present in this file; it is not being read. That arm
+        // is now about the one key that is.
         'confirm' => 'Shadow mode will CREATE and DROP a throwaway database on the :connection connection. It never touches your data, but it does create and drop a database of its own. Proceed?',
-        'aborted' => 'Shadow mode aborted — no throwaway database was created.',
-        'configure_direct_connection' => 'Configure a direct connection under capture.shadow.direct_connection: template operations cannot run behind a transaction pooler.',
-        'run_schema_dump' => 'Run `php artisan schema:dump` so shadow mode has a schema dump to rebuild the throwaway MySQL database from.',
-        'unsupported_engine' => 'Shadow mode does not support :engine — it runs only against PostgreSQL and MySQL.',
-        'kept_on_failure' => 'The throwaway database :database was kept for debugging (keep_on_failure is on). Drop it by hand when you are done.',
-        'orphan_found' => 'Found :count leftover shadow database(s) from an earlier run.',
-        'orphan_swept' => 'Removed :count leftover shadow database(s) left behind by an earlier run.',
-        'reason' => [
-            'guard_blocked' => 'The production guard blocked shadow mode, so nothing was run.',
-            'transaction_pooling' => 'The target sits behind a transaction pooler; configure a direct connection so template operations can run.',
-            'replica' => 'The target is a read replica; shadow mode runs only against the write instance.',
-            'insufficient_privileges' => 'The role cannot create a database, so the throwaway database could not be provisioned.',
-            'schema_dump_missing' => 'The MySQL schema dump is missing or unreadable; run php artisan schema:dump.',
-            'dump_unparseable' => 'The MySQL schema dump could not be read safely, so no part of it was replayed.',
-            'migrate_failed' => 'An earlier migration failed the real migrate, so this one was not run.',
-            'teardown_failed' => 'The throwaway database could not be dropped and may need to be removed by hand.',
-            'session_timeout' => 'The shadow session hit its own statement, lock, or idle-transaction timeout.',
-        ],
     ],
     'commands' => [
         'file_not_found' => 'The --file ":file" does not exist or cannot be read.',
         'file_not_php' => 'The --file ":file" is not a PHP migration file.',
         'file_outside_paths' => 'The --file ":file" is outside the configured migration paths; --file lints a migration, not an arbitrary file.',
         'file_shadow_conflict' => '--file cannot be combined with --shadow; the fast path is pretend-only.',
+        'pretend_shadow_conflict' => '--pretend and --shadow ask for opposite things: --pretend collects each migration\'s SQL without executing it, --shadow executes it against a throwaway database it creates. Name one. Without either, the run is a pretend run.',
         'roundtrip_requires_shadow' => '--roundtrip only runs in shadow mode: it replays down() for real, which is destructive by design, so it needs a throwaway database. Add --shadow.',
         'roundtrip_connection_conflict' => '--roundtrip cannot be pointed at a named connection with --connection: it runs only against the throwaway database it creates itself.',
         'roundtrip_file_conflict' => '--roundtrip cannot be combined with --file: the fast path lints one migration without a database, and a roundtrip needs one it may break.',
         'defaulted_config' => 'The sqlens configuration does not set :count key(s); the shipped default applies to each. Harmless — but if your published config was meant to set them, re-add them:',
         'invalid_config' => 'The sqlens configuration has :count problem(s). Nothing ran — a key this package does not understand is a key it ignores, silently:',
         'invalid_level' => 'Invalid --level ":level": the level must be an integer from 0 to 9.',
+        'invalid_budget' => 'Invalid --budget ":budget": the budget is a whole number of milliseconds above zero. Nothing ran — a value this command cannot read is one it would silently replace with the configured default, and you would believe you had bounded the run.',
+        'unknown_probe_connection' => 'Unknown --probe connection ":name": the configured connections are :available. Nothing was probed — an unconfigured name reports as \'undetermined (no connection is open)\' for every entry, which reads as a server that would not answer rather than as a name that does not exist.',
         'invalid_min_severity' => 'Invalid --min-severity ":severity": expected one of :available, or \'none\' to report without blocking.',
         'invalid_debt_mode' => 'Invalid --debt ":mode": expected one of :available. Nothing ran — a mode this build does not know is one it would silently treat as \'check\', and you would believe you had asked it to record.',
         'unknown_category' => 'Unknown category ":category". Available categories: :available.',
@@ -188,6 +185,7 @@ return [
             'no_primary_key_live_table_pg' => 'There is no standard sequence for this, because putting a key on this table needs a candidate that is unique AND NOT NULL across every row already in it — a fact about your data, which SQLens never reads. If a natural candidate exists, add it as the primary key in a migration of its own. If none does, the route is the staged swap: add a surrogate column, backfill it in batches, then promote it. And there is a second, cheaper answer worth knowing about on PostgreSQL: a plain, complete UNIQUE index over NOT NULL columns can carry REPLICA IDENTITY USING INDEX, which settles the replication half without settling the key question — it is a different decision, not a substitute for one.',
             'server_setting_reload' => 'There is no standard sequence for this, because no migration can set a server variable — SQLens writes migrations nowhere near this. Changing what the server hands new connections is a configuration change plus a reload, with no downtime, and it belongs wherever your server configuration lives rather than in your repository schema history. A session may be able to override the value for itself, and that is deliberately not the advice here: a server-baseline finding is about what every OTHER connection gets.',
             'server_setting_restart' => 'There is no standard sequence for this, because no migration can set a server variable. This one takes effect on restart, so it is a maintenance window rather than a configuration edit — plan it as one. That is the whole remedy: SQLens has nothing to hand you here except the fact that the change is real work and where the work is.',
+            'server_setting_offline' => 'The remedy is downtime rather than a migration, which is the distinction this line exists to make. The value cannot be changed while the server runs, but it can be changed in place: for data checksums, `pg_checksums --enable` on a cleanly shut-down cluster. Plan a maintenance window sized to a pass over the data directory. ⚠️ This used to be answered by the initdb sentence below, which recommended a new cluster and a dump/restore -- two plans that differ by orders of magnitude, chosen on the strength of one sentence in a finding.',
             'server_setting_initdb' => 'There is no remedy for this cluster, and that is the honest answer rather than a gap. The value was fixed when the cluster was initialized and cannot be changed on it at all: moving it means a new cluster and a dump/restore. Advice telling you to set it is advice you would follow for an afternoon before finding that out, which is why this says so instead.',
             'server_setting_verification' => 'Run sqlens:audit again once the server is serving the new value. This finding came from asking your server what it is set to, so it goes quiet when the answer changes — not when a migration runs. On a restart-scoped or initdb-scoped setting, check that the server really came back with it: a configuration file that was edited and never reloaded reads exactly like one that was never edited.',
             'schema_decision_state_verification' => 'Run sqlens:audit again once the migration has run. This finding came from reading your database, not from reading a file, so sqlens:lint cannot answer it — a migration that fixes the state is judged by lint before it runs, and the state itself is judged by audit afterwards. Two commands, two moments; this is the second one. It will not tell you the key was a good choice; it only tells you the table is no longer without one.',
@@ -213,7 +211,7 @@ return [
         ],
         'charset_migration' => [
             'check_index_lengths' => 'Before anything else, check what your index keys become. utf8mb3 reserves three bytes per character and utf8mb4 reserves four, and InnoDB counts its key limit in BYTES — so a key that fitted at 765 bytes becomes 1020, and a composite that fitted at 3000 becomes 4000 and is refused outright. This is how the migration usually ends: not slowly, but immediately, with an error, on a table that may already be half converted. What to do about a key that no longer fits — shorten the prefix, narrow the column, drop the index — depends on what that index is FOR, so SQLens offers no number here.',
-            'convert' => 'Then convert. This re-encodes every value in every string column, so the table is copied row by row under a shared lock and writes queue for the whole run. Pin ALGORITHM and LOCK with the values the online-DDL matrix records for this operation, following that recipe — it does not make the copy cheap, it makes the server tell you before it starts.',
+            'convert' => 'Then convert. This re-encodes every value in every string column, so the table is copied row by row under a shared lock and writes queue for the whole run — unless the source is utf8mb3, the one pair MySQL 8.4 accepts in place. The online-DDL matrix records both cases for this operation, and its axes are the pessimistic one. Issue the statement with LOCK=NONE so the server REFUSES rather than silently blocking writes: it does not make the copy cheap, it makes the server tell you before it starts, and it tells you which of the two cases you are in.',
             'follow_the_connection' => 'Now bring the connection and the server side across. A converted column with a connection still speaking utf8mb3 accepts the writes and stores the replacement character — silently. The table is utf8mb4, the data is not, and nothing errors. This is the step whose absence is discovered months later by a user with an emoji in their name.',
             'window_or_stage_it' => 'On a table of any size, plan the window or stage it — convert the table on a replica and promote it, or move the data into a new table in batches. The size that decides which is worth doing is not in the statement.',
             'verification' => 'Run sqlens:lint again — the rule must no longer report this migration. What the columns actually became is a question for the catalog: sqlens:audit reports a column still on utf8mb3, and that is the answer this statement was aiming at.',
@@ -246,11 +244,11 @@ return [
         'mysql_enum' => [
             'compare_with_the_live_column' => 'Start by comparing the new member list with the one on the live column. MySQL\'s MODIFY names the whole definition, not the change, so six different operations produce statements that look alike — appending, appending past the 255-member boundary, inserting, removing, reordering, renaming. Until you have compared, you do not know which one you are about to run.',
             'append_at_the_end' => 'If it is an append AT THE END, run it. That is the one case that is both instant and safe: nothing is rewritten and no stored value changes meaning.',
-            'anything_else_is_staged' => 'Anything else needs staging, and one of them needs it most. Inserting, removing and reordering rewrite the table. RENAMING is the trap: the stored values are ordinals, so a rename takes no lock at all — and every row that read the old name now reads the new one, in an application nobody redeployed. Add the new member, ship the code that accepts it, migrate the rows, remove the old member in a later release.',
+            'anything_else_is_staged' => 'Anything else needs staging. Inserting, removing, reordering and renaming a member to a different word all rewrite the table — and a rename rewrites rows that still hold the old member, which truncates, so under the default sql_mode the ALTER fails outright. The trap is the other one: the stored values are ordinals, so RESPELLING a member in a way the column collation still calls equal, such as b to B, is instant and rewrites nothing — and every row that read the old spelling now reads the new one, in an application nobody redeployed. Add the new member, ship the code that accepts it, migrate the rows, remove the old member in a later release.',
             'verification' => 'Run sqlens:lint again — the rule reports this shape whatever kind of change it is, so a green run here means the statement is gone, not that the change was safe. That judgment came from your comparison in step one.',
             'precondition' => [
                 'you_know_which_change_this_is' => 'You have actually made the comparison. This is the one precondition the whole sequence rests on: SQLens reports the shape and cannot tell the six apart, so an unchecked assumption here is the failure this sequence exists to prevent.',
-                'rename_is_not_free' => 'You are not treating the cheapest option as the safest. A rename is the only member change MySQL performs instantly and the only one that silently reinterprets data already written.',
+                'rename_is_not_free' => 'You are not treating the cheapest option as the safest. A respelling the column collation calls equal is instant and silently reinterprets data already written; a rename to a different word is a table rewrite that fails on rows still holding the old member. Appending at the end is instant too, so instant is not the same as safe.',
             ],
         ],
         'rewrite_avoidance' => [
@@ -359,18 +357,17 @@ return [
         ],
         'constraint' => [
             'add_not_valid' => 'Add the constraint NOT VALID. It applies to every new row from that moment and costs a brief metadata lock instead of a scan of the whole table — the lock a foreign key would otherwise hold on the referenced table as well.',
-            'not_null_check' => 'Add a CHECK that says what you are about to enforce, unvalidated. It costs a brief metadata lock and applies to every new row at once.',
+            'add_not_null_not_valid' => 'Add the not-null constraint NOT VALID. On PostgreSQL 18 a not-null constraint is a constraint of its own, so this is two statements rather than the four the CHECK detour needed. It costs a brief metadata lock instead of reading every row, and it holds for every new row at once.',
             'validate' => 'Validate it in a migration of its own, on a later deploy. That scan runs under a SHARE UPDATE EXCLUSIVE lock, which does not block reads and writes.',
-            'set_not_null_trusts_it' => 'Now set the column NOT NULL. Since PostgreSQL 12 it TRUSTS the validated check and skips reading every row — which is the whole point of the two steps in front of it. Without them this statement is the full-table scan under an ACCESS EXCLUSIVE lock that was reported.',
-            'drop_the_now_redundant_check' => 'Then drop the check. The column itself carries the guarantee now, and leaving both means every write is verified twice.',
             'debt_until_validated' => 'Between those two steps the constraint does not hold for the rows that were already there, and the planner will not rely on it. Nothing breaks and nothing is slow, which is exactly why this is the step that gets forgotten — so SQLens keeps it as an open debt until the validation lands.',
+            'debt_until_validated_not_null' => 'Between those two steps the column ALREADY READS AS NOT NULL in the catalog while rows that were there before may still be null — measured on 18.0: information_schema says NO, and the null row is still in the table. So this gap cannot be found by looking at the column, which is the one difference from the CHECK sequence. What finds it is an unvalidated constraint, which is what sqlens:predeploy reads; the VALIDATE is what proves the existing rows, and it fails with 23502 if one of them is null.',
             'build_index_concurrently' => 'Build the unique index first, concurrently, in a migration of its own. PRIMARY KEY and UNIQUE do not accept NOT VALID: they are implemented with an index, so the index has to exist before the constraint can be put on it. Everything the concurrent build needs applies here too, including the cleanup for an interrupted one.',
             'promote_index' => 'Promote the finished index onto the constraint. That is a metadata change — the index is already built, so there is no validating scan.',
             'index_must_be_valid' => 'Check that the index came out VALID before you promote it. An interrupted concurrent build leaves an INVALID one behind, and promoting that fails.',
             'verification' => 'Run sqlens:lint again — the rule must no longer report this migration. On the server, sqlens:predeploy is what finds a constraint that was added NOT VALID and never validated.',
             'precondition' => [
                 'existing_rows_may_violate' => 'Rows that are already there may violate the constraint. NOT VALID accepts them; step two is where that comes out, so look at the data before you plan the second deploy.',
-                'no_null_rows' => 'No existing row is null in that column. If one is, step two fails — which is better than step three failing, but it is still a failure you want to meet on your own schedule rather than during a deploy.',
+                'no_null_rows' => 'No existing row is null in that column. If one is, step two fails with 23502 — better than meeting it during a deploy, but still a failure, and step one will have already made the catalog read as NOT NULL by then.',
                 'second_migration_is_planned' => 'The second migration is planned, not merely intended. An unvalidated constraint is a state this sequence passes through, never one it ends in.',
                 'no_duplicate_rows' => 'No duplicate rows exist on those columns. The concurrent build is where a duplicate surfaces, and it surfaces as a failed build rather than as a clear sentence about your data.',
                 'migrator_leaves_transaction' => 'The deploy can run a migration outside a transaction — the concurrent build needs that, and a migrator that wraps everything cannot give it.',

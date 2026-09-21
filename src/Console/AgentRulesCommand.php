@@ -60,6 +60,8 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 final class AgentRulesCommand extends Command
 {
+    use ValidatesConfig;
+
     /**
      * The generator's own version, carried into every marker line and generated-file notice.
      *
@@ -88,6 +90,13 @@ final class AgentRulesCommand extends Command
         Application $app,
         Redactor $redactor,
     ): int {
+        // FIRST, before the reporter, before the profile, before anything opens a connection. A
+        // misconfiguration that surfaces after twenty seconds of catalog reading is one people
+        // check for less often — and a key this package does not know is one it IGNORES, silently.
+        if ($this->refusesInvalidConfig()) {
+            return ExitCode::Misconfiguration->value;
+        }
+
         $targets = $this->targets();
 
         if ($targets === null) {

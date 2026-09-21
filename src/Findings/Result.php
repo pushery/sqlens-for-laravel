@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Findings;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Reporting\Baseline\BaselineEntry;
+use Pushery\SQLens\Reporting\RunContext;
 use Pushery\SQLens\Reporting\Suppression\ConfigIgnoreRule;
 use Pushery\SQLens\Reporting\Suppression\SuppressedFinding;
 use Pushery\SQLens\Reporting\Suppression\SuppressionResolver;
@@ -15,7 +16,16 @@ use Pushery\SQLens\Severity\Severity;
 
 /**
  * The run result as an immutable aggregate: a deduplicated, deterministically
- * ordered list of findings plus the run metadata. It is the data reporters and
+ * ordered list of findings.
+ *
+ * ⚠️ **IT USED TO CARRY A `RunMetadata`, AND EVERY INSTANCE OF IT WAS WRONG.** The reproducibility
+ * header of a run is {@see RunContext}, which every reporter is handed
+ * beside this aggregate; the metadata was a second, thinner copy of the same facts, and nothing in
+ * the package read it. `AuditRunner` filled it with `mode: Pretend` — the label the same file calls
+ * a lie three lines higher, for a run that captures no migration at all — plus empty server and tool
+ * version lists, and `LintRunner` did the same. A public property whose every value is wrong is
+ * worse than an absent one: the first third-party reporter to read it, which its own docblock
+ * invited, would have got all of it. It is the data reporters and
  * the exit-code contract build on — this aggregate does NOT decide
  * the exit code itself.
  *
@@ -33,7 +43,6 @@ final readonly class Result
      */
     private function __construct(
         public array $findings,
-        public RunMetadata $metadata,
         public array $suppressed = [],
         public array $staleBaselineEntries = [],
         public array $unusedIgnoreRules = [],
@@ -53,7 +62,7 @@ final readonly class Result
      * @param  list<BaselineEntry>  $staleBaselineEntries
      * @param  list<ConfigIgnoreRule>  $unusedIgnoreRules
      */
-    public static function of(iterable $findings, RunMetadata $metadata, array $suppressed = [], array $staleBaselineEntries = [], array $unusedIgnoreRules = []): self
+    public static function of(iterable $findings, array $suppressed = [], array $staleBaselineEntries = [], array $unusedIgnoreRules = []): self
     {
         $deduped = [];
         foreach ($findings as $finding) {
@@ -67,7 +76,7 @@ final readonly class Result
                 <=> [$b->location->sortKey(), $b->ruleId],
         );
 
-        return new self($ordered, $metadata, $suppressed, $staleBaselineEntries, $unusedIgnoreRules);
+        return new self($ordered, $suppressed, $staleBaselineEntries, $unusedIgnoreRules);
     }
 
     /**
@@ -314,6 +323,18 @@ final readonly class Result
         }
 
         foreach ($this->suppressed as $hidden) {
+            // ⚠️ `??= 0` RATHER THAN `++` ON A KEY THAT MAY NOT EXIST, and this is not defensive
+            // padding — it was a fatal waiting for a layer to start working. `ORDER` listed seven
+            // sources while the resolver ran EIGHT, and the eighth (`cross_source_dedupe`) was absent
+            // here. Measured: `$counts['cross_source_dedupe']++` raises "Undefined array key", which
+            // under Laravel's `HandleExceptions` is an ErrorException — so the console and JSON
+            // reports would have died on the first suppression that layer ever made.
+            //
+            // The layer is in ORDER now, so this line is no longer what stands between a working
+            // suppression and a dead report. It stays because the next layer will be added by somebody
+            // who edits the resolver and not this file, and a missing count is a wrong number while a
+            // missing key is a crash.
+            $counts[$hidden->suppression->source] ??= 0;
             $counts[$hidden->suppression->source]++;
         }
 
@@ -328,7 +349,6 @@ final readonly class Result
      * @return array{
      *     overall_status: string,
      *     counts: array{status: array<string, int>, category: array<string, int>, level: array<int, int>, severity: array<string, int>, undetermined_reason: array<string, int>, suppressed_by_source: array<string, int>},
-     *     metadata: array<string, mixed>,
      *     findings: list<array<string, mixed>>,
      *     suppressed: list<array<string, mixed>>,
      * }
@@ -345,7 +365,6 @@ final readonly class Result
                 'undetermined_reason' => $this->countsByUndeterminedReason(),
                 'suppressed_by_source' => $this->countsBySuppressionSource(),
             ],
-            'metadata' => $this->metadata->toArray(),
             'findings' => array_map(static fn (Finding $finding): array => $finding->toArray(), $this->findings),
             'suppressed' => array_map(static fn (SuppressedFinding $hidden): array => $hidden->toArray(), $this->suppressed),
         ];

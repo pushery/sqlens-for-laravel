@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Drivers\Pgsql\Rules\L3;
 
 use Override;
+use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Contracts\ProvidesRemediation;
 use Pushery\SQLens\Drivers\Pgsql\Remediation\ConcurrentlyTemplate;
 use Pushery\SQLens\Drivers\Pgsql\Rules\AbstractPgsqlSafetyRule;
@@ -60,8 +61,29 @@ final class ConcurrentlyInTransactionRule extends AbstractPgsqlSafetyRule implem
      * got its habitat wrong; the rest of the sequence is what stops them getting the NEXT part
      * wrong too, which is the INVALID index an aborted build leaves behind.
      *
-     * The statement is a create-index either way — the rule only fires on a CONCURRENTLY build —
-     * so it is the create-side sequence, not the drop-side one.
+     * ⚠️ **AND THE SEQUENCE DEPENDS ON THE STATEMENT, WHICH THIS USED TO GET WRONG.** The sentence
+     * that stood here — *the statement is a create-index either way* — was false, and the rule's own
+     * test proved it two arms down: this rule fires on `DROP INDEX CONCURRENTLY` too, correctly,
+     * because PostgreSQL refuses that in a transaction block for the same reason. `buildsConcurrently()`
+     * keys on the keyword, not on the create form, and the keyword appears on at least four
+     * statements.
+     *
+     * Measured before the fix, by reading `steps[2]` for each form:
+     *
+     * ```
+     * CREATE INDEX CONCURRENTLY  ->  CREATE INDEX CONCURRENTLY <name> ON {{table}} ({{columns}})
+     * DROP INDEX CONCURRENTLY    ->  CREATE INDEX CONCURRENTLY <name> ON {{table}} ({{columns}})
+     * DETACH PARTITION …         ->  CREATE INDEX CONCURRENTLY {{index}} ON orders ({{columns}})
+     * REINDEX … CONCURRENTLY     ->  CREATE INDEX CONCURRENTLY <name> ON {{table}} ({{columns}})
+     * ```
+     *
+     * Row two is the expensive one: a fix plan that **creates the index the migration is trying to
+     * remove**. Row three hands over an unfilled `{{index}}` placeholder. And `forDropIndex()` — the
+     * right template — has been sitting in the same class all along, used by the sister rule, saying
+     * in its own docblock why reusing the create-side sweep is wrong.
+     *
+     * So the material branches on the statement's KIND, and the third arm is the load-bearing one:
+     * without it the next CONCURRENTLY form gets somebody else's plan again.
      */
     public function remediationFor(MigrationStatementView $statement): ?RemediationPayload
     {
@@ -77,7 +99,13 @@ final class ConcurrentlyInTransactionRule extends AbstractPgsqlSafetyRule implem
             return null;
         }
 
-        return $this->template->forCreateIndex($statement, $this->id(), $this->downtimeClass());
+        return match ($statement->kind) {
+            StatementKind::CreateIndex => $this->template->forCreateIndex($statement, $this->id(), $this->downtimeClass()),
+            StatementKind::DropIndex => $this->template->forDropIndex($statement, $this->id(), $this->downtimeClass()),
+            // Everything else that carries the keyword: the two steps that are true for every form,
+            // and no statement this package was never handed the parts of.
+            default => $this->template->forStatementOutsideTransaction($statement, $this->id(), $this->downtimeClass()),
+        };
     }
 
     /** Whether this statement runs inside a transaction — one reading, shared. */

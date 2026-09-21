@@ -94,8 +94,8 @@ final class RedundantIndexRule extends AbstractCatalogRule implements DeclaresJu
         return [RuleVerdict::flag(sprintf(
             'On %s, %s whose work another index already does: %s. A b-tree index on (a) beside one on (a, b) '
             .'answers nothing the second cannot, and is still maintained on every insert and on every update '
-            .'that touches its columns — it occupies its own pages in cache and is one more relation for vacuum '
-            .'to walk, for no read it serves alone. DROP INDEX is in place on InnoDB and copies no table — but '
+            .'that touches its columns — it occupies its own pages in the buffer pool, for no read it serves '
+            .'alone. DROP INDEX is in place on InnoDB and copies no table — but '
             .'check first whether the index carries a foreign key, because MySQL refuses to drop one that does '
             .'rather than leave the constraint unindexed. Only indexes this reading could compare are considered '
             .'at all: a functional index, a prefix-length key, a non-b-tree method such as FULLTEXT or SPATIAL '

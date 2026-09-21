@@ -48,8 +48,26 @@ final readonly class CanonicalFormVersion
      * what makes it unambiguous — and both change the STRING, which is all a fingerprint compares.
      * A project with a column named `schema` would otherwise have seen its ledger report drift that
      * nothing in its own tree caused.
+     *
+     * Went to 4 for the GENERATED-column vocabulary — `ALWAYS`, `GENERATED`, `STORED` and `VIRTUAL`,
+     * in BOTH driver lists. It is the fifth keyword extension and the second to arrive with its bump
+     * attached rather than after the fact.
+     *
+     * Why these four were missing is the same reason the query vocabulary was: the keyword guard's
+     * corpus is generated from the SCHEMA builder, and `GENERATED ALWAYS AS IDENTITY` is written by
+     * hand or through `->change()`, never by the builder's ordinary path. So no corpus statement ever
+     * carried them. Measured before and after:
+     *
+     *     create table t (id int generated always as identity, c int generated always as (b * 2) stored)
+     *       form 3 -> CREATE TABLE t (id int generated always AS IDENTITY, c int generated always AS (b * 2) stored)
+     *       form 4 -> CREATE TABLE t (id int GENERATED ALWAYS AS IDENTITY, c int GENERATED ALWAYS AS (b * 2) STORED)
+     *
+     * Only `AS` and `IDENTITY` folded before, so the same DDL in two casings produced two canonical
+     * strings — two fingerprints for one statement, and a baseline entry that stopped matching the
+     * moment somebody reformatted a migration. The words appear in no shipped rule pattern (measured,
+     * with a control), so nothing was mis-reported; what moved was the fingerprint.
      */
-    public const int CURRENT = 3;
+    public const int CURRENT = 4;
 
     public function __construct(public int $version) {}
 

@@ -12,6 +12,7 @@ use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PostdeployContext;
 use Pushery\SQLens\Deploy\TransitionObjectPatterns;
+use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
@@ -110,7 +111,7 @@ final readonly class OrphanTransitionObjectCheck implements PostdeployCheck
                 self::ID,
                 UndeterminedReason::CatalogReadFailed,
                 'the relation catalog could not be read, so whether the deploy left transition '
-                .'objects behind is unknown: '.$failure->getMessage(),
+                .'objects behind is unknown: '.new CredentialRedactor()->redact($failure->getMessage()),
             );
         }
 

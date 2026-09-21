@@ -196,7 +196,12 @@ final class EolRepository
                 'the %s advisory file "%s" declares schema_version %s; this build understands %d',
                 $source->value,
                 $path,
-                is_scalar($version) ? json_encode($version) : 'nothing usable',
+                // SUBSTITUTE and deliberately NOT throw: this renders a value INTO AN ERROR
+                // MESSAGE about a malformed file, so a serialization failure here would replace a
+                // useful complaint with an exception raised while explaining the first one. The
+                // substitute flag removes the only failure a scalar can actually cause, and
+                // `(string)` then has nothing to flatten.
+                is_scalar($version) ? (string) json_encode($version, JSON_INVALID_UTF8_SUBSTITUTE) : 'nothing usable',
                 self::SCHEMA_VERSION,
             ));
         }

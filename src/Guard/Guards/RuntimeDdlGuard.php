@@ -111,15 +111,28 @@ final readonly class RuntimeDdlGuard implements QueryInspector
     /**
      * Whether the statement begins with a comment, hiding its keyword from a first-word reading.
      *
-     * Both SQL comment forms, because both are produced by real tooling: the double-dash form by
-     * hand-written migrations, and the block form by query-tagging middleware, which prepends a
-     * comment to every statement an application runs.
+     * All THREE comment forms, because all three are produced by real tooling: the double-dash form
+     * by hand-written migrations, the block form by query-tagging middleware, which prepends a
+     * comment to every statement an application runs — and the hash form, which is MySQL's third
+     * and was missing here.
+     *
+     * ⚠️ THE HASH FORM WAS THE DANGEROUS OMISSION, not a tidy one. A form this method does not know
+     * does not fall to `undetermined`: it falls through to `isDdl()`, which reads `#` as the leading
+     * word, does not find it among the keywords, and returns in silence. Measured against 8.4.10,
+     * `# app=web` followed by a `CREATE TABLE` created the table and drew no violation at all — so
+     * an application whose middleware tags in the hash style had this guardrail switched off rather
+     * than enabled, with nothing on the surface to say so.
+     *
+     * ⚠️ MySQL's double-dash needs a following space or control character — `--x` is minus-minus
+     * there, and this method calls it a comment anyway. That is the CAUTIOUS direction (an
+     * `undetermined` where MySQL would compute), so it stays; it is written down because the
+     * asymmetry otherwise looks like a bug worth "fixing" in the direction that loses findings.
      */
     private function opensWithComment(string $sql): bool
     {
         $sql = ltrim($sql);
 
-        return str_starts_with($sql, '--') || str_starts_with($sql, '/*');
+        return str_starts_with($sql, '--') || str_starts_with($sql, '/*') || str_starts_with($sql, '#');
     }
 
     private function isDdl(string $sql): bool

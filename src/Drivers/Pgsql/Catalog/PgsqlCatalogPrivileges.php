@@ -34,30 +34,56 @@ final readonly class PgsqlCatalogPrivileges implements CatalogPrivileges
             // audit that follows would be empty for a reason nobody would otherwise find.
             new CatalogArea(
                 'relations, columns and indexes',
-                "SELECT has_table_privilege('pg_catalog.pg_class', 'SELECT')
-                    AND has_table_privilege('pg_catalog.pg_index', 'SELECT')
-                    AND has_table_privilege('pg_catalog.pg_attribute', 'SELECT') AS ok",
+                "SELECT pg_catalog.has_table_privilege('pg_catalog.pg_class', 'SELECT')
+                    AND pg_catalog.has_table_privilege('pg_catalog.pg_index', 'SELECT')
+                    AND pg_catalog.has_table_privilege('pg_catalog.pg_attribute', 'SELECT') AS ok",
                 'the reading role cannot read pg_class, pg_attribute or pg_index, so an audit of this database would be empty rather than clean',
             ),
             new CatalogArea(
                 'constraints and types',
-                "SELECT has_table_privilege('pg_catalog.pg_constraint', 'SELECT')
-                    AND has_table_privilege('pg_catalog.pg_type', 'SELECT') AS ok",
+                "SELECT pg_catalog.has_table_privilege('pg_catalog.pg_constraint', 'SELECT')
+                    AND pg_catalog.has_table_privilege('pg_catalog.pg_type', 'SELECT') AS ok",
                 'the reading role cannot read pg_constraint or pg_type, so nothing can be concluded about foreign keys, checks, domains or enums',
             ),
-            // Statistics are the input to every rule that reasons about table SIZE. Withheld on
-            // managed instances more often than the catalog itself, and a rule that quietly assumed
-            // "small" would recommend a lock on a table with a hundred million rows.
+            // Statistics are the input to every rule that reasons about table SIZE. A rule that quietly
+            // assumed "small" would recommend a lock on a table with a hundred million rows.
+            //
+            // ⚠️ THIS ASKED ABOUT `pg_statistic`, WHICH NOTHING IN THIS PACKAGE READS. Measured: the
+            // only occurrences of that name in `src/` were this probe and one docblock, while the size
+            // and estimate readers use `pg_class.reltuples` (five files), `pg_relation_size()` and the
+            // `pg_stat_*` views. And `pg_statistic` is deliberately not public — the user-facing view is
+            // `pg_stats` — so the probe demanded a privilege no reading needs.
+            //
+            // ⚠️ WHAT THAT COST IS A FALSE VERDICT ON EVERY MANAGED INSTANCE, including the `pg_monitor`
+            // role this package's own README recommends. Measured on PostgreSQL 18.0, for a role holding
+            // exactly `pg_monitor`:
+            //
+            //   pg_statistic        SELECT  false   <- what the probe asked
+            //   pg_class            SELECT  true
+            //   pg_stats            SELECT  true
+            //   pg_stat_all_tables  SELECT  true    <- what the readers use
+            //
+            // So the snapshot came back partial and the run emitted
+            // `AUDIT.CATALOG.UNREAD.INSUFFICIENT_PRIVILEGE` saying "no rule may reason about table size"
+            // — while the size rules had already read it. Under `strict_undetermined`, which this package
+            // recommends, a least-privilege audit could never go green.
+            //
+            // ⚠️ AND IT IS A REAL READ RATHER THAN `has_table_privilege`, which is not a style choice:
+            // that function reports the ACL of the RELATION, and for a view over a privileged function it
+            // can say yes where the read still fails. Measured on the same server: a `pg_read_all_data`
+            // role has `has_table_privilege('pg_hba_file_rules','SELECT') = true` and selecting from it
+            // fails with "permission denied for function pg_hba_file_rules". `PrivilegeProbe` catches a
+            // throwing probe and records it as a skip, so the honest question is the read itself.
             new CatalogArea(
                 'table statistics',
-                "SELECT has_table_privilege('pg_catalog.pg_statistic', 'SELECT') AS ok",
-                'pg_statistic is not readable, so no rule may reason about table size or row estimates from this reading',
+                'SELECT pg_catalog.count(*) >= 0 AS ok FROM pg_catalog.pg_stat_all_tables',
+                'the per-table statistics views are not readable, so no rule may reason about table size or row estimates from this reading',
             ),
             // The silent one. Asked as "can you see a setting only a superuser sees", because the
             // server answers a missing privilege here with a missing ROW rather than an error.
             new CatalogArea(
                 'restricted server settings',
-                "SELECT count(*) > 0 AS ok FROM pg_settings WHERE name = 'data_directory'",
+                "SELECT pg_catalog.count(*) > 0 AS ok FROM pg_settings WHERE name = 'data_directory'",
                 'settings that require pg_read_all_settings are invisible to this role — they are silently ABSENT from pg_settings rather than refused, so a check that read one would see an empty answer and not an error',
             ),
         ];

@@ -23,14 +23,15 @@ use Pushery\SQLens\Deploy\Drift\DriftRunMode;
 use Pushery\SQLens\Deploy\Drift\ExpectationComparison;
 use Pushery\SQLens\Deploy\Drift\ShadowReferenceBuilder;
 use Pushery\SQLens\Drivers\Capture\DriverCaptorFactory;
+use Pushery\SQLens\Drivers\DriverManager;
+use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Exceptions\UnknownReporterFormat;
 use Pushery\SQLens\Exceptions\UnreadableDriftExcludes;
 use Pushery\SQLens\Findings\Result;
-use Pushery\SQLens\Findings\RunMetadata;
 use Pushery\SQLens\Lint\ShadowClearance;
+use Pushery\SQLens\Reporting\CaptureMode as ReportingCaptureMode;
 use Pushery\SQLens\Reporting\ConfigRunContextCollector;
 use Pushery\SQLens\Reporting\ReporterManager;
-use Pushery\SQLens\Subjects\CaptureMode;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 use Pushery\SQLens\Subjects\SubjectContext;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
@@ -48,6 +49,14 @@ use Symfony\Component\Console\Output\ConsoleOutputInterface;
  * That green exit code is only defensible because **the mode is printed with the findings**. Without
  * that line a reader would see zero and believe it meant no drift, which is the exact silent green
  * this package refuses everywhere else.
+ *
+ * ⚠️ **AND IT EXITS CLEAN WHEN NO EXPECTATION COULD BE BUILT EITHER, WHICH IS THE ORDINARY CI CASE.**
+ * The reference is a shadow replay, and `deploy.shadow.allowed_environments` ships as
+ * `['local', 'testing']` — so in a `ci` environment the production guard refuses and there is nothing
+ * to compare against. The run says so and names the reason. It used to exit **3** there, from a second
+ * verdict path inside this command that disagreed with {@see DriftExitPolicy} about report mode, and a
+ * command documented to exit clean turning red on every CI run is how the default gets replaced with
+ * something else. In **gate** mode that situation still blocks: there the exit code is the claim.
  *
  * ## Where the two sides come from
  *
@@ -78,11 +87,13 @@ use Symfony\Component\Console\Output\ConsoleOutputInterface;
  */
 final class DriftCommand extends Command
 {
+    use ValidatesConfig;
+
     protected $signature = 'sqlens:drift
         {--connection= : The connection to compare; the application default when omitted}
         {--format= : The report format — console, json, github, sarif, or agent (defaults to the configured format)}
         {--fail-on-drift : Exit non-zero when the two sides disagree — off unless named}
-        {--allow-undetermined : Exit clean when the ONLY thing blocking is what could not be read}
+        {--allow-undetermined : In gate mode, exit clean when the ONLY thing blocking is what could not be read}
         {--exclude-file= : The differences this project has accepted; the configured path when omitted}
         {--update-excludes : Write every difference this run found into the exclude file, each needing a reason}
         {--force : Skip the confirmation the production guard asks for}';
@@ -100,8 +111,16 @@ final class DriftCommand extends Command
         ConfigRunContextCollector $runContext,
         Repository $config,
         Application $app,
+        DriverManager $drivers,
     ): int {
-        $connectionName = $this->connectionName($config);
+        // FIRST, before the reporter, before the profile, before anything opens a connection. A
+        // misconfiguration that surfaces after twenty seconds of catalog reading is one people
+        // check for less often — and a key this package does not know is one it IGNORES, silently.
+        if ($this->refusesInvalidConfig()) {
+            return ExitCode::Misconfiguration->value;
+        }
+
+        $connectionName = $this->connectionName($drivers);
 
         // FIRST, before anything reaches a database — and earlier than the sibling deploy commands
         // resolve theirs, deliberately. The expectation side of this comparison CREATES and drops a
@@ -206,9 +225,22 @@ final class DriftCommand extends Command
             $this->outputErrorLine('mode: '.$mode->value);
             $this->outputErrorLine('sqlens:drift: no expectation could be built: '.$reference?->reason?->value);
 
-            return $this->option('allow-undetermined') === true && $mode === DriftRunMode::Gate
-                ? ExitCode::Clean->value
-                : ExitCode::UndeterminedInStrictMode->value;
+            // ⚠️ ASKED, NOT DECIDED, AND THAT IS THE FIX. This branch used to derive its own exit
+            // code and got a different answer from the policy that claims to hold "the whole
+            // verdict": `UndeterminedInStrictMode` in report mode, where the policy says report mode
+            // never blocks. Under the shipped defaults that was the ordinary CI outcome — the
+            // reference is a shadow replay and `allowed_environments` does not include `ci`, so no
+            // reference is built and a report run exited 3 on a command documented to exit clean.
+            //
+            // The mode and the reason are printed above, which is the condition that makes a clean
+            // report exit honest rather than silent.
+            return DriftExitPolicy::decide(
+                $mode,
+                entries: 0,
+                blindSpots: 0,
+                allowUndetermined: $this->option('allow-undetermined') === true,
+                referenceBuilt: false,
+            )->value;
         }
 
         // `--update-excludes` is HOUSEKEEPING and ends the run — it does not also report.
@@ -258,16 +290,7 @@ final class DriftCommand extends Command
         // database that `lint` and `audit` produce — and a private shape would have cost it the
         // severity axis, `downtime_class`, the baseline, suppression and every format but prose.
         $reporter->report(
-            Result::of(DriftFindings::of($report, $context, $connectionName), new RunMetadata(
-                serverVersions: [],
-                toolVersions: [],
-                // The expectation side is a real replay into a throwaway database, which is what
-                // `shadow` means. Saying `static` would claim this run reasoned from migration text
-                // it never executed.
-                mode: CaptureMode::Shadow,
-                profile: $context->profile,
-                strictTools: false,
-            )),
+            Result::of(DriftFindings::of($report, $context, $connectionName)),
             // BOTH policy facts on the record, because neither is visible in the document otherwise.
             //
             // The mode is printed on STDERR for the person at the console, and that was the whole
@@ -279,7 +302,11 @@ final class DriftCommand extends Command
             // and fully tested for exactly this line and then never called, so a run the hatch let
             // through was indistinguishable from one that found nothing — the case the field's own
             // docblock calls "precisely the silent green this gate exists to refuse".
-            $runContext->collect()
+            // `shadow`, and the written reason is that the expectation side is a real replay into
+            // a throwaway database. This used to be stated twice — here and in a second header called
+            // `RunMetadata` — filled from different places and free to disagree in one document. The
+            // duplicate is gone, so this is the only statement of it.
+            $runContext->collect(ReportingCaptureMode::Shadow)
                 ->withDriftMode($mode)
                 ->withComparedObjectTypes($catalogReaders->catalog->readableObjectTypes())
                 ->withUndeterminedWaiver(DriftExitPolicy::waived(
@@ -287,6 +314,9 @@ final class DriftCommand extends Command
                     count($report->entries),
                     count($report->blindSpots),
                     $hatchOpen,
+                    // Reachable only past the `instanceof DriftReport` narrowing above, so a
+                    // reference exists here by construction rather than by assumption.
+                    referenceBuilt: true,
                 )),
             $this->getOutput()->getOutput(),
         );
@@ -296,6 +326,7 @@ final class DriftCommand extends Command
             count($report->entries),
             count($report->blindSpots),
             $hatchOpen,
+            referenceBuilt: true,
         )->value;
     }
 
@@ -413,7 +444,17 @@ final class DriftCommand extends Command
         return DriftExcludeFile::configuredPath(is_string($configured) ? $configured : null, $app->basePath());
     }
 
-    private function connectionName(Repository $config): string
+    /**
+     * The connection this comparison addresses — the named one, or the one the rest of the package
+     * resolves.
+     *
+     * ⚠️ Through {@see DriverManager::defaultConnectionName()}, never `database.default` directly:
+     * `sqlens.connection` comes first there, and lint, audit, baseline and the agent rules all
+     * follow it. Reading the host default here meant that the moment a project set that key,
+     * `sqlens:drift` COMPARED a different database than `sqlens:lint` linted — and this command
+     * creates a reference database to do it.
+     */
+    private function connectionName(DriverManager $drivers): string
     {
         $named = $this->option('connection');
 
@@ -421,9 +462,7 @@ final class DriftCommand extends Command
             return $named;
         }
 
-        $default = $config->get('database.default');
-
-        return is_string($default) ? $default : '';
+        return $drivers->defaultConnectionName();
     }
 
     private function request(Repository $config): CatalogRequest
@@ -443,7 +482,7 @@ final class DriftCommand extends Command
      */
     private function driver(Repository $config, string $connectionName): string
     {
-        $driver = $config->get('database.connections.'.$connectionName.'.driver');
+        $driver = EffectiveConnectionConfig::driverForConnection($config, $connectionName);
 
         return is_string($driver) ? $driver : '';
     }

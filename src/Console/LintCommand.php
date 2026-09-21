@@ -10,7 +10,9 @@ use Illuminate\Contracts\Translation\Translator;
 use Pushery\SQLens\Capture\Shadow\GuardDecision;
 use Pushery\SQLens\Capture\SingleFileFailure;
 use Pushery\SQLens\Contracts\Reporter;
+use Pushery\SQLens\Drivers\DriverManager;
 use Pushery\SQLens\Drivers\DriverResolutionFailure;
+use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Drivers\UnsupportedDriverMessage;
 use Pushery\SQLens\Exceptions\UnknownReporterFormat;
 use Pushery\SQLens\Exceptions\UnreadableBaseline;
@@ -43,6 +45,7 @@ final class LintCommand extends Command
     use ResolvesProfile;
     use ResolvesStrictTools;
     use SharesRunOptions;
+    use ValidatesConfig;
 
     /** @var string */
     protected $signature = 'sqlens:lint
@@ -68,14 +71,14 @@ final class LintCommand extends Command
     /** @var string */
     protected $description = 'Lint the pending migrations of a connection for unsafe schema changes.';
 
-    public function handle(LintRunner $runner, ReporterManager $reporters, Translator $translator, Repository $config, ShadowClearance $clearance): int
+    public function handle(LintRunner $runner, ReporterManager $reporters, Translator $translator, Repository $config, ShadowClearance $clearance, DriverManager $drivers): int
     {
         // BEFORE the reporter, before the profile, before anything opens a connection: is the
         // configuration one this package understands at all? An unknown key is a key that gets
         // IGNORED, and ignoring is silent — a `levl: 3` typo produces a green run that checked
         // less, and nothing on screen says so. The machinery for this existed and was tested from
         // the day it was written; what it never had was a caller.
-        if (! $this->configIsValid($config->get('sqlens'))) {
+        if ($this->refusesInvalidConfig()) {
             return ExitCode::Misconfiguration->value;
         }
 
@@ -117,7 +120,7 @@ final class LintCommand extends Command
         $reported = false;
 
         try {
-            return $this->lint($runner, $reporter, $translator, $config, $clearance, $output, $reported);
+            return $this->lint($runner, $reporter, $translator, $config, $clearance, $drivers, $output, $reported);
         } finally {
             $reported ? $this->closeReportOutput($output) : $this->discardReportOutput($output);
         }
@@ -135,6 +138,7 @@ final class LintCommand extends Command
         Translator $translator,
         Repository $config,
         ShadowClearance $clearance,
+        DriverManager $drivers,
         OutputInterface $output,
         bool &$reported,
     ): int {
@@ -215,6 +219,25 @@ final class LintCommand extends Command
         $connection = $this->option('connection');
         $roundtrip = $this->option('roundtrip') === true;
 
+        // ⚠️ `--pretend` WAS DECLARED AND NEVER READ, so `--pretend --shadow` ran in shadow mode:
+        // the run created and dropped a database while the operator had asked, in as many words,
+        // for the do-no-harm one. `grep -rn "option('pretend')" src/` found nothing at all.
+        //
+        // That is the silent drop the block below refuses for `--roundtrip`, in its own words —
+        // "none of them is a silent drop of the flag, which would let a user believe a roundtrip
+        // happened" — and the flag it happened to is the one a cautious script appends BECAUSE it
+        // is cautious. An alias that sets it, a habit from another tool, a pipeline that spells the
+        // default out: each of them turned into a database-creating run.
+        //
+        // Refused rather than made to win over `--shadow`. Two flags naming opposite modes is a
+        // user who believes something about this run that is not true, and picking one for them
+        // leaves the belief in place.
+        if ($this->option('pretend') === true && $this->option('shadow') === true) {
+            $this->stderr()->writeln($this->translate('sqlens::messages.commands.pretend_shadow_conflict'));
+
+            return ExitCode::Misconfiguration->value;
+        }
+
         // --roundtrip is locked to shadow mode in CODE, not by documentation. It
         // replays down() for real, which is destructive by design, so it exists only
         // where a database may be broken: the throwaway one it creates itself. Each
@@ -242,7 +265,7 @@ final class LintCommand extends Command
         // re-derived, so there is exactly one guard. A blocked decision still runs:
         // the captor turns it into a named undetermined per migration, which is the
         // honest report of a run that was not allowed, never a silent nothing.
-        $guard = $shadow ? $this->guardDecision($clearance, $config, $connection) : null;
+        $guard = $shadow ? $this->guardDecision($clearance, $drivers, $connection) : null;
         $assume = $this->option('assume-server-version');
 
         // A baseline that cannot be read stops the run HERE, named, with the misconfiguration exit.
@@ -283,7 +306,7 @@ final class LintCommand extends Command
         if ($failure instanceof DriverResolutionFailure) {
             // An unsupported engine is a message, not a finding: nothing was linted, so
             // there is nothing to report — only to say why, translated and safe to paste.
-            $driver = $config->get("database.connections.{$outcome->connectionName}.driver");
+            $driver = EffectiveConnectionConfig::driverForConnection($config, $outcome->connectionName);
 
             $this->stderr()->writeln(new UnsupportedDriverMessage($translator)->for(
                 $failure,
@@ -309,13 +332,18 @@ final class LintCommand extends Command
      * terminal is attached, and the question a person can answer.
      *
      * A non-interactive run without `--force` is refused rather than assumed-yes.
+     *
+     * ⚠️ The NAME comes from {@see DriverManager::defaultConnectionName()}, the same resolver the run
+     * uses, and that is load-bearing twice over: the guard has to judge the connection the run
+     * addresses, and the sentence below has to name it to the person being asked. Reading
+     * `database.default` here named a different database in the question than the run would have
+     * created on — an informed yes that was not informed about the right thing.
      */
-    private function guardDecision(ShadowClearance $clearance, Repository $config, mixed $connection): GuardDecision
+    private function guardDecision(ShadowClearance $clearance, DriverManager $drivers, mixed $connection): GuardDecision
     {
-        $configuredDefault = $config->get('database.default');
         $connectionName = is_string($connection) && $connection !== ''
             ? $connection
-            : (is_string($configuredDefault) ? $configuredDefault : '');
+            : $drivers->defaultConnectionName();
 
         $force = $this->option('force') === true;
         $interactive = $this->input->isInteractive();

@@ -109,6 +109,15 @@ enum AuditNotice: string implements RunNotice
     /** `--ignore-baseline` was passed and there is no baseline to bypass. */
     case NoBaselineToIgnore = 'CAP.L0.NO_BASELINE_TO_IGNORE';
 
+    /**
+     * A baseline is configured and the file it names is not there.
+     *
+     * Distinct from the case above, which is about a FLAG having nothing to act on. This one is
+     * about the project's own configuration pointing at a file that is missing — every accepted
+     * finding comes back at once, and an empty baseline and an absent one read identically.
+     */
+    case BaselineAbsent = 'CAP.L0.BASELINE_ABSENT';
+
     /** The project looks multi-tenant and has not declared a tenancy mode. */
     case TenancyNotDeclared = 'CAP.L0.TENANCY_NOT_DECLARED';
 

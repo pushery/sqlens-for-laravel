@@ -12,6 +12,7 @@ use Pushery\SQLens\Contracts\PreflightCheck;
 use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PreflightContext;
+use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
@@ -109,7 +110,7 @@ final readonly class ReplicationLagCheck implements PreflightCheck
                 self::ID,
                 UndeterminedReason::ReplicationViewsUnreadable,
                 'the replication views could not be read, so how far '
-                .'the replicas are behind is unknown: '.$failure->getMessage(),
+                .'the replicas are behind is unknown: '.new CredentialRedactor()->redact($failure->getMessage()),
             );
         }
 

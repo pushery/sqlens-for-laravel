@@ -151,18 +151,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Mode
+    | Mode — REMOVED, and this note is here so a published config does not look wrong
     |--------------------------------------------------------------------------
     |
-    | How SQLens obtains the SQL it reasons about: 'pretend' collects it via
-    | Laravel's --pretend without executing, 'shadow' runs it against a
-    | throwaway shadow database and reads the catalog back, 'static' reads the
-    | migration source without a database. The mode appears in every run header
-    | because the same migration can yield different findings per mode.
+    | There used to be a 'mode' key here promising to choose "how SQLens obtains
+    | the SQL it reasons about". No code path ever consulted it for that choice:
+    | `sqlens:lint` reads --shadow, `sqlens:drift` replays into a throwaway
+    | database, and the catalog suites read a catalog. Its one reader was the run
+    | header, where it LABELED every run with whatever this file said — including
+    | the runs whose real mode was something else.
+    |
+    | Each command now reports the mode it actually used. A published config that
+    | still carries the key gets a notice naming it, not a refusal.
     |
     */
-
-    'mode' => 'static',
 
     /*
     |--------------------------------------------------------------------------
@@ -174,10 +176,15 @@ return [
     | result came from a lenient local run or a strict pre-deploy gate.
     |
     | null, the shipped value, lets each command answer for the place it runs
-    | in: `sqlens:predeploy` runs as 'predeploy', `sqlens:drift` as 'ci', and
-    | every other command as 'local'. A name here outranks those defaults for
-    | every command, so set one only to pin all of them to it. SQLENS_PROFILE
-    | and the --profile flag outrank this key in turn.
+    | in: `sqlens:predeploy` and `sqlens:postdeploy` run as 'predeploy',
+    | `sqlens:drift` as 'ci', and every other command as 'local'. A name here
+    | outranks those defaults for every command, so set one only to pin all of
+    | them to it. SQLENS_PROFILE and the --profile flag outrank this key in turn.
+    |
+    | `sqlens:postdeploy` is named here because it is in the deploy window too,
+    | one step after the gate. It used to carry 'postdeploy' as an option default,
+    | which is not a profile at all — no enum case, no block below — so the name
+    | announced a strictness nothing had selected.
     |
     */
 
@@ -229,11 +236,13 @@ return [
     | rows"), but they are a property of the instance that answered, not of the
     | migration, so they are off where reproducibility matters more than depth.
     |
-    | The statistics reader itself arrives with the audit suite. Until it does,
-    | turning this ON does not fabricate an answer: a statistics-dependent check
-    | reports `undetermined` with a named reason, because "we could not read the
-    | statistics" and "the statistics say you are fine" are not the same result.
-    | With it OFF such a check does not run at all. Neither is ever a silent pass.
+    | Turning this ON never fabricates an answer. Where no reader can serve the run
+    | — a lint run reads migration source and opens no catalog session — a
+    | statistics-dependent check reports `undetermined` with a named reason, because
+    | "we could not read the statistics" and "the statistics say you are fine" are
+    | not the same result. With it OFF such a check does not run at all, and the
+    | deploy gate does not escalate a severity by table size either. Neither is ever
+    | a silent pass.
     |
     */
 
@@ -365,7 +374,19 @@ return [
         // the production guard and only in an allowed environment — never against a
         // production connection. See https://docs.pushery.com/sqlens-for-laravel/capture-modes/.
         'shadow' => [
-            // The connection to clone. null uses the run's resolved connection.
+            // Where the shadow databases are BUILT: a connection whose role may
+            // CREATE and DROP them — the pattern Prisma calls a `shadowDatabaseUrl`.
+            // null uses the run's resolved connection.
+            //
+            // A connection that resolves to the same place as the one being examined
+            // is REFUSED, not warned about: building the reference there would create
+            // and then drop a database on the instance under comparison. The run comes
+            // back `undetermined` with that named reason, before anything is opened.
+            //
+            // `direct_connection` below wins when both are set, and that order is
+            // mechanical rather than a preference: template operations and CREATE
+            // DATABASE do not survive a transaction pooler, so the link they run on
+            // has to be the connection that provably bypasses one.
             'connection' => null,
 
             // A direct (non-pooled) connection to provision through. Template and
@@ -1620,18 +1641,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Suites (placeholder — not yet active)
-    |--------------------------------------------------------------------------
-    |
-    | Which of the suites run — `lint`, `audit`, `analyse`, `format`, `guard`,
-    | `deploy`, `agent`. Not active yet; the semantics arrive with the lint core.
-    |
-    | 'suites' => ['lint', 'audit'],
-    |
-    */
-
-    /*
-    |--------------------------------------------------------------------------
     | Profiles
     |--------------------------------------------------------------------------
     |
@@ -1752,6 +1761,26 @@ return [
         | against a small database took about two and a half seconds, and a bound near that would
         | turn a slightly larger schema into a timeout. A timeout is an `undetermined`: the run
         | would lose the checks over something that is not a problem.
+        */
+        /*
+        | ⚠️ PIN `path` IN A CI IMAGE, AND HERE THAT IS A CREDENTIAL BOUNDARY RATHER THAN A
+        | REPRODUCIBILITY ONE.
+        |
+        | The prose above explains a pinned path as a statement about which binary produced the
+        | verdict. True, and for this one tool incomplete: `pgls` is the ONLY adapter handed the
+        | audited connection's password -- it goes to the process as `PGPASSWORD`, because
+        | postgrestools connects to the database itself rather than reading files. So whichever
+        | binary answers to `postgrestools` receives that password.
+        |
+        | With `path` null it is resolved through `$PATH`. SQLens ignores relative `$PATH` entries
+        | for exactly this reason, so `.` or `vendor/bin` cannot decide it -- but any absolute
+        | directory earlier on the path still can, and the version check is no defense: it compares
+        | a `--version` string and authenticates nothing, so any binary printing the expected line
+        | passes.
+        |
+        | Naming the path is therefore worth doing even where reproducibility does not matter to
+        | you. This note exists because the reasoning was only written down as determinism, and a
+        | configuration whose security consequence is unstated gets set for convenience.
         */
         'pgls' => [
             'path' => null,
@@ -1989,6 +2018,13 @@ return [
          * and wrong in the one case worth naming: a repository whose migrations
          * target a different engine than the connection it happens to be
          * configured with. Name it there.
+         *
+         * An `auto` that cannot be resolved — no connection, or one whose driver
+         * this package does not support — is a REFUSAL, not a guess. Comment
+         * syntax and keyword case differ per dialect, so a guessed dialect
+         * rewrites the file for the wrong engine, and without --check the
+         * original is already gone. Naming a dialect here needs no database:
+         * an explicit value never reads the connection at all.
          */
         'dialect' => 'auto',
 

@@ -56,10 +56,14 @@ final class SessionTimeoutDetector
     /** The driver-specific error number a query exception carries, if any. */
     private static function driverCode(Throwable $throwable): ?int
     {
-        $previous = $throwable->getPrevious();
-
-        if ($previous instanceof PDOException && isset($previous->errorInfo[1]) && is_int($previous->errorInfo[1])) {
-            return $previous->errorInfo[1];
+        // The WHOLE chain, starting at the throwable itself. Laravel wraps the `PDOException`
+        // behind a `QueryException`, so `getPrevious()` was the common case — but several catalog
+        // readers catch the PDO error directly, and for those this returned null. On MySQL null is
+        // the same as "not a timeout", because the SQLSTATE there is the general class either way.
+        for ($current = $throwable; $current instanceof Throwable; $current = $current->getPrevious()) {
+            if ($current instanceof PDOException && isset($current->errorInfo[1]) && is_int($current->errorInfo[1])) {
+                return $current->errorInfo[1];
+            }
         }
 
         return null;

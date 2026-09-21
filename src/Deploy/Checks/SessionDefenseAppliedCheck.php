@@ -12,6 +12,7 @@ use Pushery\SQLens\Contracts\ReadsSessionDefenseState;
 use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PreflightContext;
+use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
@@ -120,7 +121,7 @@ final readonly class SessionDefenseAppliedCheck implements PreflightCheck, Reads
             return CheckResult::undetermined(
                 self::ID,
                 UndeterminedReason::SessionTimeoutsUnreadable,
-                'the session would not say which timeouts are in force ('.$error->getMessage().'), '
+                'the session would not say which timeouts are in force ('.new CredentialRedactor()->redact($error->getMessage()).'), '
                 .'so nothing is known about whether this run is bounded. An unread bound is not a '
                 .'bound: the statements that follow could run for as long as the server allows.',
             );

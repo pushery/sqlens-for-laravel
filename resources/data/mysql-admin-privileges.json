@@ -1,26 +1,68 @@
 {
     "schema_version": 1,
-    "about": "The MySQL privileges that make an account an administrator of the SERVER rather than a user of a database. Written here rather than in a rule for one reason above the others: `SUPER` was deprecated in 8.0 and its powers split across a family of dynamic privileges, so a check that looks only for `SUPER` comes back empty on a correctly configured 8.4 server whose account is administrator in every way that matters. A list in code is a list nobody reconciles against the server; a list here carries its reason and is reconciled by a test that asks the server to accept every name. That reconciliation earned itself immediately: the first version of this file carried `SET_USER_ID`, which MySQL 8.4 refuses outright — it was split into SET_ANY_DEFINER and ALLOW_NONEXISTENT_DEFINER, and a rule reading the old name would have matched nothing on the engine this package targets while looking exactly like a rule with nothing to report.",
+    "about": "The MySQL privileges that make an account an administrator of the SERVER rather than a user of a database. Written here rather than in a rule for one reason above the others: `SUPER` was deprecated in 8.0 and its powers split across a family of dynamic privileges, so a check that looks only for `SUPER` comes back empty on a correctly configured 8.4 server whose account is administrator in every way that matters. A list in code is a list nobody reconciles against the server; a list here carries its reason and is reconciled by a test that asks the server to accept every name. That reconciliation earned itself immediately: the first version of this file carried `SET_USER_ID`, which MySQL 8.4 refuses outright — it was split into SET_ANY_DEFINER and ALLOW_NONEXISTENT_DEFINER, and a rule reading the old name would have matched nothing on the engine this package targets while looking exactly like a rule with nothing to report.\n\nRECONCILED IN BOTH DIRECTIONS SINCE 2026-09-20. The arm that asks the server to accept every listed name proves VALIDITY and, by construction, can never find something MISSING — and 40 administrative privileges were missing, among them BINLOG_ADMIN, BACKUP_ADMIN, CLONE_ADMIN and the whole replication family the rule's own docblock names as its scope. A second arm now diffs the other way, and it takes the scope from the SERVER rather than from a judgment: every privilege MySQL reports with `Context = 'Server Admin'` must be either an entry here or a declared exclusion in `excluded`, each with its reason. A privilege that is neither is red. The `excluded` list is short and each line says why, because an exclusion without a reason is how a list starts drifting again.",
     "entries": [
         {
-            "privilege": "SUPER",
-            "kind": "static",
-            "deprecated_since": "8.0",
-            "grants": "Nearly every administrative action at once: killing other sessions, changing global variables, bypassing read_only, setting a routine's DEFINER to another account.",
+            "privilege": "ALLOW_NONEXISTENT_DEFINER",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Creating an object whose DEFINER does not exist, which defers the question of whose privileges it runs with until somebody creates that account. The other half of the old SET_USER_ID.",
             "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
         },
         {
-            "privilege": "SYSTEM_VARIABLES_ADMIN",
+            "privilege": "APPLICATION_PASSWORD_ADMIN",
             "kind": "dynamic",
             "deprecated_since": null,
-            "grants": "Changing any global system variable, which reaches the server's durability, replication and security settings alike.",
+            "grants": "Managing an account's secondary password, the mechanism that lets a credential be rotated while both are accepted.",
             "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
         },
         {
-            "privilege": "SESSION_VARIABLES_ADMIN",
+            "privilege": "AUDIT_ABORT_EXEMPT",
             "kind": "dynamic",
             "deprecated_since": null,
-            "grants": "Setting restricted session variables — including the ones that disable checks the server otherwise enforces on this connection.",
+            "grants": "Exemption from an audit rule that would otherwise abort the connection, so this account keeps working where policy says it should not.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "AUDIT_ADMIN",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Configuring the audit log, including what is recorded and what is not.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "AUTHENTICATION_POLICY_ADMIN",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Changing the server's authentication policy, which decides which factors and plugins an account may use.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "BACKUP_ADMIN",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Backup operations, including LOCK INSTANCE FOR BACKUP — which blocks every DDL on the instance for as long as it is held, so this privilege can stop a deployment.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "BINLOG_ADMIN",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Control over the binary log itself: purging it and changing how it is written. The binary log is how replicas and point-in-time recovery see history, so this reaches durability beyond this server.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "BINLOG_ENCRYPTION_ADMIN",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Turning binary-log and relay-log encryption on or off, which decides whether that history is written in the clear.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "CLONE_ADMIN",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Cloning: provisioning this server from another, or serving as the donor. A clone REPLACES the recipient data directory.",
             "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
         },
         {
@@ -31,31 +73,38 @@
             "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
         },
         {
-            "privilege": "PERSIST_RO_VARIABLES_ADMIN",
-            "kind": "dynamic",
+            "privilege": "CREATE ROLE",
+            "kind": "static",
             "deprecated_since": null,
-            "grants": "Persisting read-only variables, so a change survives a restart — the difference between altering the server now and altering it permanently.",
+            "grants": "Creating roles, which are accounts that grant privileges to other accounts.",
             "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
         },
         {
-            "privilege": "ROLE_ADMIN",
-            "kind": "dynamic",
+            "privilege": "CREATE TABLESPACE",
+            "kind": "static",
             "deprecated_since": null,
-            "grants": "Granting and revoking roles with WITH ADMIN OPTION, which reaches every privilege any role carries.",
+            "grants": "Creating, altering and dropping tablespaces, which decides where data files live on the server's filesystem.",
             "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
         },
         {
-            "privilege": "SET_ANY_DEFINER",
-            "kind": "dynamic",
+            "privilege": "CREATE USER",
+            "kind": "static",
             "deprecated_since": null,
-            "grants": "Setting a routine, view or trigger DEFINER to another account — the ability to have the server run code as somebody else. It is one half of what SET_USER_ID used to cover.",
+            "grants": "Creating, dropping, renaming and re-authenticating ANY account on the server. An account with it can mint itself a second account, which makes every other restriction on the first one provisional.",
             "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
         },
         {
-            "privilege": "ALLOW_NONEXISTENT_DEFINER",
+            "privilege": "DROP ROLE",
+            "kind": "static",
+            "deprecated_since": null,
+            "grants": "Dropping roles, which removes whatever they granted from every account that held them.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "ENCRYPTION_KEY_ADMIN",
             "kind": "dynamic",
             "deprecated_since": null,
-            "grants": "Creating an object whose DEFINER does not exist, which defers the question of whose privileges it runs with until somebody creates that account. The other half of the old SET_USER_ID.",
+            "grants": "Rotating the InnoDB master encryption key, on which the readability of every encrypted tablespace depends.",
             "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
         },
         {
@@ -63,6 +112,105 @@
             "kind": "static",
             "deprecated_since": null,
             "grants": "Reading and writing files anywhere the server process can, as the server process — LOAD DATA INFILE and SELECT … INTO OUTFILE. The sharpest of the static ones: it turns database access into filesystem access on the database host, and it is the privilege an import tool asks for once and nobody narrows afterwards.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "FIREWALL_EXEMPT",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Exemption from firewall restrictions, so statements another account would be refused are allowed for this one.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "FLUSH_OPTIMIZER_COSTS",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "FLUSH OPTIMIZER_COSTS, which reloads the cost constants the optimizer plans with.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "FLUSH_PRIVILEGES",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "FLUSH PRIVILEGES, which reloads the grant tables — the step that makes a hand-edited grant table take effect.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "FLUSH_STATUS",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "FLUSH STATUS, which resets the counters other tooling reads to judge the server.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "FLUSH_TABLES",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "FLUSH TABLES, including WITH READ LOCK, which makes the whole server read-only for as long as it is held.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "FLUSH_USER_RESOURCES",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "FLUSH USER_RESOURCES, which resets per-account resource counters.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "GRANT OPTION",
+            "kind": "static",
+            "deprecated_since": null,
+            "grants": "Handing privileges on. Listed so the vocabulary is complete and marked unjudged here on purpose: it is a property OF a grant rather than an administrative power over the server, and it has its own rule. Two rules about one fact is the double report this catalog refuses.",
+            "judged": false,
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "GROUP_REPLICATION_ADMIN",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Starting and stopping Group Replication and changing its membership, which decides which servers hold the group.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "GROUP_REPLICATION_STREAM",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Acting as a Group Replication stream connection, the channel members use to exchange state.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "INNODB_REDO_LOG_ARCHIVE",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Starting and stopping redo-log archiving, which writes the redo stream to a path this privilege names.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "INNODB_REDO_LOG_ENABLE",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Disabling and re-enabling the InnoDB redo log. With it off the server is not crash-safe.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "OPTIMIZE_LOCAL_TABLE",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Running OPTIMIZE TABLE on the local server, which rebuilds a table and can hold it for the duration.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "PASSWORDLESS_USER_ADMIN",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Administering accounts that authenticate without a password.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "PERSIST_RO_VARIABLES_ADMIN",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Persisting read-only variables, so a change survives a restart — the difference between altering the server now and altering it permanently.",
             "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
         },
         {
@@ -80,6 +228,83 @@
             "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
         },
         {
+            "privilege": "REPLICATION CLIENT",
+            "kind": "static",
+            "deprecated_since": null,
+            "grants": "Asking about replication position and topology.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "REPLICATION SLAVE",
+            "kind": "static",
+            "deprecated_since": null,
+            "grants": "Reading binary log events from this server, which is the whole write history of every database on it.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "REPLICATION_APPLIER",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Acting as the applier thread: executing changes as the replication channel does, including with binary logging suppressed.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "REPLICATION_SLAVE_ADMIN",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Starting, stopping and reconfiguring replication on this server, including where it replicates from.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "RESOURCE_GROUP_ADMIN",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Creating and altering resource groups and moving other sessions between them, which decides what CPU other work gets.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "ROLE_ADMIN",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Granting and revoking roles with WITH ADMIN OPTION, which reaches every privilege any role carries.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "SENSITIVE_VARIABLES_OBSERVER",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Reading system variables the server otherwise hides, which are hidden because their values are secrets.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "SERVICE_CONNECTION_ADMIN",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Connecting on the administrative interface, which is reachable when the ordinary connection limit is exhausted.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "SESSION_VARIABLES_ADMIN",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Setting restricted session variables — including the ones that disable checks the server otherwise enforces on this connection.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "SET_ANY_DEFINER",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Setting a routine, view or trigger DEFINER to another account — the ability to have the server run code as somebody else. It is one half of what SET_USER_ID used to cover.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "SHOW_ROUTINE",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Reading the definition of every stored routine on the server, including ones this account cannot execute.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
             "privilege": "SHUTDOWN",
             "kind": "static",
             "deprecated_since": null,
@@ -87,19 +312,79 @@
             "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
         },
         {
-            "privilege": "CREATE USER",
+            "privilege": "SUPER",
             "kind": "static",
-            "deprecated_since": null,
-            "grants": "Creating, dropping, renaming and re-authenticating ANY account on the server. An account with it can mint itself a second account, which makes every other restriction on the first one provisional.",
+            "deprecated_since": "8.0",
+            "grants": "Nearly every administrative action at once: killing other sessions, changing global variables, bypassing read_only, setting a routine's DEFINER to another account.",
             "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
         },
         {
-            "privilege": "GRANT OPTION",
-            "kind": "static",
+            "privilege": "SYSTEM_USER",
+            "kind": "dynamic",
             "deprecated_since": null,
-            "grants": "Handing privileges on. Listed so the vocabulary is complete and marked unjudged here on purpose: it is a property OF a grant rather than an administrative power over the server, and it has its own rule. Two rules about one fact is the double report this catalog refuses.",
-            "judged": false,
+            "grants": "Marking an account as a system account — and, more importantly here, the power to modify system accounts, which accounts without it cannot touch.",
             "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "SYSTEM_VARIABLES_ADMIN",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Changing any global system variable, which reaches the server's durability, replication and security settings alike.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "TABLE_ENCRYPTION_ADMIN",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Overriding the default encryption rules a schema or the server sets, so a table can be created unencrypted where policy says otherwise.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "TELEMETRY_LOG_ADMIN",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Administering the telemetry log.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "TRANSACTION_GTID_TAG",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "Setting a tag on a transaction GTID, which labels entries in the replication history other servers apply.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        },
+        {
+            "privilege": "XA_RECOVER_ADMIN",
+            "kind": "dynamic",
+            "deprecated_since": null,
+            "grants": "XA RECOVER, which lists prepared transactions left by other sessions so they can be committed or rolled back.",
+            "source_url": "https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html"
+        }
+    ],
+    "excluded": [
+        {
+            "privilege": "EVENT",
+            "reason": "Creating and running scheduled events is schema-level work an application account may legitimately need; the server files it under Server Admin because the scheduler is server-wide, not because the privilege administers the server."
+        },
+        {
+            "privilege": "PROXY",
+            "reason": "Administrative in substance — it lets an account connect AS another — but it is not a global privilege: the syntax is GRANT PROXY ON 'user'@'host', never ON *.*, so it cannot be named in the shape the rules reading this list match. Excluded rather than listed because the reconciliation arm proved the point: the server refused GRANT PROXY ON *.* with error 1064. It needs its own check, not an entry here."
+        },
+        {
+            "privilege": "RESOURCE_GROUP_USER",
+            "reason": "Lets an account move its OWN thread between resource groups. The administrative counterpart, RESOURCE_GROUP_ADMIN, is listed; this one cannot affect anybody else."
+        },
+        {
+            "privilege": "SET_USER_ID",
+            "reason": "An 8.0 name that MySQL 8.4 refuses outright: it was split into SET_ANY_DEFINER and ALLOW_NONEXISTENT_DEFINER, and both of those ARE listed. Named here so a run against a sub-floor 8.0 server does not report it as an omission."
+        },
+        {
+            "privilege": "SHOW DATABASES",
+            "reason": "Lets an account SEE schema names it has no rights in. That is a disclosure concern and not control over the server, and the rules this list feeds are about administrative power."
+        },
+        {
+            "privilege": "USAGE",
+            "reason": "MySQL's placeholder for no privileges at all. Every account has it, so treating it as administrative would make every account an administrator."
         }
     ]
 }

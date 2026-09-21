@@ -130,13 +130,48 @@ final class MysqlCanonicalization implements DriverCanonicalization
             // (Named indirectly on purpose — a tripwire in the schema-builder suite watches this
             // file for the view keyword, and a comment explaining why it is absent would fire it.)
             'GRANT', 'REVOKE', 'PRIVILEGES', 'OPTION', 'ALL',
+
+            // The GENERATED-column vocabulary, and it slipped through for the reason this file has
+            // already recorded twice: the keyword guard's corpus is generated from the SCHEMA
+            // builder, and `GENERATED ALWAYS AS IDENTITY` is written by hand or through `->change()`
+            // rather than by the builder's ordinary path. So no corpus statement ever carried these
+            // words, and `generated always as identity` folded only its `AS` — one statement, two
+            // canonical forms, two fingerprints, and a baseline entry that stops matching when
+            // somebody reformats a migration.
+            //
+            // Measured before and after rather than reasoned: with these absent, the same DDL in two
+            // casings produced two different canonical strings.
+            'ALWAYS', 'GENERATED', 'STORED', 'VIRTUAL',
         ];
     }
 
-    /** @return list<string> */
+    /**
+     * Both quote characters, because on MySQL both open a string.
+     *
+     * The manual's String Literals section says a string is enclosed within either single quote or
+     * double quote characters. `"` is an identifier quote only under `ANSI_QUOTES`, which is not in
+     * the default `sql_mode` and which Laravel's MySQL connection does not set -- measured on 8.4.10,
+     * `SELECT @@sql_mode` returns ONLY_FULL_GROUP_BY, STRICT_TRANS_TABLES, NO_ZERO_IN_DATE,
+     * NO_ZERO_DATE, ERROR_FOR_DIVISION_BY_ZERO and NO_ENGINE_SUBSTITUTION, and no ANSI_QUOTES.
+     *
+     * This list was `["'"]` alone, and the cost was not theoretical in either direction. A valid
+     * batch was REFUSED: `VALUES ("O'Brien"); ALTER TABLE …` opened a single-quote scan at the
+     * apostrophe that ran to the end of the batch, and the splitter returned `unterminatedLiteral`
+     * over SQL the server accepts. And a literal's content was read as syntax: `VALUES ("set
+     * lock_wait_timeout = 5")` folded into the keyword pass and made MY.L3.MISSING_LOCK_WAIT_TIMEOUT
+     * silent on a migration that never set a timeout.
+     *
+     * Laravel's grammar emits neither form. Raw SQL written by MySQL users emits both, and raw SQL is
+     * what this package reads.
+     *
+     * The identifier quote is the backtick ({@see self::quotingCharacter()}), so nothing here is
+     * ambiguous: a `"` opens data and a backtick opens a name.
+     *
+     * @return list<string>
+     */
     public function stringLiteralDelimiters(): array
     {
-        return ["'"];
+        return ["'", '"'];
     }
 
     /** @return list<string> */

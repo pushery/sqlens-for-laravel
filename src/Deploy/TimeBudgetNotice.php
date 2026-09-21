@@ -40,10 +40,11 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * problem: the run it describes is already not the run anyone is diffing.
  *
  * ⚠️ The second of those two was NOT emitted when this sentence was first written. It was computed,
- * put into `RunMetadata`, and dropped — the envelope never carried the metadata block, and no
- * shipped code called the projection that would have. So the comment described a key a reader could
- * not find, which is worse than describing none. The field was added to the header afterwards; the
- * sentence is true now because of that, not because it always was.
+ * put into a second header called `RunMetadata`, and dropped — the envelope never carried that block,
+ * and no shipped code called the projection that would have. So the comment described a key a reader
+ * could not find, which is worse than describing none. The field was added to the real header
+ * afterwards; the sentence is true now because of that, not because it always was. The duplicate has
+ * since been removed.
  *
  * ## It never aborts
  *

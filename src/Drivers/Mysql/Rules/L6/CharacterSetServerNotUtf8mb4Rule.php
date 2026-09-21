@@ -90,13 +90,25 @@ final class CharacterSetServerNotUtf8mb4Rule extends AbstractServerSettingRule
             false => sprintf('the server default character set is %s, not %s', $serverValue, $expectation->expectation ?? 'utf8mb4'),
         };
 
+        // ⚠️ THE SUBJECT OF "takes it" IS A DATABASE, AND ONLY A DATABASE. This sentence used to read
+        // "Anything created without an explicit CHARACTER SET takes it — a database …, a table added
+        // the same way, …", and the table half is wrong: "Table Character Set and Collation" gives a
+        // table the DATABASE default, and "Database Character Set and Collation" gives a database the
+        // server one. The package documents that chain correctly
+        // elsewhere ({@see TextEncoding} — column ← table ← database ← server) and this rule did not
+        // use it.
+        //
+        // The cost was not pedantry. On a utf8mb4 database a latin1 server default is harmless for new
+        // tables, so the old wording reported damage that did not exist — and sent the reader to audit
+        // their tables instead of the one default that decides what the NEXT database gets.
         return sprintf(
-            '%s. Anything created without an explicit CHARACTER SET takes it — a database made by hand '.
-            'by an operator, a table added the same way, a raw-SQL migration — and on those objects a '.
-            'value MySQL cannot represent is replaced or truncated rather than refused, depending on '.
-            'the SQL mode. The row is stored, altered, and nobody finds out until somebody asks why '.
-            'their name is wrong. Note that collation_server follows this setting automatically; '.
-            'changing one changes both. %s',
+            '%s. A DATABASE created without an explicit CHARACTER SET takes it — one made by hand by an '.
+            'operator, one a raw-SQL migration creates. Every table created in that database without a '.
+            'character set of its own then inherits it in turn, so the level to check is the database '.
+            'default rather than each table. On an object that inherited it, a value MySQL cannot '.
+            'represent is replaced or truncated rather than refused, depending on the SQL mode. The row '.
+            'is stored, altered, and nobody finds out until somebody asks why their name is wrong. Note '.
+            'that collation_server follows this setting automatically; changing one changes both. %s',
             $problem,
             $this->remediation($expectation),
         );

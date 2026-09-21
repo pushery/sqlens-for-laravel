@@ -26,5 +26,19 @@ final readonly class PglsInvocation
          * reason that is not a problem.
          */
         public float $timeoutSeconds = 30.0,
+        /**
+         * The NAME of the connection, for anything this adapter has to say about it.
+         *
+         * Carried beside the coordinates rather than derived from them, because a failure message
+         * is read by somebody holding this project's configuration: they find the host under this
+         * name, and a report that repeated the host, the port and the database instead would tell
+         * them nothing they cannot look up while carrying an address off the machine. The value
+         * class deliberately has no name of its own — it is what the tool needs to CONNECT, and a
+         * label is not part of that.
+         *
+         * Defaulted so the one call site that builds a throwaway invocation purely to read the
+         * default timeout does not have to invent one.
+         */
+        public string $connectionName = '',
     ) {}
 }

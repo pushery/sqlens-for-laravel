@@ -12,6 +12,7 @@ use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\Checks\DiskHeadroomCheck;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PreflightContext;
+use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
@@ -127,7 +128,7 @@ final readonly class ReplicationSlotCheck implements PreflightCheck
                 UndeterminedReason::ReplicationSlotsUnreadable,
                 'whether a retired consumer is holding WAL is unknown, '
                 .'so how much of the headroom this migration needs has already been spent cannot be '
-                .'said. A managed database commonly withholds this view: '.$failure->getMessage(),
+                .'said. A managed database commonly withholds this view: '.new CredentialRedactor()->redact($failure->getMessage()),
             );
         }
 

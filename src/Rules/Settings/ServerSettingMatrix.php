@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Rules\Settings;
 
+use Pushery\SQLens\Resources\ShippedJson;
+
 /**
  * The shipped expectations, read once and asked by variable.
  *
@@ -19,18 +21,50 @@ final readonly class ServerSettingMatrix
     /** @param  list<ServerSettingExpectation>  $entries */
     private function __construct(public array $entries) {}
 
-    /** The shipped matrix. */
+    /**
+     * The shipped matrix, which must be there.
+     *
+     * ⚠️ THIS DELEGATED TO {@see self::fromFile()} AND INHERITED ITS TOLERANCE. An unreadable or
+     * malformed file yielded an EMPTY matrix, and an empty matrix makes {@see AbstractServerSettingRule}
+     * report `UnknownServerVersion` for every setting rule — "no expectation is on file for %s on this
+     * server version". The version was known perfectly well; the ARTIFACT was missing, and the reader
+     * was sent to look at their server.
+     *
+     * The tolerance belongs to `fromFile()`, whose caller chose the path and may legitimately hand it
+     * one that does not exist. Nobody chose this path, so a file that is not there means the
+     * installation is broken.
+     */
     public static function bundled(): self
     {
-        return self::fromFile(dirname(__DIR__, 3).'/'.self::BUNDLED_FILE);
+        $path = dirname(__DIR__, 3).'/'.self::BUNDLED_FILE;
+
+        /** @var array<array-key, mixed> $rows */
+        $rows = ShippedJson::decode($path, 'entries')['entries'];
+
+        return self::fromRows($rows);
     }
 
+    /**
+     * From a named artifact — the test seam, deliberately tolerant.
+     *
+     * A caller here chose the path and may be putting the matrix into a state the shipped one is never
+     * in. {@see self::bundled()} is the strict one, and the difference is exactly whether the path was
+     * a parameter.
+     */
     public static function fromFile(string $path): self
     {
         $raw = is_file($path) ? file_get_contents($path) : false;
         $decoded = $raw === false ? null : json_decode($raw, true);
         $rows = is_array($decoded) && is_array($decoded['entries'] ?? null) ? $decoded['entries'] : [];
 
+        return self::fromRows($rows);
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $rows
+     */
+    private static function fromRows(array $rows): self
+    {
         $entries = [];
 
         foreach ($rows as $row) {

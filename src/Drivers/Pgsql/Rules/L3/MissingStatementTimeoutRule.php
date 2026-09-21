@@ -70,11 +70,21 @@ final class MissingStatementTimeoutRule extends AbstractPgsqlSafetyRule implemen
         // a strong lock on something it did not just create; handed one that takes none, it is a
         // work order for a problem that is not there. The reading is the same one the judgment
         // opens with, through one method rather than a second copy of it.
-        if (! $this->gateStatement($statement) instanceof MigrationStatementDigest) {
+        $gate = $this->gateStatement($statement);
+
+        if (! $gate instanceof MigrationStatementDigest) {
             return null;
         }
 
-        return $this->template->forTimeout(ExpectedTimeouts::STATEMENT_TIMEOUT, $this->id(), $this->downtimeClass());
+        // The gate's OWN transaction context, not the view's. Which SET form bounds anything depends
+        // on whether the statement being bounded runs inside a transaction, and that is a property of
+        // the statement -- a `CONCURRENTLY` build is exactly the case where the two differ.
+        return $this->template->forTimeout(
+            ExpectedTimeouts::STATEMENT_TIMEOUT,
+            $this->id(),
+            $this->downtimeClass(),
+            $gate->withinTransaction,
+        );
     }
 
     /**
@@ -123,12 +133,34 @@ final class MissingStatementTimeoutRule extends AbstractPgsqlSafetyRule implemen
             return null;
         }
 
-        return 'This migration takes a strong lock without first setting statement_timeout, so once it '
+        // The migration may have WRITTEN the line in the form that does nothing — see the sibling
+        // rule for why that deserves its own sentence rather than the generic one.
+        $ineffective = StrongLockStatements::ineffectiveLocalTimeoutBefore(
+            $statement->migration->statements,
+            $gate->index,
+            ExpectedTimeouts::STATEMENT_TIMEOUT,
+        );
+
+        $lead = 'This migration takes a strong lock with no effective statement_timeout, so once it '
             .'has the lock it can run for as long as it takes — an ACCESS EXCLUSIVE lock held while a '
-            .'large table is rewritten keeps the table unavailable the whole time. Set a statement_timeout '
-            ."before the risky statement, for example DB::statement(\"SET statement_timeout = '30s'\"); at "
-            .'the top of up(), so a run that overshoots aborts instead of holding the lock indefinitely. '
-            .'This bounds the operation\'s RUNTIME; lock_timeout (PG.L3.MISSING_LOCK_TIMEOUT) bounds the '
+            .'large table is rewritten keeps the table unavailable the whole time. ';
+
+        $tail = 'This bounds the operation\'s RUNTIME; lock_timeout (PG.L3.MISSING_LOCK_TIMEOUT) bounds the '
             .'wait for the lock — different failures, both worth guarding.';
+
+        if ($ineffective) {
+            return $lead
+                .'SET LOCAL has no effect here: this migration runs outside a transaction, and PostgreSQL '
+                .'ends the LOCAL scope with the statement that set it — the server answers WARNING: SET LOCAL '
+                .'can only be used in transaction blocks and leaves the setting at 0. Use the plain SET form '
+                .'instead, which is session-scoped and survives to the next statement. '
+                .$tail;
+        }
+
+        return $lead
+            .'Set a statement_timeout before the risky statement, for example DB::statement("SET '
+            ."statement_timeout = '30s'\"); at the top of up(), so a run that overshoots aborts instead of "
+            .'holding the lock indefinitely. '
+            .$tail;
     }
 }

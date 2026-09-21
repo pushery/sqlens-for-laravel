@@ -6,8 +6,10 @@ namespace Pushery\SQLens\Drivers\Mysql\Rules\L3;
 
 use Override;
 use Pushery\SQLens\Canonical\StatementTarget;
+use Pushery\SQLens\Canonical\StringLiteralMask;
 use Pushery\SQLens\Contracts\DerivesDowntimeClass;
 use Pushery\SQLens\Contracts\ProvidesRemediation;
+use Pushery\SQLens\Drivers\Mysql\Canonical\MysqlCanonicalization;
 use Pushery\SQLens\Drivers\Mysql\DowntimeClass\MysqlDowntimeClassSource;
 use Pushery\SQLens\Drivers\Mysql\OnlineDdl\MatrixEntry;
 use Pushery\SQLens\Drivers\Mysql\OnlineDdl\OperationKeyMapper;
@@ -227,7 +229,7 @@ final class AlgorithmLockNotExpressibleRule extends AbstractMysqlRule implements
      */
     private function alreadyPinned(string $canonical): bool
     {
-        $masked = preg_replace("/'(?:[^']|'')*'/", "''", $canonical) ?? $canonical;
+        $masked = StringLiteralMask::forDriver(new MysqlCanonicalization)->apply($canonical);
 
         return preg_match('/\b(?:ALGORITHM|LOCK)\s*=/i', $masked) === 1;
     }

@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Drivers\Mysql\Rules\Support;
 
+use Pushery\SQLens\Canonical\StringLiteralMask;
+use Pushery\SQLens\Drivers\Mysql\Canonical\MysqlCanonicalization;
+
 /**
  * What a canonical `ALTER TABLE … MODIFY` / `… CHANGE` says about the column it redefines —
  * and, just as importantly, what it does not say.
@@ -128,7 +131,7 @@ final readonly class ColumnRedefinition
      */
     private static function hasPositionClause(string $definition): bool
     {
-        $withoutLiterals = preg_replace("/'(?:[^']|'')*'/", "''", $definition) ?? $definition;
+        $withoutLiterals = StringLiteralMask::forDriver(new MysqlCanonicalization)->apply($definition);
 
         return preg_match('/\s(?:AFTER\s+\S+|FIRST)\s*$/', $withoutLiterals) === 1;
     }

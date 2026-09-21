@@ -6,6 +6,8 @@ namespace Pushery\SQLens\Drivers\Pgsql\Rules\L3\Support;
 
 use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Canonical\StatementTarget;
+use Pushery\SQLens\Canonical\StringLiteralMask;
+use Pushery\SQLens\Drivers\Pgsql\Canonical\PgsqlCanonicalization;
 use Pushery\SQLens\Subjects\MigrationContext;
 use Pushery\SQLens\Subjects\MigrationStatementDigest;
 use Pushery\SQLens\Subjects\SchemaObjectType;
@@ -161,13 +163,69 @@ final class StrongLockStatements
     }
 
     /**
-     * Whether the statement is a `SET [SESSION|LOCAL] <timeout>` for the named GUC —
-     * how a migration declares its own timeout, either form. Read off the canonical
-     * string because a plain `SET` is not a classified DDL kind.
+     * Whether the statement EFFECTIVELY sets the named GUC — how a migration declares its own
+     * timeout. Read off the canonical string because a plain `SET` is not a classified DDL kind.
+     *
+     * ⚠️ **`SET LOCAL` only counts inside a transaction, and that is not a nicety.** The manual is
+     * explicit: *"SET LOCAL will appear to have no effect if it is executed outside a BEGIN block,
+     * since the transaction will end immediately."* Measured on PostgreSQL 18.0 — `SET LOCAL
+     * lock_timeout = '3s'` in autocommit answers `WARNING: SET LOCAL can only be used in transaction
+     * blocks` and leaves `lock_timeout` at `0`, while a plain `SET` leaves it at `3s`.
+     *
+     * So a migration declaring `public $withinTransaction = false` — which every `CONCURRENTLY`
+     * migration must, and which this package's own remediation tells it to — ran its risky DDL with
+     * NO bound while this predicate reported one. A false green on a rule that exists to find an
+     * unbounded wait, and the most expensive shape of it: the operator has written the line, can see
+     * the line, and believes the wait is capped.
+     *
+     * The literals are masked first for the same reason the MySQL side masks them: an `->insert()`
+     * whose value spells `set lock_timeout = 5s` is data, and counting it would be the same false
+     * green arriving through the other door.
      */
     public static function setsTimeout(MigrationStatementDigest $digest, string $timeout): bool
     {
-        return preg_match('/\bSET\s+(?:SESSION\s+|LOCAL\s+)?'.preg_quote($timeout, '/').'\b/i', $digest->canonical) === 1;
+        $canonical = StringLiteralMask::forDriver(new PgsqlCanonicalization)->apply($digest->canonical);
+
+        if (preg_match('/\bSET\s+(SESSION\s+|LOCAL\s+)?'.preg_quote($timeout, '/').'\b/i', $canonical, $match) !== 1) {
+            return false;
+        }
+
+        return ! self::isLocalScope($match[1] ?? '') || $digest->withinTransaction;
+    }
+
+    /**
+     * Whether the stream declares the named timeout with `SET LOCAL` somewhere before the gate while
+     * running outside a transaction — the shape that reads as a bound and is none.
+     *
+     * It exists so the finding can say WHICH mistake was made. Without it the rule tells an operator
+     * that no timeout was set, while the operator is looking at the line that sets it, and the most
+     * likely conclusion is that the tool is wrong.
+     *
+     * @param  list<MigrationStatementDigest>  $stream
+     */
+    public static function ineffectiveLocalTimeoutBefore(array $stream, int $gateIndex, string $timeout): bool
+    {
+        $mask = StringLiteralMask::forDriver(new PgsqlCanonicalization);
+
+        return array_any($stream, static function (MigrationStatementDigest $digest) use ($gateIndex, $timeout, $mask): bool {
+            if ($digest->index >= $gateIndex || $digest->withinTransaction) {
+                return false;
+            }
+
+            $matched = preg_match(
+                '/\bSET\s+(SESSION\s+|LOCAL\s+)?'.preg_quote($timeout, '/').'\b/i',
+                $mask->apply($digest->canonical),
+                $match,
+            );
+
+            return $matched === 1 && self::isLocalScope($match[1] ?? '');
+        });
+    }
+
+    /** Whether the captured scope word is `LOCAL`. An absent scope is session scope, which is effective. */
+    private static function isLocalScope(string $scope): bool
+    {
+        return stripos($scope, 'LOCAL') !== false;
     }
 
     /** Whether the canonical form carries the `CONCURRENTLY` clause. */

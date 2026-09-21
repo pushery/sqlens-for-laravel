@@ -119,14 +119,14 @@ final readonly class PgsqlStatisticsReader implements StatisticsReader
                    c.relkind::text as kind,
                    c.reltuples::float8 as row_estimate,
                    case when c.relkind = 'p'
-                        then (select coalesce(sum(pg_relation_size(t.relid)), 0) from pg_partition_tree(c.oid) t)
-                        else pg_relation_size(c.oid) end as table_bytes,
+                        then (select coalesce(pg_catalog.sum(pg_catalog.pg_relation_size(t.relid)), 0) from pg_catalog.pg_partition_tree(c.oid) t)
+                        else pg_catalog.pg_relation_size(c.oid) end as table_bytes,
                    case when c.relkind = 'p'
-                        then (select coalesce(sum(pg_indexes_size(t.relid)), 0) from pg_partition_tree(c.oid) t)
-                        else pg_indexes_size(c.oid) end as index_bytes,
+                        then (select coalesce(pg_catalog.sum(pg_catalog.pg_indexes_size(t.relid)), 0) from pg_catalog.pg_partition_tree(c.oid) t)
+                        else pg_catalog.pg_indexes_size(c.oid) end as index_bytes,
                    case when c.relkind = 'p'
-                        then (select coalesce(sum(pg_total_relation_size(t.relid)), 0) from pg_partition_tree(c.oid) t)
-                        else pg_total_relation_size(c.oid) end as total_bytes,
+                        then (select coalesce(pg_catalog.sum(pg_catalog.pg_total_relation_size(t.relid)), 0) from pg_catalog.pg_partition_tree(c.oid) t)
+                        else pg_catalog.pg_total_relation_size(c.oid) end as total_bytes,
                    s.last_analyze,
                    s.last_autoanalyze,
                    s.n_mod_since_analyze
@@ -136,7 +136,7 @@ final readonly class PgsqlStatisticsReader implements StatisticsReader
              where c.relkind in ('r', 'p', 'm')
                and (
                      n.nspname || '.' || c.relname in ({$placeholders})
-                  or (c.relname in ({$placeholders}) and pg_table_is_visible(c.oid))
+                  or (c.relname in ({$placeholders}) and pg_catalog.pg_table_is_visible(c.oid))
                    )
             SQL;
     }
@@ -157,8 +157,8 @@ final readonly class PgsqlStatisticsReader implements StatisticsReader
                    c.relname as table_name,
                    i.relname as index_name,
                    case when i.relkind = 'I'
-                        then (select coalesce(sum(pg_relation_size(t.relid)), 0) from pg_partition_tree(i.oid) t)
-                        else pg_relation_size(i.oid) end as index_bytes
+                        then (select coalesce(pg_catalog.sum(pg_catalog.pg_relation_size(t.relid)), 0) from pg_catalog.pg_partition_tree(i.oid) t)
+                        else pg_catalog.pg_relation_size(i.oid) end as index_bytes
               from pg_index x
               join pg_class i on i.oid = x.indexrelid
               join pg_class c on c.oid = x.indrelid
@@ -166,7 +166,7 @@ final readonly class PgsqlStatisticsReader implements StatisticsReader
              where i.relispartition = false
                and (
                      n.nspname || '.' || c.relname in ({$placeholders})
-                  or (c.relname in ({$placeholders}) and pg_table_is_visible(c.oid))
+                  or (c.relname in ({$placeholders}) and pg_catalog.pg_table_is_visible(c.oid))
                    )
             SQL;
     }
@@ -462,7 +462,7 @@ final readonly class PgsqlStatisticsReader implements StatisticsReader
     {
         try {
             $rows = array_values($session->read(static fn (Connection $db): array => $db->select(
-                'select current_database() as name, pg_database_size(current_database()) as used_bytes',
+                'select pg_catalog.current_database() as name, pg_catalog.pg_database_size(pg_catalog.current_database()) as used_bytes',
             )));
         } catch (Throwable $error) {
             $skips[] = DatabaseErrorTranslator::skipFor(SchemaObjectType::Database, 'database size', $error);

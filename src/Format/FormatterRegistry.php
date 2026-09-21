@@ -46,13 +46,20 @@ final readonly class FormatterRegistry
     /**
      * The backend for a request, or a named reason there is none.
      *
+     * ⚠️ There is no longer an "unknown dialect" case to handle here, and the parameter that carried
+     * it is gone rather than defaulted. It selected only backends answering for BOTH dialects, on the
+     * stated grounds that such a backend is "safe to run blind, which is precisely what the built-in
+     * core is" — and the core is not: `SqlTokenizer` switches comment syntax on the dialect and
+     * `SqlToken` switches keyword case on it. The premise was false, so the branch was protection
+     * that did not protect.
+     *
+     * `sqlens:format` now refuses an unresolved dialect up front, which means every dialect reaching
+     * this method is one somebody named. Keeping the parameter with a default would have left a
+     * branch no run can enter — dead code held alive by the test that covers it.
+     *
      * @param  string  $requested  a backend name, or `auto`
-     * @param  bool  $dialectResolved  whether the dialect is KNOWN. When it is not, only a backend
-     *                                 that handles both dialects may run — picking a
-     *                                 dialect-specific one against a guess is how a formatter
-     *                                 produces output shaped for the wrong grammar
      */
-    public function resolve(string $requested, Dialect $dialect, FormatStyle $style, bool $dialectResolved = true): FormatterResolution
+    public function resolve(string $requested, Dialect $dialect, FormatStyle $style): FormatterResolution
     {
         if ($requested !== 'auto') {
             $named = $this->byName($requested);
@@ -129,14 +136,6 @@ final readonly class FormatterRegistry
 
         foreach (self::AUTO_ORDER as $name) {
             $candidate = $this->byName($name);
-
-            // With the dialect unknown, a backend that handles only one of them is out: it would be
-            // formatting against a guess, and the output is committed. Only a backend that answers
-            // for BOTH is safe to run blind, which is precisely what the built-in core is.
-            if (! $dialectResolved && $candidate instanceof SqlFormatter
-                && (! $candidate->supports(Dialect::Pgsql) || ! $candidate->supports(Dialect::Mysql))) {
-                continue;
-            }
 
             if (! $candidate instanceof SqlFormatter || ! $candidate->supports($dialect)) {
                 continue;

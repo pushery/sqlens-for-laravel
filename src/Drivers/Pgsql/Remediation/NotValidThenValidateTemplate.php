@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Drivers\Pgsql\Remediation;
 use Pushery\SQLens\Canonical\StatementTarget;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L2\ConstraintShape;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L4\ConstraintValidationPendingRule;
+use Pushery\SQLens\Drivers\Pgsql\Rules\Support\SetNotNullChange;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Remediation\RemediationStep;
@@ -219,20 +220,49 @@ final readonly class NotValidThenValidateTemplate
     }
 
     /**
-     * The sequence that makes `SET NOT NULL` skip its scan — the same trick, applied to a different
-     * statement.
+     * The sequence that makes a column NOT NULL without the scan — two statements on 18, not four.
      *
      * `SET NOT NULL` proves no row is null by reading every one of them, under an ACCESS EXCLUSIVE
-     * lock. Since PostgreSQL 12 it will instead TRUST a validated `CHECK (col IS NOT NULL)` and skip
-     * the scan entirely — so the sequence is: add the check unvalidated, validate it under the
-     * weaker lock, then set the column, then drop the check that has become redundant.
+     * lock. ⚠️ **What the safe sequence removes is the LOCK CLASS, not the reading** — measured on
+     * 18.0 over two million rows, the bare `SET NOT NULL` and the `VALIDATE` that replaces it both
+     * take about 46 ms. The bare one holds ACCESS EXCLUSIVE for that time and the validation holds
+     * SHARE UPDATE EXCLUSIVE, so on a table where the scan is minutes rather than milliseconds one
+     * is an outage and the other is not. A remediation promising a faster statement would be wrong;
+     * it promises a weaker lock.
+     *
+     * ## Why this is no longer the PostgreSQL 12 detour
+     *
+     * That detour is four statements — add `CHECK (col IS NOT NULL)` unvalidated, validate it, set
+     * the column (which since 12 TRUSTS the validated check and skips its own scan), drop the check
+     * that has become redundant. It still works. On 18 a not-null constraint is a `pg_constraint`
+     * row of its own with `contype = 'n'` and it accepts `NOT VALID`, so the same two moves do it
+     * directly, and the package's floor is 18.
+     *
+     * ⚠️ **The detector already treated the two-statement form as the correct one** — see
+     * {@see SetNotNullChange}, where a statement
+     * carrying `NOT VALID` draws no finding. So the package recognized the answer as right while
+     * never handing it over, which is the kind of disagreement that stays invisible: both halves
+     * read correctly on their own.
+     *
+     * ## ⚠️ The half-state is the OPPOSITE of the detour's, and it is named rather than glossed
+     *
+     * Measured on 18.0 with a null row already in the table: `ADD CONSTRAINT … NOT NULL col NOT
+     * VALID` is accepted, and the catalog then reports the column as **NOT NULL** — `attnotnull`
+     * true, `information_schema` saying `NO` — while the null row is still there. The `VALIDATE` is
+     * what finds it, with `23502`. The old detour's half-state was honest in comparison: the column
+     * stayed nullable, which was true.
+     *
+     * So this sequence's gap cannot be found by looking at the column, and the note for it says so.
+     * What finds it is `convalidated = false`, which is what `sqlens:predeploy` reads — and that
+     * query is deliberately not filtered by `contype`, so it sees a pending not-null constraint the
+     * same as a pending check.
      *
      * It lives beside {@see notValidThenValidate()} rather than in a file of its own because it is
-     * the same two moves in front of a third: a separate template would be a second place to keep
-     * the `NOT VALID` reasoning in step with, and both copies would look correct alone.
+     * the same two moves: a separate template would be a second place to keep the `NOT VALID`
+     * reasoning in step with, and both copies would look correct alone.
      *
-     * The constraint NAME stays a placeholder — it does not exist yet, and generating one would
-     * make two runs over the same migration disagree about what to drop in step four.
+     * The constraint NAME stays a placeholder — it does not exist yet, and generating one would make
+     * two runs over the same migration disagree about what to validate in step two.
      *
      * @param  array<string, string>  $context
      */
@@ -243,8 +273,8 @@ final readonly class NotValidThenValidateTemplate
                 new RemediationStep(
                     order: 1,
                     kind: RemediationStepKind::MigrationStatement,
-                    noteKey: self::LANG.'not_null_check',
-                    sqlTemplate: 'ALTER TABLE {{table}} ADD CONSTRAINT {{constraint}} CHECK ({{column}} IS NOT NULL) NOT VALID',
+                    noteKey: self::LANG.'add_not_null_not_valid',
+                    sqlTemplate: 'ALTER TABLE {{table}} ADD CONSTRAINT {{constraint}} NOT NULL {{column}} NOT VALID',
                 ),
                 new RemediationStep(
                     order: 2,
@@ -254,15 +284,8 @@ final readonly class NotValidThenValidateTemplate
                 ),
                 new RemediationStep(
                     order: 3,
-                    kind: RemediationStepKind::MigrationStatement,
-                    noteKey: self::LANG.'set_not_null_trusts_it',
-                    sqlTemplate: 'ALTER TABLE {{table}} ALTER COLUMN {{column}} SET NOT NULL',
-                ),
-                new RemediationStep(
-                    order: 4,
-                    kind: RemediationStepKind::MigrationStatement,
-                    noteKey: self::LANG.'drop_the_now_redundant_check',
-                    sqlTemplate: 'ALTER TABLE {{table}} DROP CONSTRAINT {{constraint}}',
+                    kind: RemediationStepKind::ManualGate,
+                    noteKey: self::LANG.'debt_until_validated_not_null',
                 ),
             ], $context),
             strategy: RemediationStrategy::NotValidThenValidate,

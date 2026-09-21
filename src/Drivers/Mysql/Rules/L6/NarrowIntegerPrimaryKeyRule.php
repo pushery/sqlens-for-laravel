@@ -19,7 +19,10 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ## The timing is the whole problem
  *
- * A signed `INT` key runs out at 2,147,483,647, and `MEDIUMINT` and `SMALLINT` far sooner. Nothing warns on the way there; the first
+ * An `INT` key runs out at 2,147,483,647 signed and 4,294,967,295 unsigned, and `MEDIUMINT` and
+ * `SMALLINT` far sooner. ⚠️ **Laravel's `increments()` produces `INT UNSIGNED`**, so the unsigned
+ * ceiling is the one most keys this rule meets are actually near — the finding names whichever
+ * applies, read from the catalog rather than guessed. Nothing warns on the way there; the first
  * symptom is an INSERT failing on a table that has been working for years. And the moment the fix
  * becomes necessary is precisely the moment it is most expensive: widening the key rewrites the
  * table and every index over it, under a lock, on the largest table you have.
@@ -107,18 +110,31 @@ final class NarrowIntegerPrimaryKeyRule extends AbstractCatalogRule implements D
             return [];
         }
 
+        // ⚠️ THE CEILING OF *THIS* KEY, NOT A LIST OF THREE SIGNED ONES. The message named
+        // 2,147,483,647 for every `int` key — and `increments()`, the commonest shape this rule ever
+        // meets, produces `INT UNSIGNED`, which reaches 4,294,967,295. The recommendation was right
+        // and the number behind it was wrong by a factor of two, which is precisely what a reader
+        // checks before deciding whether to trust the rest.
+        //
+        // The signedness comes from the catalog, which had read it all along; only the projection was
+        // missing. See {@see NarrowIntegerPrimaryKey::CEILING} for the measurement.
+        $ceiling = NarrowIntegerPrimaryKey::ceiling($narrow['type'], $narrow['unsigned']);
+
         return [RuleVerdict::flag(sprintf(
-            '%s has %s %s primary key on %s. A signed INT runs out at 2,147,483,647, a MEDIUMINT at 8,388,607 and a SMALLINT at '
-            .'32,767 — with no warning on the way there: the first symptom is an INSERT failing on a table '
-            .'that has worked for years. The fix is due exactly when it costs most, because widening the key '
-            .'rewrites the table and every index over it, under a lock, on your largest table. Chosen now it '
-            .'costs four bytes a row: $table->id() gives a BIGINT UNSIGNED. Widen the referencing foreign-key columns '
-            .'in the same change — they live on other tables, so this finding cannot list them, and a key '
-            .'widened without them stops matching.',
+            '%s has %s %s%s primary key on %s.%s No warning comes on the way there: the first symptom is an '
+            .'INSERT failing on a table that has worked for years. The fix is due exactly when it costs '
+            .'most, because widening the key rewrites the table and every index over it, under a lock, on '
+            .'your largest table. Chosen now it costs four bytes a row: $table->id() gives a BIGINT '
+            .'UNSIGNED. Widen the referencing foreign-key columns in the same change — they live on other '
+            .'tables, so this finding cannot list them, and a key widened without them stops matching.',
             $object->qualifiedName,
             NarrowIntegerPrimaryKey::article($narrow['type']),
             $narrow['type'],
+            $narrow['unsigned'] ? ' UNSIGNED' : '',
             $narrow['column'],
+            // Said only when it is known. A type this package has no ceiling for gets the argument
+            // without a number rather than a number somebody guessed.
+            $ceiling === '' ? '' : sprintf(' It runs out at %s.', $ceiling),
         ))];
     }
 }

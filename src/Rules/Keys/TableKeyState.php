@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Rules\Keys;
 
+use Pushery\SQLens\Canonical\StringLiteralMask;
 use Pushery\SQLens\Catalog\TableMembers;
+use Pushery\SQLens\Contracts\DriverCanonicalization;
 use Pushery\SQLens\Rules\Coverage\ForeignKeyIndexCoverage;
 use Pushery\SQLens\Subjects\SchemaObject;
 
@@ -52,9 +54,9 @@ enum TableKeyState
     case Undetermined;
 
     /** Read a canonical `CREATE TABLE`. */
-    public static function inCreateTable(string $canonical): self
+    public static function inCreateTable(string $canonical, DriverCanonicalization $driver): self
     {
-        $statement = self::withoutStringLiterals($canonical);
+        $statement = StringLiteralMask::forDriver($driver)->apply($canonical);
 
         if (preg_match('/\bPRIMARY KEY\b/', $statement) === 1) {
             return self::Keyed;
@@ -158,11 +160,5 @@ enum TableKeyState
             array_map(trim(...), explode(';', $encoded)),
             static fn (string $entry): bool => $entry !== '',
         ));
-    }
-
-    /** Replace every string literal with an empty one, so a scan reads syntax and not data. */
-    private static function withoutStringLiterals(string $statement): string
-    {
-        return preg_replace("/'(?:[^']|'')*'/", "''", $statement) ?? $statement;
     }
 }
