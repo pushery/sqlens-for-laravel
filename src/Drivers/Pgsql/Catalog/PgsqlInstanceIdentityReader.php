@@ -81,16 +81,12 @@ final readonly class PgsqlInstanceIdentityReader implements InstanceIdentityRead
             // A local socket has no address to report. Named rather than blank, so a reader can
             // tell "connected over a socket" from "the reading could not say".
             //
-            // ⚠️ THIS NAMED `ManagedDatabaseRestriction`, AND THAT REASON SAYS THE OPPOSITE OF THE
-            // COMMENT CHOOSING IT: "a managed database blocks the catalog or setting the check
-            // reads". The comment knows it is a local socket; the reason told the reader their
-            // provider was withholding something. `inet_server_addr()` is documented to return NULL
-            // over a Unix-domain socket, so this is not a restriction at all — there is no address
-            // to report.
-            //
-            // And it is not a corner: it is every developer machine connecting over a socket, which
-            // is the most ordinary local setup there is. The intent — named rather than blank — was
-            // right; the name was not.
+            // Not `ManagedDatabaseRestriction`, whose sentence says "a managed database blocks the
+            // catalog or setting the check reads" and would tell the reader their provider is
+            // withholding something. `inet_server_addr()` is documented to return NULL over a
+            // Unix-domain socket, so this is not a restriction at all — there is no address to
+            // report — and it is every developer machine connecting over a socket, the most ordinary
+            // local setup there is.
             unavailable: $host === null ? ['host' => UndeterminedReason::LocalSocketConnection] : [],
         );
     }

@@ -44,10 +44,9 @@ final class ApiSnapshotCommand extends Command
     {
         $root = dirname(__DIR__, 2);
 
-        // ⚠️ THROUGH THE SHARED LOADER, AND THAT IS THE WRITE-SIDE FIX RATHER THAN A TIDY-UP. This
-        // used to be a hand-rolled decode that threw on malformed JSON and accepted everything else —
-        // so a registry of `{}` or `{"entries": []}` produced an EMPTY surface, wrote it without a
-        // word, and every later classification then compared against nothing. A package with no rules
+        // Through the shared loader. A decode that only throws on malformed JSON would accept a
+        // registry of `{}` or `{"entries": []}`, produce an empty surface, write it without a word,
+        // and every later classification would compare against nothing. A package with no rules
         // does not exist; that is a failed run, not a result.
         //
         // `ShippedJson` refuses all four broken states including the empty list, which is exactly the
@@ -131,18 +130,15 @@ final class ApiSnapshotCommand extends Command
         /** @var array<string, mixed> $released */
         $released = json_decode((string) file_get_contents($releasedPath), true, flags: JSON_THROW_ON_ERROR);
 
-        // ⚠️ A BASELINE THAT PARSES AND CARRIES NO RULES IS THE SAME "nothing was compared" AS A
-        // MISSING ONE, and until now only the missing one was named. The asymmetry is what made it
-        // dangerous: an empty CANDIDATE reports every released rule as removed and goes loudly red,
-        // while an empty RELEASED surface reports every candidate rule as NEW — all of them
-        // `allowed_in_minor` — so `blocking()` comes back empty and the classification passes.
+        // A baseline that parses and carries no rules is the same "nothing was compared" as a
+        // missing one. The asymmetry is what makes it dangerous: an empty candidate reports every
+        // released rule as removed and goes loudly red, while an empty released surface reports
+        // every candidate rule as new — all of them `allowed_in_minor` — so `blocking()` comes back
+        // empty and the classification passes.
         //
         // And it does not look like silence. It prints "3 change(s), none of them breaking", which
-        // reads like a comparison that ran. A release removing every rule in the package would have
-        // gone through on that output.
-        //
-        // Measured with controls: `{}`, `{"rules": []}` and `{"rules": "broken"}` each gave 0
-        // blocking, while a genuine removal and an emptied candidate each gave the red they should.
+        // reads like a comparison that ran. A release removing every rule in the package would go
+        // through on that output.
         if (! is_array($released['rules'] ?? null) || $released['rules'] === []) {
             $this->components->error(sprintf(
                 'The released snapshot at `%s` carries no rules, so there is nothing to classify '

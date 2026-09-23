@@ -424,6 +424,22 @@ only one of them is an install away. Under `--strict-tools` a missing binary fai
 platform that cannot have it does not, and `sqlens.tools.squawk.enabled = false` is a decision
 rather than an absence and fails nothing.
 
+## False positives, measured
+
+A linter that cries wolf gets switched off, and the switch is never turned back on. So the rule
+pack is measured against migrations somebody really shipped — 14 of [BookStack](https://github.com/BookStackApp/BookStack)'s,
+a decade of schema changes — with the verdict each rule should reach annotated case by case, and
+the reasoning written down beside it.
+
+The current number is **no false positive in 13 measured cases** on MySQL 8.4. The second half of
+that sentence matters more than the first: 228 of the 241 rules this build ships have no case in
+the corpus yet, and PostgreSQL has no collection at all, so its rate is unknown rather than good.
+
+[False positives, measured](https://docs.pushery.com/sqlens-for-laravel/false-positive-rate/)
+carries the method, the five ways a case is classified, every blind spot by name, and the command
+that reproduces the report. That report is committed, and this paragraph is checked against it by
+the test suite — so a number that goes stale turns the suite red instead of staying published.
+
 ## Security
 
 Please review the [security policy](SECURITY.md) and report vulnerabilities

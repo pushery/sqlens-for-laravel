@@ -76,17 +76,16 @@ final readonly class SuppressionResolver
         // only ever hides one of OURS, so no finding can be covered by both. The order is still
         // written down, because a precedence nobody wrote down is one the next reader has to guess.
         PairedViewDedupeSuppressionSource::SOURCE,
-        // ⚠️ THE THIRD DE-DUPLICATION LAYER, AND IT WAS MISSING FROM THIS LIST WHILE THE RESOLVER RAN
-        // IT. `Result::countsBySuppressionSource()` seeds its counters from exactly this constant and
-        // then increments per suppression, so the first finding this layer ever hid incremented a key
-        // that did not exist — an "Undefined array key" warning, which under Laravel's
-        // `HandleExceptions` is an ErrorException, in the console and JSON reporters. The layer being
-        // unreachable is what kept that from happening.
+        // The third de-duplication layer, and it has to be in this list because the resolver runs it.
+        // `Result::countsBySuppressionSource()` seeds its counters from exactly this constant and
+        // then increments per suppression, so a layer missing here would increment a key that does
+        // not exist — an "Undefined array key" warning, which under Laravel's `HandleExceptions` is an
+        // ErrorException, in the console and JSON reporters.
         //
         // Position: after the other two, for the reason given above them — a human decision deserves
         // to be the recorded reason whenever both apply. Among the three the order is immaterial by
-        // construction: RLS hides a FOREIGN id, paired-view hides one of OURS in the catalog half, and
-        // this one hides a MIGRATION finding whose fact the catalog half already reports.
+        // construction: RLS hides a foreign id, paired-view hides one of ours in the catalog half, and
+        // this one hides a migration finding whose fact the catalog half already reports.
         CrossSourceDedupeSuppressionSource::SOURCE,
     ];
 
@@ -150,19 +149,18 @@ final readonly class SuppressionResolver
 
         // Computed once, from the candidate list that is already complete, and needed by exactly one
         // layer: the paired-view dedupe, which may only hide a privacy view when its hardening
-        // partner genuinely reported something in THIS run.
+        // partner genuinely reported something in this run.
         $reportedIds = $this->reportedIds($candidates);
 
         // Beside it, and for the same reason: entitlement to hide a migration finding depends on
-        // what the CATALOG half reported in this run, which cannot be answered one finding at a time.
+        // what the catalog half reported in this run, which cannot be answered one finding at a time.
         //
-        // ⚠️ AND THE CATALOG HALF IS A DIFFERENT PASS, WHICH IS WHY THIS LAYER HAD NEVER FIRED.
-        // `sqlens:security` runs the audit and the lint suite as two sub-runs with a resolver each:
-        // a lint pass sees no catalog candidate, so the set was empty and nothing ever matched; an
-        // audit pass sees no migration candidate, so the layer returned early on every one. The
-        // other half's findings arrive through `$crossSuiteFindings` — and the identity is still
-        // derived HERE, from one list, because two derivation sites for one key is how the two
-        // halves would come to disagree about what counts as the same fact.
+        // And the catalog half is a different pass. `sqlens:security` runs the audit and the lint
+        // suite as two sub-runs with a resolver each: a lint pass sees no catalog candidate, and an
+        // audit pass sees no migration candidate, so from its own candidates alone neither could
+        // ever match. The other half's findings arrive through `$crossSuiteFindings` — and the
+        // identity is still derived here, from one list, because two derivation sites for one key
+        // is how the two halves would come to disagree about what counts as the same fact.
         $catalogIdentities = CrossSourceDedupeSuppressionSource::catalogIdentities([
             ...array_map(static fn (SuppressionCandidate $candidate): Finding => $candidate->finding, $candidates),
             ...$crossSuiteFindings,

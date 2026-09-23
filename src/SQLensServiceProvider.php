@@ -224,23 +224,15 @@ final class SQLensServiceProvider extends ServiceProvider
                 // above: a rule that read configuration would have a verdict its own tests cannot
                 // see.
                 new EolRepository($app->make(Repository::class), $app->basePath()),
-                // ⚠️ TODAY IS NOT INJECTED, AND THIS LINE USED TO CALL THE LOCAL-TIME DATE. The reasoning
-                // was right and the placement was wrong: a support window closes ON a date, and two
-                // rules reading the clock either side of midnight would give one database two answers.
-                // What that argues for is one value per RUN — and this is a singleton closure, so the
-                // value was computed once per CONTAINER. Under Octane, in a queue worker or across a
-                // long test suite the container outlives the day, and the date was then not merely
-                // local but stale.
+                // Today is not injected. A support window closes on a date, and two rules reading the
+                // clock either side of midnight would give one database two answers, so the value has
+                // to be one per run — and this is a singleton closure, computed once per container.
+                // Under Octane, in a queue worker or across a long test suite the container outlives
+                // the day, and a value computed here would go stale.
                 //
                 // `Driver::rules()` is called fresh on every run and `SecurityRuleSet::forProjectRoot`
-                // resolves its default exactly once per call, handing the same value to every rule it
-                // builds. So passing nothing gives the property the old comment wanted AND a value
-                // that cannot go stale. It was also `date()` rather than `gmdate()`, which is the
-                // second half of the same defect — see that default.
-                //
-                // ⚠️ The local-time call is NOT spelled out above, deliberately: the acceptance for
-                // this change is a grep for it over `src/`, and a comment naming the pattern is the
-                // trap this repository keeps rediscovering — prose about a check answers the check.
+                // resolves its default exactly once per call, in UTC, handing the same value to every
+                // rule it builds. So passing nothing gives one value per run that cannot go stale.
                 null,
                 // The privacy pack's COLUMN reading. Built here because this is the only place that
                 // knows both the configuration and the application: discovering models means asking
@@ -268,6 +260,11 @@ final class SQLensServiceProvider extends ServiceProvider
                 $app->make(Repository::class)->get('database.migrations'),
             ),
         );
+
+        // Bound outside the console, not only inside it: the reader connection factory asks this
+        // contract which PDO attributes a reader's copy of a connection needs, and the factory is
+        // resolved wherever a runner is, which is not only from a command.
+        $this->app->bind(SessionDefenses::class, DriverRegistry::class);
 
         // Bound rather than autowired: the refresher needs the SAME advisory reader the rules judge
         // from, plus the base path, and letting the container guess would hand it a second reader
@@ -490,9 +487,9 @@ final class SQLensServiceProvider extends ServiceProvider
                 // `NoMigrationTable` skip over a table that exists.
                 MigrationsTable::from($app->make(Repository::class)->get('database.migrations')),
                 (string) $app->basePath(),
-                // ⚠️ THIS IS THE BINDING `sqlens:drift` AND `sqlens:postdeploy --expect-shadow`
-                // RESOLVE, and until now neither bounded the session it read the pending state on.
-                // The budget comes from the shared capture resolver, so all three commands wait
+                // This is the binding `sqlens:drift` and `sqlens:postdeploy --expect-shadow` resolve,
+                // so the session they read the pending state on is bounded here. The budget comes
+                // from the shared capture resolver, so all three commands wait
                 // exactly as long as the project configured — not as long as whichever call site
                 // remembered to say so.
                 new SessionGuard(
@@ -576,8 +573,6 @@ final class SQLensServiceProvider extends ServiceProvider
             // changes and register themselves here; a runner that discovered them would iterate in
             // whatever order the container built, and two runs against an unchanged database would
             // report the same findings in a different sequence — which a diff reads as a change.
-            $this->app->bind(SessionDefenses::class, DriverRegistry::class);
-
             // The run header reads the session bounds back through this seam, and the command
             // takes the INTERFACE — so a test can substitute a reader that refuses, which is the
             // only way the header's silent-rather-than-optimistic path can be proved. The check

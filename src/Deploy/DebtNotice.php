@@ -50,11 +50,10 @@ enum DebtNotice: string implements RunNotice
      * committed file from there would put a change into somebody's tree that nobody made on a
      * machine where nobody could review it.
      *
-     * ⚠️ That used to be written as a property of the COMMAND — "audit runs on a deploy server", so
-     * it never writes. The property is the WRITE being unasked-for, not which command makes it: the
-     * same run is a deploy server's on one machine and a maintainer's working copy on another, and
-     * nothing available to the process tells them apart. So the default is unchanged and writes
-     * nothing, and `sqlens:audit --debt=record` is the operator saying which machine this is. The
+     * That is a property of the write being unasked-for, not of which command makes it: the same
+     * run is a deploy server's on one machine and a maintainer's working copy on another, and
+     * nothing available to the process tells them apart. So the default writes nothing, and
+     * `sqlens:audit --debt=record` is the operator saying which machine this is. The
      * entry can equally go on the next `sqlens:lint --debt=record` in the repository.
      */
     case Resolved = 'DEBT.RESOLVED';

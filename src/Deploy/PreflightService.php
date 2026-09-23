@@ -134,19 +134,16 @@ final readonly class PreflightService implements PreflightRuns
             ),
             profile: $profileName,
             deadlineAt: $deadlineAt = hrtime(true) + ($budget * 1_000_000),
-            // ⚠️ THE SWITCH IS HONORED HERE, AND UNTIL NOW IT WAS HONORED NOWHERE. `use_statistics`
-            // is documented as deciding "whether checks may reason about the server's table
-            // statistics", it is validated by the schema, and a profile may override it — and the
-            // only code that read it was a lint branch filtering for `StatisticsDependent`, which
-            // no shipped rule implements. ON and OFF were identical in the shipped tree, while THIS
-            // path escalated severities by table size without ever asking.
+            // The switch is honored here. `use_statistics` is documented as deciding "whether checks
+            // may reason about the server's table statistics", it is validated by the schema, and a
+            // profile may override it; no shipped lint rule implements `StatisticsDependent`, so this
+            // path, which escalates severities by table size, is where the switch takes effect.
             //
-            // A project that set it to `false` "where reproducibility matters more than depth" got
-            // statistics-driven severities anyway — the exact opposite of what it configured, and
-            // invisible, because a severity that was escalated looks like a severity that was
-            // assigned.
+            // A project that sets it to `false` "where reproducibility matters more than depth" gets
+            // no statistics-driven severities. Anything else would be invisible, because a severity
+            // that was escalated looks like a severity that was assigned.
             //
-            // Withholding the READER rather than skipping the escalation, because the absence is
+            // Withholding the reader rather than skipping the escalation, because the absence is
             // already a case `FindingEscalation` handles and explains: no reader means the findings
             // stand at the severity lint gave them, and the checks that needed one have already
             // said so by name. One absence, one shape, whatever the reason for it.

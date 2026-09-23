@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Console;
 
 use Illuminate\Console\Command;
+use Illuminate\Contracts\Config\Repository;
 use Pushery\SQLens\Catalog\RuleRegistryExport;
 use Pushery\SQLens\Corpus\CorpusCollection;
 use Pushery\SQLens\Corpus\CorpusLoader;
@@ -12,8 +13,9 @@ use Pushery\SQLens\Corpus\CorpusLoadFailure;
 use Pushery\SQLens\Corpus\CorpusMetrics;
 use Pushery\SQLens\Corpus\CorpusReport;
 use Pushery\SQLens\Corpus\CorpusRun;
-use Pushery\SQLens\Findings\Finding;
+use Pushery\SQLens\Lint\LintOutcome;
 use Pushery\SQLens\Lint\LintRunner;
+use Pushery\SQLens\Reporting\ReportedServerVersion;
 use Pushery\SQLens\Subjects\CaptureMode;
 
 /**
@@ -79,19 +81,44 @@ final class CorpusMeasureCommand extends Command
         }
 
         $cases = [];
+        $declaredLevels = $this->declaredLevels($repositoryRoot);
+        $serverVersions = [];
 
         foreach ($collections as $collection) {
-            foreach (CorpusRun::classify($collection, $this->findingsFor($repositoryRoot, $collection), $this->driverOf($collection)) as $case) {
+            $connection = $this->connectionFor($collection);
+
+            if ($connection === null) {
+                // Named and fatal, for the same reason a collection that will not load is: a
+                // measurement that quietly used the default connection would report a rate under
+                // this collection's engine for SQL that engine never saw.
+                $this->components->error(sprintf(
+                    'The collection at `%s` targets `%s`, and no configured database connection uses that driver. '
+                    .'Configure one (its name does not matter, only its driver) or take the collection out of the corpus.',
+                    $collection->path,
+                    $this->driverOf($collection),
+                ));
+
+                return self::FAILURE;
+            }
+
+            $outcome = $this->measure($repositoryRoot, $collection, $connection);
+
+            // Recorded per collection, because the same collection measures differently on two
+            // server versions: a rate without the version it was taken on is a rate about an
+            // unnamed engine.
+            $serverVersions[$collection->path] = $this->serverVersionOf($outcome, $connection);
+
+            foreach (CorpusRun::classify($collection, $outcome->result->findings, $this->driverOf($collection), $declaredLevels) as $case) {
                 $cases[] = $case;
             }
         }
 
-        $ruleIds = $this->shippedRuleIds($repositoryRoot);
+        $ruleIds = array_keys($declaredLevels);
         $metrics = CorpusMetrics::of($cases, $ruleIds);
 
         // The catalog this rate describes, recorded WITH it. Without the pair, a rate and a catalog
         // drift apart silently and the release gate has nothing to compare.
-        $report = CorpusReport::of($metrics, $collections, $ruleIds);
+        $report = CorpusReport::of($metrics, $collections, $ruleIds, $serverVersions);
 
         $this->write($repositoryRoot.'/'.$out, $report);
 
@@ -107,7 +134,7 @@ final class CorpusMeasureCommand extends Command
     }
 
     /**
-     * The findings the SHIPPED runner produces for one collection.
+     * The run the SHIPPED runner performs over one collection.
      *
      * `LintRunner` is resolved from the container rather than constructed here, and that is the
      * guardrail rather than a convenience: the measurement has to use the same engine
@@ -115,21 +142,88 @@ final class CorpusMeasureCommand extends Command
      * shipped one exactly where the shipped one is subtle, and it would drift silently — both
      * would keep passing their own tests.
      *
-     * @return list<Finding>
+     * The connection is the collection's, not the application's default. `null` here would take
+     * whatever the runner is pointed at while the report carries the collection's `engine` in its
+     * heading. The schema builder emits per-grammar SQL, so that would not be a smaller measurement
+     * but a measurement of a different subject filed under the wrong name.
+     *
+     * The level and the category set are the measurement's own, never the host application's. The
+     * rate is a claim about the whole rule pack, so every rule has to be given the chance to speak:
+     * at the configured level — 0 unless a project raised it — the rules above it stay silent, and
+     * the classifier would read that silence as a false negative where the corpus expects a failure
+     * and as a correct silence where it expects none. Both are verdicts about rules that never ran,
+     * and the second one flatters the result.
      */
-    private function findingsFor(string $repositoryRoot, CorpusCollection $collection): array
+    private function measure(string $repositoryRoot, CorpusCollection $collection, string $connection): LintOutcome
     {
-        $outcome = $this->laravel->make(LintRunner::class)->run(
-            null,
+        return $this->laravel->make(LintRunner::class)->run(
+            $connection,
             [$repositoryRoot.'/'.$collection->path],
             // `Pretend` rather than `Shadow`: a corpus measurement must not create a database.
             // Shadow capture is the more thorough mode and it is also the one that needs a server
             // it may write to — a measurement that required that could not run on a laptop, and a
             // measurement nobody runs is not a measurement.
             CaptureMode::Pretend,
+            level: CorpusRun::measuredLevel(),
+            // Every category, whatever the host configured. A convention rule left out of the run
+            // would take its corpus cases with it and shrink the denominator the rate is taken over.
+            categories: [],
         );
+    }
 
-        return $outcome->result->findings;
+    /**
+     * The version of the server this collection was measured against, as the run met it.
+     *
+     * A run reports one entry per addressed connection and says so even when no server answered:
+     * the version then reads `unknown (no server version could be determined)`, measured over a
+     * refused connection and over an engine the rule pack does not support. So the absent case is
+     * the runner's own wording rather than a gap this method invents, and the null tail is for a
+     * context that carries no entry at all — which nothing in this command produces.
+     *
+     * @return array{version: string, source: string}|null
+     */
+    private function serverVersionOf(LintOutcome $outcome, string $connection): ?array
+    {
+        return array_values(array_map(
+            static fn (ReportedServerVersion $version): array => [
+                'version' => $version->version,
+                'source' => $version->source->value,
+            ],
+            array_filter(
+                $outcome->context->serverVersions,
+                static fn (ReportedServerVersion $version): bool => $version->connection === $connection,
+            ),
+        ))[0] ?? null;
+    }
+
+    /**
+     * The connection a collection is measured over: the first configured one whose DRIVER is the
+     * collection's engine.
+     *
+     * By driver rather than by name, because the name is the host application's to choose — this
+     * package's own test environment ships `mysql`, `pgsql` and `sqlite`, a consumer's may ship
+     * `analytics` and `legacy`. Null when nothing matches, and the caller refuses rather than
+     * falling back: a fallback here is exactly the silent substitution this command exists to
+     * measure away.
+     */
+    private function connectionFor(CorpusCollection $collection): ?string
+    {
+        $engine = $this->driverOf($collection);
+
+        // Through the container rather than the `config()` helper, and that is a shipped-code rule
+        // rather than a style: this package declares the slim `illuminate/*` components, so a
+        // consumer installing without `laravel/framework` gets a clean install and a fatal call.
+        // Nothing local can see that — testbench pulls the framework into the vendor tree — which
+        // is why a guard reads the source instead.
+        $connections = $this->laravel->make(Repository::class)->get('database.connections');
+
+        foreach (is_array($connections) ? $connections : [] as $name => $configured) {
+            if (is_array($configured) && ($configured['driver'] ?? null) === $engine) {
+                return (string) $name;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -150,34 +244,38 @@ final class CorpusMeasureCommand extends Command
      * what a consumer reads and what the documentation gate holds — a second enumeration here would
      * be a second answer to "which rules exist".
      *
-     * @return list<string>
+     * Keyed by id and carrying the level each rule declares, because a corpus case belongs to its
+     * rule's level whether or not the rule spoke in this run.
+     *
+     * @return array<string, int>
      */
-    private function shippedRuleIds(string $repositoryRoot): array
+    private function declaredLevels(string $repositoryRoot): array
     {
         // No catch, deliberately. The registry is a generated artifact this repository ships and a
         // gate validates; a malformed one is a broken build, not a condition to degrade around.
         // Swallowed into an empty list it would produce a report whose blind-spot list named EVERY
         // rule — a dramatic number with a boring cause, and nothing pointing at the cause.
-        /** @var array{entries?: list<array{id?: string}>} $registry */
+        /** @var array{entries?: list<array{id?: string, level?: int}>} $registry */
         $registry = json_decode(
             (string) file_get_contents($repositoryRoot.'/'.RuleRegistryExport::BUNDLED_FILE),
             true,
             flags: JSON_THROW_ON_ERROR,
         );
 
-        $ids = [];
+        $levels = [];
 
         foreach ($registry['entries'] ?? [] as $entry) {
             $id = (string) ($entry['id'] ?? '');
 
             if ($id !== '') {
-                $ids[] = $id;
+                $levels[$id] = (int) ($entry['level'] ?? 0);
             }
         }
 
-        sort($ids);
+        // Sorted by id so the rule list the report carries is the same on every machine.
+        ksort($levels);
 
-        return array_values(array_unique($ids));
+        return $levels;
     }
 
     /** @param  array<string, mixed>  $report */

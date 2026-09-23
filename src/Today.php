@@ -27,10 +27,10 @@ use Pushery\SQLens\Exceptions\InvalidRunDay;
  * documented fallback in `SecurityRuleSet::forProjectRoot()`. A run creates one of these at its
  * entry point and hands it on; nothing downstream asks the clock again.
  *
- * ⚠️ UTC, DELIBERATELY, AND THE ALTERNATIVE HAS ALREADY COST A DEFECT. `date()` reads the host
- * app's `app.timezone`, so an application east of UTC once had a support window closing on one
- * calendar day and a debt acknowledgment expiring on another, within one report, with nothing
- * saying which side of midnight either was on. Every timestamp this package compares against — a
+ * UTC, deliberately. The local reading follows the host app's `app.timezone`, so an application
+ * east of UTC could have a support window closing on one calendar day and a debt acknowledgment
+ * expiring on another, within one report, with nothing saying which side of midnight either was
+ * on. Every timestamp this package compares against — a
  * tag, a pipeline, an advisory date — is already UTC, so UTC is the reading that needs no
  * conversion.
  *
@@ -71,7 +71,7 @@ final readonly class Today
             throw InvalidRunDay::malformed($day);
         }
 
-        // ⚠️ THE FORMAT CHECK IS NOT THE DATE CHECK, and only the second one catches `2026-02-30`.
+        // The format check is not the date check, and only the second one catches `2026-02-30`.
         // A regex accepts any two digits, so a month of 13 or a February 30th passes it and then
         // prints into a header as a day nothing happened on.
         if (! checkdate((int) $parts[2], (int) $parts[3], (int) $parts[1])) {

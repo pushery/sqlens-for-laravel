@@ -71,14 +71,13 @@ final readonly class EffectiveConnectionConfig
     }
 
     /**
-     * The driver of a NAMED connection, read the way Laravel reads it.
+     * The driver of a named connection, read the way Laravel reads it.
      *
-     * ⚠️ The one call every reader in this package should make, and the reason it exists is that
-     * nine of them did not. `database.connections.<name>.driver` is absent on a `url`-configured
-     * connection — the form Laravel Cloud, Heroku and every `DATABASE_URL` deployment produce —
-     * because the framework derives the driver from the URL's SCHEME at
-     * `ConfigurationUrlParser`. Reading the key raw answers `null` there, and the same
-     * configuration then worked under `sqlens:lint` and failed under `sqlens:drift`.
+     * The one call every reader in this package makes for this. `database.connections.<name>.driver`
+     * is absent on a `url`-configured connection — the form Laravel Cloud, Heroku and every
+     * `DATABASE_URL` deployment produce — because the framework derives the driver from the URL's
+     * scheme at `ConfigurationUrlParser`. Reading the key raw answers `null` there, and the same
+     * configuration would work under one command and fail under another.
      *
      * Taking the repository rather than the array, so a caller cannot get the path wrong either.
      */

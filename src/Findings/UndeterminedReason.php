@@ -551,8 +551,7 @@ enum UndeterminedReason: string
      * A rule that reasons about the server's table statistics ran with statistics
      * turned on (`use_statistics`) and no reader answered it.
      *
-     * ⚠️ THIS USED TO SAY "the reader arrives with the audit suite", and that suite has shipped.
-     * The reason is not a schedule, it is the RUN: a lint run reads migration source and opens no
+     * The reason is not a schedule, it is the run: a lint run reads migration source and opens no
      * catalog session, so it has no statistics to read however complete the package is. The audit
      * and preflight runs do open one.
      *
@@ -683,12 +682,11 @@ enum UndeterminedReason: string
     /**
      * `capture.shadow.connection` names the same place as the connection being examined.
      *
-     * ⚠️ THE SECOND LOCK ON THE ONLY PATH THAT CREATES AND DROPS DATABASES, and until now it had no
-     * caller. `ShadowTargetIdentity` was written for exactly this — its docblock calls itself "the
-     * second lock … mechanical rather than advisory: a collision is a refusal, never a warning" —
-     * and the key it names was read by nothing at all. A developer who pointed it at the wrong
-     * entry in `config/database.php` passed every question the production guard asks and then had
-     * the tool build a scratch database on the instance it was supposed to be comparing.
+     * The second lock on the only path that creates and drops databases. `ShadowTargetIdentity`
+     * is "the second lock … mechanical rather than advisory: a collision is a refusal, never a
+     * warning". A developer who points the key at the wrong entry in `config/database.php` passes
+     * every question the production guard asks, and without this lock the tool would build a
+     * scratch database on the instance it was supposed to be comparing.
      */
     case ShadowConnectionCollides = 'shadow_connection_collides';
 
@@ -936,36 +934,22 @@ enum UndeterminedReason: string
 
     /*
     |--------------------------------------------------------------------------
-    | The DEPLOY preflight's reasons
+    | The deploy preflight's reasons
     |--------------------------------------------------------------------------
     |
-    | Fourteen reasons the deploy preflight has been writing as FREE TEXT since it was built, each
-    | beginning with a token by convention and nothing enforcing it. That convention is the whole
-    | problem this block exists to end: `suppression.allow_undetermined` took a LIST of reasons and
-    | validated it against this enum, while `deploy.predeploy.allow_undetermined` could only be a
-    | boolean, because a list on that side would have had to match a prefix on prose.
+    | The deploy preflight's undetermined reasons, as cases rather than free text. Both
+    | `suppression.allow_undetermined` and `deploy.predeploy.allow_undetermined` take a list of
+    | reasons validated against this enum, so the deploy gate can be opened for the reason a project
+    | has accepted and left shut for the ones it has not, which a single boolean could never express.
     |
-    | Both sides take a list now. That was the point of ending the convention rather than the
-    | pleasant side effect: the deploy gate can be opened for the reason a project has accepted and
-    | left shut for the ones it has not, which one bit could never express.
-    |
-    | Measured before this block was written: of the leading tokens at the 43 `CheckResult::
-    | undetermined()` call sites, ZERO were cases here. The two vocabularies were disjoint.
-    |
-    | The control that measurement needed, and it earned its keep: a first, cruder pass reported
-    | `world` and `bound` as tokens. Both are ordinary English mid-sentence, and a counter that
-    | reports them is a counter measuring its own pattern.
-    |
-    | ⚠️ AND THE FIRST COUNT WAS STILL WRONG, BECAUSE IT COMPARED TOKENS RATHER THAN CONCEPTS.
-    | Sixteen cases went in; two of them named a state this enum already carried under other words,
-    | and both were removed:
+    | One state has one name, for the preflight as for everything else. Two retired names map to the
+    | case that carries their state:
     |
     |   grant_subject_missing      -> MigrationRoleMissing    (the role is not on this server)
     |   server_version_unreadable  -> UnknownServerVersion    ("could not be determined")
     |
-    | The measured claim "the two vocabularies are disjoint" was true of the token STRINGS and false
-    | of the meanings. A vocabulary with two names for one state is worse than a missing case: a
-    | waiver that lists one of them silently misses the other half of the same situation.
+    | A vocabulary with two names for one state is worse than a missing case: a waiver that lists
+    | one of them silently misses the other half of the same situation.
     |
     | Kept apart on purpose, and the code makes the same cut one line from each other:
     | MigrationRoleUnknown is "the configuration does not say which role" and MigrationRoleMissing
@@ -994,9 +978,9 @@ enum UndeterminedReason: string
      * This role cannot see other sessions in `pg_stat_activity`, so a running vacuum cannot be
      * ruled out.
      *
-     * ⚠️ NOT THE SAME AS {@see self::ActivityUnreadable}, and the difference is why this case
-     * exists. There the view is withheld and the read THROWS, which is loud. Here it is readable by
-     * PUBLIC and answers cleanly — PostgreSQL MASKS foreign rows rather than refusing them, so
+     * Not the same as {@see self::ActivityUnreadable}, and the difference is why this case
+     * exists. There the view is withheld and the read throws, which is loud. Here it is readable by
+     * PUBLIC and answers cleanly — PostgreSQL masks foreign rows rather than refusing them, so
      * `query` reads `<insufficient privilege>` and a filter on it matches nothing. The reading is
      * empty, no error is raised, and "no anti-wraparound vacuum is running" is indistinguishable
      * from "I am not allowed to see one".
@@ -1006,9 +990,9 @@ enum UndeterminedReason: string
      * and it is asked for with `pg_has_role` rather than `has_table_privilege` — the question is not
      * whether the view may be read, which it may, but whether foreign sessions appear in it.
      *
-     * ⚠️ The condition is not exotic: a least-privilege migration role is exactly what this
-     * package's own `SEC.PRIV.*` rules recommend. Following that advice used to cost this check
-     * silently.
+     * The condition is not exotic: a least-privilege migration role is exactly what this
+     * package's own `SEC.PRIV.*` rules recommend, and following that advice must not cost this
+     * check silently.
      */
     case VacuumActivityNotVisible = 'vacuum_activity_not_visible';
 
@@ -1024,15 +1008,14 @@ enum UndeterminedReason: string
      * The value was read, the server version is known, and the shipped matrix has no expectation for
      * this variable at that version.
      *
-     * ⚠️ ITS OWN REASON RATHER THAN {@see self::UnknownServerVersion}, WHICH IS WHAT IT USED TO SAY —
-     * and the difference is not a nuance, it is the operator's next step. "I do not know which server
-     * this is" sends them to the version pin; "I know the server and have nothing on file for this
-     * variable" sends them to the matrix, or to us. Reporting the first for the second sent everybody
-     * to the wrong place, and the sentence beside it said the version was the problem.
+     * Its own reason rather than {@see self::UnknownServerVersion}, and the difference is not a
+     * nuance, it is the operator's next step. "I do not know which server this is" sends them to the
+     * version pin; "I know the server and have nothing on file for this variable" sends them to the
+     * matrix, or to us.
      *
-     * The two cases are one `null` from `ServerSettingMatrix::for()` and were told apart by nothing:
-     * a missing row and an unresolvable version produce the same absent expectation. What separates
-     * them is whether the subject carried a server version at all.
+     * The two cases are one `null` from `ServerSettingMatrix::for()`: a missing row and an
+     * unresolvable version produce the same absent expectation. What separates them is whether the
+     * subject carried a server version at all.
      */
     case SettingExpectationMissing = 'setting_expectation_missing';
 

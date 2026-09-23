@@ -25,23 +25,17 @@ use Symfony\Component\Console\Output\OutputInterface;
  *
  * ## Why this is its own trait
  *
- * ⚠️ It used to live inside {@see WritesReportOutput}, which meant it reached exactly the three
- * commands that write a report — and the machinery's own history says what that costs: "the
- * machinery for this existed and was tested from the day it was written; what it never had was a
- * caller." It then had three.
- *
- * The eight without it are the ones where it matters most. `predeploy` and `postdeploy` run INSIDE
- * the deploy window; `baseline`, `drift` and `format` write files into the repository; the MCP
- * server binds tools to whatever the configuration says. Two of them carry comments asserting the
- * validator has already refused the shape they are about to read — `PreflightService` justifies
- * falling back on an unusable threshold that way, and `McpCommand` says reaching a branch "means it
- * was bypassed". Neither sentence was true of the run.
+ * Inside {@see WritesReportOutput} it would reach only the three commands that write a report,
+ * and the others are the ones where it matters most. `predeploy` and `postdeploy` run inside the
+ * deploy window; `baseline`, `drift` and `format` write files into the repository; the MCP server
+ * binds tools to whatever the configuration says. Two of them rely on the validator having already
+ * refused the shape they are about to read — `PreflightService` falls back on an unusable
+ * threshold on that basis, and `McpCommand` treats reaching a branch as proof it was bypassed.
  *
  * ## Self-sufficient on purpose
  *
  * It resolves its own translator and writes to its own stream rather than borrowing `stderr()` and
- * `translate()` from two other traits, which is how the previous arrangement ended up depending on
- * a method that lives somewhere else. A trait every command must use cannot also require two it
+ * `translate()` from two other traits: a trait every command must use cannot also require two it
  * might not.
  *
  * ## Every violation, not the first
@@ -63,7 +57,7 @@ trait ValidatesConfig
      * call that cannot differ — some of them have a `Repository` in `handle()` and some do not, and
      * an argument would have meant a slightly different line in each.
      *
-     * ⚠️ `sqlens:doctor` DOES NOT CALL THIS, and that is the one deliberate exception — see
+     * `sqlens:doctor` does not call this, and that is the one deliberate exception — see
      * {@see ConfigInspection()}.
      */
     private function refusesInvalidConfig(): bool
@@ -75,13 +69,12 @@ trait ValidatesConfig
      * The same inspection, handed back instead of acted on — for the one command that must survive
      * a configuration nothing else will run on.
      *
-     * ⚠️ REFUSING IS THE WRONG ANSWER IN EXACTLY ONE PLACE, and it is the place people reach for
+     * Refusing is the wrong answer in exactly one place, and it is the place people reach for
      * when something is wrong. `sqlens:doctor` exists to describe a broken environment; a doctor
-     * that will not start because the configuration is broken has inverted its own purpose. Its
-     * suite says so in an arm written long before this trait existed: "it DESCRIBES a broken
-     * profile rather than dying on it — the one command that must survive it".
+     * that will not start because the configuration is broken has inverted its own purpose. It
+     * describes a broken profile rather than dying on it — the one command that must survive it.
      *
-     * So doctor REPORTS what the validator found and carries on. Nothing is lost by that: every
+     * So doctor reports what the validator found and carries on. Nothing is lost by that: every
      * other command refuses on the same configuration, so a run that matters still stops — and the
      * command you then reach for is the one that can tell you which key it was.
      */

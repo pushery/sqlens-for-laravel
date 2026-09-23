@@ -51,20 +51,12 @@ use Pushery\SQLens\Rules\AbstractCatalogRule;
  * {@see DeclaresSecurityPosture} from a different parent, which is the whole reason that contract
  * is a contract.
  *
- * `AbstractRawSqlSecurityRule` still does not exist, and the reason has changed from "nothing would
- * use it" into something stronger: the raw-SQL security surface EXISTS and is not shaped like this.
- * The three `SEC.INJ.*` rules read PHP source, so they are PHPStan rules registered through
- * `extension.neon` and composed by `AnalyseRuleCatalog` — the right
- * home for a check whose subject is a call site rather than a database. A base on this contract over
- * the same surface would be a second seam across one subject, and the two would answer the same
- * question differently the first time either moved.
- *
- * ⚠️ This paragraph carried a hand-counted "of 57 rule files, none judges a migration" and both
- * halves went stale: the directory holds seventy, and fourteen served rules judge migrations. A
- * reader trusting it would either rebuild a class that already exists or conclude the migration
- * surface is uncovered. The claim that replaced it is checkable rather than counted —
- * `SecurityPostureContractTest` derives the bases from the rules being served, so a base named here
- * and a base in use cannot drift apart without something going red.
+ * There is no `AbstractRawSqlSecurityRule`: the raw-SQL security surface exists and is not shaped
+ * like this. The three `SEC.INJ.*` rules read PHP source, so they are PHPStan rules registered
+ * through `extension.neon` and composed by `AnalyseRuleCatalog` — the right home for a check whose
+ * subject is a call site rather than a database. A base on this contract over the same surface
+ * would be a second seam across one subject, and the two would answer the same question
+ * differently the first time either moved.
  */
 abstract class AbstractSchemaObjectSecurityRule extends AbstractCatalogRule implements DeclaresSecurityPosture
 {

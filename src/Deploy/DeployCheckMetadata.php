@@ -89,11 +89,11 @@ final readonly class DeployCheckMetadata
          * left: a constraint added `NOT VALID` and never validated, and a MySQL check written
          * `NOT ENFORCED`. Those two have a clean pair and owe one.
          *
-         * ⚠️ Required rather than defaulted, and the four name-based `LEGACY` checks are why. They
+         * Required rather than defaulted, and the four name-based `LEGACY` checks are why. They
          * look authored — `orders_old`, `_t_gho`, an invalid index — and they are not: each says in
          * its own limitations that it cannot tell wreckage from a healthy in-flight state, so no
-         * migration reliably causes them and none avoids them. A default would have classified all
-         * six of that family the same way without anybody deciding, and a new check would inherit
+         * migration reliably causes them and none avoids them. A default would classify all six of
+         * that family the same way without anybody deciding, and a new check would inherit
          * whichever answer happened to be the default.
          *
          * {@see Attribution} carries the criterion and what each answer obliges.

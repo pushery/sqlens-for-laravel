@@ -137,14 +137,14 @@ final readonly class CredentialRedaction
                 continue;
             }
 
-            // ⚠️ THE READ/WRITE SPLIT NESTS ITS CREDENTIALS, AND THIS LOOP USED TO READ ONLY THE TOP
-            // LEVEL. Laravel lets a connection carry `read` and `write` blocks, each able to override
-            // `host`, `username`, `password`, `database` and `port`. A replica's password therefore
-            // lives at `database.connections.pgsql.read.password` and was collected by nothing — so
-            // the one credential most likely to differ from the primary's was the one that traveled.
+            // The read/write split nests its credentials, so this loop reads both blocks as well as
+            // the top level. Laravel lets a connection carry `read` and `write` blocks, each able to
+            // override `host`, `username`, `password`, `database` and `port`. A replica's password
+            // therefore lives at `database.connections.pgsql.read.password`, and it is the one
+            // credential most likely to differ from the primary's.
             //
             // This package is pointed at production and reports what it read; a report is pasted into
-            // a ticket. Reading only the top level made the redaction weakest exactly where the
+            // a ticket. Reading only the top level would make the redaction weakest exactly where the
             // topology is most complicated.
             foreach ([$connection, $connection['read'] ?? null, $connection['write'] ?? null] as $scope) {
                 if (! is_array($scope)) {
@@ -152,8 +152,8 @@ final readonly class CredentialRedaction
                 }
 
                 foreach ($fields as $field) {
-                    // ⚠️ A HOST CAN BE A LIST. Laravel accepts `'host' => ['replica-1', 'replica-2']`
-                    // and picks one per request, so an `is_string()` test on its own skipped every
+                    // A host can be a list. Laravel accepts `'host' => ['replica-1', 'replica-2']`
+                    // and picks one per request, so an `is_string()` test on its own would skip every
                     // host of every multi-host connection — silently, because a skipped value looks
                     // exactly like a connection that configured none.
                     foreach (is_array($scope[$field] ?? null) ? $scope[$field] : [$scope[$field] ?? null] as $value) {

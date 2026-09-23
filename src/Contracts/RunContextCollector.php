@@ -16,15 +16,12 @@ use Pushery\SQLens\Reporting\RunContext;
 interface RunContextCollector
 {
     /**
-     * @param  CaptureMode  $mode  how THIS run obtained the SQL it reasons about
+     * @param  CaptureMode  $mode  how this run obtained the SQL it reasons about
      *
-     * ⚠️ REQUIRED, and it used to be read from `sqlens.mode` instead. A configuration key cannot
-     * answer this question: the same installation runs `sqlens:lint` in pretend, `sqlens:drift`
-     * against a shadow replay and `sqlens:audit` over a catalog, and the header then announced
-     * whatever the file said for all three. Every producer already knows its own answer, and each
-     * used to ALSO put it into a second header called `RunMetadata`, with a written reason — so the
-     * two came from different places and disagreed in the same document. That duplicate is gone; this
-     * parameter is the single answer.
+     * Required, and never read from configuration. A configuration key cannot answer this
+     * question: the same installation runs `sqlens:lint` in pretend, `sqlens:drift` against a shadow
+     * replay and `sqlens:audit` over a catalog. Every producer knows its own answer, and this
+     * parameter is the single place it goes.
      */
     public function collect(CaptureMode $mode): RunContext;
 }

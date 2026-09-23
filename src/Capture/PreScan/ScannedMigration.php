@@ -97,8 +97,8 @@ final readonly class ScannedMigration
      * Read off the AST the pre-scan already parsed, exactly like {@see DownMethodState()} above, so
      * it costs no second parse — the fast path's sub-second promise rests on parsing each file once.
      *
-     * ⚠️ READ FROM THE SOURCE, NOT BY REFLECTION, and the reason is the shape of a Laravel
-     * migration. Since Laravel 9 a migration file returns an ANONYMOUS class, so there is no name to
+     * Read from the source, not by reflection, and the reason is the shape of a Laravel
+     * migration. Since Laravel 9 a migration file returns an anonymous class, so there is no name to
      * reflect on until the file has been required — and the pre-scan runs before anything is
      * required, on purpose. The AST is the only place the answer exists at this point.
      *
@@ -106,7 +106,7 @@ final readonly class ScannedMigration
      * The finer form matters: a migration whose `up()` is deliberately empty on SQLite may still owe
      * a real `down()`, and a class-level annotation would excuse both.
      *
-     * An attribute whose reason is an empty string is IGNORED — a reason nobody wrote is the state
+     * An attribute whose reason is an empty string is ignored — a reason nobody wrote is the state
      * this whole mechanism exists to surface, so it must not be the thing that silences it.
      *
      * @param  string  $method  `up` or `down`

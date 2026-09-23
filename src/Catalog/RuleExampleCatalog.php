@@ -18,18 +18,17 @@ use Pushery\SQLens\Rules\RuleExamples;
  * producer that emits the finding, and they are REQUIRED there: a capture producer cannot be
  * declared without a pair.
  *
- * ⚠️ **Nothing read the second set.** Measured before this class existed: `badExample` and
- * `goodExample` had no reader anywhere in `src/`, and `ExplainRuleTool` — the tool whose whole job
- * is turning a rule id into something actionable — answered `registered: false` for all ten,
- * because it read the JSON register alone. The examples were written, they are good, and an agent
- * asking about `CAP.PRESCAN.SIDE_EFFECT` was told none existed.
+ * **This class is the second set's reader.** Without it `badExample` and `goodExample` would have
+ * no reader anywhere in `src/`, and `ExplainRuleTool` — the tool whose whole job is turning a rule
+ * id into something actionable — would answer `registered: false` for all ten, telling an agent
+ * asking about `CAP.PRESCAN.SIDE_EFFECT` that no example exists.
  *
- * ## What this class does NOT do
+ * ## What this class does not do
  *
  * It does not move them. The JSON register's own `about` text argues that examples belong in data
- * so they can be reviewed as a list, and that argument is sound — but relocating ten pairs is a
- * different change with a different risk, and it would be made here as a side effect of fixing a
- * missing reader. The join is the repair; where the examples ultimately live is a separate question.
+ * so they can be reviewed as a list, and that argument is sound — relocating ten pairs is a
+ * different change with a different risk. This class joins the two sets; where the examples
+ * ultimately live is a separate question.
  */
 final readonly class RuleExampleCatalog
 {

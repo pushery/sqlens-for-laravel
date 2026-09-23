@@ -123,19 +123,20 @@ final readonly class MysqlShadowProvisioner implements ShadowProvisioner
         $pdo = $this->db->connection($name)->getPdo();
 
         try {
-            // ⚠️ THE DUMP'S OWN HEADER SAID THIS AND THE READER THROWS IT AWAY. `mysqldump` writes
-            // `/*!40014 SET … FOREIGN_KEY_CHECKS=0 */` and `… UNIQUE_CHECKS=0` before the tables, and
-            // `MysqlSchemaDumpReader` skips every whole-statement `/*!…*/` as a client directive — but
-            // the MySQL manual's Comments section is explicit that a versioned comment is executed BY THE SERVER. The dump was telling
-            // the replay something and the reader dropped it.
+            // The dump's own header asks for this, and the reader drops that header. `mysqldump`
+            // writes `/*!40014 SET … FOREIGN_KEY_CHECKS=0 */` and `… UNIQUE_CHECKS=0` before the
+            // tables, and `MysqlSchemaDumpReader` skips every whole-statement `/*!…*/` as a client
+            // directive — while the MySQL manual's Comments section is explicit that a versioned
+            // comment is executed by the server.
             //
-            // ⚠️ AND IT MATTERS ON ALMOST EVERY REAL SCHEMA, because `mysqldump` emits tables
-            // ALPHABETICALLY. Verified on MySQL 8.4.10 with Laravel's own dump options
+            // It matters on almost every real schema, because `mysqldump` emits tables
+            // alphabetically. Verified on MySQL 8.4.10 with Laravel's own dump options
             // (`--skip-comments --skip-set-charset --tz-utc --no-data`): for `orders` → `users` the child
             // is written first, and replaying the header-stripped dump fails with
             // `ERROR 1824 (HY000) Failed to open the referenced table 'users'`. With this line the same
-            // dump replays clean. So shadow mode was permanently `undetermined` wherever a child table
-            // sorts before its parent — `orders`/`users`, `comments`/`posts`, `accounts`/`users`.
+            // dump replays clean. Without it, shadow mode would be permanently `undetermined` wherever
+            // a child table sorts before its parent — `orders`/`users`, `comments`/`posts`,
+            // `accounts`/`users`.
             //
             // Set here rather than by honoring the dump's directives, and that is the narrower fix: it
             // does not depend on which `/*!…*/` lines a given mysqldump version happens to write, and the

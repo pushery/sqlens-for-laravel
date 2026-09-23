@@ -15,11 +15,7 @@ use Pushery\SQLens\Format\FormatStyle;
  * would be one the seam had failed to hide. Every method here is a question any backend can answer
  * about itself.
  *
- * ⚠️ This paragraph said "three methods" while the interface carried four, and it now carries five.
- * A count in prose beside a list is a fact with a second copy, and the copy is the one that rots --
- * so the sentence no longer states one.
- *
- * ## `format()` NEVER throws
+ * ## `format()` never throws
  *
  * Every failure a formatter can meet — a missing binary, a version outside the measured window, a
  * timeout, an unparsable statement, a style option it cannot express — is an ordinary event on a
@@ -57,12 +53,11 @@ interface SqlFormatter
      * about the MACHINE: is the binary installed, is it executable, is its version one this adapter
      * was measured against.
      *
-     * ⚠️ Without it, `auto` picks the best backend for the dialect and discovers per file that it
-     * cannot run — so every file comes back undetermined and the run reports a tree it never looked
-     * at. Measured: with pgFormatter uninstalled, `auto` chose it anyway and reported ten files as
-     * `format_tool_missing` instead of formatting them with the core that was right there.
+     * Without it, `auto` would pick the best backend for the dialect and discover per file that it
+     * cannot run — so every file would come back undetermined, `format_tool_missing` with pgFormatter
+     * uninstalled, instead of being formatted by the core that is right there.
      *
-     * It is asked ONCE per resolution rather than per file, because locating a binary is a syscall
+     * It is asked once per resolution rather than per file, because locating a binary is a syscall
      * and the answer cannot change during a run.
      */
     public function isAvailable(): bool;
@@ -80,7 +75,7 @@ interface SqlFormatter
      * -- these backends are amplifiers, never a requirement, so a diagnostic that asks about one
      * must not be the thing that fails.
      *
-     * ⚠️ A backend that is always there answers with something rather than `null`. The built-in core
+     * A backend that is always there answers with something rather than `null`. The built-in core
      * has no binary and no probe, but reporting `null` for it would render as "missing" beside the
      * ones that really are.
      */
@@ -89,9 +84,9 @@ interface SqlFormatter
     /**
      * The style options this backend cannot express, named; empty when it can express the whole style.
      *
-     * Asked WITHOUT formatting, like `supports()` and `isAvailable()`, because `auto` has to choose
-     * before a file is read. It used to choose on dialect and machine alone: with `leading_commas`
-     * set and pgFormatter installed, it picked pgFormatter, and every file came back
+     * Asked without formatting, like `supports()` and `isAvailable()`, because `auto` has to choose
+     * before a file is read. Choosing on dialect and machine alone, with `leading_commas` set and
+     * pgFormatter installed, would pick pgFormatter, and every file would come back
      * `format_style_not_expressible` while the core, which does leading commas, sat further down
      * the list.
      *

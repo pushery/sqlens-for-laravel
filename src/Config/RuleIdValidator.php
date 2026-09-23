@@ -13,13 +13,10 @@ use Pushery\SQLens\Rules\RuleRegistry;
  * baseline, and the `#[SqlensIgnore]` annotations — against the rules that
  * actually exist.
  *
- * ⚠️ That sentence was a PROMISE rather than a description until 2026-09-08, and the gap ran the
- * expensive way. Measured then: `inConfigIgnore` was reached by `sqlens:agent-rules` alone — a
- * command a project may never run — and `inAnnotation` by nothing at all. So in a lint run, the
- * suite that fires on every migration, two of the three forms went unchecked.
- *
- * All three are checked now, and the ANSWER differs by form because the text lives in different
- * places. An ignore list and a baseline are edited by whoever runs the tool today, so an unknown id
+ * All three are checked in a lint run, the suite that fires on every migration — not only by
+ * `sqlens:agent-rules`, a command a project may never run. The answer differs by form because the
+ * text lives in different places. An ignore list and a baseline are edited by whoever runs the
+ * tool today, so an unknown id
  * there is a refusal. An annotation sits in a migration that shipped years ago and will never be
  * touched again — refusing over a rule renamed since would turn a project's history into a timer,
  * so that form is reported as a notice and the run continues.

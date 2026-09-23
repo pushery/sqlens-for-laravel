@@ -50,18 +50,12 @@ return [
         'undetermined_allowed' => 'undetermined allowed by config',
     ],
     'shadow' => [
-        // ⚠️ ONE KEY, AND SIXTEEN WERE REMOVED — they had no reader in `src/`. The shadow refusals
-        // are built from `UndeterminedReason` and `GuardBlockReason` descriptions, in English prose,
-        // never through the translator, and nothing builds a `shadow.` key from a value. `confirm`
-        // is the one `LintCommand` really asks for.
+        // One key. The shadow refusals are built from `UndeterminedReason` and `GuardBlockReason`
+        // descriptions, in English prose, never through the translator, and nothing builds a
+        // `shadow.` key from a value. `confirm` is the one `LintCommand` asks for.
         //
-        // The cost was not the space. Whoever set out to change a shadow refusal text found these
-        // keys first, edited one, and nothing happened — the sentence lives in the enum. A key with
-        // no reader sends the next reader to the wrong file.
-        //
-        // ⚠️ `ShadowMessagesTest` listed all seventeen and asserted each RESOLVES, calling them
-        // "LIVE". Resolving is true of any key present in this file; it is not being read. That arm
-        // is now about the one key that is.
+        // A refusal text is therefore changed in the enum, not here. A key in this group that
+        // nothing reads would send whoever wants to change that text to the wrong file.
         'confirm' => 'Shadow mode will CREATE and DROP a throwaway database on the :connection connection. It never touches your data, but it does create and drop a database of its own. Proceed?',
     ],
     'commands' => [
@@ -186,7 +180,7 @@ return [
             'no_primary_key_live_table_pg' => 'There is no standard sequence for this, because putting a key on this table needs a candidate that is unique AND NOT NULL across every row already in it — a fact about your data, which SQLens never reads. If a natural candidate exists, add it as the primary key in a migration of its own. If none does, the route is the staged swap: add a surrogate column, backfill it in batches, then promote it. And there is a second, cheaper answer worth knowing about on PostgreSQL: a plain, complete UNIQUE index over NOT NULL columns can carry REPLICA IDENTITY USING INDEX, which settles the replication half without settling the key question — it is a different decision, not a substitute for one.',
             'server_setting_reload' => 'There is no standard sequence for this, because no migration can set a server variable — SQLens writes migrations nowhere near this. Changing what the server hands new connections is a configuration change plus a reload, with no downtime, and it belongs wherever your server configuration lives rather than in your repository schema history. A session may be able to override the value for itself, and that is deliberately not the advice here: a server-baseline finding is about what every OTHER connection gets.',
             'server_setting_restart' => 'There is no standard sequence for this, because no migration can set a server variable. This one takes effect on restart, so it is a maintenance window rather than a configuration edit — plan it as one. That is the whole remedy: SQLens has nothing to hand you here except the fact that the change is real work and where the work is.',
-            'server_setting_offline' => 'The remedy is downtime rather than a migration, which is the distinction this line exists to make. The value cannot be changed while the server runs, but it can be changed in place: for data checksums, `pg_checksums --enable` on a cleanly shut-down cluster. Plan a maintenance window sized to a pass over the data directory. ⚠️ This used to be answered by the initdb sentence below, which recommended a new cluster and a dump/restore -- two plans that differ by orders of magnitude, chosen on the strength of one sentence in a finding.',
+            'server_setting_offline' => 'The remedy is downtime rather than a migration, which is the distinction this line exists to make. The value cannot be changed while the server runs, but it can be changed in place: for data checksums, `pg_checksums --enable` on a cleanly shut-down cluster. Plan a maintenance window sized to a pass over the data directory. It does not take a new cluster and a dump/restore, which would be a plan orders of magnitude larger.',
             'server_setting_initdb' => 'There is no remedy for this cluster, and that is the honest answer rather than a gap. The value was fixed when the cluster was initialized and cannot be changed on it at all: moving it means a new cluster and a dump/restore. Advice telling you to set it is advice you would follow for an afternoon before finding that out, which is why this says so instead.',
             'server_setting_verification' => 'Run sqlens:audit again once the server is serving the new value. This finding came from asking your server what it is set to, so it goes quiet when the answer changes — not when a migration runs. On a restart-scoped or initdb-scoped setting, check that the server really came back with it: a configuration file that was edited and never reloaded reads exactly like one that was never edited.',
             'schema_decision_state_verification' => 'Run sqlens:audit again once the migration has run. This finding came from reading your database, not from reading a file, so sqlens:lint cannot answer it — a migration that fixes the state is judged by lint before it runs, and the state itself is judged by audit afterwards. Two commands, two moments; this is the second one. It will not tell you the key was a good choice; it only tells you the table is no longer without one.',

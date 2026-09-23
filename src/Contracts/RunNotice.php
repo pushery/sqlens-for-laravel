@@ -50,16 +50,13 @@ interface RunNotice
     /**
      * The severity this notice's finding carries, or null when it carries none.
      *
-     * ⚠️ NULLABLE BECAUSE ALMOST NONE OF THEM HAVE ONE, AND ONE OF THEM DOES. The registry export
-     * used to stamp `severity: null` on every runner notice under a comment saying they are "never
-     * severity-gated" — and `DEBT.UNRECORDED` had carried `Severity::Info` all along. The published
-     * artifact therefore told a consumer that a rule has no severity while the shipped finding had
-     * one, and the severity there is not decoration: `DebtThresholds::escalate()` ages a debt from
-     * `info` through `low` to `high`, so a consumer reading the artifact sorted away a rule that
-     * escalates.
+     * Nullable because almost none of them have one, and one of them does: `DEBT.UNRECORDED`
+     * carries `Severity::Info`. The severity there is not decoration: `DebtThresholds::escalate()`
+     * ages a debt from `info` through `low` to `high`, so an artifact that stamped `null` on every
+     * runner notice would let a consumer sort away a rule that escalates.
      *
-     * The alternative was to drop the severity from the finding, which would have made the finding
-     * wrong to keep an artifact quiet. `CarriesNoSeverity` gives the families that genuinely have
+     * Dropping the severity from the finding instead would make the finding wrong to keep an
+     * artifact quiet. `CarriesNoSeverity` gives the families that genuinely have
      * none their answer in one place, so the slot costs them nothing.
      */
     public function severity(): ?Severity;

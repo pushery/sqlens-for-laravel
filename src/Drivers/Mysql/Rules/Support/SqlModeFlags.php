@@ -14,7 +14,7 @@ namespace Pushery\SQLens\Drivers\Mysql\Rules\Support;
  * variable, and four independent substring checks is four chances for that.
  *
  * Splitting on the comma is the whole implementation, and that is the point: it is not clever, it is
- * simply done ONCE.
+ * simply done once.
  *
  * ## Combination modes are not expanded here
  *
@@ -23,18 +23,16 @@ namespace Pushery\SQLens\Drivers\Mysql\Rules\Support;
  * therefore already the expanded list, and expanding again here would be inventing an answer the
  * server did not give — the shape of guess this package refuses.
  *
- * ⚠️ THE COMBINATION WORD COMES BACK TOO, ALONGSIDE ITS EXPANSION — this paragraph used to treat that
- * as a remote case ("a value that somehow still carried a combination word"), and it is the NORMAL
- * state of any server set that way. Measured on 8.4.10, over all three read paths:
+ * The combination word comes back too, alongside its expansion, and that is the normal state of any
+ * server set that way rather than a remote case. Measured on 8.4.10, over all three read paths:
  *
  *     SET SESSION sql_mode = 'TRADITIONAL'
  *       -> STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,
  *          ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_ENGINE_SUBSTITUTION
  *
- * It costs nothing, because `has('STRICT_TRANS_TABLES')` finds the expansion. What the old wording
- * got backwards is the conclusion: it said such a value "would fail the `has()` check and produce a
- * finding". It does not, and that is correct — but anyone building a guard on the old sentence would
- * pin an untruth, namely that this value never carries a combination word.
+ * It costs nothing, because `has('STRICT_TRANS_TABLES')` finds the expansion: such a value does not
+ * fail the `has()` check and produces no finding. A guard built on the assumption that this value
+ * never carries a combination word would pin an untruth.
  */
 final readonly class SqlModeFlags
 {

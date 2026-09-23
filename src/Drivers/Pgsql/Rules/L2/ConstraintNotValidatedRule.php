@@ -24,8 +24,8 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  * carrying the constraint and the one it references while it installs the enforcing
  * triggers, so a migration that names one table stalls writes to two.
  *
- * ⚠️ THE LOCK IS SHARE ROW EXCLUSIVE ON BOTH SIDES, AND THIS SAID AccessExclusive — which
- * inverted the planning advice. Measured on PostgreSQL 18.0, inside the transaction:
+ * The lock is SHARE ROW EXCLUSIVE on both sides, not ACCESS EXCLUSIVE. Measured on
+ * PostgreSQL 18.0, inside the transaction:
  *
  *   receiving table   AccessShareLock, ShareRowExclusiveLock
  *   referenced table  AccessShareLock, RowShareLock, ShareRowExclusiveLock
@@ -33,16 +33,16 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  * No AccessExclusive on either. And the difference is exactly the one a maintenance window
  * is planned around — measured against a held SHARE ROW EXCLUSIVE on the same server:
  *
- *   SELECT  returns immediately   <- readers are NOT blocked
+ *   SELECT  returns immediately   <- readers are not blocked
  *   INSERT  waits, then hits lock_timeout
  *
- * So this blocks WRITERS. The old text said the lock "conflicts with every other lock" and
- * that "all traffic" stalls, which describes AccessExclusive and would send a reader to
- * schedule a read outage they do not need — or to underestimate what they really block.
+ * So this blocks writers, not readers. A lock that "conflicts with every other lock" and stalls
+ * "all traffic" is ACCESS EXCLUSIVE, and planning for that one here would schedule a read outage
+ * nobody needs.
  *
- * ⚠️ The queue effect is real and survives the correction: a long-running READ transaction
- * already holding AccessShare does not conflict with SHARE ROW EXCLUSIVE, but any lock
- * request queued BEHIND this one waits, so writers pile up behind a slow validation. That
+ * The queue effect is real all the same: a long-running read transaction already holding
+ * AccessShare does not conflict with SHARE ROW EXCLUSIVE, but any lock request queued behind
+ * this one waits, so writers pile up behind a slow validation. That
  * is the mechanism worth planning for, and `lock_timeout` is what bounds it.
  *
  * GoCardless's documented ~15-second outage predates 9.5, which is when the referenced-side
@@ -155,11 +155,11 @@ final class ConstraintNotValidatedRule extends AbstractPgsqlSafetyRule implement
     /**
      * Three-valued, because the classifier has a real third answer.
      *
-     * ⚠️ **`ConstraintShape::Unrecognized` is an `undetermined`, never a pass.** The shape used to
-     * answer `null` for a form it did not know, which is the same value it answers for a form it
-     * deliberately clears — so an unconsidered constraint kind read as a considered one. PostgreSQL
-     * 18's named not-null constraint went through that hole, and it performs the exact scan
-     * `PG.L2.SET_NOT_NULL_SCAN` exists to report.
+     * **`ConstraintShape::Unrecognized` is an `undetermined`, never a pass.** `null` is what the
+     * shape answers for a form it deliberately clears, so answering it for a form it does not know
+     * would read an unconsidered constraint kind as a considered one. PostgreSQL 18's named not-null
+     * constraint is such a form, and it performs the exact scan `PG.L2.SET_NOT_NULL_SCAN` exists to
+     * report.
      *
      * The seam for this is documented on {@see ReadsMigrationStatements::verdict()}: *a classifier
      * that meets a case its data does not cover overrides this and returns an undetermined rather

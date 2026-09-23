@@ -231,8 +231,8 @@ final readonly class RemediationRenderer
 
         $payload = $finding->remediation;
 
-        // ⚠️ NOT `remediation=…`. The run header already carries a line spelled exactly that way —
-        // `remediation=preview (schema 1)`, the CONTRACT for the whole run — and a per-finding line
+        // Not `remediation=…`. The run header already carries a line spelled exactly that way —
+        // `remediation=preview (schema 1)`, the contract for the whole run — and a per-finding line
         // sharing its prefix would read as a second opinion about the same thing. Two lines, two
         // shapes, because they answer two questions: what the schema is, and what this finding has.
         $hint = '    remediation available ('.RemediationPayload::STABILITY->value.'): '.$this->strategyLabel($payload->strategy)
@@ -275,7 +275,7 @@ final readonly class RemediationRenderer
      * finding came from reading a database, and the fix is a migration nobody has written. "In a
      * later migration" there quietly implies an earlier one.
      *
-     * ⚠️ THE SUBJECT COMES FROM THE PAYLOAD, never from a shape this renderer recognizes. Exactly
+     * The subject comes from the payload, never from a shape this renderer recognizes. Exactly
      * one place knows which of the two a template is about, and it is the field the producer set. A
      * renderer that inferred it — from the location kind, from the step kind, from whether a step
      * carries SQL — would be a second answer to a question that already has one, and two answers

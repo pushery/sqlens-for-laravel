@@ -42,28 +42,24 @@ use PHPStan\Collectors\Collector;
  *
  * ## One collector for four node shapes, and the registry really does allow it
  *
- * `getNodeType()` returns the INTERFACE. PHPStan's collector registry resolves a node's collectors
+ * `getNodeType()` returns the interface. PHPStan's collector registry resolves a node's collectors
  * through `class_parents` + `class_implements` of the node's actual class
  * (`PHPStan\Collectors\Registry::getCollectors()` via `ExtensionClassHelper`), so one registration on
  * {@see FunctionLike} is reached for {@see Function_}, {@see Closure}, {@see ArrowFunction} and
  * {@see ClassMethod} alike.
  *
- * ⚠️ {@see JustificationCollector} says the opposite — *"PHPStan's registry does not walk
- * subclasses, so one collector per node shape is the rule"* — and that sentence is what kept the
- * two missing shapes unreachable for a version longer than they had to be. It has been corrected
- * there; this is the measurement it was corrected against.
+ * {@see JustificationCollector} states the same fact from its side.
  *
- * ## A class method belongs to the OTHER channel, and this one skips it
+ * ## A class method belongs to the other channel, and this one skips it
  *
  * {@see ClassMethod} implements {@see FunctionLike}, so it arrives here too — and it is the one
- * shape the name collector already owns. Recording it in both was harmless for JUSTIFICATION (two
- * channels agreeing that a call is covered is still one answer) and wrong for the expiry direction:
- * {@see StaleRawSqlReasonRule} reports the ANNOTATION, so one attribute produced two findings on the
- * same line, one naming the method and one saying "here".
+ * shape the name collector already owns. Recording it in both would be harmless for justification
+ * (two channels agreeing that a call is covered is still one answer) and wrong for the expiry
+ * direction: {@see StaleRawSqlReasonRule} reports the annotation, so one attribute would produce two
+ * findings on the same line, one naming the method and one saying "here".
  *
- * Measured, not foreseen — the arm over the stale fixture caught it. Single ownership per shape is
- * the rule now: the name collector takes classes and methods, this one takes everything else PHP
- * lets the attribute sit on.
+ * Single ownership per shape is the rule: the name collector takes classes and methods, this one
+ * takes everything else PHP lets the attribute sit on.
  *
  * @implements Collector<FunctionLike, array{from: int, to: int, rawSql: bool, interpolation: bool}|null>
  */

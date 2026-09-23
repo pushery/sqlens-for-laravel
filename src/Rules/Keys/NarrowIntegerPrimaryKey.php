@@ -43,11 +43,11 @@ final readonly class NarrowIntegerPrimaryKey
     /**
      * The largest value each narrow type holds, signed and unsigned.
      *
-     * ⚠️ **MEASURED, not transcribed.** Every one of these eight was verified against MySQL 8.4.10 by
+     * **Measured, not transcribed.** Every one of these eight was verified against MySQL 8.4.10 by
      * inserting the value and then the value plus one: the first is accepted, the second refused
      * under a strict mode. A ceiling table copied from memory is exactly the kind of number a reader
-     * checks — and the message that carried the SIGNED `int` ceiling for an `INT UNSIGNED` key was
-     * wrong by a factor of two, on the commonest shape the rule meets.
+     * checks — and the signed `int` ceiling for an `INT UNSIGNED` key is wrong by a factor of two, on
+     * the commonest shape the rule meets.
      *
      * The signed column is PostgreSQL's too: `smallint` stops at 32,767 and `integer` at
      * 2,147,483,647 there as well. The unsigned column is MySQL-only, because PostgreSQL has no
@@ -89,7 +89,7 @@ final readonly class NarrowIntegerPrimaryKey
      * "too narrow" stops being a property of one column — and a rule that reported one anyway would
      * be arithmetic nobody asked it to do.
      *
-     * ⚠️ **`unsigned` comes from the CATALOG, never from the type name.** The MySQL message names a
+     * **`unsigned` comes from the catalog, never from the type name.** The MySQL message names a
      * ceiling, and the signed one is half the unsigned one — so a rule that guessed would be wrong by
      * a factor of two on the commonest shape it meets, `increments()`, which produces `INT UNSIGNED`.
      * It is always `false` on PostgreSQL, which has no unsigned integers; a caller must treat that as

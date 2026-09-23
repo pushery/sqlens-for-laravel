@@ -92,14 +92,12 @@ final class PredeployCommand extends Command
             return ExitCode::Misconfiguration->value;
         }
 
-        // ⚠️ BEFORE THE RUN, and the ordering is the whole point of moving it here. This block used
-        // to sit AFTER `$preflight->run()`, so a typo in `--format` cost a full catalog reading
-        // against the production instance before the error was named — at the moment before a
-        // deploy, which is the worst moment this command has. `sqlens:drift` already resolved its
-        // reporter first and said so in its own comment: the message was available before any of
-        // that work started.
+        // Before the run, and the ordering is the point: after `$preflight->run()`, a typo in
+        // `--format` would cost a full catalog reading against the production instance before the
+        // error was named — at the moment before a deploy, which is the worst moment this command
+        // has. `sqlens:drift` resolves its reporter first for the same reason.
         //
-        // The report goes through the SAME reporters everything else uses, and that is the point
+        // The report goes through the same reporters everything else uses, and that is the point
         // rather than reuse: a gate with its own output format would drift from the one a pipeline
         // already parses, and the day the two disagree nobody can tell which is right.
         //

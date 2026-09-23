@@ -153,14 +153,14 @@ final readonly class ViolationLogger
      */
     private function clipped(string $sql, int $max): string
     {
-        // ⚠️ MASKED BEFORE IT IS CLIPPED, AND IT WAS NEITHER. Bindings are shape-only by design —
-        // the class docblock argues that at length — but the STATEMENT TEXT went to the log
-        // verbatim. A `CREATE ROLE … PASSWORD 'literal'` or an `IDENTIFIED BY '…'` running at
-        // runtime therefore wrote its credential into the application's own log channel, which is
-        // usually the most widely readable surface a request touches. This package has a RULE for
-        // that mistake in a migration; its runtime half was publishing it.
+        // Masked before it is clipped. Bindings are shape-only by design — the class docblock
+        // argues that at length — and the statement text needs the same care: a
+        // `CREATE ROLE … PASSWORD 'literal'` or an `IDENTIFIED BY '…'` running at runtime would
+        // otherwise write its credential into the application's own log channel, which is usually
+        // the most widely readable surface a request touches. This package has a rule for that
+        // mistake in a migration; its runtime half must not publish it.
         //
-        // The ORDER is the load-bearing half, not the masking. Clipping first can cut a statement
+        // The order is the load-bearing half, not the masking. Clipping first can cut a statement
         // mid-literal — `… PASSWORD 'hunter` — and the truncated form matches no shape the mask
         // knows, so the fragment would survive exactly in the case where the value is longest and
         // the clip most likely. Mask first and the clip only ever shortens a line whose secrets are

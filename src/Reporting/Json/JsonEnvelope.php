@@ -181,18 +181,13 @@ final readonly class JsonEnvelope
         // and found nothing looked exactly like a run that never admitted it.
         'admitted_stability',
 
-        // What the whole run cost, in milliseconds — the SUM beside `check_timings`, which is the
-        // split and is a SENTENCE. A deploy script asking "did this take 4 s or 40 s" had to parse
-        // prose to find out, which is the shape this package refuses everywhere else.
+        // What the whole run cost, in milliseconds — the sum beside `check_timings`, which is the
+        // split and is a sentence. A deploy script asking "did this take 4 s or 40 s" should not
+        // have to parse prose to find out, which is the shape this package refuses everywhere else.
         //
-        // It is not a new measurement: both deploy commands have computed it since the budget
-        // existed, and it went into a second, thinner header called `RunMetadata` — projected by
-        // `Result::toArray()`, which this envelope does not emit and which no shipped code called at
-        // all. Two source comments told the reader `run.time_budget_ms_consumed` was already here.
+        // Both deploy commands compute it, and `RunContext` is the only place it comes from.
         //
-        // ⚠️ That duplicate is GONE, so `RunContext` is the only place this can come from.
-        //
-        // ⚠️ It reads as if it belonged beside `check_timings`, and in the HEADER it cannot: these
+        // It reads as if it belonged beside `check_timings`, and in the header it cannot: these
         // registers are concatenated in order to pin the header's key order, so a field declared in
         // version 5 has to appear after every version-4 field. Putting it where it reads best would
         // tell a consumer on version 4 that they already had it, which is the silent contract change
@@ -231,19 +226,18 @@ final readonly class JsonEnvelope
     /**
      * The run-level field version 7 introduces: the calendar day the run judged on.
      *
-     * ⚠️ IT IS A NEW VERSION RATHER THAN A FIELD ON 6, AND THAT IS THE WHOLE COST OF THE CHANGE. The
+     * It is a new version rather than a field on 6, and that is the whole cost of the change. The
      * envelope says why in its own words a few lines up: a field added to a version consumers already
      * hold would tell them they had it all along. Schema 6 shipped with 0.12.0.
      *
      * What it answers is not cosmetic. Rules that judge on a date — a support window closing, a debt
-     * acknowledgment expiring — were reproducible only by luck at a boundary: the report named no day,
-     * so re-examining a verdict meant guessing which side of midnight the run had been on. The clock
-     * is now read once per run and handed to the rules and to this header, so the day in the report is
-     * the day that was judged on rather than a second reading that usually agrees.
+     * acknowledgment expiring — are reproducible at a boundary only if the report names the day;
+     * otherwise re-examining a verdict means guessing which side of midnight the run was on. The clock
+     * is read once per run and handed to the rules and to this header, so the day in the report is the
+     * day that was judged on rather than a second reading that usually agrees.
      *
-     * Null on a producer that hands no clock down. Every producer in this package does, and an
-     * architecture arm holds them to it — a null here would be a permissive default, and the run it
-     * matters for is the one nobody is watching.
+     * Null on a producer that hands no clock down. Every producer in this package does — a null here
+     * would be a permissive default, and the run it matters for is the one nobody is watching.
      */
     public const array RUN_FIELDS_ADDED_IN_V7 = [
         'run_day',

@@ -282,17 +282,17 @@ final readonly class GrantCheck implements PreflightCheck
             // created it. `DROP TABLE`'s own description says so: "only the table owner, the schema
             // owner, and superuser can drop a table."
             //
-            // ⚠️ THIS ARM ASKED ONLY ABOUT `relowner`, AND THAT BLOCKED A LEGITIMATE DEPLOY. A
-            // migration role that owns the schema while another role created the tables is refused
-            // with `OWNERSHIP_MISSING` at Critical, and sent to `ALTER TABLE … OWNER TO` — an
-            // ownership transfer it does not need. Measured on 18.0: with the table owned by one role
-            // and the schema by another, the old question answers `false`, this one answers `true`,
+            // The schema owner counts as well as the table owner. Asking only about `relowner`
+            // would refuse a migration role that owns the schema while another role created the
+            // tables, with `OWNERSHIP_MISSING` at Critical, and send it to `ALTER TABLE … OWNER TO`
+            // — an ownership transfer it does not need. Measured on 18.0: with the table owned by one
+            // role and the schema by another, `relowner` alone answers `false`, this answers `true`,
             // and the server accepts the DROP.
             //
-            // ⚠️ AND THE ALTER ARM ABOVE MUST NOT BE LOOSENED THE SAME WAY, which the same
-            // measurement settles: `ALTER TABLE … ADD COLUMN` by the schema owner is refused with
-            // "must be owner of table". The two classes are kept apart so a project is told which of
-            // them it is short of, and now they really do ask different questions.
+            // The ALTER arm above stays with the table owner, and the same measurement settles
+            // that: `ALTER TABLE … ADD COLUMN` by the schema owner is refused with "must be owner of
+            // table". The two classes are kept apart so a project is told which of them it is short
+            // of, and they ask different questions.
             default => [
                 'select pg_catalog.pg_has_role(?, c.relowner, \'USAGE\')'
                 .' or pg_catalog.pg_has_role(?, n.nspowner, \'USAGE\') as allowed'
@@ -344,9 +344,9 @@ final readonly class GrantCheck implements PreflightCheck
         // names, and watch the next deploy fail identically.
         $ownership = $class === PrivilegeClass::Ownership || $class === PrivilegeClass::Drop;
 
-        // ⚠️ AND THE TWO OWNERSHIP CASES NEED DIFFERENT SENTENCES, which this used to give one.
-        // `DROP TABLE` accepts the SCHEMA owner as well as the table owner — measured on 18.0 — so
-        // telling a schema owner they "must OWN the table" is advice for a transfer they do not need.
+        // The two ownership cases need different sentences. `DROP TABLE` accepts the schema owner
+        // as well as the table owner — measured on 18.0 — so telling a schema owner they "must own
+        // the table" would be advice for a transfer they do not need.
         // `ALTER TABLE` really does need the table, and the same measurement shows it: the schema
         // owner is refused with "must be owner of table".
         $needs = match (true) {

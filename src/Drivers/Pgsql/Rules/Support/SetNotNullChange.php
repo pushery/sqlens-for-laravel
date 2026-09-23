@@ -17,12 +17,12 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  *
  * ## Why the pattern matches lowercase `set`
  *
- * In the canonical form `set` is NOT a keyword and stays lowercase, while `NOT NULL` is normalized.
+ * In the canonical form `set` is not a keyword and stays lowercase, while `NOT NULL` is normalized.
  * Matching `set NOT NULL` is what distinguishes this statement from `ADD COLUMN … NOT NULL DEFAULT`,
  * which carries `NOT NULL` and no `SET` at all — and confusing the two would attach a
  * four-statement plan to a column being created.
  *
- * ## The second spelling, and why it was silent
+ * ## The second spelling
  *
  * PostgreSQL 18 keeps not-null constraints in `pg_constraint` with `contype = 'n'` and accepts them
  * as named constraints:
@@ -31,18 +31,17 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  * ALTER TABLE orders ADD CONSTRAINT orders_email_nn NOT NULL email [NOT VALID];
  * ```
  *
- * ⚠️ **This form reached NO rule at all.** It classifies as `AddConstraint`, which this reader
- * refused, and `ConstraintShape` fell through every arm to `null` — where `null` means "nothing to
- * say" rather than "I do not know this". So the exact operation `PG.L2.SET_NOT_NULL_SCAN` exists to
- * report passed in silence, under a different spelling of itself.
+ * **This is the operation `PG.L2.SET_NOT_NULL_SCAN` exists to report, under a different spelling.**
+ * It classifies as `AddConstraint`, so a reader that knew only `SET NOT NULL` would let it pass in
+ * silence. This one reads both.
  *
  * **Measured on PostgreSQL 18.0**, which is what makes this the same finding rather than a
  * lookalike: without `NOT VALID` the constraint lands `convalidated = t` — the server scanned every
  * row — and the statement holds `AccessExclusiveLock` on the table while it does.
  *
- * ⚠️ **And `NOT VALID` here is the safe form for the same reason it is elsewhere, but NOT for the
+ * **And `NOT VALID` here is the safe form for the same reason it is elsewhere, but not for the
  * reason one would guess.** Measured on the same server: the `NOT VALID` variant takes
- * `AccessExclusiveLock` as well. What it removes is the SCAN, not the lock level — so the lock is
+ * `AccessExclusiveLock` as well. What it removes is the scan, not the lock level — so the lock is
  * brief rather than absent, and a remediation promising a weaker lock would be wrong. A statement
  * already carrying it is the recommended form and draws no finding.
  */

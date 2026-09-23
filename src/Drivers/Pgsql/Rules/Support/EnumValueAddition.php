@@ -39,15 +39,15 @@ final readonly class EnumValueAddition
         // a `BEFORE`/`AFTER` neighbor, and a shape this pattern does not recognize leaves the
         // placeholder standing rather than guessing at a literal — which is the same choice every
         // template here makes about a fact it cannot establish.
-        // ⚠️ `[^']*` ENDS AT THE FIRST QUOTE, AND A QUOTE INSIDE A POSTGRESQL LITERAL IS WRITTEN BY
-        // DOUBLING IT. That is the grammar, not an edge case — and the truncation did not leave the
-        // placeholder standing the way the paragraph above promises. The pattern MATCHED, so the
-        // value counted as established: `'it''s fine'` was read as `it`, and the remediation then
-        // told a reader to add an enum value nobody asked for. A wrong answer, not a missing one.
+        // The literal allows a doubled quote, because that is how a quote inside a PostgreSQL
+        // literal is written — the grammar, not an edge case. A `[^']*` would end at the first quote
+        // and still match, so the value would count as established: `'it''s fine'` would read as
+        // `it`, and the remediation would tell a reader to add an enum value nobody asked for. A
+        // wrong answer, not a missing one.
         //
         // The form is the one `IndexPredicate::LITERAL` already uses and documents for this exact
         // reason. It is spelled out again rather than shared: that constant is private to a class in
-        // another namespace, and reading a literal's VALUE is a different act from matching one.
+        // another namespace, and reading a literal's value is a different act from matching one.
         $value = preg_match("/\\bADD\\s+VALUE\\s+(?:IF NOT EXISTS\\s+)?'((?:[^']|'')*)'/i", $statement->canonical, $literal) === 1
             ? str_replace("''", "'", $literal[1])
             : null;

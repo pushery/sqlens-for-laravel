@@ -180,17 +180,16 @@ final readonly class LintRunner implements LintRuns
     private function runBounded(?Closure &$release, ?string $connection, ?array $migrationPaths, CaptureMode $mode, ?string $assumeServerVersion = null, ?int $level = null, ?array $categories = null, bool $applyBaseline = true, ?bool $strictTools = null, array $files = [], ?GuardDecision $guard = null, bool $roundtrip = false, ?DebtMode $debt = null, ?bool $includeVendorMigrations = null, array $crossSuiteFindings = []): LintOutcome
     {
         $connectionName = $this->connectionName($connection);
-        // ⚠️ THE RUN'S CLOCK, READ ONCE, HERE — and "here" is load-bearing rather than tidy. Before
-        // this line the day was read wherever it was needed: twice in this class, twice in the audit
-        // runner, once in the postdeploy command. Each of those is its own reading, so a run that
-        // crosses midnight judged a support window on one calendar day and an expired debt
-        // acknowledgment on another, inside one report, with nothing saying which side either was on.
+        // The run's clock, read once, here — and "here" is load-bearing rather than tidy. A day read
+        // wherever it is needed is several readings, so a run that crosses midnight would judge a
+        // support window on one calendar day and an expired debt acknowledgment on another, inside
+        // one report, with nothing saying which side either was on.
         //
         // Created before the first `buildContext()` below, because the header names it too: a second
         // reading for the header would be the same defect between the report and the rules rather
         // than between two rule families.
         $today = Today::fromClock();
-        // Whether somebody NAMED these paths, decided before the coalesce below overwrites the
+        // Whether somebody named these paths, decided before the coalesce below overwrites the
         // evidence. `--path` and `sqlens.migration_paths` are a person saying "these", and a run
         // that silently dropped part of what they named would make the argument advisory. Only
         // paths the run discovered on its own can be filtered.
@@ -661,15 +660,15 @@ final readonly class LintRunner implements LintRuns
         // before suppression, for the same reason they are: it is a finding, and a finding that
         // bypassed the suppression chain would be a second pipeline that drifts from the first.
         //
-        // ⚠️ It cannot be suppressed BY the missing baseline, which is the shape that would have
-        // made it useless — there is nothing in an absent file to accept it with.
+        // It cannot be suppressed by the missing baseline, which would make it useless — there is
+        // nothing in an absent file to accept it with.
         $findings = [...$findings, ...$this->baselineAbsenceNotice($subjectContext)];
 
         // The suppression chain (config · audit ignore · baseline · annotation · destructive opt-in) is
         // applied here, after the rule engine and before the reporter, so a second
-        // run after a baseline shows only NEW findings — and never suppresses one
+        // run after a baseline shows only new findings — and never suppresses one
         // silently: the hidden findings and the stale instructions ride on the Result.
-        // Which suppression sources could not be CHECKED this run. An accepted finding from a tool
+        // Which suppression sources could not be checked this run. An accepted finding from a tool
         // that never answered is not a finding somebody fixed, and reporting it as stale would send
         // a reader to delete a line that comes straight back on the next machine that has the tool.
         $unverifiable = UnverifiableToolPrefixes::from($diagnostics);
@@ -976,9 +975,9 @@ final readonly class LintRunner implements LintRuns
      * it points at a check that will stop checking. Refusing over it would make a correct
      * configuration fail for having been written earlier.
      *
-     * ⚠️ The BASELINE form is deliberately not covered here. Its references are built inside
-     * {@see BaselineRuleIds} and exposing them is a change to that seam rather than to this one; a
-     * baseline naming a deprecated rule is worth the same notice and is its own piece of work.
+     * The baseline form is not covered here. Its references are built inside
+     * {@see BaselineRuleIds}, behind a different seam, so a baseline naming a deprecated rule draws
+     * no notice from this method.
      *
      * @param  list<RuleIdReference>  $annotationReferences
      * @return list<Finding>
@@ -1585,12 +1584,11 @@ final readonly class LintRunner implements LintRuns
      * The suppression chain for this run, built from the lint context: the resolved
      * baseline file, the `ignore` config block, the reasons a project has explicitly
      * accepted living without, and whether it has opted in project-wide to destructive
-     * operations. ⚠️ The order is `config · audit ignore · baseline · annotation · destructive opt-in`
-     * — config FIRST and the baseline THIRD, which is the resolver's own `ORDER`. This comment named
-     * the baseline first for as long as it existed, and so did the README: a reader who predicted
-     * which layer a report would blame got the wrong answer, and a baseline burn-down counted
-     * differently than they expected. Standing before temporary is the mnemonic. The order and
-     * the mechanism are owned by the suppression layer; this only wires them.
+     * operations. The order is `config · audit ignore · baseline · annotation · destructive opt-in`
+     * — config first and the baseline third, which is the resolver's own `ORDER`, and it decides
+     * which layer a report blames and how a baseline burn-down counts. Standing before temporary is
+     * the mnemonic. The order and the mechanism are owned by the suppression layer; this only wires
+     * them.
      */
     private function suppressionResolver(bool $applyBaseline): SuppressionResolver
     {

@@ -76,8 +76,8 @@ final readonly class NotCapturableRule implements CaptureRule
         // `up()` that is deliberately empty on one driver. The first is a defect; the second is a
         // decision, and reporting it on every run is what gets a rule silenced wholesale.
         //
-        // ⚠️ THE DRIVER OF THE RUN, NOT MERELY THE PRESENCE OF AN ANNOTATION. `#[NoSqlOnDriver]`
-        // names a driver, and this compares it: emptiness on a driver the file did NOT name still
+        // The driver of the run, not merely the presence of an annotation. `#[NoSqlOnDriver]`
+        // names a driver, and this compares it: emptiness on a driver the file did not name still
         // fires, which is what keeps the attribute from being a blanket switch that merely sits
         // closer to the code. A misspelled driver name therefore excuses nothing on any run, and
         // that is how the typo surfaces instead of silently disabling the check.

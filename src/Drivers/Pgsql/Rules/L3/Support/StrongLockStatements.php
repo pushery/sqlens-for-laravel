@@ -166,17 +166,17 @@ final class StrongLockStatements
      * Whether the statement EFFECTIVELY sets the named GUC — how a migration declares its own
      * timeout. Read off the canonical string because a plain `SET` is not a classified DDL kind.
      *
-     * ⚠️ **`SET LOCAL` only counts inside a transaction, and that is not a nicety.** The manual is
+     * **`SET LOCAL` only counts inside a transaction, and that is not a nicety.** The manual is
      * explicit: *"SET LOCAL will appear to have no effect if it is executed outside a BEGIN block,
      * since the transaction will end immediately."* Measured on PostgreSQL 18.0 — `SET LOCAL
      * lock_timeout = '3s'` in autocommit answers `WARNING: SET LOCAL can only be used in transaction
      * blocks` and leaves `lock_timeout` at `0`, while a plain `SET` leaves it at `3s`.
      *
-     * So a migration declaring `public $withinTransaction = false` — which every `CONCURRENTLY`
-     * migration must, and which this package's own remediation tells it to — ran its risky DDL with
-     * NO bound while this predicate reported one. A false green on a rule that exists to find an
-     * unbounded wait, and the most expensive shape of it: the operator has written the line, can see
-     * the line, and believes the wait is capped.
+     * So in a migration declaring `public $withinTransaction = false` — which every `CONCURRENTLY`
+     * migration must, and which this package's own remediation tells it to — a `SET LOCAL` bounds
+     * nothing. Counting it would be a false green on a rule that exists to find an unbounded wait,
+     * and the most expensive shape of it: the operator has written the line, can see the line, and
+     * believes the wait is capped.
      *
      * The literals are masked first for the same reason the MySQL side masks them: an `->insert()`
      * whose value spells `set lock_timeout = 5s` is data, and counting it would be the same false

@@ -288,23 +288,21 @@ final readonly class IndexComprehension
      *   pieces of one another is not a list anything downstream may compare, and it is refused rather
      *   than repaired — see {@see self::isOneKeyPosition()}.
      *
-     * ## Two refusals that were retired, because the separators stopped being a problem
+     * ## Separators inside an expression are not a problem
      *
-     * An expression holding the character that separates key positions used to arrive as pieces:
-     * `COALESCE(heading, '')` is one position with a comma inside. One holding the character that
-     * separates members — a `';'` literal is legal in an index expression — took the member list
-     * apart. Both were refused. Both lists are now split only at their TOP level, outside parentheses
+     * An expression can hold the character that separates key positions — `COALESCE(heading, '')` is
+     * one position with a comma inside — or the one that separates members, since a `';'` literal is
+     * legal in an index expression. Both lists are split only at their top level, outside parentheses
      * and quotes ({@see TopLevelList}), so these expressions arrive whole and are compared like any
-     * other. A consumer's search index over `title || ' ' || COALESCE(heading, '')` measured what the
-     * old refusal cost: an ordinary index, reported as not understood on every run.
+     * other. Refusing them would report an ordinary index — a search index over
+     * `title || ' ' || COALESCE(heading, '')`, say — as not understood on every run.
      *
-     * ⚠️ **The obvious test for the first arm — does the expression text appear among the key
-     * columns — is WRONG, and it took a real reading to show it.** The two facts come from two
-     * different deparsers, and on PostgreSQL 18.4 they disagree: `pg_get_expr(indexprs)` renders
-     * `lower((display_name)::text)` where `pg_get_indexdef()` per position renders
-     * `lower(display_name::text)`. A string comparison therefore fails on every expression carrying
-     * a cast, and the widening would have shipped doing nothing. What is asked instead is whether an
-     * expression is VISIBLE in the list at all, beside the driver's own declaration that it dropped
+     * **The obvious test for the first arm — does the expression text appear among the key
+     * columns — is wrong.** The two facts come from two different deparsers, and on PostgreSQL 18.4
+     * they disagree: `pg_get_expr(indexprs)` renders `lower((display_name)::text)` where
+     * `pg_get_indexdef()` per position renders `lower(display_name::text)`. A string comparison
+     * therefore fails on every expression carrying a cast. What is asked instead is whether an
+     * expression is visible in the list at all, beside the driver's own declaration that it dropped
      * one.
      */
     private static function expressionLostOnTheWay(SchemaObject $index, string $expression): ?string

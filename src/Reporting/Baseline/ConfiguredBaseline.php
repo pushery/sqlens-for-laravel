@@ -35,15 +35,15 @@ final readonly class ConfiguredBaseline
     public function __construct(private Repository $config, private string $projectRoot) {}
 
     /**
-     * Whether a baseline is CONFIGURED and the file it names is not there.
+     * Whether a baseline is configured and the file it names is not there.
      *
-     * ⚠️ Distinct from "no baseline", and that distinction is the whole reason this exists. Both
+     * Distinct from "no baseline", and that distinction is the whole reason this exists. Both
      * produce an empty `BaselineFile`, and from the report they are indistinguishable — one is a
      * project that accepts nothing, the other is a project whose accepted findings have all come
      * back at once because a path does not resolve. A reader seeing a wall of new findings has no
      * way to tell which happened.
      *
-     * NOT an error: `sqlens:baseline` has to be runnable before the file exists, which is how a
+     * Not an error: `sqlens:baseline` has to be runnable before the file exists, which is how a
      * project creates one in the first place. So it is a notice, in the same family as an
      * unreadable debt ledger — the run continues and says what it could not find.
      */
@@ -71,14 +71,14 @@ final readonly class ConfiguredBaseline
             return BaselineFile::of([]);
         }
 
-        // ⚠️ ANCHORED AT THE PROJECT ROOT, not at the process's working directory. The config
+        // Anchored at the project root, not at the process's working directory. The config
         // promises a repo-relative path and the schema refuses an absolute one, so a bare
-        // `is_file()` asked a question about wherever the process happened to be started:
+        // `is_file()` would ask a question about wherever the process happened to be started:
         // the monorepo root under `php path/to/artisan`, whatever a deploy script last `cd`-ed to,
         // `public/` under `Artisan::call()` from a request.
         //
         // The three sibling keys with the same promise — the debt ledger in both runners and the
-        // agent's findings path — were already anchored. Only this one was not, and it fails in
+        // agent's findings path — are anchored the same way. Unanchored, this one would fail in
         // the quiet direction: the file is not found, the baseline reads as empty, and every
         // accepted finding comes back at once with nothing in the report saying a baseline was
         // configured.
@@ -105,10 +105,10 @@ final readonly class ConfiguredBaseline
     /**
      * A configured path, resolved against the root it is documented to be relative to.
      *
-     * ⚠️ An ABSOLUTE path is left alone. The schema refuses one, so a project cannot configure it
+     * An absolute path is left alone. The schema refuses one, so a project cannot configure it
      * on purpose — but a configuration that slips past a validator must not then be read from a
      * third place nobody named. Prefixing a root onto `/var/lib/…` produces a path that exists
-     * nowhere, which is the silent failure this whole change is about, one level down.
+     * nowhere, which is the silent failure this anchoring exists to prevent, one level down.
      */
     public static function anchored(string $path, string $projectRoot): string
     {

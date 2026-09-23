@@ -359,19 +359,16 @@ final class PgsqlCanonicalization implements DriverCanonicalization
                 ]),
                 // ALTER TABLE [ONLY] <t> ADD COLUMN [IF NOT EXISTS] <c>
                 //
-                // Mirrors the DROP COLUMN signature below it, and closes an asymmetry rather than
-                // opening one: MySQL's grammar has named this statement `AddColumn` since it
-                // shipped, while PostgreSQL let it fall through to the bare `AlterTable` fallback —
-                // so the two engines disagreed about what the same statement IS, and every reader
-                // keyed on the kind inherited that disagreement.
+                // Mirrors the DROP COLUMN signature below it: MySQL's grammar names this statement
+                // `AddColumn`, and without this signature PostgreSQL would let it fall through to the
+                // bare `AlterTable` fallback — the two engines would disagree about what the same
+                // statement is, and every reader keyed on the kind would inherit that disagreement.
                 //
-                // ⚠️ Converging the two makes PostgreSQL stop producing `AlterTable` here, which
-                // takes the statement away from every reader that names only that kind. Each of the
-                // nine was checked before this landed: three needed `AddColumn` added (two of them
-                // were ALREADY blind on MySQL, which is how the defect surfaced), and six are inert
-                // because their own text match — `ALTER COLUMN … TYPE`, `ALTER COLUMN … SET NOT
-                // NULL`, `ADD (CONSTRAINT|PRIMARY KEY|UNIQUE)`, or a scan for constraint targets —
-                // cannot match an `ADD COLUMN` under either kind.
+                // With it, PostgreSQL does not produce `AlterTable` here, so a reader that has to
+                // see this statement names `AddColumn` as well. A reader whose own text match —
+                // `ALTER COLUMN … TYPE`, `ALTER COLUMN … SET NOT NULL`, `ADD (CONSTRAINT|PRIMARY
+                // KEY|UNIQUE)`, or a scan for constraint targets — cannot match an `ADD COLUMN` under
+                // either kind, and is unaffected.
                 new StatementSignature(StatementKind::AddColumn, [
                     SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
                     SignatureElement::optionalModifiers(), SignatureElement::target($table),

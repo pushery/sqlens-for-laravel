@@ -10,7 +10,7 @@ namespace Pushery\SQLens\Format;
  * ## The three failures this exists to prevent
  *
  * **A truncated write.** `file_put_contents()` opens the file for writing before it has the bytes to
- * write, so a process killed in between leaves an EMPTY file where a migration was. On a formatter
+ * write, so a process killed in between leaves an empty file where a migration was. On a formatter
  * that walks a whole directory, one interrupted run can empty dozens.
  *
  * **A write that was never needed.** Rewriting a file whose content did not change updates its
@@ -18,16 +18,15 @@ namespace Pushery\SQLens\Format;
  * as a modification with an empty diff. A formatter that ran over an unchanged tree should leave the
  * tree untouched.
  *
- * **A write that went somewhere else.** ⚠️ This one was the header's own blind spot: it said *two*
- * while the temporary name was the path plus the PID — predictable — and the write opened it with
- * `O_CREAT|O_TRUNC`, which follows a symlink. Anyone able to write in the directory could aim the
- * formatted SQL at a file of their choosing, and the `rename()` afterwards moved the symlink onto the
- * migration path so the result looked ordinary. The name carries random bytes now and the open is
- * `O_CREAT|O_EXCL`, which refuses rather than follows.
+ * **A write that went somewhere else.** A predictable temporary name opened with `O_CREAT|O_TRUNC`
+ * follows a symlink: anyone able to write in the directory could aim the formatted SQL at a file of
+ * their choosing, and the `rename()` afterwards would move the symlink onto the migration path so
+ * the result looked ordinary. The name carries random bytes and the open is `O_CREAT|O_EXCL`, which
+ * refuses rather than follows.
  *
  * ## Write to a sibling, then rename
  *
- * The temporary file is in the SAME DIRECTORY, not in the system temp: `rename()` is atomic only
+ * The temporary file is in the same directory, not in the system temp: `rename()` is atomic only
  * within one filesystem, and `/tmp` is a different one on most machines — so a cross-device rename
  * silently degrades into copy-then-delete, which is exactly the non-atomic write this avoids.
  */
@@ -44,35 +43,32 @@ final readonly class SafeFileWriter
             return false;
         }
 
-        // Sibling, and unique per WRITE rather than per process. Two workers formatting one tree must
+        // Sibling, and unique per write rather than per process. Two workers formatting one tree must
         // not write the same temporary name, and a leftover from a killed run must not be picked up as
         // somebody's data.
         //
-        // ⚠️ **It used to be the path plus the PID, which is PREDICTABLE, and predictable is what made
-        // the next line exploitable.** Anyone able to write in the migrations directory could place
-        // `<file>.sqlens-<pid>.tmp` as a symlink pointing anywhere; `file_put_contents` opens with
-        // `O_CREAT|O_TRUNC` and FOLLOWS it, so the formatted SQL landed at the symlink's target — and
-        // the `rename()` below then moved the symlink itself onto the migration path, leaving the
-        // damage in place looking like an ordinary file.
+        // Random, because a predictable name — the path plus the PID, say — is what would make the
+        // write exploitable. Anyone able to write in the migrations directory could place that name as
+        // a symlink pointing anywhere; `file_put_contents` opens with `O_CREAT|O_TRUNC` and follows
+        // it, so the formatted SQL would land at the symlink's target — and the `rename()` below would
+        // then move the symlink itself onto the migration path, leaving the damage in place looking
+        // like an ordinary file.
         //
-        // Random bytes remove the attacker's ability to pre-place anything at all, and they also
-        // remove the only reason the PID was there: a stray from a killed run can no longer collide
-        // with a live one, so `x` below cannot be wedged by one.
+        // Random bytes remove the ability to pre-place anything at all, and a stray from a killed run
+        // cannot collide with a live one either, so `x` below cannot be wedged by one.
         $temporary = $path.'.sqlens-'.bin2hex(random_bytes(8)).'.tmp';
 
-        // ⚠️ SUPPRESSED, and this is the one place in the package where that is right rather than
-        // lazy. Laravel installs an error handler that turns a PHP WARNING into an ErrorException —
-        // so an unwritable directory does not return `false` here, it THROWS, and the `false` branch
-        // below is unreachable in the only environment this code runs in.
-        //
-        // Measured: with the warning left unsuppressed, a format run over a directory containing one
-        // unwritable file died on that file and reported nothing about the ninety-nine it had
-        // already formatted.
+        // Suppressed, and this is the one place in the package where that is right rather than
+        // lazy. Laravel installs an error handler that turns a PHP warning into an ErrorException —
+        // so an unwritable directory would not return `false` here, it would throw, and a format run
+        // over a directory containing one unwritable file would die on that file and report nothing
+        // about the ninety-nine it had already formatted.
         //
         // The return value is the contract this method documents, and suppressing the warning is
         // what makes the contract true.
-        // ⚠️ `x` rather than `w`, and that is the load-bearing character. `x` is `O_CREAT|O_EXCL`,
-        // which fails with EEXIST when the path already exists -- INCLUDING when it is a symlink, and
+        //
+        // `x` rather than `w`, and that is the load-bearing character. `x` is `O_CREAT|O_EXCL`,
+        // which fails with EEXIST when the path already exists -- including when it is a symlink, and
         // including a symlink whose target does not exist. `w` would create or truncate whatever the
         // name resolves to. So this refuses rather than follows, which is the direction a writer named
         // `Safe` has to fail in.
@@ -111,18 +107,15 @@ final readonly class SafeFileWriter
     /**
      * Create the temporary file and write all of it, or answer false.
      *
-     * ⚠️ **A METHOD RATHER THAN A SECOND BRANCH IN `write()`, AND THE COVERAGE FLOOR IS WHY.** The
-     * first version of this checked the short write with its own `if`, and that branch is one no run
-     * can enter: `fwrite` to a local file does not come up short unless the disk is full or the stream
-     * is broken, neither of which a test can arrange. The 100 % floor named it at 99.9 %.
+     * The short write is checked as a value rather than as a branch of its own: `fwrite` to a local
+     * file does not come up short unless the disk is full or the stream is broken, so a separate `if`
+     * would be a branch no run can enter. The check itself stays — renaming half a file over a
+     * migration is the first failure this class's header says it prevents — as an expression that
+     * always runs, where the short write is a `false` rather than a jump.
      *
-     * Deleting the check was the wrong answer — renaming half a file over a migration is the first
-     * failure this class's header says it prevents. So the check became a VALUE instead: the last line
-     * is an expression that always runs, and the short write is a `false` rather than a jump.
-     *
-     * The remaining `return false` IS reachable, and deliberately by a uid-independent route: `x` is
-     * `O_CREAT|O_EXCL`, so it fails when the directory does not exist — which holds for root as well,
-     * unlike an unwritable directory. That matters because the coverage step runs in a container.
+     * The remaining `return false` is reachable by a uid-independent route: `x` is `O_CREAT|O_EXCL`,
+     * so it fails when the directory does not exist — which holds for root as well, unlike an
+     * unwritable directory.
      */
     private static function writtenExclusively(string $temporary, string $contents): bool
     {

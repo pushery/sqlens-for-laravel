@@ -132,12 +132,11 @@ final readonly class PglsRunner
             // `--reporter=json` was asked for. So "the output is not JSON" is not evidence of a
             // broken tool here — it is the ordinary shape of the most likely misconfiguration, and
             // reporting it as a defect in the tool would send the reader to the wrong place.
-            // ⚠️ THE CONNECTION'S NAME, NOT ITS COORDINATES. This detail becomes the message of a
-            // finding and goes through every reporter, so the host, the port and the database name
-            // written here left the machine on every unreachable run. `CredentialRedaction` lists
-            // `host` and `database` among the values it masks, and the stderr suffix appended one
-            // line down is redacted — the protection reached around exactly the part that needed
-            // it, because this sentence put the coordinates back in front of it.
+            // The connection's name, not its coordinates. This detail becomes the message of a
+            // finding and goes through every reporter, so a host, a port and a database name written
+            // here would leave the machine on every unreachable run. `CredentialRedaction` masks
+            // `host` and `database`, and the stderr suffix appended one line down is redacted; this
+            // sentence must not put the coordinates back in front of that protection.
             //
             // The reader is holding the configuration this name comes from. They find the host
             // under it; the report gains nothing by repeating it.

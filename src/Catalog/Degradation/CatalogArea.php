@@ -11,11 +11,6 @@ namespace Pushery\SQLens\Catalog\Degradation;
  * server's, because the skip a reader ends up holding has to say what is MISSING FROM THE AUDIT.
  * `pg_hba_file_rules is not readable` is a fact about a catalog relation; `host-based authentication
  * rules` is the thing that will not be reasoned about, and the second one is what a person can act on.
- *
- * ⚠️ The example used to be `pg_statistic`, which stopped being one: that probe asked for a table
- * nothing in this package reads, so a least-privilege role was reported partial on statistics on every
- * run. The naming principle above is unaffected — the illustration simply had to stop pointing at a
- * defect.
  */
 final readonly class CatalogArea
 {

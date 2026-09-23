@@ -74,9 +74,9 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *   together. An index absent from both is either unconditional, or alone under its condition, or
  *   carries a predicate shape the reading refuses. See {@see self::samePredicate()}.
  * - `same_method_indexes` and `index_method_groups` — the same pair one attribute along, for the
- *   indexes whose ACCESS METHOD is what kept them out of `comparable_indexes`: a GIN, a GiST, a
- *   FULLTEXT. Grouped by method AND operator class, because inside one of those both cancel the way
- *   a shared predicate does. ⚠️ What may be concluded inside such a group is WEAKER than inside a
+ *   indexes whose access method is what kept them out of `comparable_indexes`: a GIN, a GiST, a
+ *   FULLTEXT. Grouped by method and operator class, because inside one of those both cancel the way
+ *   a shared predicate does. What may be concluded inside such a group is weaker than inside a
  *   predicate group — identity only, never a prefix — and that belongs to the rule rather than to
  *   this projection; see {@see RedundantIndex}. See {@see self::accessMethodKey()}.
  * - `unique_null_treatment` — whether each unique index counts two NULLs as the same value. Three-
@@ -176,13 +176,11 @@ final readonly class TableMembers
                     $nullable[$parent][] = self::shortName($object);
                 }
 
-                // ⚠️ THE CATALOG READS THIS AND NOTHING CARRIED IT, so the one rule that needs it
-                // could not ask. `MY.L6.PK_NOT_BIGINT` named the SIGNED limit for every `int` key —
-                // and Laravel's `increments()`, the commonest shape that rule ever meets, produces
-                // `INT UNSIGNED`, which reaches twice as far. The value was already on the column
-                // object; only the projection was missing.
+                // Carried so the one rule that needs it can ask: `MY.L6.PK_NOT_BIGINT` names the
+                // ceiling of the key it judges, and Laravel's `increments()`, the commonest shape that
+                // rule meets, produces `INT UNSIGNED`, which reaches twice as far as the signed limit.
                 //
-                // Carried as a column SET like `nullable_columns` rather than folded into
+                // Carried as a column set like `nullable_columns` rather than folded into
                 // `column_types`, because the canonical type vocabulary is shared between engines and
                 // `int unsigned` is not a type name in it. PostgreSQL has no unsigned integers, so
                 // this is empty there — which is the honest answer rather than an absent key.

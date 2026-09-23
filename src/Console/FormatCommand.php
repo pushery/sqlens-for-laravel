@@ -141,10 +141,9 @@ final class FormatCommand extends Command
         $requested = is_string($flag = $this->option('dialect')) && $flag !== '' ? $flag : $settings->dialect;
         $resolved = $dialects->resolve($requested);
 
-        // ⚠️ AN UNRESOLVED DIALECT IS A REFUSAL, and this line used to read `?? Dialect::Pgsql` while
-        // the comment above it promised the run "says so rather than silently choosing one". It chose
-        // one. What that cost is not a worse-formatted file, it is a WRONG one: the core is not
-        // dialect-neutral at two points that change bytes.
+        // An unresolved dialect is a refusal, not a default. A guessed dialect would not produce a
+        // worse-formatted file but a wrong one: the core is not dialect-neutral at two points that
+        // change bytes.
         //
         //   - Comment syntax. Under pgsql `# …` is not a comment and gets re-set as tokens, and
         //     `5--1` becomes one (`SqlTokenizer`).
@@ -152,17 +151,17 @@ final class FormatCommand extends Command
         //     words `SqlToken` protects on purpose, "because MySQL on Linux compares table names by
         //     case".
         //
-        // So a MySQL project with a table called `comment`, `view` or `json` had
-        // `INSERT INTO comment` WRITTEN BACK as `INSERT INTO COMMENT` — and on a Linux MySQL with
-        // `lower_case_table_names=0` the file now names a table that does not exist. Without
-        // `--check` the original is already overwritten.
+        // So under a guessed pgsql, a MySQL project with a table called `comment`, `view` or `json`
+        // would have `INSERT INTO comment` written back as `INSERT INTO COMMENT` — and on a Linux
+        // MySQL with `lower_case_table_names=0` the file would then name a table that does not
+        // exist. Without `--check` the original would already be overwritten.
         //
-        // ⚠️ AND REFUSING DOES NOT COST THE NO-DATABASE NORTH-STAR, which is the objection this had
-        // to answer. `DialectResolver` says where that property actually lives: "an explicit dialect
+        // And refusing does not cost the no-database north-star. `DialectResolver` says where that
+        // property actually lives: "an explicit dialect
         // short-circuits everything: the connection is never read … That is the property the
         // north-star rests on." A fresh checkout, a pre-commit hook and a machine with nothing
         // installed all keep working — they name the dialect once, in a flag or in config, instead of
-        // having one guessed for them. The guess was never what made them work.
+        // having one guessed for them. A guess is not what makes them work.
         //
         // Placed with the other up-front refusals rather than after the loop, for the reason stated
         // there: a run that is going to fail should not first rewrite two hundred files.
@@ -223,15 +222,11 @@ final class FormatCommand extends Command
 
         if ($dumps !== []) {
             $this->report(sprintf(
-                // ⚠️ THE PLURAL IS SPELLED OUT, and that is not a style choice. Two guards scan
-                // shipped source for a debug leftover by looking for the helper's name followed by
-                // an opening parenthesis, and neither knows a string from a statement — so the
-                // parenthesised plural of the word for a database export read as a call to it.
-                //
-                // The sentence was rewritten rather than the guards: a check for a debug helper in
-                // shipped code should stay blunt, and the spelled-out phrase is clearer anyway.
-                // Naming the pattern here would trip it a third time, which is the trap this whole
-                // comment exists inside.
+                // The plural is spelled out, and that is not a style choice. A check that scans
+                // source for a debug leftover looks for the helper's name followed by an opening
+                // parenthesis and does not tell a string from a statement, so the parenthesised
+                // plural of the word for a database export would read as a call to it. Such a check
+                // should stay blunt, and the spelled-out phrase is clearer anyway.
                 'sqlens:format: formatting %d generated schema dump file(s) — `database/schema/*` is excluded '
                 .'by default and this project took the entry out of `sqlens.format.exclude`. The next '
                 .'`schema:dump` overwrites them: %s',
@@ -275,24 +270,19 @@ final class FormatCommand extends Command
         $lastVersion = null;
 
         foreach ($files as $file) {
-            // Read through the FILESYSTEM SEAM, not through a bare `file_get_contents`, and judged
-            // before the formatter sees anything.
+            // Read through the container's `Filesystem`, not through a bare `file_get_contents`, and
+            // judged before the formatter sees anything.
             //
             // The judgment is the point: a bare read answers `false` for a file it cannot open, and
-            // the cast that used to stand here turned that into an empty string — which the
-            // formatter then quite correctly called "the statement is empty". Correct about the
-            // string it was handed, and about nothing the user has: it sent a reader to look at
-            // their SQL when the problem was a mode bit.
+            // cast to a string that becomes an empty statement, which the formatter would quite
+            // correctly call "the statement is empty" — sending a reader to look at their SQL when
+            // the problem is a mode bit.
             //
-            // ⚠️ THE SEAM IS WHY THIS IS COVERABLE AT ALL, and the first version was not. A `0000`
-            // file is unreadable for an ordinary user and perfectly readable for ROOT, which is what
-            // CI runs as — so the arms staged that way skipped there, the branch never executed, and
-            // the 100% floor went red on this very block. Nor is there any other filesystem state
-            // that reaches it: {@see SqlFileScanner} only yields paths where `is_file()` holds, so a
-            // dangling symlink or a directory named `x.sql` is filtered out before the read.
-            //
-            // Through the container's `Filesystem` the case is stageable anywhere, by anyone,
-            // without depending on who the process happens to be.
+            // The seam also makes the case reproducible regardless of who the process runs as: a
+            // `0000` file is unreadable for an ordinary user and perfectly readable for root. No other
+            // filesystem state reaches this branch: {@see SqlFileScanner} only yields paths where
+            // `is_file()` holds, so a dangling symlink or a directory named `x.sql` is filtered out
+            // before the read.
             try {
                 $original = $filesystem->get($file);
             } catch (FileNotFoundException) {
@@ -406,10 +396,10 @@ final class FormatCommand extends Command
         // mystery, and the commonest cause — one machine had a binary the other did not — is
         // invisible.
         //
-        // ⚠️ `strict tools` is printed in BOTH states, unlike the tool version below, and the
+        // `strict tools` is printed in both states, unlike the tool version below, and the
         // asymmetry is deliberate. An absent version says "the built-in core produced this" all by
         // itself, so `(none)` would be noise. A missing strict flag says nothing at all — and it is
-        // the one parameter that decides whether a run that lost a backend FAILED or merely said so.
+        // the one parameter that decides whether a run that lost a backend failed or merely said so.
         // Two runs that disagree about that disagree about their exit code, which is exactly the
         // difference a reader is trying to explain.
         $this->report(sprintf(
@@ -481,13 +471,13 @@ final class FormatCommand extends Command
         // survival condition of a committed artifact: a diff on every run and a team stops reading.
         usort($files, static fn (array $left, array $right): int => strcmp($left['path'], $right['path']));
 
-        // ⚠️ THE FLAGS, for the reason DoctorCommand records at its own call: a `(string)` cast over
-        // a `false` return prints a BLANK LINE and the exit code still comes from the verdict, so a
+        // The flags, for the reason DoctorCommand records at its own call: a `(string)` cast over a
+        // `false` return prints a blank line and the exit code still comes from the verdict, so a
         // consumer gets an empty document with a status that says nothing went wrong.
         //
-        // Here the bytes come from the FILESYSTEM -- `files[].path` -- and a non-UTF-8 filename is
-        // legal on Linux. Substituting keeps the document valid and readable; THROW stays for the
-        // structural failures substitution cannot produce.
+        // Here the bytes come from the filesystem -- `files[].path` -- and a non-UTF-8 filename is
+        // legal on Linux. Substituting keeps the document valid and readable; `JSON_THROW_ON_ERROR`
+        // stays for the structural failures substitution cannot produce.
         $this->line(json_encode([
             'run' => $run,
             'files' => $files,
@@ -593,23 +583,21 @@ final class FormatCommand extends Command
      *   2. `sqlens.format.paths`, when the project named its own roots
      *   3. `MigrationPaths`, the same resolution every other command uses
      *
-     * ⚠️ Step 2 is new, and the docblock here used to argue against it: "a formatter that scanned a
-     * different set than the linter judges would rewrite files nothing checks and skip files
-     * something does". The reasoning is about MIGRATIONS and does not reach this suite — the linter
-     * judges `.php` migrations and the formatter takes `.sql` files only, so the two sets are
-     * already disjoint by construction. What the old default really did was leave a project whose
-     * SQL lives outside its migration paths with no way to say so, short of naming the directory on
-     * every invocation.
+     * Step 2 does not make the formatter disagree with the linter about a file either of them
+     * judges: the linter judges `.php` migrations and the formatter takes `.sql` files only, so the
+     * two sets are disjoint by construction. Without it, a project whose SQL lives outside its
+     * migration paths would have no way to say so, short of naming the directory on every
+     * invocation.
      *
-     * The fallback is unchanged, so a project that configures nothing behaves exactly as before.
+     * A project that configures nothing gets step 3.
      *
      * @return list<string>
      */
     private function paths(MigrationPaths $paths, FormatDiscovery $discovery): array
     {
-        // `--path` is declared repeatable, so Laravel always hands back an array — the `is_array`
-        // a first draft had here was a branch nothing can enter, which is a branch no test can
-        // cover and no reader can trust.
+        // `--path` is declared repeatable, so Laravel always hands back an array — an `is_array`
+        // here would be a branch nothing can enter, which no test can cover and no reader can
+        // trust.
         $named = array_values(array_filter((array) $this->option('path'), is_string(...)));
         $positional = array_values(array_filter((array) $this->argument('path'), is_string(...)));
 
@@ -617,11 +605,10 @@ final class FormatCommand extends Command
         // that silently dropped either would format a tree nobody asked for or skip one somebody
         // did.
         //
-        // ⚠️ NOT deduplicated here, and the first draft was — with a comment claiming that without
-        // it the summary would count a doubly-named file twice. It would not: {@see SqlFileScanner}
-        // already makes its result unique, for the overlapping-configured-paths case, and a red
-        // proof over the extra `array_unique` came back GREEN. A second guard whose stated reason is
-        // already handled elsewhere is worse than none — the next reader believes the reason.
+        // Not deduplicated here: {@see SqlFileScanner} already makes its result unique, for the
+        // overlapping-configured-paths case, so a doubly-named file is not counted twice. A second
+        // guard whose stated reason is already handled elsewhere is worse than none — the next
+        // reader believes the reason.
         $selected = [...$positional, ...$named];
 
         if ($selected !== []) {
@@ -632,16 +619,14 @@ final class FormatCommand extends Command
     }
 
     /**
-     * Everything that is NOT a machine report goes to STDERR through here.
+     * Everything that is not a machine report goes to STDERR through here.
      *
      * Named `report` rather than `line` because `Command::line()` already exists and means something
      * else — an override would silently change where every inherited helper writes. And STDERR
      * rather than STDOUT so a `--check` run can be piped without its verdict landing in whatever is
      * reading the pipe.
      *
-     * ⚠️ The first line used to read "everything this command says", and `--format` made that false.
-     * The rule it always meant is the package's: the report on STDOUT, everything else on STDERR.
-     * With one format there was no report, so "everything else" was everything. The console verdict
+     * The rule is the package's: the report on STDOUT, everything else on STDERR. The console verdict
      * stays here deliberately — a human reading a write run wants it beside the degradation notices,
      * not mixed into a file somebody is piping.
      */

@@ -80,17 +80,16 @@ final readonly class ConfigSchema
      *
      * ## A retired key is not an unknown one, and the difference is the reason this list exists
      *
-     * An UNKNOWN key is fatal, because a typo that silently enables nothing is the failure the
+     * An unknown key is fatal, because a typo that silently enables nothing is the failure the
      * validator exists for. A retired key is not a typo: the project wrote it correctly, against a
      * schema that has since moved. Refusing it stops every command on an upgrade the project did
      * nothing to earn -- and stops it green, because a package that runs nothing raises no red line.
      * So a retired key is named, ignored, and the run continues.
      *
-     * ⚠️ `mode` was announced exactly this way in 0.20.0 -- *"a published config that still carries it
-     * gets a notice rather than a refusal"* -- and shipped as a refusal: until this list existed, no
-     * code path told a retired key from an unknown one.
+     * `mode` was retired this way in 0.20.0: *"a published config that still carries it gets a
+     * notice rather than a refusal"*. This list is what tells a retired key from an unknown one.
      *
-     * A key belongs here only if this package once READ it. A key that was never valid is a typo and
+     * A key belongs here only if this package once read it. A key that was never valid is a typo and
      * stays fatal, which is why this is a list and not a pattern.
      *
      * @var array<string, string> key => the release that retired it

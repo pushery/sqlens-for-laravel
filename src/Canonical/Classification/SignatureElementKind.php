@@ -128,7 +128,7 @@ enum SignatureElementKind
      * whitespace, and every later one follows a comma. A name preceded by `=` is a value, a name
      * preceded by `(` is inside an expression, and neither is collected.
      *
-     * ## It DECLINES rather than answer partially
+     * ## It declines rather than answer partially
      *
      * The run ends at the first token that is not an assignment target, and the signature only
      * matches when that token is one of the clause terminators the driver named (or the end of the
@@ -138,11 +138,9 @@ enum SignatureElementKind
      * through to a signature that captures no columns — a reader then concludes nothing rather than
      * concluding `[total_cents]` about a clause it did not reach the end of.
      *
-     * ⚠️ This paragraph used to name `SET a = (SELECT …), b = 2` as the declining case, and that is
-     * wrong twice over. MEASURED: it does not decline — it answers `[a]`, because the depth check
+     * `SET a = (SELECT …), b = 2` is not a declining case: it answers `[a]`, because the depth check
      * carries the run past the subquery's `SELECT` to the end of the statement. And `[a]` is the
-     * RIGHT answer: `b = 2` assigns a literal, so the sourced test excludes it whatever the run
-     * does. The old example described the element before that test existed.
+     * right answer: `b = 2` assigns a literal, so the sourced test excludes it whatever the run does.
      *
      * That is the same trade `ColumnList` documents: half a list is the one answer that must not
      * travel, because it looks exactly like a whole one.

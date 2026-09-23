@@ -703,7 +703,7 @@ final readonly class AuditNotices
     /**
      * A baseline is configured and the file it names is not there.
      *
-     * ⚠️ Distinct from the notice below, which is about a FLAG having nothing to act on. This one
+     * Distinct from the notice below, which is about a flag having nothing to act on. This one
      * is about the project's own configuration: every finding it had accepted comes back in this
      * report, and an empty baseline and an absent one look identical from the outside.
      *

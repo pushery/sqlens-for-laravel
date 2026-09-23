@@ -24,7 +24,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * A change to an `ENUM` (or `SET`) column's member list — the classic MySQL trap, and one whose two
  * halves point in opposite directions.
  *
- * ## Measured on MySQL 8.4, and it corrected the received wisdom
+ * ## Measured on MySQL 8.4, against the received wisdom
  *
  * Each change run under `ALGORITHM=INSTANT` then `ALGORITHM=INPLACE` against a real 8.4:
  *
@@ -38,26 +38,22 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * | RESPELLING a member equivalently under its collation (`'b'`→`'B'`) | **INSTANT** | **no** |
  * | RENAMING a member to a different word (`'b'`→`'x'`) | **COPY**, and it ABORTS | **no** |
  *
- * ⚠️ THE LAST TWO ROWS WERE ONE ROW SAYING "RENAMING a member in place | INSTANT", and that was the
- * collation-equivalent special case sold as the general rule. The engine compares member names
- * positionally under the column's collation (`Field_enum::is_equal` → `compare_type_names`), so only a
- * respelling that the collation calls EQUAL is a no-op. Measured on MySQL 8.4.10 — the FLOOR server the
- * suite runs against, which on a development machine is not the one a bare `mysql` client reaches:
- * `MySqlTestCase` says so in its own docblock, "the default port is 3308 — Herd's MySQL 8.4 — never the
- * conventional 3306, which on a dev machine is often a legacy sub-floor server". A measurement taken on
- * 3306 here describes a version this package refuses to support.
+ * The last two rows are two cases, not one. "Renaming a member in place is INSTANT" holds only for
+ * the collation-equivalent special case: the engine compares member names positionally under the
+ * column's collation (`Field_enum::is_equal` → `compare_type_names`), so only a respelling that the
+ * collation calls equal is a no-op. Measured on MySQL 8.4.10, the lowest server version this package
+ * supports:
  *
  *   'b' → 'B'  ALGORITHM=INSTANT   accepted
  *   'b' → 'x'  ALGORITHM=INSTANT   ERROR 1846  "Need to rebuild the table to change column type"
  *   'b' → 'x'  default algorithm   ERROR 1265  "Data truncated for column 's' at row 2"
  *
- * ⚠️ AND THE SECOND ERROR IS THE OPPOSITE OF WHAT THE RULE USED TO WARN ABOUT. A real rename is a
- * COPY, and during the copy the old member is no longer in the definition, so every row still holding
- * it truncates — under `STRICT_TRANS_TABLES`, which is in the default `sql_mode`, the `ALTER` simply
- * FAILS. The rule warned about a silent reinterpretation and said nothing about an abort.
+ * The second error is an abort, not a silent reinterpretation. A real rename is a COPY, and during
+ * the copy the old member is no longer in the definition, so every row still holding it truncates —
+ * under `STRICT_TRANS_TABLES`, which is in the default `sql_mode`, the `ALTER` simply fails.
  *
- * The respelling row is still the one nobody expects, and it is where the old text's danger really
- * lives: the stored values are ordinals, so `'b'`→`'B'` rewrites nothing and takes no lock — and every
+ * The respelling row is the one nobody expects, and it is where the silent danger really lives:
+ * the stored values are ordinals, so `'b'`→`'B'` rewrites nothing and takes no lock — and every
  * row that read `'b'` a moment ago now reads `'B'`, in an application that has not been redeployed.
  * Cost and compatibility are not the same axis, and a rule that reported only the cost would call this
  * one free.

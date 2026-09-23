@@ -143,11 +143,10 @@ final class ExplainRuleTool extends SqlensTool
      */
     private function examplesFor(string $ruleId): array
     {
-        // ⚠️ THROUGH THE CATALOG, NOT THE JSON REGISTER ALONE — and the difference was ten rules.
-        // The capture family carries its pairs as constructor arguments on its metadata, and this
-        // tool read only the file beside them, so an agent asking about `CAP.PRESCAN.SIDE_EFFECT`
-        // was told no example was registered while a good one sat in the class. Nothing was red:
-        // `badExample` and `goodExample` had no reader anywhere in `src/`.
+        // Through the catalog, not the JSON register alone — and the difference is ten rules. The
+        // capture family carries its pairs as constructor arguments on its metadata, so a tool that
+        // read only the file beside them would tell an agent asking about `CAP.PRESCAN.SIDE_EFFECT`
+        // that no example is registered while a good one sits in the class.
         $example = ($this->examples ??= RuleExampleCatalog::shipped())->for($ruleId);
 
         if ($example === null) {

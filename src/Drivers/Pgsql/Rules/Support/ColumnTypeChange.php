@@ -53,9 +53,9 @@ final readonly class ColumnTypeChange
      * What both matrices are keyed on. Derived rather than separately parsed, so it cannot
      * disagree with {@see $rest} about where the type ends.
      *
-     * ⚠️ The comma that ends the type is a STRUCTURAL one, and a plain split on the character
-     * cannot tell it from the one inside `numeric(10, 2)`. That mattered more than a lost digit:
-     * `numeric` is in the rewrite list, so cutting at the first comma handed the matrix
+     * The comma that ends the type is a structural one, and a plain split on the character
+     * cannot tell it from the one inside `numeric(10, 2)`. That matters more than a lost digit:
+     * `numeric` is in the rewrite list, so cutting at the first comma would hand the matrix
      * `numeric(10`, which it does not recognize — a full table rewrite reporting as "cannot
      * classify from the migration alone". The depth scan below is why the specifier survives.
      */

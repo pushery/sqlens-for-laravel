@@ -96,10 +96,9 @@ final class UnifiedDiff
      */
     private static function lines(string $text): array
     {
-        // ⚠️ NOTHING is normalized here, and an earlier draft of this class normalized CRLF to LF
-        // "for comparison only". That was a silent green, measured: the pure-PHP core STRIPS the
-        // CR — `select a\r\nfrom t\r\n` comes back as `SELECT a\nFROM t` — so a CRLF file really
-        // is rewritten, and the normalizing draft printed no diff over a run that would change
+        // Nothing is normalized here, not even CRLF to LF "for comparison only". The pure-PHP core
+        // strips the CR — `select a\r\nfrom t\r\n` comes back as `SELECT a\nFROM t` — so a CRLF file
+        // really is rewritten, and a normalizing diff would print nothing over a run that changes
         // every line of it. A diff that hides a change the write would make is worse than no diff.
         $parts = explode("\n", $text);
         $last = count($parts) - 1;

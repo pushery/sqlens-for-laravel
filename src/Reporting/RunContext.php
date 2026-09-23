@@ -66,15 +66,15 @@ final readonly class RunContext
         // version gate and the statistics axis each report their own named
         // undetermined finding.
         //
-        // ⚠️ NULL AND ZERO ARE DIFFERENT ANSWERS, and the difference is the whole reason this is
+        // Null and zero are different answers, and the difference is the whole reason this is
         // nullable. `0` says the run selected rules and selected none -- the security command
         // passes it deliberately, and its own comment says why. `null` says the run does not
-        // select rules AT ALL: `sqlens:predeploy` runs checks, so a rule count is not a number
+        // select rules at all: `sqlens:predeploy` runs checks, so a rule count is not a number
         // that is wrong there, it is a question that does not arise.
         //
-        // Until this was nullable a consumer read `active-rules=0 hidden-rules=0` over seven
-        // predeploy results and had no way to tell which of the two it was. That is the same
-        // distinction the contracts page already draws for `evaluated_rules` one line below:
+        // Without the distinction a consumer reading `active-rules=0 hidden-rules=0` over seven
+        // predeploy results could not tell which of the two it was. It is the same distinction the
+        // contracts page draws for `evaluated_rules` one line below:
         // `null` when the producing suite does not report it, `[]` when it really evaluated
         // nothing.
         public ?int $activeRuleCount = null,
@@ -163,14 +163,9 @@ final readonly class RunContext
          * answering it from `check_timings` means parsing prose, which is what this package refuses
          * to make a consumer do everywhere else.
          *
-         * The number was computed by both deploy commands from the day the budget existed and
-         * reached nobody: it went into a second, thinner header called `RunMetadata`, projected by
-         * `Result::toArray()`, which the JSON envelope does not emit and which no shipped code called
-         * at all. A value that is measured and discarded is the same defect as a check that runs and
-         * says nothing — and two source comments already told the reader this key was here.
-         *
-         * ⚠️ That duplicate is GONE. It said `pretend` for runs that capture no migration and carried
-         * empty version lists, so every value in it was wrong; this object is now the only header.
+         * Both deploy commands compute the number, and this object is the only header it reaches:
+         * a value that is measured and discarded is the same defect as a check that runs and says
+         * nothing.
          *
          * Null for every producer without a time budget, which is every lint and audit run. Null
          * rather than 0, because 0 ms is a claim about a run that happened.
@@ -339,15 +334,13 @@ final readonly class RunContext
          * the header for that reason: the register guard compares the post-v3 keys in header order,
          * so a v7 field standing in front of a v6 one would announce itself to a consumer on schema 6.
          *
-         * ⚠️ NULLABLE, AND NOT BECAUSE A RUN MAY LACK A DAY. Every producer in this package hands one
-         * down; the default exists so the four construction sites and the fixtures were not all
-         * required to change in one commit. A producer that forgets it emits `null` rather than a
-         * wrong day — the same choice `subject_count` above makes — and an architecture arm holds
-         * every production site to passing one, because a silent null here is precisely the
-         * permissive default this package refuses elsewhere.
+         * Nullable, and not because a run may lack a day. Every producer in this package hands one
+         * down. A producer that forgets it emits `null` rather than a wrong day — the same choice
+         * `subject_count` above makes — and every production site passes one, because a silent null
+         * here is precisely the permissive default this package refuses elsewhere.
          *
-         * ⚠️ It is the OBJECT rather than its string, so the header and the rules can be shown to
-         * carry the same READING. Two `gmdate` calls agree on almost every run and differ across
+         * It is the object rather than its string, so the header and the rules can be shown to
+         * carry the same reading. Two `gmdate` calls agree on almost every run and differ across
          * midnight, which is the one case this field exists to make visible.
          */
         public ?Today $today = null,

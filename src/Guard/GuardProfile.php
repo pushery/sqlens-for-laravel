@@ -55,7 +55,7 @@ final readonly class GuardProfile
     /**
      * The profile a configuration names, or a refusal that says which name it could not find.
      *
-     * ⚠️ An unknown name is an EXCEPTION and never "off". The two are indistinguishable in their
+     * An unknown name is an exception and never "off". The two are indistinguishable in their
      * effect and opposite in their meaning: off is a decision somebody made, and an unknown name is
      * a typo that turned every guardrail in the application into a no-op while the config still
      * reads as though they are on.

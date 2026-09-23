@@ -83,17 +83,13 @@ final class McpCommand extends Command
             return ExitCode::Misconfiguration->value;
         }
 
-        // ⚠️ A SECOND TRANSPORT CHECK USED TO STAND HERE, AND ITS OWN COMMENT PREDICTED WHY IT IS
-        // GONE: "the configuration validator already refuses anything else, so reaching this means
-        // it was bypassed". That sentence was false when it was written — the validator had no
-        // caller on this command — and it became true the moment it got one, which made the branch
-        // unreachable rather than redundant. Coverage is what said so: no run could enter it.
-        //
-        // What it did is done a step earlier and better. `refusesInvalidConfig()` names the KEY and
-        // the legal value, where the old line only said which transport this build speaks; a reader
-        // with a typo'd `agent.mcp.transort` was told about stdio and never about the typo.
+        // No second transport check here: the configuration validator already refuses anything
+        // else, so such a branch could not be entered. `refusesInvalidConfig()` names the key and
+        // the legal value, which is the better answer — a reader with a typo'd
+        // `agent.mcp.transort` needs to hear about the typo, not only which transport this build
+        // speaks.
 
-        // What this run REALLY exposed, named before a client connects rather than after it asks.
+        // What this run really exposed, named before a client connects rather than after it asks.
         //
         // From the registry filtered by the policy, not from the policy alone — and that is a
         // correction rather than a preference. The policy answers "which names may be on", which

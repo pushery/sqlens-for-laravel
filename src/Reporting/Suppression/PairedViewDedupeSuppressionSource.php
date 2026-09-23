@@ -54,19 +54,17 @@ final readonly class PairedViewDedupeSuppressionSource
     /** @param  string|null  $tablePath  the mapping table; null loads the bundled one */
     public function __construct(?string $tablePath = null)
     {
-        // ⚠️ FOUND BY THE BUNDLED-ARTIFACT POLICY ARM, not by the audit finding that prompted it — which
-        // named three loaders and missed these two. The form was identical: `catch (JsonException) {
-        // return []; }` on a shipped register.
+        // A shipped register that cannot be read is refused, not read as empty.
         //
-        // The DIRECTION here is the safe one, and saying so is the honest version of this comment: an
-        // empty dedupe table suppresses nothing, so a broken artifact makes this package report a
-        // duplicate finding rather than hide a real one. That is noise, not a silent pass — unlike the
-        // privilege vocabulary, where empty turned a security rule into a pass on every server.
+        // The direction here is the safe one: an empty dedupe table suppresses nothing, so a broken
+        // artifact would make this package report a duplicate finding rather than hide a real one.
+        // That is noise, not a silent pass — unlike the privilege vocabulary, where empty would turn
+        // a security rule into a pass on every server.
         //
         // It refuses anyway, for a reason that does not depend on the direction: a shipped file that
         // cannot be read is a broken installation, and a run that quietly reports duplicates leaves the
-        // operator with output they cannot explain. Exempting it would also mean the policy needs an
-        // allowlist, and an allowlist is what let three loaders drift in the first place.
+        // operator with output they cannot explain. One rule for every shipped register also needs no
+        // list of exceptions, and such a list is how loaders drift apart.
         $shipped = dirname(__DIR__, 3).'/resources/data/rule-dedupe-views.json';
 
         if ($tablePath === null) {

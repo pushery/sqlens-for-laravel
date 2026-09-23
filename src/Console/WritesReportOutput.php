@@ -26,9 +26,8 @@ use Symfony\Component\Console\Output\StreamOutput;
  */
 trait WritesReportOutput
 {
-    // ⚠️ `configIsValid()` used to live here, and that is why it reached only the three commands
-    // that write a report. It is {@see ValidatesConfig} now, which every command uses — see that
-    // trait for what the narrow reach cost.
+    // `configIsValid()` lives in {@see ValidatesConfig}, which every command uses, not here, where
+    // it would reach only the three commands that write a report.
 
     /** The stream the report is written to, or null when `--output` names a path that cannot be opened. */
     private function reportOutput(): ?OutputInterface

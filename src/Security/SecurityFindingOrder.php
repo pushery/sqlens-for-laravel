@@ -22,27 +22,19 @@ use Pushery\SQLens\Severity\Severity;
  * not a sorted list. The result is deterministic — the same input always produces the same sequence
  * — but deterministic is not the same as ordered, and only one of the two is what a reader needs.
  *
- * ## What this deliberately does NOT do
+ * ## What this deliberately does not do
  *
- * **Merge findings from different sources.** The plan asks for a lint finding about a
- * `GRANT … TO PUBLIC` migration and an audit finding about the resulting catalog state to become one
- * entry carrying both sources.
+ * **Merge findings from different sources.** A lint finding about a `GRANT … TO PUBLIC` migration
+ * and an audit finding about the resulting catalog state stay two entries.
  *
- * ⚠️ THIS PARAGRAPH SAID THE MECHANISM DOES NOT EXIST, AND IT DOES. It read
- * "`Location::inMigration()` takes no object name and leaves the field null", and that stopped being
- * true: the factory takes `?string $objectName` and `?SchemaObjectType $objectType`, and
- * `MigrationVerdicts` passes both. A stale reason is worse than no reason here, because it tells the
- * next reader the merge is blocked on work somebody else has already done.
+ * `Location::inMigration()` takes `?string $objectName` and `?SchemaObjectType $objectType`, and
+ * `MigrationVerdicts` passes both — but the parameters are optional, and the factory says why in its
+ * own comment: "almost no rule names one". So for most rules a migration finding does not know which
+ * object its statement touches, and the only thing the two findings share is a rule id. Merging on a
+ * rule id alone would be the wrong merge: two different tables, one rule, collapsed into an entry
+ * true of neither.
  *
- * The blocker moved rather than disappeared, and where it sits now is a coverage question instead of
- * a structural one: the parameters are OPTIONAL, and the factory says why in its own comment —
- * "almost no rule names one". So for most rules a migration finding still does not know WHICH object
- * its statement touches, and the only thing the two findings share is a rule id. Merging on a rule id
- * alone is the wrong merge the plan's own guard rail forbids: two different tables, one rule,
- * collapsed into an entry true of neither.
- *
- * So the merge waits for RULES to name their object, not for the capture layer to gain the ability,
- * and this file does the half that stands on its own.
+ * A merge needs rules to name their object; this file does the half that stands on its own.
  */
 final readonly class SecurityFindingOrder
 {

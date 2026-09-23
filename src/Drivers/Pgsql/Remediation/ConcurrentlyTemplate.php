@@ -165,19 +165,19 @@ final readonly class ConcurrentlyTemplate
     /**
      * The sequence for a CONCURRENTLY statement that is neither a create nor a drop of an index.
      *
-     * ⚠️ **Two steps, and the absence of a third is the whole point.** `CONCURRENTLY` appears on
+     * **Two steps, and the absence of a third is the whole point.** `CONCURRENTLY` appears on
      * more than the two index forms — `REINDEX … CONCURRENTLY` and `ALTER TABLE … DETACH PARTITION
      * … CONCURRENTLY` carry it too, and PostgreSQL refuses all of them inside a transaction block
      * for the same reason. What this package cannot do for those is write the statement: it does not
      * know an index name, a column list or a partition it was never handed.
      *
-     * The previous behavior was to hand over the CREATE-INDEX sequence regardless, which produced
-     * two different kinds of wrong material. For a `DROP INDEX CONCURRENTLY` it recommended
-     * **creating the index the migration is trying to remove**. For a `DETACH PARTITION` it
-     * recommended creating an index whose name was an unfilled `{{index}}` placeholder.
+     * Handing over the create-index sequence regardless would produce two different kinds of wrong
+     * material: for a `DROP INDEX CONCURRENTLY` it would recommend **creating the index the migration
+     * is trying to remove**, and for a `DETACH PARTITION` an index whose name is an unfilled
+     * `{{index}}` placeholder.
      *
      * So the honest sequence is the part that is true for every form — bound the wait, and take the
-     * statement out of the migrator's transaction, which IS the fix this rule's finding names — and
+     * statement out of the migrator's transaction, which is the fix this rule's finding names — and
      * nothing else. A step with no SQL is not a gap here; the two steps above `forCreateIndex`'s
      * index-specific pair have never carried any either.
      *

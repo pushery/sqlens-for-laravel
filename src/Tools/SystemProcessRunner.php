@@ -32,25 +32,24 @@ final readonly class SystemProcessRunner implements ProcessRunner
 
     public function locate(string $binaryName): ?string
     {
-        // ⚠️ A PINNED PATH IS NOT A NAME, AND THIS METHOD USED TO TREAT IT AS ONE.
+        // A pinned path is not a name.
         //
         // Everything below joins the argument onto each `$PATH` directory, which is right for a
         // bare `pg_format` and nonsense for `/opt/homebrew/bin/pg_format`: the join produces
-        // `/usr/bin//opt/homebrew/bin/pg_format`, no candidate exists, and the method answers
-        // null. Measured — `locate('php')` resolves and `locate('<that same absolute path>')`
-        // returns null.
+        // `/usr/bin//opt/homebrew/bin/pg_format`, no candidate exists, and the method would answer
+        // null.
         //
-        // The consequence is the one the shipped config explicitly promises against. Its `tools`
-        // section says: "A pinned path that does not run is REPORTED — never quietly replaced by
-        // whatever else is installed, because naming a path is a statement about which binary
-        // produced the verdict." The pin was silently replaced by whatever the backend's default
-        // name found on `$PATH`, or by the built-in fallback — so a project that pinned one
-        // formatter got a verdict from another, with nothing in the report saying so.
+        // The consequence would be the one the shipped config explicitly promises against. Its
+        // `tools` section says: "A pinned path that does not run is REPORTED — never quietly
+        // replaced by whatever else is installed, because naming a path is a statement about which
+        // binary produced the verdict." A pin lost that way would be replaced by whatever the
+        // backend's default name finds on `$PATH`, or by the built-in fallback — so a project that
+        // pinned one formatter would get a verdict from another, with nothing in the report saying so.
         //
         // A path is anything carrying a separator, not merely one that is absolute: `./bin/tool`
         // and `vendor/bin/tool` are addresses too, and joining either onto `$PATH` is the same
         // category error. Both are answered here, and a pin that does not resolve returns null —
-        // which every caller already reports as a NAMED missing tool rather than a fallback.
+        // which every caller already reports as a named missing tool rather than a fallback.
         if (str_contains($binaryName, DIRECTORY_SEPARATOR)) {
             return is_file($binaryName) && is_executable($binaryName) ? $binaryName : null;
         }
@@ -248,19 +247,19 @@ final readonly class SystemProcessRunner implements ProcessRunner
      * The ABSOLUTE `$PATH` entries. An unset PATH coerces to an empty string and yields no
      * directories, so a locate simply finds nothing.
      *
-     * ⚠️ **A relative entry is dropped, and that is a credential boundary rather than tidiness.**
-     * This filtered only EMPTY segments, so `.`, `node_modules/.bin` and `vendor/bin` were joined
-     * like any other directory — CWE-427, an uncontrolled search path element. Whatever the process
-     * happens to be sitting in decides which binary runs.
+     * **A relative entry is dropped, and that is a credential boundary rather than tidiness.**
+     * Joined like any other directory, `.`, `node_modules/.bin` and `vendor/bin` would be CWE-427,
+     * an uncontrolled search path element: whatever the process happens to be sitting in would
+     * decide which binary runs.
      *
      * The version fence does not close it: `ToolLocator` compares a `--version` string and
      * authenticates nothing, so any binary printing the expected line passes.
      *
      * And one tool makes this concrete. `pgls` is the only adapter handed the audited connection's
-     * password — it goes out as `PGPASSWORD` — and it ships ENABLED with `path => null`, resolved
-     * through `$PATH`. So before this filter, the first `postgrestools` on the search path received
-     * the database password, and a `.` entry made "the first one" mean "whatever is in this
-     * directory".
+     * password — it goes out as `PGPASSWORD` — and it ships enabled with `path => null`, resolved
+     * through `$PATH`. So the first `postgrestools` on the search path receives the database
+     * password, and without this filter a `.` entry would make "the first one" mean "whatever is in
+     * this directory".
      *
      * Absoluteness is tested the way {@see SingleFileResolver::absolutePath()} already tests it in
      * this package, rather than with a second spelling of the same question.

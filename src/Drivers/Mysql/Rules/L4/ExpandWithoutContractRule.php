@@ -181,7 +181,7 @@ final class ExpandWithoutContractRule extends AbstractMysqlRule implements Produ
      * it. Handing over the whole expand/contract recipe would tell somebody to add a column that is
      * already there, in a migration they are not allowed to edit.
      *
-     * ⚠️ `{{old_column}}` reaches the reader UNFILLED, and that is deliberate. Which column the new
+     * `{{old_column}}` reaches the reader unfilled, and that is deliberate. Which column the new
      * one replaced is a decision that does not appear in the statement — see this rule's own
      * limitations. A guessed name would read as decided; an empty placeholder reads as the question
      * it is.
@@ -318,11 +318,8 @@ final class ExpandWithoutContractRule extends AbstractMysqlRule implements Produ
      * against the session's DEFAULT database — whatever the connection selected — which a static
      * reader does not have. A wrong identity is worse than a bare one, because it looks decided.
      *
-     * ⚠️ This paragraph described PostgreSQL until 2026-08-25: `public.orders`, `search_path`, and
-     * guessing `public`. MySQL has none of the three — its schema IS its database, and an
-     * unqualified name resolves against the connection's current one. It was a docblock rather than
-     * behavior, so nothing was measurably wrong; it was still this package explaining a MySQL rule
-     * in another product's vocabulary, which is the one thing the engine split exists to prevent.
+     * MySQL has no `search_path` and no `public` schema to guess: its schema is its database, and an
+     * unqualified name resolves against the connection's current one.
      */
     private function qualifiedThroughTable(StatementTarget $column, StatementTarget $table): string
     {

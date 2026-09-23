@@ -51,13 +51,13 @@ use Symfony\Component\Console\Output\ConsoleOutputInterface;
  * that line a reader would see zero and believe it meant no drift, which is the exact silent green
  * this package refuses everywhere else.
  *
- * ⚠️ **AND IT EXITS CLEAN WHEN NO EXPECTATION COULD BE BUILT EITHER, WHICH IS THE ORDINARY CI CASE.**
+ * **And it exits clean when no expectation could be built either, which is the ordinary CI case.**
  * The reference is a shadow replay, and `deploy.shadow.allowed_environments` ships as
  * `['local', 'testing']` — so in a `ci` environment the production guard refuses and there is nothing
- * to compare against. The run says so and names the reason. It used to exit **3** there, from a second
- * verdict path inside this command that disagreed with {@see DriftExitPolicy} about report mode, and a
- * command documented to exit clean turning red on every CI run is how the default gets replaced with
- * something else. In **gate** mode that situation still blocks: there the exit code is the claim.
+ * to compare against. The run says so and names the reason, and the exit code comes from
+ * {@see DriftExitPolicy} like every other verdict: a command documented to exit clean that turned red
+ * on every CI run would be how the default gets replaced with something else. In **gate** mode that
+ * situation still blocks: there the exit code is the claim.
  *
  * ## Where the two sides come from
  *
@@ -229,12 +229,10 @@ final class DriftCommand extends Command
             $this->outputErrorLine('mode: '.$mode->value);
             $this->outputErrorLine('sqlens:drift: no expectation could be built: '.$reference?->reason?->value);
 
-            // ⚠️ ASKED, NOT DECIDED, AND THAT IS THE FIX. This branch used to derive its own exit
-            // code and got a different answer from the policy that claims to hold "the whole
-            // verdict": `UndeterminedInStrictMode` in report mode, where the policy says report mode
-            // never blocks. Under the shipped defaults that was the ordinary CI outcome — the
-            // reference is a shadow replay and `allowed_environments` does not include `ci`, so no
-            // reference is built and a report run exited 3 on a command documented to exit clean.
+            // Asked, not decided: the policy holds the whole verdict, and report mode never blocks.
+            // Under the shipped defaults this is the ordinary CI outcome — the reference is a shadow
+            // replay and `allowed_environments` does not include `ci`, so no reference is built — and
+            // an exit code of its own here would turn a command documented to exit clean red.
             //
             // The mode and the reason are printed above, which is the condition that makes a clean
             // report exit honest rather than silent.
@@ -452,10 +450,10 @@ final class DriftCommand extends Command
      * The connection this comparison addresses — the named one, or the one the rest of the package
      * resolves.
      *
-     * ⚠️ Through {@see DriverManager::defaultConnectionName()}, never `database.default` directly:
+     * Through {@see DriverManager::defaultConnectionName()}, never `database.default` directly:
      * `sqlens.connection` comes first there, and lint, audit, baseline and the agent rules all
-     * follow it. Reading the host default here meant that the moment a project set that key,
-     * `sqlens:drift` COMPARED a different database than `sqlens:lint` linted — and this command
+     * follow it. Reading the host default here would mean that the moment a project set that key,
+     * `sqlens:drift` compared a different database than `sqlens:lint` linted — and this command
      * creates a reference database to do it.
      */
     private function connectionName(DriverManager $drivers): string

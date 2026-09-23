@@ -143,21 +143,19 @@ final readonly class RawSqlSinks
      * reader that the tool has not understood their code, which costs more than the finding was
      * worth.
      *
-     * Derived rather than remembered: `RawSqlSinksTest` reflects every sink, collects the ones
-     * without a `bindings` parameter, and fails if that set and this constant disagree. So a future
-     * Laravel that gives `raw()` bindings, or grows another argument-less member, moves this list —
-     * nobody has to notice.
+     * Derived rather than remembered: every sink is reflected, and the ones without a `bindings`
+     * parameter have to equal this constant. So a future Laravel that gives `raw()` bindings, or
+     * grows another argument-less member, moves this list — nobody has to notice.
      *
-     * ⚠️ `unprepared` was missing until 2026-08-21, and the guard could not have found it: the
-     * derivation walked `FRAGMENT_SINKS` alone, against `Query\\Builder`. `unprepared` is a
-     * STATEMENT sink on `Connection`, so it sat outside the ground set of the very check that
-     * exists to keep this list honest — the same shape as `raw` itself before 2026-08-17.
+     * `unprepared` belongs here too, although it is a statement sink on `Connection` rather than a
+     * fragment sink on `Query\\Builder`, so a derivation over `FRAGMENT_SINKS` alone does not reach
+     * it.
      *
-     * The consequence was user-facing, not cosmetic. {@see RawInterpolationRule::remedy()} reads
-     * this list to decide whether "pass it as a binding" is advice somebody can act on, so
-     * interpolation inside `DB::unprepared()` was answered with `unprepared('… = ?', [$value])` —
-     * a call the framework does not offer, on the one sink that executes its string with no
-     * prepared statement at all.
+     * It matters to the user, not only to the list. {@see RawInterpolationRule::remedy()} reads
+     * this list to decide whether "pass it as a binding" is advice somebody can act on, so without
+     * `unprepared` here, interpolation inside `DB::unprepared()` would be answered with
+     * `unprepared('… = ?', [$value])` — a call the framework does not offer, on the one sink that
+     * executes its string with no prepared statement at all.
      *
      * @var list<string>
      */
@@ -169,14 +167,14 @@ final readonly class RawSqlSinks
     /**
      * The three methods a bare PDO handle offers for running a statement.
      *
-     * ⚠️ THESE ARE NOT IN `STATEMENT_SINKS`, AND THAT SEPARATION IS THE WHOLE POINT. Every name in
+     * These are not in `STATEMENT_SINKS`, and that separation is the whole point. Every name in
      * that list is evidence on its own or close to it — nobody writes `->unprepared()` on anything
      * but a connection. `prepare`, `query` and `exec` are the opposite: a repository, a cache, an
      * HTTP client and a template engine may all declare them. Putting them in the same list would
      * make the fence around an unresolved receiver ({@see CONNECTION_ONLY_SINKS}) decide a question
      * it cannot answer here, and the suite would report ordinary code in every project.
      *
-     * So they live apart and are matched ONLY against a receiver that resolves to `PDO`. The
+     * So they live apart and are matched only against a receiver that resolves to `PDO`. The
      * collector that reads them says the same thing in its own words, because the two have to
      * agree and the reason is not obvious from either side alone.
      *

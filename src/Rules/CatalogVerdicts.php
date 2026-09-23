@@ -132,14 +132,13 @@ final readonly class CatalogVerdicts
     }
 
     /**
-     * The second remediation seam's ONE caller — the catalog counterpart of `CaptureFindingCollector`.
+     * The second remediation seam's one caller — the catalog counterpart of `CaptureFindingCollector`.
      *
-     * One, and an architecture arm holds it there. On the lint side the number of callers grew from
-     * one to three, and the unspoken precondition — "a rule is only asked about something it
-     * reported" — broke silently when it did. Here the precondition is written on the contract and
-     * the call site is single, which is the pair that keeps it true.
+     * One, because the precondition — "a rule is only asked about something it reported" — breaks
+     * silently when callers multiply. Here the precondition is written on the contract and the call
+     * site is single, which is the pair that keeps it true.
      *
-     * ⚠️ Asked with the OBJECT, never with a statement. That is the whole reason the second contract
+     * Asked with the object, never with a statement. That is the whole reason the second contract
      * exists: {@see ProvidesRemediation} guarantees its placeholders come from a canonicalized
      * statement, and a catalog rule has none — so widening that seam would have made its guarantee
      * conditional rather than adding a case to it.
@@ -184,11 +183,10 @@ final readonly class CatalogVerdicts
      * object that came from a reading always carries one. The driver name stands in only for a
      * context built by hand — a subject that came from no reading at all.
      *
-     * ⚠️ THIS USED TO SAY "never a file and a line", AND THAT WAS TRUE UNTIL IT COST SOMETHING. A
-     * catalog finding says `public.orders.customer_id`; the person reading the pull request is
-     * looking at a migration diff. The database has never heard of the file, so the join has to be
-     * made by reading the migrations — and where it cannot be made, the finding is reported exactly
-     * as it was before. The anchor is presentation: it enters no fingerprint and changes no verdict.
+     * A catalog finding says `public.orders.customer_id`; the person reading the pull request is
+     * looking at a migration diff. The database has never heard of the file, so the join to a file
+     * and a line is made by reading the migrations — and where it cannot be made, the finding carries
+     * no file. The anchor is presentation: it enters no fingerprint and changes no verdict.
      */
     private static function location(SchemaObject $object, ?MigrationSubjectMap $map, string $projectRoot): Location
     {

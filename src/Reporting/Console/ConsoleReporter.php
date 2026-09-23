@@ -432,28 +432,20 @@ final readonly class ConsoleReporter implements Reporter
     /**
      * What is actually wrong, in the words the rule wrote.
      *
-     * ⚠️ THE CONSOLE REPORTER PRINTED NEITHER THIS NOR THE URL, AND IT IS THE DEFAULT FORMAT. The
-     * dial line is assembled from `messagePrefix`, which is a SOURCE LABEL — the literal strings
-     * `sqlens.lint`, `sqlens.audit`, `sqlens.security` — and not a sentence. So a real finding
-     * reached the terminal as
+     * The console is the default format, so the sentence has to reach it. The dial line is
+     * assembled from `messagePrefix`, which is a source label — the literal strings `sqlens.lint`,
+     * `sqlens.audit`, `sqlens.security` — and not a sentence. Without this note a real finding would
+     * reach the terminal as
      *
      *     [fail]  SEC.AUTH.HBA_TRUST_LOCAL  sqlens.lint  severity=medium  hba_rule
      *
      * A rule id, a label, and two dials: nothing saying what was found, and nothing saying where to
-     * read about it. The message and the documentation URL are first-class fields on every finding
-     * and this class read neither, so the sentence reached the JSON, SARIF and agent readers and
-     * never the person at the terminal — the one reader who cannot go and look the id up in a
-     * schema.
+     * read about it. The message and the documentation URL are first-class fields on every finding,
+     * and the person at the terminal is the one reader who cannot go and look the id up in a schema.
      *
-     * The defect was already recorded HALF-WAY, a few lines below: the debt field is introduced by
-     * a comment observing that these lines "carry the message PREFIX and never the message itself".
-     * That threaded one value through for one rule family. This is the same observation applied
-     * where it belongs.
-     *
-     * ⚠️ Do not name the two fields here in their `ClassName::$field` form. `ReporterLocalization`
-     * scans this file as TEXT for a finding-building class that also reaches the translator, and it
-     * cannot tell a docblock from a statement — the first draft of this comment failed that guard
-     * over prose describing the fix.
+     * The two fields are not named here in their `ClassName::$field` form: a text scan for a
+     * finding-building class that also reaches the translator cannot tell a docblock from a
+     * statement.
      */
     private function messageNote(Finding $finding): ?string
     {

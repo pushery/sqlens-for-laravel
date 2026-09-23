@@ -72,13 +72,13 @@ final readonly class PhpSqlFormatter implements SqlFormatter
     }
 
     /**
-     * The UTF-8 byte order mark, handled as a UNIT rather than as three characters of SQL.
+     * The UTF-8 byte order mark, handled as a unit rather than as three characters of SQL.
      *
-     * ⚠️ It was not, and the result was the worst class of bug this suite can have. The tokenizer
-     * saw `EF`, `BB` and `BF` as three separate tokens and put a space between each, so a file that
-     * opened with a BOM came back opening with `EF 20 BB 20 BF`: **a valid UTF-8 file rewritten as
-     * an invalid one**. The run reported success, and because the damaged form is itself stable,
-     * every later `--check` called the file clean. Nothing anywhere would have said what happened.
+     * Otherwise the tokenizer would see `EF`, `BB` and `BF` as three separate tokens and put a space
+     * between each, so a file that opened with a BOM would come back opening with `EF 20 BB 20 BF`:
+     * **a valid UTF-8 file rewritten as an invalid one**. The run would report success, and because
+     * the damaged form is itself stable, every later `--check` would call the file clean — the worst
+     * class of bug a formatter can have.
      */
     private const string BYTE_ORDER_MARK = "\xEF\xBB\xBF";
 
@@ -177,16 +177,16 @@ final readonly class PhpSqlFormatter implements SqlFormatter
     /**
      * `line_width`, when a project set it to anything but the shipped default. Nothing else.
      *
-     * Checked BEFORE any work, the way the external backends check theirs, and conditional for the
+     * Checked before any work, the way the external backends check theirs, and conditional for the
      * reason PgFormatterBackend states about the same option: a core that refused every run because it
      * cannot bound a line would be a core nobody can use, and the shipped default is a value nobody
      * chose.
      *
-     * ⚠️ Until this existed, `line_width` was read from config, validated, and folded into the style
-     * FINGERPRINT — and then ignored. Measured: 20, 100 and 400 gave byte-identical output. A project
-     * that set it saw its report claim a different style and its files come back the same, which is
-     * precisely the silent drop {@see FormatUndeterminedReason::StyleNotExpressible} exists to prevent.
-     * Wrapping to a column is a real feature and may arrive later; saying nothing was never an option.
+     * `line_width` is read from config, validated, and folded into the style fingerprint, and the
+     * core does not wrap to a column: 20, 100 and 400 give byte-identical output. Without this, a
+     * project that set it would see its report claim a different style and its files come back the
+     * same, which is precisely the silent drop {@see FormatUndeterminedReason::StyleNotExpressible}
+     * exists to prevent.
      *
      * @return list<string>
      */
@@ -227,10 +227,10 @@ final readonly class PhpSqlFormatter implements SqlFormatter
     {
         $previous = $tokens[$index - 1] ?? null;
 
-        // ⚠️ AFTER a line comment, always. The rule below only broke BEFORE one, so whatever
-        // followed a `-- note` on the next line was joined onto the comment's line and commented
-        // out: `where x = 1 -- note` over `and y = 2` came back as `-- note AND y = 2`, a condition
-        // gone from an UPDATE. The one arm about it put the comment before FROM, which breaks anyway.
+        // After a line comment, always, not only before one: otherwise whatever followed a
+        // `-- note` on the next line would be joined onto the comment's line and commented out.
+        // `where x = 1 -- note` over `and y = 2` would come back as `-- note AND y = 2`, a condition
+        // gone from an UPDATE.
         if ($previous instanceof SqlToken && $previous->isLineComment()) {
             return true;
         }

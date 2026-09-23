@@ -43,11 +43,10 @@ final readonly class SqlFluffBackend extends ExternalSqlFormatter
             '-',
             '--dialect', $dialect === Dialect::Pgsql ? 'postgres' : 'mysql',
             '--nocolor',
-            // ⚠️ `--indent-unit` and `--indented-joins` stood here, and `sqlfluff format` knows
-            // neither: measured on 4.3.0, the call ended with exit 2 and "No such option", so every
-            // file came back refused and no project using this backend ever got a statement
-            // formatted. Only a fake runner had checked this list, and a fake confirms whatever was
-            // typed into it. Layout values reach SQLFluff through the directives in input() instead.
+            // No `--indent-unit` or `--indented-joins`: `sqlfluff format` knows neither, and
+            // measured on 4.3.0 the call ends with exit 2 and "No such option", so every file would
+            // come back refused. Layout values reach SQLFluff through the directives in input()
+            // instead.
         ];
     }
 

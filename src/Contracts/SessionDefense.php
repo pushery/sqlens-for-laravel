@@ -84,23 +84,22 @@ interface SessionDefense
     /**
      * Whether this failure is the session's own time budget firing.
      *
-     * ⚠️ A SQLSTATE ALONE CANNOT ANSWER THIS, on either engine, and the two implementations used
-     * to try.
+     * A SQLSTATE alone cannot answer this, on either engine.
      *
      * Measured against PostgreSQL 18.0 and MySQL 8.4.10 by provoking each bound:
      *
      *     pg statement_timeout        57014
-     *     pg lock_timeout             55P03          <- this path only knew 57014
+     *     pg lock_timeout             55P03
      *     mysql max_execution_time    HY000 / 3024
      *     mysql innodb_lock_wait      HY000 / 1205
      *
-     * On MySQL the SQLSTATE carries no information at all: `HY000` is the GENERAL class, worn
+     * On MySQL the SQLSTATE carries no information at all: `HY000` is the general class, worn
      * equally by a gone server (2006), a lost connection (2013) and a full disk (1030). Reading it
-     * as "the server was not at fault" turned every one of those into a budget the reader was told
-     * to relax. So the driver's own error number travels with it.
+     * as "the server was not at fault" would turn every one of those into a budget the reader is
+     * told to relax. So the driver's own error number travels with it.
      *
-     * The classification itself lives in {@see SessionTimeoutDetector}, which the shadow path has
-     * always used and this one did not — one answer, reached from both sides.
+     * The classification itself lives in {@see SessionTimeoutDetector}, which the shadow path uses
+     * too — one answer, reached from both sides.
      *
      * @param  int|null  $driverCode  the driver's own error number, when the exception carried one
      */

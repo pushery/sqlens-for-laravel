@@ -366,12 +366,11 @@ final readonly class DriverCaptorFactory
         $direct = $this->config->get('sqlens.capture.shadow.direct_connection');
         $shadow = $this->config->get('sqlens.capture.shadow.connection');
 
-        // ⚠️ `capture.shadow.connection` IS READ HERE, AND IT WAS PREVIOUSLY READ BY NOTHING AT ALL.
-        // The shipped config describes it ("the connection to clone") and the shadow-mode page
-        // tells a project to point shadow mode at a dedicated CREATEDB role through it — the
-        // pattern Prisma calls a `shadowDatabaseUrl`. A project that followed that advice got
-        // provisioning, the maintenance link and the template connection built on the role and the
-        // server of the connection UNDER EXAMINATION instead.
+        // `capture.shadow.connection` is read here. The shipped config describes it ("the
+        // connection to clone") and the shadow-mode page tells a project to point shadow mode at a
+        // dedicated CREATEDB role through it — the pattern Prisma calls a `shadowDatabaseUrl`.
+        // Provisioning, the maintenance link and the template connection are built on that role and
+        // server, not on the connection under examination.
         //
         // `direct_connection` still wins when both are named, and that order is mechanical rather
         // than a preference: template operations and CREATE DATABASE break behind a transaction
@@ -615,13 +614,12 @@ final readonly class DriverCaptorFactory
      * runner attaches the resolved one immediately (`LintRunner` calls
      * `withResolvedServerVersion()` on what this returns) — because only the runner has resolved it.
      *
-     * ⚠️ THIS SAID the version "arrives with the version-pin unit, so a rule that needs a version
-     * still yields a named undetermined until then". That unit shipped. A rule reached from a lint run
-     * has the version; the absence here is the seam, not a stage on the way to something.
+     * A rule reached from a lint run has the version; its absence here is the seam, not a stage on
+     * the way to something.
      *
-     * Public because it is the ONE source of a run's subject context: the captor is
+     * Public because it is the one source of a run's subject context: the captor is
      * canonicalized under it, and the finding collector must build its subjects under
-     * the SAME context — a second, separately-built context would let the two drift.
+     * the same context — a second, separately-built context would let the two drift.
      */
     public function subjectContextFor(string $key): SubjectContext
     {

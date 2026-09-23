@@ -476,16 +476,13 @@ final readonly class RuleRegistryExport
             pages: $pages,
             category: $notice->category()->value,
             level: $notice->level()->value,
-            // ⚠️ THIS USED TO STAMP `null` UNDER A COMMENT SAYING RUNNER NOTICES ARE NEVER
-            // SEVERITY-GATED, AND ONE OF THEM ALWAYS WAS. `DEBT.UNRECORDED` ships with
-            // `Severity::Info`, so the published artifact told a consumer the rule has no severity
-            // while the finding it would receive carried one — and the severity is where
-            // `DebtThresholds::escalate()` starts ageing a debt toward `high`. Asked now, so the
-            // artifact reports what the notice really carries.
+            // Asked, not stamped `null`: a runner notice can carry a severity. `DEBT.UNRECORDED`
+            // ships with `Severity::Info`, and the severity is where `DebtThresholds::escalate()`
+            // starts ageing a debt toward `high`, so an artifact saying "no severity" would
+            // contradict the finding a consumer receives.
             //
-            // The rest of the sentence still holds: a run notice carries no version window, is
-            // never deprecated and classifies no downtime, because it describes the run rather
-            // than a statement.
+            // A run notice carries no version window, is never deprecated and classifies no
+            // downtime, because it describes the run rather than a statement.
             severity: $notice->severity()?->value,
             stability: $notice->stability()->value,
             confidence: null,

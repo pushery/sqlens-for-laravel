@@ -24,11 +24,10 @@ final readonly class ServerSettingMatrix
     /**
      * The shipped matrix, which must be there.
      *
-     * ⚠️ THIS DELEGATED TO {@see self::fromFile()} AND INHERITED ITS TOLERANCE. An unreadable or
-     * malformed file yielded an EMPTY matrix, and an empty matrix makes {@see AbstractServerSettingRule}
-     * report `UnknownServerVersion` for every setting rule — "no expectation is on file for %s on this
-     * server version". The version was known perfectly well; the ARTIFACT was missing, and the reader
-     * was sent to look at their server.
+     * It does not delegate to {@see self::fromFile()} and does not inherit its tolerance. An empty
+     * matrix makes {@see AbstractServerSettingRule} report `UnknownServerVersion` for every setting rule
+     * — "no expectation is on file for %s on this server version" — so an unreadable artifact would send
+     * a reader to look at their server when the version is known perfectly well.
      *
      * The tolerance belongs to `fromFile()`, whose caller chose the path and may legitimately hand it
      * one that does not exist. Nobody chose this path, so a file that is not there means the

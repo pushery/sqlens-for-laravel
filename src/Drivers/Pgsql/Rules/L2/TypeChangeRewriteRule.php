@@ -70,16 +70,16 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
      * with controls in both directions so "no rewrite" is a reading rather than a blind detector:
      * `int -> bigint` rewrote, `varchar(10) -> varchar(20)` did not.
      *
-     * ## ⚠️ The wording carries the whole risk, and it is deliberate
+     * ## The wording carries the whole risk, and it is deliberate
      *
-     * A heuristic that names its exception is EASIER TO WAVE AWAY — someone not on UTC reads "this
+     * A heuristic that names its exception is easier to wave away — someone not on UTC reads "this
      * may not apply" and stops there. So the sentence does not offer an excuse, it hands over the
      * decision procedure: one command, in the session that will run the migration. A caveat you can
      * answer in a second is not an invitation to skip the check; an unanswerable one is.
      *
      * ## Why it is not in the matrix artifact
      *
-     * The matrix maps target -> impact. This is neither: it is what a reader should DO about an
+     * The matrix maps target -> impact. This is neither: it is what a reader should do about an
      * impact that depends on something no lint run can see. Putting prose in the artifact would also
      * mean a schema change to a shipped file for a sentence only this rule reads.
      *
@@ -89,9 +89,9 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
      * be the first time any rule receives it, so it waits for that seam to exist rather than growing
      * a private channel for one caveat.
      *
-     * ⚠️ BOTH directions, because the measurement covered both: `timestamptz -> timestamp` under a
-     * UTC session is free as well. Listing only the one the ticket named would have left the other
-     * half reporting an outage nobody gets.
+     * Both directions, because the measurement covered both: `timestamptz -> timestamp` under a
+     * UTC session is free as well, and listing only one would leave the other reporting an outage
+     * nobody gets.
      *
      * @var list<string>
      */
@@ -129,7 +129,7 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
             return '';
         }
 
-        return ' ⚠️ THIS ONE DEPENDS ON THE SESSION THAT RUNS THE MIGRATION: since PostgreSQL 12 a '
+        return ' This one depends on the session that runs the migration: since PostgreSQL 12 a '
             .'timestamp/timestamptz change is metadata-only when TimeZone is UTC, and a rewrite '
             .'otherwise. Measured on 18.4 over 50,000 rows: UTC 0.7 ms and no rewrite, Europe/Berlin '
             .'25.9 ms and a rewrite. Answer it rather than assume it — run SHOW TimeZone; in the '

@@ -9,15 +9,13 @@ use Illuminate\Contracts\Config\Repository;
 /**
  * `--budget`, resolved once for both deploy commands so they cannot disagree about what it accepts.
  *
- * ⚠️ **IT USED TO BE DROPPED SILENTLY, IN A PACKAGE THAT NAMES EVERY OTHER UNKNOWN VALUE.**
- * Both gates read it as `ctype_digit($budget) ? (int) $budget : null`, and `null` is the signal for
- * *"not given, take the configured value"*. So `--budget=abc` did not fail — it ran with the
- * configured default, reported nothing, and left an operator believing they had bounded the run they
- * were about to gate a deploy on.
+ * **An unusable value is refused by name, never dropped.** Read as
+ * `ctype_digit($budget) ? (int) $budget : null`, `--budget=abc` would come back as `null`, the
+ * signal for *"not given, take the configured value"*, and run with the configured default without a
+ * word — leaving an operator believing they had bounded the run they were about to gate a deploy on.
  *
- * The principle it was breaking is written down two files away, in {@see AuditCommand}: *"an unknown
- * value is a named misconfiguration"*. `--level=12` and `--debt=recrod` are both refused by name;
- * `--budget=abc` was the one that was not.
+ * The principle is written down in {@see AuditCommand}: *"an unknown value is a named
+ * misconfiguration"*. `--level=12` and `--debt=recrod` are refused by name, and so is `--budget=abc`.
  *
  * ## Why a trait rather than a method on each command
  *

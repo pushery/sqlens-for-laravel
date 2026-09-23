@@ -64,14 +64,13 @@ final readonly class CaptureRuleMetadata
     /**
      * Always `Authored`, and the constructor above is the reason rather than a claim beside it.
      *
-     * Every producer in this family hands over a bad and a good example as REQUIRED arguments, so a
+     * Every producer in this family hands over a bad and a good example as required arguments, so a
      * capture id that named something the run merely observed could not be declared: whoever wrote
      * it would have had to invent the two migrations. The classification is therefore already made,
      * by the shape of the constructor, and this method reads it out instead of restating it.
      *
-     * ⚠️ Those examples reached nobody until now. They are written, they are good, and
-     * `ExplainRuleTool` answered `registered: false` for all ten ids because it read only the JSON
-     * register beside them. {@see RuleExampleRegister} is the join.
+     * {@see RuleExampleRegister} joins these examples with the JSON register, so `ExplainRuleTool`
+     * reaches them too.
      */
     public function attribution(): Attribution
     {

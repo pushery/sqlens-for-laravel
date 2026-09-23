@@ -22,22 +22,22 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * that names no object is never matched — "no target" is not an agreement, it is an absence, and
  * treating the two alike is exactly the substitution this package refuses everywhere else.
  *
- * ## ⚠️ NO SHIPPED RULE REACHES THIS LAYER, AND FOR GRANTS THAT IS A DECISION, NOT A GAP
+ * ## No shipped rule reaches this layer, and for grants that is a decision, not a gap
  *
  * The two halves of a grant finding share none of the three fields this matches on. The migration
  * side's id carries an `_IN_MIGRATION` suffix (`SEC.PRIV.GRANT_PUBLIC_IN_MIGRATION` against
  * `SEC.PRIV.GRANT_PUBLIC`), it names the statement's table where the catalog names a `Grant`, and so
  * the names differ too. Measured over the whole `SEC.PRIV.*` family, 7 rules against 15. Pairing them
- * looked like the missing half of this layer, and it is not wanted:
+ * looks like the missing half of this layer, and it is not wanted:
  *
- * The migration half of `sqlens:security` judges the PENDING set. A pending `GRANT … TO PUBLIC` is
+ * The migration half of `sqlens:security` judges the pending set. A pending `GRANT … TO PUBLIC` is
  * not the live grant reported a second time; it is the next deploy granting it again. The two
  * findings carry two remedies, revoke the live grant and change the migration, and suppressing the
  * second as "the same fact" would hide that the first does not survive the next deploy.
  *
  * The privilege question that pairing raised is answered for the day a migration half reads
  * migrations that have already run: a grant finding's identity carries its privilege set, and the
- * migration side is the same fact only when its set is CONTAINED in the catalog's. Equality is too
+ * migration side is the same fact only when its set is contained in the catalog's. Equality is too
  * strict, because the catalog may hold more from another route, and any overlap is too loose, because
  * a live `SELECT` does not report a migration's `INSERT`. `ALL` compares through the catalog's own
  * `all_privileges`, because the set it expands to depends on the object and the server version.
@@ -68,14 +68,10 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  */
 final readonly class CrossSourceDedupeSuppressionSource
 {
-    // ⚠️ SNAKE_CASE, AND IT WAS THE ONLY HYPHENATED ONE OF EIGHT. Its seven siblings spell themselves
-    // `audit_ignore`, `destructive_opt_in`, `rls_dedupe`, `paired_view_dedupe` — and this string is a KEY
-    // in the JSON envelope's `suppressed_by_source` object, so one hyphen among eight underscores is a
-    // shape a consumer has to special-case forever.
-    //
-    // Renamed now because it is FREE now: this layer has never fired in any run, so no consumer has ever
-    // seen the old spelling in output. The same rename after it starts working is a breaking change to a
-    // published envelope.
+    // Snake case, like its seven siblings: `audit_ignore`, `destructive_opt_in`, `rls_dedupe`,
+    // `paired_view_dedupe`. This string is a key in the JSON envelope's `suppressed_by_source` object,
+    // so one hyphen among eight underscores would be a shape a consumer has to special-case forever,
+    // and renaming it once consumers see it would be a breaking change to a published envelope.
     public const string SOURCE = 'cross_source_dedupe';
 
     /**

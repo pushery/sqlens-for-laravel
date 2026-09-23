@@ -116,15 +116,8 @@ final readonly class PgsqlCatalogReader implements CatalogReader
      * Ordered as the catalog is walked rather than alphabetically, because that is the order a reader
      * of {@see read()} meets them and a list that agrees with the code is one less thing to check.
      *
-     * `pg_trigger` and `pg_proc` are BOTH read — the routine bodies and the trigger bindings drift
+     * `pg_trigger` and `pg_proc` are both read — the routine bodies and the trigger bindings drift
      * compares — and the security reader reads `pg_proc` a second time for a different question.
-     *
-     * ⚠️ This paragraph said "`pg_proc` and `pg_trigger` … neither is read here" until 2026-08-20,
-     * eleven lines above the `SchemaObjectType::Routine` that had joined the list below it. It is
-     * corrected rather than deleted because the correction is the point: a docblock that contradicts
-     * the code it introduces is worse than none, and this one shipped. `ReaderScopeDeclarationTest`
-     * holds the LIST against the reader's source and cannot read prose — which is exactly why the
-     * prose drifted while every arm stayed green.
      *
      * @return non-empty-list<SchemaObjectType>
      */

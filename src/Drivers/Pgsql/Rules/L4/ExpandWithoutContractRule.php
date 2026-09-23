@@ -158,7 +158,7 @@ final class ExpandWithoutContractRule extends AbstractPgsqlSafetyRule implements
      * it. Handing over the whole expand/contract recipe would tell somebody to add a column that is
      * already there, in a migration they are not allowed to edit.
      *
-     * ⚠️ `{{old_column}}` reaches the reader UNFILLED, and that is deliberate. Which column the new
+     * `{{old_column}}` reaches the reader unfilled, and that is deliberate. Which column the new
      * one replaced is a decision that does not appear in the statement — see this rule's own
      * limitations. A guessed name would read as decided; an empty placeholder reads as the question
      * it is.
