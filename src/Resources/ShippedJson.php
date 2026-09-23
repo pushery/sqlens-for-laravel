@@ -38,33 +38,27 @@ final readonly class ShippedJson
      * broken installation as one that does not parse, and a loader that checked only the parse would
      * hand back a valid-looking empty register — the exact answer this class exists to prevent.
      *
-     * ⚠️ THE EMPTINESS HALF WAS MISSING, AND THE REFUSAL MESSAGE ALREADY ARGUED FOR IT. A missing
-     * `entries` key was refused with the words "an empty register would make the rules that read it
-     * silently correct about every server, which is a pass and not an undetermined" — and then
-     * `{"entries": []}` was accepted, producing that exact register. The reasoning was written out and
-     * stopped one step short of its own consequence.
+     * An empty required list is refused like a missing one: "an empty register would make the rules
+     * that read it silently correct about every server, which is a pass and not an undetermined" holds
+     * for `{"entries": []}` exactly as for a missing `entries` key.
      *
-     * ⚠️ It is tied to `$requiredKey` rather than applied to every read, and the distinction is
+     * It is tied to `$requiredKey` rather than applied to every read, and the distinction is
      * load-bearing. A caller that names a required key has already said it cannot work without that
      * list. The three callers that name none — the baseline's emittable ids and the two suppression
      * sources — are correct to accept an empty file: nothing accepted and nothing suppressed both mean
-     * EVERYTHING is reported, which is the loud direction. Refusing them would turn a legitimate state
+     * everything is reported, which is the loud direction. Refusing them would turn a legitimate state
      * into a broken installation.
      *
      * @return array<array-key, mixed>
      */
     public static function decode(string $path, ?string $requiredKey = null): array
     {
-        // ⚠️ ONE BRANCH, NOT TWO, AND THE REASON IS COVERAGE RATHER THAN BREVITY. This read used to be
-        // guarded by `is_file()` first and `$raw === false` second, which reads well and left a line no
-        // run can enter: a path that passes `is_file()` and then fails to READ needs a permission setup
-        // that is not portable to a CI container. Gate 2866 named it — `uncovered
-        // src/Resources/ShippedJson.php: 53` — and the honest answer to an unreachable branch is to not
-        // have one, rather than to chmod a fixture and hope the container is not root.
+        // One read, one branch. A path that passes `is_file()` and then fails to read needs a
+        // permission setup no portable environment reproduces, so it gets no branch of its own; the
+        // read decides, and the message is chosen after it.
         //
-        // The two messages survive, because they send an operator on different errands: "not there" means
-        // reinstall, "could not be read" means look at permissions. They are chosen inline, on ONE line,
-        // since a multi-line ternary has an else-line coverage never marks either.
+        // The two messages send an operator on different errands: "not there" means reinstall,
+        // "could not be read" means look at permissions.
         $raw = @file_get_contents($path);
 
         if ($raw === false) {

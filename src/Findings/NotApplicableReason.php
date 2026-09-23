@@ -83,7 +83,7 @@ enum NotApplicableReason: string
      * `SEC.CFG.TLS_DISABLED` — every one of them about a container the job creates and destroys,
      * none of them about the application the job is there to judge.
      *
-     * ⚠️ **It withholds a verdict about the SERVER and nothing else.** Every schema finding reports
+     * **It withholds a verdict about the server and nothing else.** Every schema finding reports
      * unchanged, because the schema is what gets deployed onto a real host and the declaration says
      * nothing about it. And the withheld checks are not dropped: they are what `sqlens:predeploy`
      * runs against the target host, where the same facts are real — so the finding names that
@@ -91,8 +91,8 @@ enum NotApplicableReason: string
      *
      * Not {@see DeclinedByProject}, though both come from configuration, and the difference is worth
      * the second case: that one says "this construct is not how we solve the problem", an answer
-     * about the DESIGN that holds wherever the code runs. This one says "the thing you are looking
-     * at is not the thing that will be operated", an answer about THIS RUN — the identical project,
+     * about the design that holds wherever the code runs. This one says "the thing you are looking
+     * at is not the thing that will be operated", an answer about this run — the identical project,
      * audited on its target host, gets the verdict back.
      */
     case ServerIsDisposable = 'server_is_disposable';

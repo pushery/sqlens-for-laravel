@@ -223,7 +223,7 @@ final readonly class NotValidThenValidateTemplate
      * The sequence that makes a column NOT NULL without the scan — two statements on 18, not four.
      *
      * `SET NOT NULL` proves no row is null by reading every one of them, under an ACCESS EXCLUSIVE
-     * lock. ⚠️ **What the safe sequence removes is the LOCK CLASS, not the reading** — measured on
+     * lock. **What the safe sequence removes is the lock class, not the reading** — measured on
      * 18.0 over two million rows, the bare `SET NOT NULL` and the `VALIDATE` that replaces it both
      * take about 46 ms. The bare one holds ACCESS EXCLUSIVE for that time and the validation holds
      * SHARE UPDATE EXCLUSIVE, so on a table where the scan is minutes rather than milliseconds one
@@ -233,24 +233,22 @@ final readonly class NotValidThenValidateTemplate
      * ## Why this is no longer the PostgreSQL 12 detour
      *
      * That detour is four statements — add `CHECK (col IS NOT NULL)` unvalidated, validate it, set
-     * the column (which since 12 TRUSTS the validated check and skips its own scan), drop the check
+     * the column (which since 12 trusts the validated check and skips its own scan), drop the check
      * that has become redundant. It still works. On 18 a not-null constraint is a `pg_constraint`
      * row of its own with `contype = 'n'` and it accepts `NOT VALID`, so the same two moves do it
      * directly, and the package's floor is 18.
      *
-     * ⚠️ **The detector already treated the two-statement form as the correct one** — see
-     * {@see SetNotNullChange}, where a statement
-     * carrying `NOT VALID` draws no finding. So the package recognized the answer as right while
-     * never handing it over, which is the kind of disagreement that stays invisible: both halves
-     * read correctly on their own.
+     * **The detector accepts the same two-statement form** — see {@see SetNotNullChange}, where a
+     * statement carrying `NOT VALID` draws no finding. The sequence handed over here is therefore
+     * one the rule itself would pass.
      *
-     * ## ⚠️ The half-state is the OPPOSITE of the detour's, and it is named rather than glossed
+     * ## The half-state is the opposite of the detour's, and it is named rather than glossed
      *
      * Measured on 18.0 with a null row already in the table: `ADD CONSTRAINT … NOT NULL col NOT
      * VALID` is accepted, and the catalog then reports the column as **NOT NULL** — `attnotnull`
      * true, `information_schema` saying `NO` — while the null row is still there. The `VALIDATE` is
-     * what finds it, with `23502`. The old detour's half-state was honest in comparison: the column
-     * stayed nullable, which was true.
+     * what finds it, with `23502`. The detour's half-state is honest in comparison: the column stays
+     * nullable, which is true.
      *
      * So this sequence's gap cannot be found by looking at the column, and the note for it says so.
      * What finds it is `convalidated = false`, which is what `sqlens:predeploy` reads — and that

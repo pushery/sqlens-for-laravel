@@ -50,7 +50,7 @@ final readonly class QueryWatcher implements RuntimeGuard
      * `illuminate/queue`, neither of which this package requires. Listening by name costs nothing
      * when the event never fires, and works exactly as well when it does.
      *
-     * ⚠️ Without these the cumulative budget is dead from the second job onward in any long-lived
+     * Without these the cumulative budget is dead from the second job onward in any long-lived
      * process — and dead in the way that looks healthiest: the log reports once and then goes quiet
      * forever, which reads like an application that got faster.
      *

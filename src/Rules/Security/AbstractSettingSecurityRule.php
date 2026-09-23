@@ -37,7 +37,7 @@ abstract class AbstractSettingSecurityRule extends AbstractServerSettingRule imp
      * A server SETTING is the server, by definition of this base — so the whole family declares it
      * here rather than rule by rule.
      *
-     * ⚠️ Deliberately not on {@see AbstractServerSettingRule}, one level up, even though every rule
+     * Deliberately not on {@see AbstractServerSettingRule}, one level up, even though every rule
      * there also reads a setting. That base is category-neutral and the privacy suite sits on it
      * too; declaring it there would hand the same withholding to rules nobody measured and nobody
      * asked about. The line is drawn where the security meaning is, which is here.

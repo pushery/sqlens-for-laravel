@@ -20,7 +20,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * ## The timing is the whole problem
  *
  * An `INT` key runs out at 2,147,483,647 signed and 4,294,967,295 unsigned, and `MEDIUMINT` and
- * `SMALLINT` far sooner. ⚠️ **Laravel's `increments()` produces `INT UNSIGNED`**, so the unsigned
+ * `SMALLINT` far sooner. **Laravel's `increments()` produces `INT UNSIGNED`**, so the unsigned
  * ceiling is the one most keys this rule meets are actually near — the finding names whichever
  * applies, read from the catalog rather than guessed. Nothing warns on the way there; the first
  * symptom is an INSERT failing on a table that has been working for years. And the moment the fix
@@ -110,14 +110,13 @@ final class NarrowIntegerPrimaryKeyRule extends AbstractCatalogRule implements D
             return [];
         }
 
-        // ⚠️ THE CEILING OF *THIS* KEY, NOT A LIST OF THREE SIGNED ONES. The message named
-        // 2,147,483,647 for every `int` key — and `increments()`, the commonest shape this rule ever
-        // meets, produces `INT UNSIGNED`, which reaches 4,294,967,295. The recommendation was right
-        // and the number behind it was wrong by a factor of two, which is precisely what a reader
-        // checks before deciding whether to trust the rest.
+        // The ceiling of this key, not a list of three signed ones. `increments()`, the commonest
+        // shape this rule meets, produces `INT UNSIGNED`, which reaches 4,294,967,295 rather than
+        // 2,147,483,647. A number wrong by a factor of two is precisely what a reader checks before
+        // deciding whether to trust the rest.
         //
-        // The signedness comes from the catalog, which had read it all along; only the projection was
-        // missing. See {@see NarrowIntegerPrimaryKey::CEILING} for the measurement.
+        // The signedness comes from the catalog. See {@see NarrowIntegerPrimaryKey::CEILING} for the
+        // measurement.
         $ceiling = NarrowIntegerPrimaryKey::ceiling($narrow['type'], $narrow['unsigned']);
 
         return [RuleVerdict::flag(sprintf(

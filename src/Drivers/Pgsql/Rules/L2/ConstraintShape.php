@@ -23,17 +23,16 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  *
  * ## Why the exits live here too
  *
- * `null` covers everything the rule has nothing to say about, INCLUDING the two safe forms — a
+ * `null` covers everything the rule has nothing to say about, including the two safe forms — a
  * foreign key or check already marked `NOT VALID`, and a primary key or unique promoted from an
  * index with `USING INDEX`. Those are the exact sequences the templates recommend, so firing on
  * them would cry wolf on our own advice; keeping that exit beside the classification is what stops
  * a later reader from re-deciding it one way in the rule and another in the template.
  *
- * ⚠️ **AND `null` USED TO MEAN A SECOND THING, WHICH IS THE DEFECT THIS CLASS CARRIED.** The final
- * `return` handed back the same `null` for any form the arms did not recognize, so an unconsidered
- * constraint kind was indistinguishable from a considered-and-cleared one. {@see self::Unrecognized}
- * carries that meaning now, and a rule turns it into an `undetermined` rather than a silent pass.
- * The deliberate exits stay `null`, each one written down where it is taken.
+ * **And `null` means only that.** A form the arms do not recognize is {@see self::Unrecognized},
+ * never `null`, so an unconsidered constraint kind cannot look like a considered-and-cleared one,
+ * and a rule turns it into an `undetermined` rather than a silent pass. The deliberate exits are
+ * `null`, each one written down where it is taken.
  */
 enum ConstraintShape
 {
@@ -68,14 +67,13 @@ enum ConstraintShape
     /**
      * An `ADD CONSTRAINT` form this classifier does not know.
      *
-     * ⚠️ **This case exists because `null` was carrying two meanings, and the second one was a silent
-     * pass.** `null` is the deliberate exit — a safe form, or a table born in this migration. The
-     * final `return` used to hand back the same `null` for anything the arms did not recognize, so a
-     * constraint kind nobody had thought about looked exactly like one that had been considered and
-     * cleared.
+     * **This case keeps `null` to one meaning.** `null` is the deliberate exit — a safe form, or a
+     * table born in this migration. Handing back the same `null` for anything the arms do not
+     * recognize would make a constraint kind nobody has thought about look exactly like one that has
+     * been considered and cleared.
      *
-     * It was not hypothetical. PostgreSQL 18's named not-null constraint fell straight through to it,
-     * and that statement performs the very scan `PG.L2.SET_NOT_NULL_SCAN` exists to report.
+     * The case is concrete: PostgreSQL 18's named not-null constraint is such a kind, and that
+     * statement performs the very scan `PG.L2.SET_NOT_NULL_SCAN` exists to report.
      *
      * A rule seeing this answers `undetermined` with a reason, never silence. "I do not recognize this
      * statement" and "this statement is fine" are different sentences, and only one of them is honest

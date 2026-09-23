@@ -20,10 +20,8 @@ use Pushery\SQLens\Today;
  * live state keeps this deterministic and side-effect-free, which is exactly what a reproducibility
  * header needs.
  *
- * ⚠️ THIS SAID "the trivial collector FOR NOW" and that the version collection "LANDS WITH the capture
- * and audit suites". Both suites shipped, and the collection did not land here — it landed in the
- * runners, which is the right place, because only a runner knows which instance it addressed. The
- * emptiness is the design rather than a stage on the way to something.
+ * The server versions are collected in the runners, not here, because only a runner knows which
+ * instance it addressed. The emptiness is the design rather than a stage on the way to something.
  */
 final readonly class ConfigRunContextCollector implements RunContextCollector
 {
@@ -37,12 +35,9 @@ final readonly class ConfigRunContextCollector implements RunContextCollector
      *                                          budget; null for the lint and audit runs, which have
      *                                          none
      *
-     * ⚠️ THE MODE IS A PARAMETER AND NOT A CONFIG READ, and that is the correction rather than a
-     * preference. `sqlens.mode` promised to choose "how SQLens obtains the SQL it reasons about"
-     * and no code path consulted it for that; its single reader was this line, so a key that chose
-     * nothing labeled every run. The label was then wrong wherever it mattered: `sqlens:drift`
-     * replays into a shadow database and `sqlens:postdeploy` captures in pretend, and both
-     * announced whatever the configuration happened to say.
+     * The mode is a parameter and not a config read: only the producer knows how it obtained the SQL.
+     * `sqlens:drift` replays into a shadow database and `sqlens:postdeploy` captures in pretend,
+     * whatever a configuration key would say.
      */
     public function collect(CaptureMode $mode, ?array $sessionTimeouts = null, ?string $checkTimings = null, ?int $timeBudgetMsConsumed = null, ?Today $today = null): RunContext
     {
@@ -72,10 +67,10 @@ final readonly class ConfigRunContextCollector implements RunContextCollector
             // header reads exactly like an active one, and a reader scanning for it and finding
             // nothing concludes the field is not emitted by this version.
             guardProfile: self::guardProfileFrom($this->config),
-            // ⚠️ THE DAY IS PASSED IN AND NEVER READ HERE, and the reason is the whole point of the
+            // The day is passed in and never read here, and the reason is the whole point of the
             // run clock: this collector is called once per run by five producers, and a `gmdate` on
             // this line would be a reading that competes with the one the rules got. Three of those
-            // producers report THIS context as their header; the lint runner treats it as a base and
+            // producers report this context as their header; the lint runner treats it as a base and
             // builds its own, so a null from there is not a gap.
             today: $today,
         );

@@ -49,12 +49,11 @@ enum SkipReason: string
      * redundancy heuristic that guesses, and a guess about an index is wrong in exactly the way
      * that makes a team stop believing the tool.
      *
-     * ⚠️ **It used to carry a second meaning, and that is why {@see self::NotComparable} exists.** A
-     * partial index and a GIN index were reported here although nothing about them was unclear — both
-     * were read completely, and what they lacked was a comparison this build deliberately does not
-     * make. A consumer read four such notices as a backlog, "unknown, not fine", on exactly the
-     * indexes a statement would have been worth the most on. The two facts need opposite reactions:
-     * this one may be a gap worth closing, the other one is the construction.
+     * **It has one meaning, and {@see self::NotComparable} carries the other.** A partial index and a
+     * GIN index are read completely, and what they lack is a comparison this build deliberately does
+     * not make; reported here, they would read as a backlog, "unknown, not fine", on exactly the
+     * indexes a statement is worth the most on. The two facts need opposite reactions: this one may be
+     * a gap worth closing, the other one is the construction.
      */
     case NotUnderstood = 'not_understood';
 

@@ -72,8 +72,8 @@ final readonly class PgsqlSettingCrossFactCollector implements SettingCrossFactC
      * again by whoever reads them. A reader acting on this finding has to know which layer to
      * change; the numbers alone say only that the pair is wrong.
      *
-     * ⚠️ Read from `pg_db_role_setting` rather than from `pg_settings.source`, and the difference is
-     * the whole reason this fact exists. `source` describes where the CURRENT SESSION's value came
+     * Read from `pg_db_role_setting` rather than from `pg_settings.source`, and the difference is
+     * the whole reason this fact exists. `source` describes where the current session's value came
      * from — and this audit sets both of these timeouts on its own session before it reads anything
      * (`capture.session.lock_timeout`). So `source` here says `session` for both, every time,
      * describing SQLens rather than the server. `pg_db_role_setting` holds what `ALTER DATABASE` and
@@ -146,7 +146,7 @@ final readonly class PgsqlSettingCrossFactCollector implements SettingCrossFactC
      * pooled connection the two halves can describe different backends, and the whole point of this
      * pair is that the two numbers are compared against each other.
      *
-     * ⚠️ `reset_val`, NOT `setting`, and getting this wrong would make the rule judge SQLens. The
+     * `reset_val`, not `setting`, and getting this wrong would make the rule judge SQLens. The
      * audit sets its own `lock_timeout` and `statement_timeout` before it reads anything, so
      * `setting` describes this tool's preamble on every server it is ever pointed at. `reset_val` is
      * what a `RESET` returns to: the value the server file, the database and the role have settled

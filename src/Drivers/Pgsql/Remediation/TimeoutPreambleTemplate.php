@@ -79,17 +79,16 @@ final readonly class TimeoutPreambleTemplate
      *                           rules are gated on, so a payload can never recommend a GUC the
      *                           config surface does not know
      * @param  bool  $withinTransaction  whether the migration this payload is for runs inside one.
-     *                                   ⚠️ **Not a refinement — it decides whether the SQL works at all.**
-     *                                   This rendered `SET LOCAL` unconditionally while the comment beside it
-     *                                   promised the plain form outside a transaction, so the package handed a
-     *                                   `CONCURRENTLY` migration a preamble that PostgreSQL discards: measured
-     *                                   on 18.0, `SET LOCAL` in autocommit answers `WARNING: SET LOCAL can only
-     *                                   be used in transaction blocks` and leaves the GUC at `0`. Every
-     *                                   `CONCURRENTLY` migration is such a migration, and this package's own
-     *                                   `ConcurrentlyTemplate` builds one — so the advice produced the very
-     *                                   configuration the rule then read as safe.
+     *                                   **Not a refinement — it decides whether the SQL works at all.**
+     *                                   Outside a transaction the preamble is the plain form, because
+     *                                   PostgreSQL discards a `SET LOCAL` there: measured on 18.0, `SET LOCAL`
+     *                                   in autocommit answers `WARNING: SET LOCAL can only be used in
+     *                                   transaction blocks` and leaves the GUC at `0`. Every `CONCURRENTLY`
+     *                                   migration is such a migration, and this package's own
+     *                                   `ConcurrentlyTemplate` builds one, so a `SET LOCAL` there would read
+     *                                   as a bounded migration while no timeout is set at all.
      *
-     *                                   ⚠️ **No default, deliberately.** A default would have to be
+     *                                   **No default, deliberately.** A default would have to be
      *                                   `true`, since that is the common case — and then a caller that
      *                                   simply forgot would get the form that does nothing, silently,
      *                                   which is the defect this parameter exists to close.

@@ -23,23 +23,16 @@ enum FormatUndeterminedReason: string
     case ToolMissing = 'format_tool_missing';
 
     /*
-     * ⚠️ THERE WAS A `ToolVersionUnsupported` CASE HERE, AND NOTHING COULD EVER PRODUCE IT.
+     * There is no "version unsupported" case. The two other external-tool adapters in this package
+     * have a version window (`SquawkTool::MINIMUM_VERSION`, `PglsTool::MINIMUM_VERSION`); the format
+     * backends have no version concept at all, so nothing could produce such a case.
      *
-     * It read "it is installed, and its version is outside the window this adapter was measured
-     * against" — a window that does not exist. The two OTHER external-tool adapters in this package
-     * do have one (`SquawkTool::MINIMUM_VERSION`, `PglsTool::MINIMUM_VERSION`, each pinned in
-     * lockstep with the version its lane installs); the format backends have no version concept at
-     * all. Measured over the whole tree, the case was constructed 0 times in `src/`, referenced 0
-     * times in `tests/`, and named in no documentation. Its own declaration was the only line that
-     * mentioned it.
-     *
-     * That matters here more than it would in an internal enum: this is a STRING-BACKED enum whose
+     * That matters here more than it would in an internal enum: this is a string-backed enum whose
      * values travel in the JSON envelope, so the case list is part of what a consumer may switch on
-     * — and 1.0 freezes it. A value that cannot occur is a promise with no producer, and removing it
-     * after the first release would be a breaking change. Before it, it costs nothing.
+     * — and 1.0 freezes it. A value that cannot occur is a promise with no producer.
      *
-     * It comes back the day a format backend gets a measured version window, and not before. The
-     * honest alternative — inventing a window nobody measured — would refuse working installs.
+     * It is added the day a format backend gets a measured version window, and not before. The
+     * alternative — inventing a window nobody measured — would refuse working installs.
      */
 
     /** It ran and did not finish inside the budget. */
@@ -79,14 +72,13 @@ enum FormatUndeterminedReason: string
      * The file itself could not be read — permissions, a broken symlink, a race with something
      * that deleted it mid-run.
      *
-     * ⚠️ Its OWN case rather than folding into {@see self::Unparsable}, because that is what the
-     * suite used to do and the answer it produced was actively misleading. An unreadable file was
-     * read as an empty string, and an empty string is "the statement is empty, so there is nothing
-     * to format" — a verdict about SQL, over a file whose SQL nobody ever saw. The run was right
-     * that something was undetermined and wrong about what, so a reader went looking at their
-     * query when the problem was a mode bit.
+     * Its own case rather than folding into {@see self::Unparsable}, because that answer would be
+     * actively misleading. An unreadable file read as an empty string is "the statement is empty,
+     * so there is nothing to format" — a verdict about SQL, over a file whose SQL nobody ever saw.
+     * The run would be right that something was undetermined and wrong about what, so a reader
+     * would go looking at their query when the problem is a mode bit.
      *
-     * A skip without a reason is a bug in this package. A skip with the WRONG reason is worse: it
+     * A skip without a reason is a bug in this package. A skip with the wrong reason is worse: it
      * spends someone's afternoon before it is caught.
      */
     case FileUnreadable = 'format_file_unreadable';

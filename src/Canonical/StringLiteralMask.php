@@ -9,21 +9,21 @@ use Pushery\SQLens\Contracts\DriverCanonicalization;
 /**
  * Blanks the string literals in a canonical statement, so a rule scans syntax and not data.
  *
- * Canonicalization leaves literal CONTENT untouched by design: inside quotes a keyword is data, and
+ * Canonicalization leaves literal content untouched by design: inside quotes a keyword is data, and
  * rewriting it would make the tool edit the SQL it is describing. That decision is right, and it is
  * what puts the burden here — every rule that greps for a clause has to blank the literals first, or
  * a column default spelling `LOCK=` decides a rule about clauses.
  *
  * ## Why this is one class rather than a regex per rule
  *
- * It used to be a regex per rule, and there were seven copies of the same one:
+ * A regex per rule would mean seven copies of the same one:
  *
  * ```php
  * preg_replace("/'(?:[^']|'')*'/", "''", $canonical)
  * ```
  *
- * Seven copies is not a tidiness problem. That pattern hard-codes an answer to two questions the
- * DRIVER owns, and it gets both wrong for MySQL:
+ * Seven copies would not be a tidiness problem. That pattern hard-codes an answer to two questions
+ * the driver owns, and it gets both wrong for MySQL:
  *
  * - **Which delimiters open a literal.** MySQL's manual, under String Literals, says a string is
  *   enclosed within either single quote or double quote characters. `"` is only an identifier quote
@@ -34,12 +34,12 @@ use Pushery\SQLens\Contracts\DriverCanonicalization;
  * - **Whether a backslash escapes the delimiter.** MySQL escapes with a backslash by default;
  *   PostgreSQL does not, because `standard_conforming_strings` is on. The pattern above encodes the
  *   PostgreSQL answer, so on MySQL `'it\'s LOCK=ALGORITHM'` masks to `''s LOCK=ALGORITHM'` and the
- *   literal's content escapes into the scan. ⚠️ **That one needs no double quote and no raw SQL** —
+ *   literal's content escapes into the scan. **That one needs no double quote and no raw SQL** —
  *   any MySQL migration with a backslash-escaped apostrophe in a default already has it.
  *
  * Both are properties of the engine, and both already had an answer on {@see DriverCanonicalization}
- * — `stringLiteralDelimiters()` and `usesBackslashStringEscapes()`, which the splitter has been
- * reading all along. The rules were the only layer that asked nobody.
+ * — `stringLiteralDelimiters()` and `usesBackslashStringEscapes()`, which the splitter reads too.
+ * This class asks the driver, so the rules do as well.
  *
  * ## Why a scanner and not a cleverer pattern
  *

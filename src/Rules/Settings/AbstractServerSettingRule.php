@@ -220,11 +220,10 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
         );
 
         if (! $expectation instanceof ServerSettingExpectation) {
-            // ⚠️ TWO CASES, ONE `null`, AND THEY SEND AN OPERATOR TO DIFFERENT PLACES. `for()` answers
-            // absent both when the version could not be resolved and when the version IS known and the
-            // shipped matrix holds no row for this variable. Every setting rule used to report the
-            // first for both — so somebody with a perfectly well pinned server was told their version
-            // was the problem, and the sentence beside it said so too.
+            // Two cases, one `null`, and they send an operator to different places. `for()` answers
+            // absent both when the version could not be resolved and when the version is known and the
+            // shipped matrix holds no row for this variable. Reporting the first for both would tell
+            // somebody with a perfectly well pinned server that their version was the problem.
             //
             // What separates them is whether the subject carried a version at all, which is the one
             // fact `for()` cannot report back through a null.
@@ -418,7 +417,7 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
      * writing the same three sentences four times each, and the fourth copy is the one that stops
      * agreeing with the other three.
      *
-     * ⚠️ NO DOWNTIME CLASS. There is no deploy here at all — the change happens in a configuration
+     * No downtime class. There is no deploy here at all — the change happens in a configuration
      * file, and what it costs is stated in the reason rather than in an axis about migrations. The
      * validator refuses one on a `schema_object` payload, so this is enforced rather than merely
      * intended.
@@ -464,8 +463,8 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
      * somebody to set it is advice they will follow for an afternoon before discovering it cannot be
      * done, so it gets the honest sentence instead.
      *
-     * ⚠️ **`data_checksums` was in that sentence and does not belong there.** It is changeable in
-     * place with `pg_checksums --enable` on a cleanly shut-down cluster, so it takes the `Offline`
+     * **`data_checksums` does not belong in that sentence.** It is changeable in place with
+     * `pg_checksums --enable` on a cleanly shut-down cluster, so it takes the `Offline`
      * arm — a maintenance window rather than a migration. The two plans differ by orders of
      * magnitude, and this sentence is read exactly where one of them gets scheduled.
      */

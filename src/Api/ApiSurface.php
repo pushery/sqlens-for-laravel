@@ -100,7 +100,7 @@ final readonly class ApiSurface
      * day somebody added a capability interface; a derivation alone would silently promise every
      * internal seam a driver happens to reach through.
      *
-     * ⚠️ NOT every interface in `src/Contracts/`. That namespace also holds the seams a DRIVER
+     * Not every interface in `src/Contracts/`. That namespace also holds the seams a driver
      * implements — a catalog reader, a pooler probe, an activity reader. Promising those would make
      * a major release out of an internal refactor nobody outside this package can observe.
      *

@@ -398,8 +398,8 @@ final readonly class BreakingChangeDetector
         $after = is_array($candidate['extension_contracts'] ?? null) ? $candidate['extension_contracts'] : [];
         $changes = [];
 
-        // ⚠️ `array_unique`, and the arm below is why it is here. Without it a contract present on
-        // both sides is visited twice and every change it carries is reported twice — which reads,
+        // `array_unique`, because without it a contract present on both sides is visited twice and
+        // every change it carries is reported twice — which reads,
         // in a failing gate, as two separate breaks to go and look at.
         foreach (array_unique([...array_keys($before), ...array_keys($after)]) as $contract) {
             $contract = (string) $contract;

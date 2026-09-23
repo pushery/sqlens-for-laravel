@@ -87,8 +87,8 @@ final readonly class SqlFileScanner
         // second pass would report the first pass's own changes.
         $files = array_values(array_unique($files));
 
-        // ⚠️ `SORT_STRING`, and the flag is the whole point rather than a default somebody typed.
-        // It compares BYTES; `SORT_LOCALE_STRING` would compare by the ambient collation, and the
+        // `SORT_STRING`, and the flag is the whole point rather than a default somebody typed.
+        // It compares bytes; `SORT_LOCALE_STRING` would compare by the ambient collation, and the
         // same tree would then produce a different order under `de_DE.UTF-8` than under `C`. A
         // `--check` report that reorders itself by environment cannot be diffed against yesterday's,
         // which is the whole reason the list is sorted at all.

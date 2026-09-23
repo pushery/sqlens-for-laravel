@@ -70,16 +70,16 @@ enum OnlineDdlPredicate: string
     /**
      * An ORDINARY index covers the column — not only a functional one.
      *
-     * ⚠️ KEPT APART FROM {@see self::ColumnHasFunctionalIndex} BECAUSE THE MATRIX NAMED ONLY THAT
-     * ONE AND THE SERVER REFUSES BOTH. Measured on 8.4.10, with the algorithm pinned:
+     * Kept apart from {@see self::ColumnHasFunctionalIndex}, because the server refuses on a plain
+     * index as well. Measured on 8.4.10, with the algorithm pinned:
      *
      *     drop column <stored generated>    no index -> accepted INSTANT, no rebuild
-     *     drop column <stored generated>    indexed  -> REFUSED, error 1845
+     *     drop column <stored generated>    indexed  -> refused, error 1845
      *     modify … character set utf8mb4    no index -> accepted INPLACE, no rebuild
-     *     modify … character set utf8mb4    indexed  -> REFUSED, error 1846
+     *     modify … character set utf8mb4    indexed  -> refused, error 1846
      *
      * Control, so the two refusals are not confused with the one the matrix already knows:
-     * `latin1 -> utf8mb4` WITHOUT an index is refused too (1846), and that is
+     * `latin1 -> utf8mb4` without an index is refused too (1846), and that is
      * {@see self::CharacterSetEncodingUnchanged}. The rows above are a pair that changes no stored
      * byte and still fails — the index is the whole difference.
      *

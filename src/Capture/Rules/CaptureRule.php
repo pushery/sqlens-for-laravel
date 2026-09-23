@@ -34,11 +34,11 @@ interface CaptureRule
     public function metadata(): CaptureRuleMetadata;
 
     /**
-     * Whether this rule judges the given capture outcome, on THIS run. A result it does not
-     * apply to produces NO finding — "not applicable" is silence, never a pass.
+     * Whether this rule judges the given capture outcome, on this run. A result it does not
+     * apply to produces no finding — "not applicable" is silence, never a pass.
      *
-     * ⚠️ The context is here because some capture questions are driver-dependent, and the answer
-     * has to be available BEFORE a finding exists. `evaluate()` must return a Finding, so a rule
+     * The context is here because some capture questions are driver-dependent, and the answer
+     * has to be available before a finding exists. `evaluate()` must return a Finding, so a rule
      * that discovers in there that it should say nothing has no way to say nothing — the collector
      * appends whatever comes back. A rule that needs the driver to decide therefore needs it here.
      */

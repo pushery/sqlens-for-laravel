@@ -71,16 +71,15 @@ final class DoctorCommand extends Command
 
     public function handle(Repository $config, ServerVersion $versions, ToolReport $tools, ConnectionProbe $probe, DriverManager $drivers): int
     {
-        // ⚠️ REPORTED, NOT REFUSED — the one command where the validator's usual answer is wrong.
+        // Reported, not refused — the one command where the validator's usual answer is wrong.
         //
         // Every other command in this package stops here, because a key it does not know is a key
-        // it IGNORES and ignoring is silent. This one describes an environment, and an operator
+        // it ignores and ignoring is silent. This one describes an environment, and an operator
         // reaches for it precisely when something is off. A doctor that will not start because the
-        // configuration is broken has inverted its own purpose; the suite has said so since long
-        // before the validator arrived here — "it DESCRIBES a broken profile rather than dying on
-        // it, the one command that must survive it".
+        // configuration is broken has inverted its own purpose: it describes a broken profile
+        // rather than dying on it, the one command that must survive it.
         //
-        // Nothing is lost by reporting instead: a run that MATTERS still stops, at whichever
+        // Nothing is lost by reporting instead: a run that matters still stops, at whichever
         // command was going to do the work. What is gained is that the command you reach for
         // afterwards can name the key.
         $inspection = $this->configInspection();
@@ -91,14 +90,14 @@ final class DoctorCommand extends Command
         // connections the operator actually asked about. A probe that were always passed would make
         // the connect the default, which is the one thing this command must not do.
         //
-        // ⚠️ AND IT IS SCOPED, which is a correctness rule rather than a convenience. `DB_PORT` is
-        // ONE variable and every connection in a stock `database.php` reads it, so a project
+        // And it is scoped, which is a correctness rule rather than a convenience. `DB_PORT` is
+        // one variable and every connection in a stock `database.php` reads it, so a project
         // pointed at PostgreSQL hands the mariadb and mysql entries port 5432 as well. Opening
-        // those is not a failed connect: the TCP session ESTABLISHES and the MySQL driver then
+        // those is not a failed connect: the TCP session establishes and the MySQL driver then
         // waits for a handshake packet a PostgreSQL server will never send. No timeout applies,
-        // because nothing failed. Measured: `--probe` over all six connections printed the four
-        // header lines and hung on the FIRST one, indefinitely, while the connection the operator
-        // cared about sat two lines below, reachable.
+        // because nothing failed. Measured: probing all six connections prints the four header
+        // lines and hangs on the first one, indefinitely, while the connection the operator cares
+        // about sits two lines below, reachable.
         if (($probeScope = $this->probeScope($config, $drivers)) === false) {
             /** @var array<string, mixed> $configured */
             $configured = $config->get('database.connections', []);
@@ -138,18 +137,18 @@ final class DoctorCommand extends Command
         }
 
         if ($format === 'json') {
-            // ⚠️ THE FLAGS ARE THE POINT, AND THE CAST THAT USED TO BE HERE WAS THE DEFECT.
-            // `json_encode` answers `false` on invalid UTF-8, a `(string)` cast turns that into `''`,
-            // and `line('')` prints a BLANK LINE. The exit code comes from the verdict below, so a
-            // pipeline consumer received an empty document with a success status -- the shape this
-            // package rules out everywhere else.
+            // The flags are the point. `json_encode` answers `false` on invalid UTF-8, a `(string)`
+            // cast would turn that into `''`, and `line('')` prints a blank line. The exit code comes
+            // from the verdict below, so a pipeline consumer would receive an empty document with a
+            // success status -- the shape this package rules out everywhere else.
             //
             // The bytes have a real source: this payload carries tool versions and resolutions read
-            // from PROCESS OUTPUT and `$PATH`, neither of which is guaranteed to be UTF-8.
+            // from process output and `$PATH`, neither of which is guaranteed to be UTF-8.
             //
             // Same policy as {@see JsonReporter}: substitute the bad bytes so a malformed version
-            // string cannot suppress the whole document, and keep THROW for the structural failures
-            // that substitution cannot cause. Whatever happens, the run does not answer with silence.
+            // string cannot suppress the whole document, and keep `JSON_THROW_ON_ERROR` for the
+            // structural failures that substitution cannot cause. Whatever happens, the run does not
+            // answer with silence.
             $this->line(json_encode(
                 $this->payload($config, $versions, $tools, $probe, $probeScope, $inspection),
                 JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES,
@@ -304,7 +303,7 @@ final class DoctorCommand extends Command
      * The validator's verdict as data: `ok` when the configuration is a shape this package
      * understands, and the offending paths when it is not.
      *
-     * ⚠️ `status` IS PRESENT EVEN WHEN EVERYTHING IS FINE, for the same reason the guard section
+     * `status` is present even when everything is fine, for the same reason the guard section
      * reports `off` as a value rather than an absence: a field that appears only when something is
      * wrong answers "is my configuration alright?" with silence, which is indistinguishable from a
      * doctor that never looked.
@@ -514,11 +513,11 @@ final class DoctorCommand extends Command
         if ($probe !== 'all') {
             $name = (string) $probe;
 
-            // ⚠️ IT USED TO BE TAKEN UNCHECKED, AND THE RESULT READ AS A SERVER PROBLEM. The loop
-            // below only ever walks CONFIGURED names, so `--probe=prodd` matched nothing and every
-            // connection printed `undetermined (no connection is open — pass --probe to open one)`.
-            // A diagnostic told an operator to pass the flag they had just passed, and the real
-            // answer — that name does not exist — was nowhere in the output.
+            // Checked, because the loop below only ever walks configured names: unchecked,
+            // `--probe=prodd` would match nothing and every connection would print `undetermined
+            // (no connection is open — pass --probe to open one)`, telling an operator to pass the
+            // flag they had just passed while the real answer — that name does not exist — was
+            // nowhere in the output.
             //
             // Named rather than dropped, which is this package's own rule two files over: "an
             // unknown value is a named misconfiguration."

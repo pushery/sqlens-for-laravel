@@ -93,24 +93,20 @@ final readonly class CheckResult
      * wants to allow this answer has to name it in `allow_undetermined`, and prose alone would send
      * them to look the token up.
      *
-     * The shape `name: detail` is not new: 24 of the 43 call sites had written it out by hand,
-     * independently, before there was anything to compose it from. The remaining 19 GAIN a prefix
-     * they did not print before, which is a deliberate change to their rendered text and the reason
-     * five pinned message tests moved with this commit.
+     * The shape `name: detail` is the one call sites wrote out by hand before it was composed here,
+     * so every undetermined result now carries the same prefix.
      *
-     * ⚠️ THE DETAIL IS **NOT** REDACTED HERE, and that was tried. Fifteen of the forty-three call
-     * sites compose a driver's message into it, so a sink here looked right — and it is not, for a
-     * reason a scan found only at the gate: this field carries the CHECK'S OWN PROSE as well, and
-     * some of that prose quotes an identifier. `GrantCheck` writes "the migration connection names
-     * the role `deploy`", which the shape redactor removes, because removing a quoted role is
-     * exactly its job when the text came from a driver.
+     * **The detail is not redacted here.** Some call sites compose a driver's message into it, so
+     * a sink here looks right — and it is not: this field carries the check's own prose as well,
+     * and some of that prose quotes an identifier. `GrantCheck` writes "the migration connection
+     * names the role `deploy`", which the shape redactor would remove, because removing a quoted role
+     * is exactly its job when the text came from a driver.
      *
      * A role name there is not a credential. It is the identifier the reader typed into their own
      * configuration, and it is the one thing that makes the message actionable.
      *
-     * So the redaction stays at the SITES that compose a `Throwable`, where the text is a driver's
-     * and nothing else. The measurement that justified a sink here looked for `role "…"` and this
-     * prose uses backticks — one quote style out of the three the redactor handles.
+     * So the redaction stays at the sites that compose a `Throwable`, where the text is a driver's
+     * and nothing else.
      *
      * @param  list<Finding>  $findings
      */

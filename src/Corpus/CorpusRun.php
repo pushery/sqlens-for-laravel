@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Corpus;
 
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Outcome;
+use Pushery\SQLens\Levels\Level;
 
 /**
  * Turns one collection's findings into classified cases.
@@ -31,12 +32,29 @@ use Pushery\SQLens\Findings\Outcome;
 final readonly class CorpusRun
 {
     /**
+     * The level a corpus measurement runs at: the highest one there is.
+     *
+     * The rate is a claim about the whole rule pack. A run at the level a host application happens to
+     * configure leaves every rule above that level silent, and the classifier would book the silence
+     * as a false negative where the corpus expects a failure and as a correct silence where it expects
+     * none. Both would be verdicts about rules that never ran.
+     *
+     * The measurement command and the real-engine lane read this one value, so the report and the
+     * test that holds it cannot drift onto two different levels.
+     */
+    public static function measuredLevel(): int
+    {
+        return max(array_map(static fn (Level $level): int => $level->value, Level::cases()));
+    }
+
+    /**
      * Classify one collection against the findings a lint run produced for it.
      *
      * @param  list<Finding>  $findings  from the shipped runner, unmodified
+     * @param  array<string, int>  $declaredLevels  rule id => the level the shipped rule registry declares for it
      * @return list<array{rule_id: string, driver: string, level: int, classification: CorpusClassification}>
      */
-    public static function classify(CorpusCollection $collection, array $findings, string $driver): array
+    public static function classify(CorpusCollection $collection, array $findings, string $driver, array $declaredLevels = []): array
     {
         $observed = self::worstPerRule($findings);
         $levels = self::levelPerRule($findings);
@@ -49,10 +67,12 @@ final readonly class CorpusRun
             $cases[] = [
                 'rule_id' => $ruleId,
                 'driver' => $driver,
-                // The level the finding carried, or 0 when the rule said nothing at all. A missing
-                // level is not an unknown one: no finding means no level was reported, and putting
-                // a guessed number in the per-level breakdown would move a bar nobody measured.
-                'level' => $levels[$ruleId] ?? 0,
+                // The level the rule DECLARES, whether or not it spoke in this run. A silent rule has
+                // a level too: a level-8 naming rule that correctly says nothing is still a level-8
+                // case, and filing it under level 0 would put it in the breakdown of the capture
+                // layer. Only a rule the registry does not know falls back to the level its finding
+                // carried, and to 0 when there was no finding either.
+                'level' => $declaredLevels[$ruleId] ?? $levels[$ruleId] ?? 0,
                 'classification' => CorpusClassifier::classify($expectation['outcome'], $observed[$ruleId] ?? null),
             ];
         }

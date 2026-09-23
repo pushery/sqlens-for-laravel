@@ -213,17 +213,16 @@ final class TypeImplicitCastRule extends AbstractCatalogRule implements Declares
             return null;
         }
 
-        // Only where this rule actually FLAGGED, which is narrower than "said something". Asking
+        // Only where this rule actually flagged, which is narrower than "said something". Asking
         // the rule rather than re-deriving the test here: two conditions for one question drift
         // the day the rule narrows its subject.
         //
-        // ⚠️ AN UNDETERMINED VERDICT MUST NOT CARRY MATERIAL, AND THE FIRST VERSION OF THIS LET IT.
-        // A table whose only mismatched pair had one end the catalog could not read is reported as
-        // undetermined -- the question was asked and not answered. A considered `none` beside that
-        // reads as "here is what to do about the thing I just said I could not decide", which is
-        // the one way a fix template is worse than none at all. The concern that serves every other
-        // catalog rule filters exactly this way; this rule builds its own payload and had to say so
-        // itself. Found by the coverage floor rather than by a test, which is its own lesson.
+        // An undetermined verdict must not carry material. A table whose only mismatched pair had
+        // one end the catalog could not read is reported as undetermined -- the question was asked
+        // and not answered. A considered `none` beside that would read as "here is what to do about
+        // the thing I just said I could not decide", which is the one way a fix template is worse
+        // than none at all. The concern that serves every other catalog rule filters exactly this
+        // way; this rule builds its own payload, so it filters here itself.
         $flagged = array_filter(
             $this->judgeSchemaObject($object),
             static fn (RuleVerdict $verdict): bool => ! $verdict->isPass

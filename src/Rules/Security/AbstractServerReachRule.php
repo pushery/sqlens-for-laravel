@@ -58,7 +58,7 @@ abstract class AbstractServerReachRule extends AbstractSchemaObjectSecurityRule 
      * The name says it: a privilege that reaches past the DATABASE to the server is a fact about the
      * server, whoever holds it.
      *
-     * ⚠️ And this is the family that shows why the declaration belongs to the rule rather than to a
+     * And this is the family that shows why the declaration belongs to the rule rather than to a
      * prefix list. Its ids sit under `SEC.PRIV.*` alongside {@see GrantToPublicRule}, which judges a
      * grant on a table this project's own migrations created — as real inside a container as on any
      * host, and not withheld here. Same prefix, opposite answer.

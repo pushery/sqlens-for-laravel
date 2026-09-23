@@ -32,8 +32,8 @@ namespace Pushery\SQLens\Config;
  * scalar, null — the published value wins whole, including when it is an empty list, which is the
  * answer neither of Laravel's helpers can express.
  *
- * ⚠️ The deciding side is the package's, and reading it off the PUBLISHED side instead is a real
- * defect that a control arm caught before this shipped. An empty array in a published file means two
+ * The deciding side is the package's, and reading it off the published side instead would be a real
+ * defect. An empty array in a published file means two
  * different things depending on where it sits: `'format' => []` is a project saying it sets nothing
  * in that block, while `'exclude' => []` is a project saying none. They are indistinguishable
  * from the published side and obvious from the package's, because the package ships a map at the

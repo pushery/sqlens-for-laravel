@@ -111,20 +111,19 @@ final readonly class RuntimeDdlGuard implements QueryInspector
     /**
      * Whether the statement begins with a comment, hiding its keyword from a first-word reading.
      *
-     * All THREE comment forms, because all three are produced by real tooling: the double-dash form
+     * All three comment forms, because all three are produced by real tooling: the double-dash form
      * by hand-written migrations, the block form by query-tagging middleware, which prepends a
-     * comment to every statement an application runs — and the hash form, which is MySQL's third
-     * and was missing here.
+     * comment to every statement an application runs — and the hash form, which is MySQL's third.
      *
-     * ⚠️ THE HASH FORM WAS THE DANGEROUS OMISSION, not a tidy one. A form this method does not know
-     * does not fall to `undetermined`: it falls through to `isDdl()`, which reads `#` as the leading
-     * word, does not find it among the keywords, and returns in silence. Measured against 8.4.10,
-     * `# app=web` followed by a `CREATE TABLE` created the table and drew no violation at all — so
-     * an application whose middleware tags in the hash style had this guardrail switched off rather
-     * than enabled, with nothing on the surface to say so.
+     * Leaving one out is dangerous, not untidy. A form this method does not know does not fall to
+     * `undetermined`: it falls through to `isDdl()`, which reads `#` as the leading word, does not
+     * find it among the keywords, and returns in silence. Measured against 8.4.10, `# app=web`
+     * followed by a `CREATE TABLE` creates the table, so without the hash form an application whose
+     * middleware tags in that style would have this guardrail switched off, with nothing on the
+     * surface to say so.
      *
-     * ⚠️ MySQL's double-dash needs a following space or control character — `--x` is minus-minus
-     * there, and this method calls it a comment anyway. That is the CAUTIOUS direction (an
+     * MySQL's double-dash needs a following space or control character — `--x` is minus-minus
+     * there, and this method calls it a comment anyway. That is the cautious direction (an
      * `undetermined` where MySQL would compute), so it stays; it is written down because the
      * asymmetry otherwise looks like a bug worth "fixing" in the direction that loses findings.
      */

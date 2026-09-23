@@ -11,20 +11,18 @@ namespace Pushery\SQLens\Contracts;
  * instance.
  *
  * The marker is what the run consults for the `use_statistics` axis: with statistics
- * turned on but no reader for THIS run — a lint run opens no catalog session — a
+ * turned on but no reader for this run — a lint run opens no catalog session — a
  * statistics-dependent rule is a named `statistics_unavailable` undetermined; with
- * statistics off, it does not run at all. A rule WITHOUT this marker is unaffected
+ * statistics off, it does not run at all. A rule without this marker is unaffected
  * either way — it reads the migration and needs no live reading.
  *
- * It is a marker, not a method on the Rule contract, so a rule opts IN by
+ * It is a marker, not a method on the Rule contract, so a rule opts in by
  * implementing it and every existing rule stays untouched.
  *
- * ⚠️ AND THE SENTENCE THAT USED TO CLOSE THIS BLOCK WAS THE PROBLEM IT CLAIMED TO SOLVE. It said
- * the marker "keeps `use_statistics` an honest three-valued switch rather than a config key with
- * no effect" — while no shipped rule implemented the marker, so the filter it feeds was always
- * empty and the switch had exactly the effect it was supposed to be saved from. What makes the key
- * honest is `PreflightService`, which withholds the statistics READER when it is off, so the
- * deploy gate stops escalating a severity by table size. This seam covers the lint half, and it
- * covers it for third-party rules — no rule in this package reasons about statistics yet.
+ * The marker alone does not make `use_statistics` an honest switch: no rule in this package
+ * implements it, so the lint filter it feeds is empty. What makes the key honest is
+ * `PreflightService`, which withholds the statistics reader when it is off, so the deploy gate
+ * does not escalate a severity by table size. This seam covers the lint half, for third-party
+ * rules.
  */
 interface StatisticsDependent {}

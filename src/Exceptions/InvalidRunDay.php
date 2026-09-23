@@ -9,7 +9,7 @@ use InvalidArgumentException;
 /**
  * A pinned run day is not a day.
  *
- * ⚠️ This is a user misconfiguration and NOT a packaging error, which is why it extends
+ * This is a user misconfiguration and not a packaging error, which is why it extends
  * `InvalidArgumentException` rather than the `LogicException` the bundled-artifact exceptions use: a
  * pinned day arrives from a caller — a reproduced run, a boundary judgment being re-examined — and
  * the honest answer to a bad one is to refuse it by name.

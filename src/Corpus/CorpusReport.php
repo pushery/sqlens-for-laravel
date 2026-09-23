@@ -44,14 +44,19 @@ final readonly class CorpusReport
     /**
      * Build the report body.
      *
+     * The server versions are an addition to the artifact rather than a new shape, so
+     * `SCHEMA_VERSION` stays where it is: a report written before the field existed reads as "the
+     * version is unavailable", never as "no server was involved".
+     *
      * @param  list<CorpusCollection>  $collections
      * @param  list<string>|null  $ruleIds  the catalog this rate describes; null only for a caller
      *                                      that has none to give. The HASH is derived here rather
      *                                      than passed in, so the digest and the list it digests
      *                                      cannot be written by two different callers and disagree
+     * @param  array<string, array{version: string, source: string}|null>  $serverVersions  collection path => server met
      * @return array<string, mixed>
      */
-    public static function of(CorpusMetrics $metrics, array $collections, ?array $ruleIds = null): array
+    public static function of(CorpusMetrics $metrics, array $collections, ?array $ruleIds = null, array $serverVersions = []): array
     {
         return [
             'schema_version' => self::SCHEMA_VERSION,
@@ -73,7 +78,7 @@ final readonly class CorpusReport
                 'hash' => RuleCatalogFingerprint::of($ruleIds),
                 'rule_ids' => self::sortedIds($ruleIds),
             ],
-            'ground_set' => self::groundSet($collections),
+            'ground_set' => self::groundSet($collections, $serverVersions),
             'summary' => [
                 // Null when nothing could be measured, and null is NOT zero: zero reads as "no
                 // false positives", which is the best possible result rather than the absence of
@@ -98,9 +103,10 @@ final readonly class CorpusReport
      * What the measurement was made over.
      *
      * @param  list<CorpusCollection>  $collections
+     * @param  array<string, array{version: string, source: string}|null>  $serverVersions
      * @return list<array<string, mixed>>
      */
-    private static function groundSet(array $collections): array
+    private static function groundSet(array $collections, array $serverVersions = []): array
     {
         $entries = [];
 
@@ -115,6 +121,11 @@ final readonly class CorpusReport
                 // since moved — without it a stale measurement reads exactly like a current one.
                 'rule_catalog_hash' => $collection->manifest['rule_catalog_hash'],
                 'migrations' => count($collection->migrations),
+                // The server this collection was measured against. The same migrations classify
+                // differently on two server versions — a rule that speaks about an operation one
+                // release made instant has a different verdict on each — so a rate that does not
+                // name its engine version is a rate about an engine nobody can identify.
+                'server_version' => $serverVersions[$collection->path] ?? null,
                 'expectations' => $collection->outcomeCounts(),
             ];
         }

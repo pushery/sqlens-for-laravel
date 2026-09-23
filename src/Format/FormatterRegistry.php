@@ -46,16 +46,10 @@ final readonly class FormatterRegistry
     /**
      * The backend for a request, or a named reason there is none.
      *
-     * ⚠️ There is no longer an "unknown dialect" case to handle here, and the parameter that carried
-     * it is gone rather than defaulted. It selected only backends answering for BOTH dialects, on the
-     * stated grounds that such a backend is "safe to run blind, which is precisely what the built-in
-     * core is" — and the core is not: `SqlTokenizer` switches comment syntax on the dialect and
-     * `SqlToken` switches keyword case on it. The premise was false, so the branch was protection
-     * that did not protect.
-     *
-     * `sqlens:format` now refuses an unresolved dialect up front, which means every dialect reaching
-     * this method is one somebody named. Keeping the parameter with a default would have left a
-     * branch no run can enter — dead code held alive by the test that covers it.
+     * There is no "unknown dialect" case to handle here. No backend is safe to run blind, the
+     * built-in core included: `SqlTokenizer` switches comment syntax on the dialect and `SqlToken`
+     * switches keyword case on it. `sqlens:format` refuses an unresolved dialect up front, so every
+     * dialect reaching this method is one somebody named.
      *
      * @param  string  $requested  a backend name, or `auto`
      */
@@ -141,13 +135,13 @@ final readonly class FormatterRegistry
                 continue;
             }
 
-            // ⚠️ THE STYLE, as well as dialect and machine. Without it `auto` picked pgFormatter for a
-            // project with `leading_commas`, and every file came back `format_style_not_expressible`
-            // while the core, which does leading commas, sat further down the list. Measured with
-            // both binaries installed.
+            // The style, as well as dialect and machine. Without it `auto` would pick pgFormatter for
+            // a project with `leading_commas`, and every file would come back
+            // `format_style_not_expressible` while the core, which does leading commas, sat further
+            // down the list.
             $expresses = $candidate->unexpressible($style) === [];
 
-            // AVAILABILITY as well as dialect support, and the second half is what `auto` means.
+            // Availability as well as dialect support, and the second half is what `auto` means.
             // Without it the best backend for the dialect is chosen whether or not it is installed,
             // and every file comes back `format_tool_missing` while the core that would have worked
             // sits one line down the list. Measured, on a machine without pgFormatter.

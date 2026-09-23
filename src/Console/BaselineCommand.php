@@ -156,11 +156,11 @@ final class BaselineCommand extends Command
     }
 
     /**
-     * The baseline file to WRITE, anchored at the project root, or null.
+     * The baseline file to write, anchored at the project root, or null.
      *
-     * ⚠️ Anchored for the same reason the reader is: the config promises a repo-relative path and
-     * the schema refuses an absolute one, so a raw path put the file wherever the process happened
-     * to be started — outside the repository the path exists to keep it portable within.
+     * Anchored for the same reason the reader is: the config promises a repo-relative path and
+     * the schema refuses an absolute one, so a raw path would put the file wherever the process
+     * happened to be started — outside the repository the path exists to keep it portable within.
      */
     private function resolvePath(Repository $config): ?string
     {

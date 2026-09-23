@@ -20,4 +20,17 @@ interface SessionDefenses
 {
     /** The seal for this driver, or the safest available one when the driver is not recognized. */
     public function for(string $driver): SessionDefense;
+
+    /**
+     * The PDO attributes the reader's own copy of a connection is opened with, for this driver.
+     *
+     * Asked here rather than of the seal, and the difference is the unrecognized driver. `for()`
+     * answers that case with the safest SEAL it has, which is right for a seal: a wrong one fails
+     * loudly on its first statement. An attribute is different. Handed to a driver that does not
+     * know it, it breaks the connection before any statement runs, so an engine this build does
+     * not recognize gets none at all.
+     *
+     * @return array<int, mixed>
+     */
+    public function readerConnectionOptions(string $driver): array;
 }

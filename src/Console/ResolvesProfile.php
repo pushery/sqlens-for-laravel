@@ -93,12 +93,10 @@ trait ResolvesProfile
      * lives in illuminate/contracts, which the package does require. Shared here so
      * every suite command routes translation the one lean-safe way.
      *
-     * ⚠️ THE LOCALE IS PASSED EXPLICITLY, AND THIS CALL DID NOT. It is the sixth resolution
-     * point in the package; the five that existed when the rule was written all pass the
-     * constant, and this trait was added afterwards without it. Nothing about the omission
-     * looks wrong, and nothing goes red: on the usual host the fallback chain reaches `en`
-     * anyway. On a host that sets BOTH `app.locale` and `app.fallback_locale` to its own
-     * language — a German shop on `de`/`de`, which is an ordinary setup rather than a corner
+     * The locale is passed explicitly, as at every other resolution point in the package. Nothing
+     * about an omission would look wrong, and nothing would go red: on the usual host the fallback
+     * chain reaches `en` anyway. On a host that sets both `app.locale` and `app.fallback_locale` to
+     * its own language — a German shop on `de`/`de`, which is an ordinary setup rather than a corner
      * — there is no path to English at all, and the translator returns the key it was given.
      *
      * Every profile, severity and format diagnostic in `sqlens:lint`, `sqlens:audit`,

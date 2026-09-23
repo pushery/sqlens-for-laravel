@@ -218,7 +218,7 @@ final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements Decl
      * The catalog case is if anything the harder of the two: a table in the database is populated by
      * definition, so the empty-table escape the `CREATE TABLE` case has does not exist here.
      *
-     * ⚠️ NO DOWNTIME CLASS, and it is not an omission. The lint side passes one because it is about
+     * No downtime class, and it is not an omission. The lint side passes one because it is about
      * a deploy that is about to happen; here there is no deploy — the cost arrives when somebody
      * writes the migration, and depends on which key they choose. A value would be a sentence about
      * a deploy that does not exist, and the validator refuses one rather than rendering it.
@@ -239,10 +239,9 @@ final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements Decl
 
         return $this->noSafeSequence->payload(
             'sqlens::messages.remediation.no_safe_sequence.no_primary_key_live_table',
-            // ⚠️ NOT the statement half's verification key, and the first version reached for it.
-            // Its text says "run sqlens:lint again" — correct for a finding that read a migration,
-            // wrong here: this one read the CATALOG, so lint would never go quiet however good the
-            // fix. Two commands, two moments.
+            // Not the statement half's verification key. Its text says "run sqlens:lint again" —
+            // correct for a finding that read a migration, wrong here: this one read the catalog, so
+            // lint would never go quiet however good the fix. Two commands, two moments.
             'sqlens::messages.remediation.no_safe_sequence.schema_decision_state_verification',
             $this->id(),
             null,
@@ -347,20 +346,20 @@ final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements Decl
     /**
      * Whether the migration puts a primary key back on the same table after dropping it.
      *
-     * Ordered, not merely present: a key added BEFORE the drop is the key being dropped. The
+     * Ordered, not merely present: a key added before the drop is the key being dropped. The
      * stream carries the statements in capture order, so "after" is a fact the rule can read
      * rather than assume.
      *
-     * ⚠️ **AND THE RESTORE CAN SIT IN THE SAME STATEMENT, WHICH THIS USED TO MISS — REPORTING THE
-     * SAFER MIGRATION.** MySQL accepts `ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (id)`, and
+     * **The restore can sit in the same statement.** MySQL accepts
+     * `ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (id)`, and
      * that form is better than the two-statement one on both counts: the table is rebuilt once
      * instead of twice, and there is no moment when it has no primary key — which is the state this
-     * rule warns about. The statement scan below could never see it, because there IS no later
-     * statement: measured, the canonical model classifies the whole multi-action `ALTER` as ONE
+     * rule warns about. The statement scan below cannot see it, because there is no later
+     * statement: measured, the canonical model classifies the whole multi-action `ALTER` as one
      * statement of kind `drop_constraint`, and the add is not reflected in the kind at all.
      *
-     * So the rule reported the form it should approve of and stayed silent on the form that really
-     * does open the window. Reading the canonical text is the same move {@see dropsThePrimaryKey()}
+     * Without this check the rule would report the form it should approve of. Reading the
+     * canonical text is the same move {@see dropsThePrimaryKey()}
      * already makes one method up, and for the same reason: the kind is too coarse to tell these
      * apart, and the text is where the information actually is.
      */

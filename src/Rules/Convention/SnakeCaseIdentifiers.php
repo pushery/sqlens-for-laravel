@@ -48,6 +48,16 @@ final readonly class SnakeCaseIdentifiers
     public const string DEFAULT_PATTERN = '/^[a-z][a-z0-9_]*$/';
 
     /**
+     * The identifier quote characters of the two engines this judgment serves.
+     *
+     * A closed list rather than a driver lookup: {@see self::bareName()} takes a rendered string,
+     * and the one thing a shared shape judgment must not have is an engine.
+     *
+     * @var list<string>
+     */
+    private const array QUOTE_CHARACTERS = ['`', '"'];
+
+    /**
      * The object kinds this rule judges — and the list is SHORTER than it looks like it should be.
      *
      * A column, an index and a constraint are missing on purpose. They are members of a table, and
@@ -232,18 +242,95 @@ final readonly class SnakeCaseIdentifiers
     }
 
     /**
-     * The bare identifier out of a qualified name.
+     * The bare identifier out of a qualified name — unqualified AND unquoted.
      *
      * A column arrives as `schema.table.column` and a table as `schema.table`, so the last segment
      * is the name this rule is about. Splitting on the LAST dot rather than the first is what keeps
      * a schema called `My_Schema` from being reported once per column it contains — the schema is
      * its own object and gets judged once, on its own.
+     *
+     * ## Why the quoting has to come off, and what it cost that it did not
+     *
+     * The name reaching this rule from the lint path is a CANONICAL rendering, and
+     * {@see Identifier::canonical()} keeps the driver's quotes whenever the name would not survive
+     * unquoted. A keyword is that case on both engines: BookStack's `action` column canonicalizes to
+     * `` `action` `` and a PostgreSQL `text` column to `"text"`.
+     *
+     * A rule judging the SHAPE of that string judges the quote character too — so a column named
+     * `action`, which is snake_case by any reading, was reported as "not snake_case: it contains a
+     * character outside a-z, 0-9 and underscore". Both halves of that sentence were about the
+     * backticks. Measured on the real corpus, where 2 of 65 findings over 14 upstream migrations
+     * were this and nothing else.
+     *
+     * ## And the dot is found OUTSIDE the quoting
+     *
+     * A quoted identifier may contain a dot, and that dot does not qualify: `` shop.`a.b` `` is one
+     * object in one schema. Scanning for the separator with the quote state in hand is what keeps
+     * the split from cutting a name in half — the same rule {@see Identifier::parse()} follows one
+     * layer down, applied here because this function receives the rendering rather than the object.
      */
     public static function bareName(string $qualifiedName): string
     {
-        $lastDot = mb_strrpos($qualifiedName, '.');
+        return self::unquoted(mb_substr($qualifiedName, self::lastSeparator($qualifiedName) + 1));
+    }
 
-        return $lastDot === false ? $qualifiedName : mb_substr($qualifiedName, $lastDot + 1);
+    /**
+     * The offset of the qualifying dot, or -1 when there is none.
+     *
+     * Quoted runs are skipped whole, so only a dot at the top level separates. `-1` rather than
+     * `null` because the single caller adds one to it either way, and a branch there would exist
+     * only to re-derive the same offset.
+     */
+    private static function lastSeparator(string $rendering): int
+    {
+        $separator = -1;
+        $quote = null;
+        $length = mb_strlen($rendering);
+
+        for ($index = 0; $index < $length; $index++) {
+            $character = mb_substr($rendering, $index, 1);
+
+            if ($quote !== null) {
+                // A doubled quote is an escaped one and stays INSIDE the run: stepping over both
+                // characters is what keeps `` `od``d` `` from reading as two adjacent quoted runs.
+                if ($character === $quote) {
+                    $quote = mb_substr($rendering, $index + 1, 1) === $quote ? $quote : null;
+                    $index += $quote === null ? 0 : 1;
+                }
+
+                continue;
+            }
+
+            if (in_array($character, self::QUOTE_CHARACTERS, true)) {
+                $quote = $character;
+
+                continue;
+            }
+
+            if ($character === '.') {
+                $separator = $index;
+            }
+        }
+
+        return $separator;
+    }
+
+    /**
+     * One quoted run with its quoting removed, or the string untouched.
+     *
+     * Both engines' quote characters are accepted because this judgment is shared by both rules and
+     * receives a rendering rather than a driver. The alternative — threading the driver in — would
+     * put an engine into a class whose whole point is that the shape question has one answer.
+     */
+    private static function unquoted(string $name): string
+    {
+        foreach (self::QUOTE_CHARACTERS as $quote) {
+            if (mb_strlen($name) >= 2 && str_starts_with($name, $quote) && str_ends_with($name, $quote)) {
+                return str_replace($quote.$quote, $quote, mb_substr($name, 1, -1));
+            }
+        }
+
+        return $name;
     }
 
     /**

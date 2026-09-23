@@ -44,16 +44,13 @@ use Pushery\SQLens\Attributes\SqlensIgnore;
  * Reached through the class node rather than by a second collector: a class node carries its own
  * statements, so one traversal sees both levels.
  *
- * ⚠️ THIS PARAGRAPH USED TO GIVE A REASON THAT IS NOT TRUE — *"PHPStan's registry does not walk
- * subclasses, so one collector per node shape is the rule"*. Measured against the installed
- * version: `PHPStan\Collectors\Registry::getCollectors()` resolves through `class_parents` plus
- * `class_implements` of the node's actual class, so a collector may declare an interface and be
- * reached for every node implementing it. The sentence was load-bearing in the wrong direction — it
- * argued that reaching a free function or a closure would cost a collector per shape, and the two
- * shapes stayed unreachable while `#[RawSql]` went on declaring `TARGET_FUNCTION`.
- * {@see JustificationSpanCollector} is the one registration that reaches all of them.
+ * PHPStan's registry does walk subclasses: `PHPStan\Collectors\Registry::getCollectors()` resolves
+ * through `class_parents` plus `class_implements` of the node's actual class, so a collector may
+ * declare an interface and be reached for every node implementing it. Reaching a free function or a
+ * closure therefore costs no collector per shape — {@see JustificationSpanCollector} is the one
+ * registration that reaches all of them, which `#[RawSql]` declaring `TARGET_FUNCTION` requires.
  *
- * ## What this collector deliberately does NOT reach
+ * ## What this collector deliberately does not reach
  *
  * A free function and a closure. Neither has a name a call site inside it reports — outside a class
  * the call site's own scope name is `null` — so a name join has nothing to compare. They are covered

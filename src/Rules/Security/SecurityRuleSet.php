@@ -64,15 +64,15 @@ final readonly class SecurityRuleSet
     public static function forProjectRoot(string $projectRoot, ?EolRepository $advisories = null, ?string $today = null, ?RunEnvironment $environment = null, ?UnencryptedColumnEvaluator $privacyColumns = null): self
     {
         $advisories ??= EolRepository::bundled();
-        // ⚠️ `gmdate`, NOT `date`, AND THAT WAS A SECOND CLOCK IN ONE PACKAGE. The debt ledger judges
-        // an expired acknowledgment on `gmdate('Y-m-d')`; this line judged a support window on the
-        // LOCAL one. An application whose `app.timezone` sits east of UTC therefore saw two different
-        // calendar days around midnight — `PatchEolRule` flipping on one and
-        // `LINT.DEBT.ACKNOWLEDGMENT_EXPIRED` on the other — and nothing in the report said which.
+        // `gmdate`, not `date`: the debt ledger judges an expired acknowledgment on
+        // `gmdate('Y-m-d')`, and a support window judged on the local day would be a second clock in
+        // one package. An application whose `app.timezone` sits east of UTC would then see two
+        // different calendar days around midnight — `PatchEolRule` flipping on one and
+        // `LINT.DEBT.ACKNOWLEDGMENT_EXPIRED` on the other — with nothing in the report saying which.
         //
-        // Resolved HERE rather than injected, and that is deliberate: this runs once per
+        // Resolved here rather than injected, and that is deliberate: this runs once per
         // `Driver::rules()` call, so every rule of one run gets the same value, and the next run gets
-        // a fresh one. An injected value came from a container singleton and went stale.
+        // a fresh one. A value from a container singleton would go stale.
         $today ??= gmdate('Y-m-d');
 
         return new self([

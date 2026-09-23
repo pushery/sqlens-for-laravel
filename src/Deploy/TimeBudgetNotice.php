@@ -29,7 +29,7 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * ## Emitted only on an overrun, and that is what keeps the output deterministic
  *
  * The measured duration is a wall-clock number: it differs on every run, on every machine, under
- * every load. Putting it in a finding that is ALWAYS present would make two runs over one unchanged
+ * every load. Putting it in a finding that is always present would make two runs over one unchanged
  * database produce two different documents, and every golden comparison in this repository a coin
  * toss.
  *
@@ -38,13 +38,6 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * — and both are excluded from the deterministic comparison by name, because both are wall-clock.
  * This finding is the exceptional case, and an exceptional case that varies is not a determinism
  * problem: the run it describes is already not the run anyone is diffing.
- *
- * ⚠️ The second of those two was NOT emitted when this sentence was first written. It was computed,
- * put into a second header called `RunMetadata`, and dropped — the envelope never carried that block,
- * and no shipped code called the projection that would have. So the comment described a key a reader
- * could not find, which is worse than describing none. The field was added to the real header
- * afterwards; the sentence is true now because of that, not because it always was. The duplicate has
- * since been removed.
  *
  * ## It never aborts
  *

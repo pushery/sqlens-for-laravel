@@ -99,14 +99,13 @@ final readonly class PgsqlShadowProvisioner implements ShadowProvisioner
 
         // Never adopt a database we did not create: a name collision stops the run.
         //
-        // ⚠️ IT IS CHECKED BEFORE THE TEMPLATE IS BUILT, and the order is load-bearing twice over.
+        // It is checked before the template is built, and the order is load-bearing twice over.
         //
-        // It is the CHEAPEST and the most DETERMINISTIC of the refusals — one catalog read about a
-        // name — and it used to sit behind `waitForIdle()`, which is neither. So on a busy server
-        // the run refused with `ShadowTemplateInUse` for a name that was going to collide anyway:
-        // the honest reason lost a race to a timing-sensitive one, and the reported cause depended
-        // on how loaded the machine was. Measured as an intermittent CI failure where a test
-        // staging a collision was told the template was in use instead.
+        // It is the cheapest and the most deterministic of the refusals — one catalog read about a
+        // name — and `waitForIdle()` is neither. Behind it, a busy server would refuse with
+        // `ShadowTemplateInUse` for a name that was going to collide anyway: the honest reason would
+        // lose a race to a timing-sensitive one, and the reported cause would depend on how loaded
+        // the machine is.
         //
         // And it means a run refused on a name no longer builds a template first. That build
         // creates a database holding the project's entire schema — expensive, and one more thing

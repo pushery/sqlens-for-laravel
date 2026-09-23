@@ -125,10 +125,9 @@ final class PostdeployCommand extends Command
         // run — and across midnight it answers about a different day than the one the run is about.
         $today = Today::fromClock();
 
-        // ⚠️ BEFORE ANYTHING OPENS A CONNECTION, and that ordering is the fix. This block used to sit
-        // after `$verifier->verify()`, so a typo in `--format` cost the whole aftercare run against
-        // the production instance before the error was named. `sqlens:drift` already did it in this
-        // order and said why in its own comment.
+        // Before anything opens a connection, and the ordering matters: after `$verifier->verify()`,
+        // a typo in `--format` would cost the whole aftercare run against the production instance
+        // before the error was named. `sqlens:drift` resolves its reporter in the same order.
         //
         // Refused, never fallen back from. A quiet fall back to console succeeds, emits the wrong
         // shape, and leaves whatever was parsing it with nothing.
@@ -140,9 +139,8 @@ final class PostdeployCommand extends Command
             return ExitCode::Misconfiguration->value;
         }
 
-        // Refused by name rather than dropped, and the two gates now share one implementation:
-        // `sqlens:postdeploy` required `> 0` while `sqlens:predeploy` accepted `0`, so the same flag
-        // meant two different things depending on which gate you typed it at.
+        // Refused by name rather than dropped, and the two gates share one implementation, so the
+        // same flag means the same thing whichever gate you type it at.
         if ($this->validatedBudgetMs() === false) {
             return ExitCode::Misconfiguration->value;
         }
@@ -150,25 +148,19 @@ final class PostdeployCommand extends Command
         // The same resolution every other suite command uses -- flag over SQLENS_PROFILE over the
         // configured profile -- with `predeploy` underneath as this command's own default.
         //
-        // ⚠️ IT USED TO READ `--profile=postdeploy` STRAIGHT OFF AN OPTION DEFAULT, and that is the
-        // defect `sqlens:predeploy` records in its own comment one file over, unfixed here. As an
-        // option default the name was ALWAYS the flag, so `SQLENS_PROFILE=ci sqlens:postdeploy` ran
-        // as postdeploy with nothing saying so; `--profile=bogus` was accepted and written into
-        // every subject context, where every other command answers `Misconfiguration`; and the name
-        // never became the SETTINGS, because nothing resolved it. The header said one thing
-        // (`sqlens.profile`, unset, so `local`) while each finding's subject said another.
+        // Resolved rather than read off an option default, for the reason `sqlens:predeploy`
+        // records in its own comment: as an option default the name would always be the flag, so
+        // `SQLENS_PROFILE=ci` would be ignored with nothing saying so, `--profile=bogus` would be
+        // accepted where every other command answers `Misconfiguration`, and the name would never
+        // become the settings. There is no `postdeploy` profile: `RunProfile` has three cases and
+        // `sqlens.profiles` has three blocks.
         //
-        // `postdeploy` was never a profile: `RunProfile` has three cases and `sqlens.profiles` has
-        // three blocks, none of them this name. So the name it announced could not have selected
-        // anything even if something had looked it up.
-        //
-        // ⚠️ THE DEFAULT IS `predeploy` AND NOT `local`, WHICH IS WHAT THE CONFIG PROSE SAID.
-        // That sentence answers for the commands it was written about; this one runs in the deploy
-        // window, one step after the gate that already uses that profile. On the shipped base it
-        // changes nothing -- `predeploy` overrides only `security.min_severity`, to the value the
-        // base already ships. What it buys is the reason `ci` and `predeploy` name that key at all:
-        // a project that lowers its base floor while working through a backlog no longer lowers
-        // this gate with it, silently.
+        // The default is `predeploy` and not `local`: this command runs in the deploy window, one
+        // step after the gate that already uses that profile. On the shipped base it changes
+        // nothing -- `predeploy` overrides only `security.min_severity`, to the value the base
+        // already ships. What it buys is the reason `ci` and `predeploy` name that key at all: a
+        // project that lowers its base floor while working through a backlog does not lower this
+        // gate with it, silently.
         $profile = $this->resolveProfile($config, 'predeploy');
 
         // Narrowed on the property rather than through `isValid()`, for the reason the sister
@@ -229,11 +221,10 @@ final class PostdeployCommand extends Command
         // What the CHECKS cost, from the START rather than from what is left of the budget — and
         // measured here, deliberately before the expectation comparison below.
         //
-        // ⚠️ `$budgetMs - $remaining` is the obvious spelling and it CANNOT SEE AN OVERRUN.
+        // `$budgetMs - $remaining` is the obvious spelling and it cannot see an overrun.
         // `$remaining` is floored at zero, so a run that took twice its budget and one that took
-        // exactly its budget both report the whole budget consumed — the number saturates at the
-        // one value that means "on time", and the finding below could never fire. Measured: with
-        // that spelling the overrun arm went green against a run that was 60 ms over.
+        // exactly its budget would both report the whole budget consumed — the number saturates at
+        // the one value that means "on time", and the finding below could never fire.
         //
         // `--expect-shadow` is outside this window on purpose. It provisions a database and replays
         // a migration history into it; that cost is dominated by the size of the history rather than
@@ -641,12 +632,8 @@ final class PostdeployCommand extends Command
     /**
      * The run's budget, from `sqlens.deploy.postdeploy.budget_ms`.
      *
-     * ⚠️ THIS DOCBLOCK ARGUED THE OPPOSITE OF THE CODE, AND BOTH CARRIED A REASON. It said the budget
-     * "shares `sqlens.preflight.budget_ms` on purpose … a second key would be a second number to keep
-     * in step", while the comment three lines below it says the command read that key until
-     * 2026-08-24 and was moved off it because "two commands making two promises need two numbers".
-     * The move happened; the docblock was the half nobody updated, and a reader who trusted it would
-     * have tuned the wrong key.
+     * Its own key, not `sqlens.preflight.budget_ms`: two commands making two promises need two
+     * numbers.
      */
     private function budgetMs(Repository $config): int
     {
@@ -656,10 +643,8 @@ final class PostdeployCommand extends Command
             return $requested;
         }
 
-        // The POST-deploy key, not the pre-deploy one. This command read `preflight.budget_ms` until
-        // 2026-08-24, so raising the gate's allowance silently raised the aftercare's too and
-        // lowering it silently squeezed a run that had nothing to do with the change. Two commands
-        // making two promises need two numbers.
+        // The post-deploy key, not the pre-deploy one. A shared key would let a change to the gate's
+        // allowance silently raise or squeeze a run that has nothing to do with it.
         return $this->configuredBudgetMs($config, 'sqlens.deploy.postdeploy.budget_ms', 5_000);
     }
 }

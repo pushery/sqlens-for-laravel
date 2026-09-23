@@ -91,21 +91,18 @@ final class MigrationLoader
             return $migration;
         }
 
-        // ⚠️ THE OLD CLASS SHAPE, AND IT ARRIVES HERE AS `int(1)`.
+        // The old class shape, and it arrives here as `int(1)`.
         //
-        // `require` returns what the file RETURNS, and 1 when it returns nothing. Both shapes are
+        // `require` returns what the file returns, and 1 when it returns nothing. Both shapes are
         // valid Laravel: the modern one returns an anonymous class, the older one declares a named
         // class and returns nothing. The declared-class shortcut above cannot see the second,
         // because before the `require` the class is not declared yet -- so control lands here with
-        // an integer, and a `/** @var Migration */` docblock above it made the return type read as
-        // a fact rather than an intention.
+        // an integer.
         //
-        // Measured in a consuming project on 2026-09-05: 24 migrations, exactly ONE in the old
-        // shape, and that one aborted the entire run with a TypeError. It came from `vendor:publish`
-        // -- a package-published migration, unchanged since -- which is why this is not rare: it is
-        // not old project code, it is anybody who ever published one.
+        // This is not rare: a migration published with `vendor:publish` keeps whatever shape its
+        // package wrote, so it is not old project code, it is anybody who ever published one.
         //
-        // The second look costs nothing and needs no new derivation: AFTER the require the class IS
+        // The second look costs nothing and needs no new derivation: after the require the class is
         // declared, so the same reflection-checked lookup that answered `null` a moment ago now
         // finds it. Same rule as the framework's own `Migrator::resolve()`.
         $declared = $this->declaredClassFor($file);

@@ -118,13 +118,12 @@ final readonly class EncryptedCasts
      */
     public static function isCustomCastable(string $cast): bool
     {
-        // ⚠️ A COLON DOES NOT MEAN A BUILT-IN. Laravel documents a custom cast WITH ARGUMENTS in
+        // A colon does not mean a built-in. Laravel documents a custom cast with arguments in
         // exactly that shape — `Hash::class.':sha256'` — so a class cast and a parameterized
-        // built-in are indistinguishable by the presence of a colon. This method used to return
-        // false on sight of one, which sent every argumented class cast down the unprotected path:
-        // the same cast class read `undetermined` without an argument and "stored in the clear"
-        // with one. On this rule that is not a missed finding, it is a false statement about a
-        // column's protection.
+        // built-in are indistinguishable by the presence of a colon. Returning false on sight of
+        // one would send every argumented class cast down the unprotected path: the same cast class
+        // would read `undetermined` without an argument and "stored in the clear" with one. On this
+        // rule that is not a missed finding, it is a false statement about a column's protection.
         //
         // So the arguments come off first, which is what the framework does in `parseCasterClass()`
         // before it decides anything.

@@ -76,16 +76,15 @@ final readonly class SettingsReading
      * state no real server produces, and therefore one that should look different in a report from
      * the failure that produces it constantly.
      *
-     * ⚠️ The detail is REDACTED here rather than at the caller, and that is the whole shape of
-     * the fix: eighteen producers wrote `Throwable::getMessage()` into this field with no
-     * redactor at all, and `QueryException::formatMessage()` appends ` (Connection: …, Host: …,
-     * Port: …, Database: …, SQL: …)` to every query exception on both engines. A refused catalog
-     * read on a managed instance — which the collectors' own comments call the ordinary case —
-     * therefore arrived wearing the connection's coordinates.
+     * The detail is redacted here rather than at the caller. Producers write
+     * `Throwable::getMessage()` into this field, and `QueryException::formatMessage()` appends
+     * ` (Connection: …, Host: …, Port: …, Database: …, SQL: …)` to every query exception on both
+     * engines, so a refused catalog read on a managed instance — the ordinary case — would otherwise
+     * arrive wearing the connection's coordinates.
      *
-     * At the sink, because a nineteenth producer inherits the redaction without knowing it exists.
+     * At the sink, because a new producer inherits the redaction without knowing it exists.
      * Not at {@see Finding}, which would be a filter rather than a sink: the shape redactor removes
-     * `role "…"`, `user "…"` and `database "…"`, and that is precisely what a SECURITY finding
+     * `role "…"`, `user "…"` and `database "…"`, and that is precisely what a security finding
      * about a role or a database is made of. This field carries error text and nothing else.
      *
      * The property's own docblock already said this text must never be shown as-is because it can

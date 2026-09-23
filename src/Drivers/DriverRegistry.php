@@ -65,6 +65,17 @@ final class DriverRegistry implements DebtStandingResolvers, SessionDefenses
     }
 
     /**
+     * Explicit per driver, unlike the seal above: see {@see SessionDefenses::readerConnectionOptions()}
+     * for why an unrecognized driver gets nothing here rather than the PostgreSQL answer.
+     *
+     * @return array<int, mixed>
+     */
+    public function readerConnectionOptions(string $driver): array
+    {
+        return $driver === 'pgsql' ? PgsqlSessionDefense::readerConnectionOptions() : [];
+    }
+
+    /**
      * The catalog question a recorded debt gets on this engine.
      *
      * Here for the same reason the seal above is: this file is already one of the three allowed to
@@ -175,8 +186,8 @@ final class DriverRegistry implements DebtStandingResolvers, SessionDefenses
         // literal `'migrations'` — the knowledge existed and the caller that needed it most did
         // not have it.
         //
-        // ⚠️ `null` rather than the default here, and that difference is deliberate: a RULE that
-        // was told nothing must not exempt a table nobody named, while a RESOLVER that was told
+        // `null` rather than the default here, and that difference is deliberate: a rule that
+        // was told nothing must not exempt a table nobody named, while a resolver that was told
         // nothing still has to look somewhere. So the shared narrowing answers the name, and this
         // reader turns "the default" back into "not said".
         $ledger = MigrationsTable::from($migrationsTable);

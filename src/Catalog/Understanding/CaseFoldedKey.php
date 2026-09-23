@@ -33,7 +33,7 @@ namespace Pushery\SQLens\Catalog\Understanding;
  * | `varchar(30)` | `lower("Mixed")` | `lower("Mixed"::text)` |
  * | `varchar(50)` | `UPPER(Display_Name)` | `upper(display_name::text)` |
  *
- * ⚠️ **THE CAST IS THE NORMAL CASE, AND A READER WRITTEN WITHOUT IT MATCHES NOTHING REAL.** Only a
+ * **The cast is the normal case, and a reader written without it matches nothing real.** Only a
  * `text` column arrives bare; every other string type is coerced, because the function is defined
  * over `text` and the planner records the coercion. Laravel's `string()` column is `varchar(255)`, so
  * the cast form is the one an application actually has — the consumer index this was built for,

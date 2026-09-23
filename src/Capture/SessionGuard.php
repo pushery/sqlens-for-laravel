@@ -96,7 +96,7 @@ final readonly class SessionGuard
     /**
      * Whether session state may be written onto this connection at all.
      *
-     * ⚠️ The question exists because the connection belongs to the HOST APPLICATION. Behind a
+     * The question exists because the connection belongs to the host application. Behind a
      * transaction pooler a session `SET` lands on whichever backend carried that one statement and
      * stays there — PgBouncer's `server_reset_query` runs only in session pooling by default, and
      * `track_extra_parameters` cannot reset a parameter the server does not announce, which
@@ -104,12 +104,12 @@ final readonly class SessionGuard
      * backend that never had it, and some stranger's session inherits a five-second timeout it
      * never chose. Both halves of the mechanism are broken at once, and neither says so.
      *
-     * The tell is read-only and conclusive in ONE direction: `pg_backend_pid()` twice, as two
+     * The tell is read-only and conclusive in one direction: `pg_backend_pid()` twice, as two
      * separate statements. A changed backend can only come from multiplexing. The same pid is the
      * weaker answer — an idle pooler may well hand back the same backend twice — so it is treated
      * as "no evidence of pooling" rather than as proof of a direct connection, and the guard
-     * proceeds. That is exactly what it did before this check existed, so a false negative costs
-     * nothing that was not already being paid, while the true positive stops the leak.
+     * proceeds. That is exactly what it would do without this check, so a false negative costs
+     * nothing, while the true positive stops the leak.
      *
      * A probe that cannot run leaves the guard applying, deliberately: `select pg_backend_pid()`
      * failing on a live PostgreSQL connection essentially means the connection is gone, and then
@@ -134,14 +134,14 @@ final readonly class SessionGuard
     private function backendPid(Connection $connection): int
     {
         /** @var object{pid?: int|string|null}|null $row */
-        // ⚠️ NOT `pg_catalog.`-qualified, and that is the opposite of the rule the pgsql driver
+        // Not `pg_catalog.`-qualified, and that is the opposite of the rule the pgsql driver
         // follows — deliberately, for two reasons that point the same way.
         //
-        // It is not needed: measured on PostgreSQL 18.0, a user function with an IDENTICAL
+        // It is not needed: measured on PostgreSQL 18.0, a user function with an identical
         // signature does not outrank the catalog one, and this call takes no arguments at all.
         // There is no closer match for a substitute to win with.
         //
-        // And this file is CORE. A schema name here is engine vocabulary in a layer that is meant
+        // And this file is core. A schema name here is engine vocabulary in a layer that is meant
         // to have none; the function name alone is already an exemption the purity register has to
         // carry a reason for. Adding a second term to buy nothing is the wrong trade.
         $row = $connection->selectOne('select pg_backend_pid() as pid');
@@ -205,16 +205,16 @@ final readonly class SessionGuard
      * is over and its result already stands, so throwing here would turn a completed lint
      * into a crash over housekeeping. The connection dying is itself the restore.
      *
-     * ⚠️ That swallow is why the LITERAL FORM below has to be right per engine rather than
+     * That swallow is why the literal form below has to be right per engine rather than
      * merely plausible. Measured on MySQL 8.4: `SET SESSION max_execution_time = '0'` is
      * refused with error 1232, "Incorrect argument type to variable" — MySQL takes the bare
      * numeric form for a numeric system variable, and the quoted one is a type error. The
-     * swallow then made a total failure to restore look exactly like a successful one, and
-     * every lint run left `max_execution_time = 5000` and `innodb_lock_wait_timeout = 3`
-     * behind on the HOST APPLICATION's connection. On a short-lived Artisan process that is
+     * swallow would then make a total failure to restore look exactly like a successful one, and
+     * every lint run would leave `max_execution_time = 5000` and `innodb_lock_wait_timeout = 3`
+     * behind on the host application's connection. On a short-lived Artisan process that is
      * invisible; under Octane, a queue worker or a test suite the connection outlives the
      * run, and unrelated queries then fail for a reason the application never chose — the
-     * exact harm {@see self::snapshot()} exists to prevent, on the engine nobody measured.
+     * exact harm {@see self::snapshot()} exists to prevent.
      *
      * @param  array<string, string>  $snapshot
      */
@@ -243,25 +243,25 @@ final readonly class SessionGuard
      * the settings this guard touches produces one, and the day one does, a quoted literal
      * is a value the server will reject — not a fragment it will execute.
      *
-     * ## The quote is DOUBLED, not backslash-escaped
+     * ## The quote is doubled, not backslash-escaped
      *
-     * ⚠️ This used `addslashes()`, which is the wrong escaper for one of the two engines it serves —
-     * and this method is the shared path, so "one of the two" means every PostgreSQL run.
+     * `addslashes()` is the wrong escaper for one of the two engines this serves — and this method
+     * is the shared path, so "one of the two" means every PostgreSQL run.
      *
      * With `standard_conforming_strings` on, the default since 9.1, a backslash inside `'…'` is an
      * ordinary character on PostgreSQL. Measured on 18.0: `SELECT 'a\''` answers `ERROR: unterminated
-     * quoted string`, because the `\'` ENDS the literal rather than escaping the quote, and the
+     * quoted string`, because the `\'` ends the literal rather than escaping the quote, and the
      * trailing quote opens a new one. So `addslashes()` does not merely fail to protect — it converts
      * a value carrying a quote into a syntax error at best.
      *
      * Doubling is correct on both. Measured on MySQL 8.4.10, `SELECT 'a''b', 'a\'b'` returns `a'b`
      * twice: MySQL accepts either form, PostgreSQL only this one. So there is one idiom for both
      * engines rather than one per engine, which is what {@see PgsqlSessionDefense} and
-     * {@see BindingSubstitutor} were already doing.
+     * {@see BindingSubstitutor} do as well.
      *
-     * The values this method actually sees are validated GUC readbacks, so nothing was exploitable
-     * here. The defect is the IDIOM: two escaping forms for one job in one package is one too many,
-     * and the next reader copies whichever they find first.
+     * The values this method actually sees are validated GUC readbacks, so nothing here is
+     * exploitable either way. The point is the idiom: two escaping forms for one job in one package
+     * is one too many, and the next reader copies whichever they find first.
      */
     private function restoreStatement(string $driver, string $setting, string $value): string
     {

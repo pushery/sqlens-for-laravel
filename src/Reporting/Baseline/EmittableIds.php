@@ -50,13 +50,12 @@ final readonly class EmittableIds
     /**
      * Read from the shipped artifact, which must be there.
      *
-     * ⚠️ THIS SAID an unreadable artifact "yields an EMPTY set rather than an exception", and its
-     * reasoning was sound about the DANGER and wrong about the remedy: an empty set really would make
-     * every id unknown and refuse every baseline on earth — so the caller treats empty as "cannot
-     * judge" instead. But that leaves the other half of the asymmetry unaddressed. `BaselineRuleIds`
-     * reads the same empty set and returns no findings at all, so the baseline-id check switches
-     * itself off, while the `RuleIdValidator` path calls every `CAP.*` and `SQUAWK.*` ignore id
-     * unknown. One empty set, two opposite conclusions, neither of them "the file is missing".
+     * An unreadable artifact is an exception, not an empty set. An empty set would make every id
+     * unknown and refuse every baseline on earth, and treating empty as "cannot judge" only moves the
+     * problem: `BaselineRuleIds` would read the same empty set and return no findings at all, so the
+     * baseline-id check switches itself off, while the `RuleIdValidator` path calls every `CAP.*` and
+     * `SQUAWK.*` ignore id unknown. One empty set, two opposite conclusions, neither of them "the file
+     * is missing".
      *
      * Refusing says the true thing once, in the one place that can know it. The tolerance stays on
      * {@see self::fromFile()}, where a suite legitimately supplies an absent or truncated artifact —

@@ -60,13 +60,12 @@ final readonly class RuleGuidance
      * The version note is included when there is one. A catalog produced without a pin lists rules
      * it could not place, and a reader who does not know that will treat every line as certain.
      *
-     * ⚠️ THE PACKAGE VERSION IS DELIBERATELY ABSENT, AND THE LINE SAYING SO IS THE POINT. A reader
-     * asked for it, which is fair — and `--check` compares the WHOLE generated content
-     * (`AgentRulesCommand::deliver()`, `$desired !== $existing`), not the `catalog=` hash. So a
-     * version anywhere in this block turns `--check` red on every release of this package, whether
-     * or not it feeds the hash: the "in the block but out of the hash" middle does not exist. This
-     * fleet's updater merges in-house packages without a waiting period, so the concrete cost is a
-     * red integration branch per release per consumer.
+     * The package version is deliberately absent, and the line saying so is the point. `--check`
+     * compares the whole generated content (`AgentRulesCommand::deliver()`, `$desired !== $existing`),
+     * not the `catalog=` hash, so a version anywhere in this block would turn `--check` red on every
+     * release of this package, whether or not it feeds the hash: the "in the block but out of the
+     * hash" middle does not exist. A project that takes package updates automatically would get a
+     * red check on every release.
      *
      * A version-blind comparison is the other way out and this command refuses it in its own class
      * docblock: check and write are one path, because two would agree until they did not.

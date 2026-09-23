@@ -42,12 +42,10 @@ final readonly class FormatDiscovery
      * answer — a run that did would rewrite files the next `composer install` overwrites, after
      * committing them.
      *
-     * ⚠️ "Descends into", not "appears anywhere in the path", and the distinction is measured. The
-     * first draft rejected any path with one of these as a segment, which is the same rule stated
-     * over the absolute path — and it rejected a legitimate root, because a Testbench application's
-     * own `database/migrations` lives under `vendor/orchestra/testbench-core/`. The fallback arm
-     * went red over a correct configuration. A root somebody NAMES is a root; the rule is about
-     * where a walk wanders, so it is applied by {@see mayDescend()} during the walk and nowhere
+     * "Descends into", not "appears anywhere in the path". Rejecting any path with one of these as a
+     * segment would reject a legitimate root: a Testbench application's own `database/migrations`
+     * lives under `vendor/orchestra/testbench-core/`. A root somebody names is a root; the rule is
+     * about where a walk wanders, so it is applied by {@see mayDescend()} during the walk and nowhere
      * else.
      */
     public const array NEVER_DESCEND = ['vendor', 'node_modules', 'storage'];
@@ -114,7 +112,7 @@ final readonly class FormatDiscovery
     {
         $normalized = strtolower(str_replace('\\', '/', $path));
 
-        // ⚠️ NOT IN SCOPE is a different answer from SKIPPED. A `.php`, `.md` or `.json` file in a
+        // Not in scope is a different answer from skipped. A `.php`, `.md` or `.json` file in a
         // formatted directory is not a file this suite could not handle — it is a file this suite
         // has nothing to do with, and reporting it as `undetermined` would fill every run with
         // entries nobody can act on. A skip carries a reason because somebody might fix it; this

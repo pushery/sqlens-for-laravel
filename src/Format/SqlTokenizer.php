@@ -18,12 +18,12 @@ namespace Pushery\SQLens\Format;
  * A regex over the whole statement cannot know which of those it is inside. A scanner that tracks
  * the state it is in can, and that is the entire reason this class exists.
  *
- * ## A token is what the SERVER reads as one
+ * ## A token is what the server reads as one
  *
- * ⚠️ This scanner used to emit every operator character as a token of its own, and the formatter puts
- * a space between two tokens. `total >= 0` came back as `total > = 0`, `h::text` as `h : : TEXT`,
+ * The formatter puts a space between two tokens, so a scanner that emitted every operator character
+ * as a token of its own would write `total >= 0` back as `total > = 0`, `h::text` as `h : : TEXT`,
  * `E'a\nb'` as `E 'a\nb'` and `1.5e-3` as `1.5e - 3`: syntax errors, written back into the file.
- * The inside of a string was protected, and the boundaries between tokens were not.
+ * Protecting the inside of a string is not enough; the boundaries between tokens matter as much.
  *
  * So the rule is the server's lexer, per dialect, and nothing looser. Two tokens are two tokens only
  * where PostgreSQL or MySQL would read two, which is what makes a space between them safe:
@@ -105,9 +105,9 @@ final readonly class SqlTokenizer
                 continue;
             }
 
-            // ⚠️ DOLLAR-QUOTING, and it has to be tried BEFORE the word scan — `$` is a word
+            // Dollar-quoting, and it has to be tried before the word scan — `$` is a word
             // character here (PostgreSQL allows it in identifiers), so a `$$` left to that scan
-            // becomes a word and the FUNCTION BODY AFTER IT IS TREATED AS SQL. A formatter would
+            // becomes a word and the function body after it is treated as SQL. A formatter would
             // then reflow the body of a `CREATE FUNCTION`, which is the same class of damage as
             // formatting a PHP file: the output looks formatted and the code inside is destroyed.
             //

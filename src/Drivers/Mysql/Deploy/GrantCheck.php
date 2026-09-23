@@ -215,21 +215,21 @@ final readonly class GrantCheck implements PreflightCheck
     #[RawSql(reason: 'reads the privileges the deploying account actually holds; a preflight that guessed would pass a deploy that then fails halfway')]
     private function heldPrivileges(PreflightContext $context, string $role): array
     {
-        // ⚠️ A PREFIX COMPARISON, not `LIKE`, and not `substring_index` either. `GRANTEE` is
+        // A prefix comparison, not `LIKE`, and not `substring_index` either. `GRANTEE` is
         // rendered as `'user'@'host'`, so the account is everything up to and including the `'@`
         // that follows its closing quote.
         //
-        // `LIKE "'{$role}'@%"` was the original and it failed OPEN: in LIKE an underscore is a
-        // SINGLE-CHARACTER WILDCARD, so `'sqlens_grant_x'` also matched `'sqlens-grant-x'` and a
-        // neighbor's `ALTER` answered for this account. A deploy gate that passes a deploy which
-        // then dies halfway through `migrate --force` is worse than no gate: it replaces the check
-        // somebody would otherwise have made by hand. MEASURED on MySQL 8.4.10, exactly that pair.
+        // `LIKE "'{$role}'@%"` fails open: in LIKE an underscore is a single-character wildcard,
+        // so `'sqlens_grant_x'` also matches `'sqlens-grant-x'` and a neighbor's `ALTER` answers for
+        // this account. A deploy gate that passes a deploy which then dies halfway through
+        // `migrate --force` is worse than no gate: it replaces the check somebody would otherwise
+        // have made by hand. Measured on MySQL 8.4.10, exactly that pair.
         //
-        // `substring_index(grantee, '@', 1)` is the obvious repair and is also wrong, in the other
-        // direction. It splits at the FIRST `@`, so an email-shaped account — `sqlens@mail.test`,
-        // an ordinary thing to call a user — is cut in half and matches nothing at all. Measured on
-        // the same server: it returned the account's privileges as an empty set, which this check
-        // reads as "holds nothing" and turns into a false MISSING_PRIVILEGE finding.
+        // `substring_index(grantee, '@', 1)` is wrong in the other direction. It splits at the
+        // first `@`, so an email-shaped account — `sqlens@mail.test`, an ordinary thing to call a
+        // user — is cut in half and matches nothing at all. Measured on the same server: it returns
+        // the account's privileges as an empty set, which this check would read as "holds nothing"
+        // and turn into a false MISSING_PRIVILEGE finding.
         //
         // The prefix comparison has no wildcard to escape and no separator to guess at. It is bound
         // twice because the length and the value are both parameters; `char_length` counts

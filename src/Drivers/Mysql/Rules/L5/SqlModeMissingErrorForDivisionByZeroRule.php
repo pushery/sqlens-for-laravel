@@ -20,16 +20,15 @@ use Pushery\SQLens\Levels\Level;
  * | `UPDATE` to a nullable column | accepted, stores NULL | error 1365 |
  * | `INSERT` into a NOT NULL column | error 1048, "column cannot be null" | error 1365 |
  *
- * ⚠️ **THIS DOCBLOCK SAID "yields NULL instead of raising" AND NAMED A NULL IN A REPORT AS THE
- * DAMAGE, WHICH IS THE ONE CASE THE FLAG DOES NOT FIX.** A `SELECT` keeps returning NULL with the
- * flag on; the manual is explicit, and the measurement above agrees. So the sentence recommended a
- * setting by describing a harm it does not prevent — and a reader who set it and still found a NULL
- * in an average would conclude the checker was wrong about something.
+ * **A NULL in a report is the one case the flag does not fix.** A `SELECT` keeps returning NULL
+ * with the flag on; the manual is explicit, and the measurement above agrees. Recommending the
+ * setting by that harm would describe something it does not prevent, and a reader who set it and
+ * still found a NULL in an average would conclude the checker was wrong about something.
  *
  * The flag governs the **write** path, and that is the more valuable half anyway: a stored NULL
  * outlives the query that made it, and nothing downstream can tell it from a NULL somebody meant.
  *
- * ⚠️ **The last row is why the flag is worth setting even where a column forbids NULL.** Without
+ * **The last row is why the flag is worth setting even where a column forbids NULL.** Without
  * it, MySQL refuses the write for the wrong reason — "column cannot be null" is a complaint about
  * the column, and it sends the reader to the schema rather than to the arithmetic.
  */

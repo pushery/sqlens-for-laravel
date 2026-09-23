@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Drivers\Pgsql\Catalog;
 
+use Pdo\Pgsql as PdoPgsql;
 use Pushery\SQLens\Capture\Shadow\SessionTimeoutDetector;
 use Pushery\SQLens\Catalog\ReaderSession;
 use Pushery\SQLens\Catalog\SessionBudget;
@@ -34,20 +35,47 @@ use Pushery\SQLens\Contracts\SessionDefense;
  * to `57014` and idle transactions to a FATAL `25P03`, for a reason it never chose. The reader
  * connection is a copy of the application's config, so it goes through the same pooler.
  *
- * ⚠️ This used to set the bounds TWICE — once on the session, once as `SET LOCAL` — and called the
- * session copy "the belt to that brace". The belt was the damage. The brace holds alone: everything
- * this session does happens inside the read transaction, so there is no window a session-scoped
- * copy would cover and no topology in which it earns its risk.
+ * The bounds are set once, as `SET LOCAL`, and not also on the session as a second safeguard. That
+ * copy would be the leak described above, and it would buy nothing: everything this session does
+ * happens inside the read transaction, so there is no window a session-scoped copy would cover and
+ * no topology in which it earns its risk.
  *
  * `idle_in_transaction_session_timeout` is the one with no MySQL counterpart and it matters most
  * here: a read transaction that stalls holds a snapshot open, and an open snapshot stops `VACUUM`
  * from reclaiming anything on the whole database. A reader that hung would not merely be slow, it
  * would be actively harmful.
+ *
+ * ## Why the reader's connection prepares no NAMED statements
+ *
+ * PDO prepares each query as a named server-side statement and, when the statement object goes
+ * away, may remove it again with a plain `DEALLOCATE pdo_stmt_…`. Behind PgBouncer in transaction
+ * pooling with `max_prepared_statements`, the server never saw that name: the pooler renamed the
+ * statement when it forwarded it, and a plain `DEALLOCATE` is not renamed. The server answers
+ * `26000`, and because the reader always reads inside a transaction, that error aborts it. The next
+ * statement then fails with `25P02`, at a place that has nothing to do with the cause.
+ *
+ * So the reader's own copy of the connection is opened with {@see self::readerConnectionOptions()}.
+ * Each query and its parameters travel in one unnamed round trip, the parameters are still bound by
+ * the server, and there is nothing left to deallocate. A reader reuses no statement, so nothing is
+ * lost, and the application's own connection keeps whatever it configured.
  */
 final readonly class PgsqlSessionDefense implements SessionDefense
 {
     /** Refused because the transaction is read-only. */
     private const string READ_ONLY_SQL_STATE = '25006';
+
+    /**
+     * The PDO attributes the reader's own copy of a PostgreSQL connection is opened with.
+     *
+     * Empty without `pdo_pgsql`: such a host cannot open a PostgreSQL connection at all, and naming
+     * the attribute's class there would fail before any connection is attempted.
+     *
+     * @return array<int, mixed>
+     */
+    public static function readerConnectionOptions(): array
+    {
+        return extension_loaded('pdo_pgsql') ? [PdoPgsql::ATTR_DISABLE_PREPARES => true] : [];
+    }
 
     /** Nothing. Everything this session sets is scoped to its transaction — see the note above. */
     public function sessionStatements(SessionBudget $budget): array
@@ -91,7 +119,7 @@ final readonly class PgsqlSessionDefense implements SessionDefense
 
     /**
      * Whether the account simply may not write.
-
+     *
      * PostgreSQL answers a denied write with 42501, insufficient_privilege — distinct from the
      * 25006 a read-only transaction gives, and every bit as conclusive about what cannot happen.
      */

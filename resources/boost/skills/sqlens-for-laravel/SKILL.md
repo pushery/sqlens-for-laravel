@@ -443,7 +443,7 @@ machines formatting differently with nothing saying so. `--strict-tools` makes t
 
 Which files a run finds comes from `sqlens.format.paths` (empty: the app's migration paths),
 `exclude` (default `['database/schema/*']`, because `schema:dump` rewrites those anyway) and
-`extensions` (default `['sql']`). ⚠️ `php` is **reserved** and cannot be added — a migration is a PHP
+`extensions` (default `['sql']`). `php` is **reserved** and cannot be added — a migration is a PHP
 file, and reading one as SQL rewrites the whole file as a single statement. `vendor/`,
 `node_modules/` and `storage/` are never walked into, and symlinks are not followed.
 
@@ -451,7 +451,7 @@ file, and reading one as SQL rewrites the whole file as a single statement. `ven
 alone; `--check` returns the verdict. Run `--diff` to decide whether to run the write, `--check` in
 the pipeline, and `--check --diff` when you want both.
 
-⚠️ **`.sql` files only.** A Laravel migration is a PHP file, and running a SQL formatter over one
+**`.sql` files only.** A Laravel migration is a PHP file, and running a SQL formatter over one
 does not format the SQL inside its heredoc — it reads PHP as SQL and rewrites the whole file. The
 scanner refuses a `.php` path even when you name it explicitly, and generated `database/schema/*.sql`
 dumps are left alone.

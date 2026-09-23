@@ -38,7 +38,7 @@ use PhpParser\NodeVisitorAbstract;
  * only for the table. Inside a `Schema::create`/`Schema::table` closure, every `$table->x('name')`
  * contributes `orders.name` — again only where the name is a literal.
  *
- * ⚠️ THE CLOSURE'S TABLE IS TRACKED BY NESTING, NOT BY VARIABLE NAME. `$table` is a convention, not
+ * The closure's table is tracked by nesting, not by variable name. `$table` is a convention, not
  * a rule, and a migration that calls it `$t` is ordinary. The visitor remembers which create/table
  * call it is currently inside, so the receiver's name never matters.
  */
@@ -47,7 +47,7 @@ final class SchemaSubjectCollector extends NodeVisitorAbstract
     /**
      * The `Schema::` methods that name a table in their first argument.
      *
-     * `rename` is deliberately absent: its first argument is the OLD name, so recording it would
+     * `rename` is deliberately absent: its first argument is the old name, so recording it would
      * anchor a subject to the migration that stopped calling it that. The new name is the second
      * argument and could be read — but a rename is not an introduction, and this map answers "where
      * did this come from", not "where was it last touched".

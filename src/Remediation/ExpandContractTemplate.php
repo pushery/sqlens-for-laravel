@@ -165,14 +165,14 @@ final readonly class ExpandContractTemplate
      * is one statement, not four. Handing over the whole sequence here would tell somebody to add a
      * column that is already there, in a migration they are not allowed to edit any more.
      *
-     * ⚠️ **`{{old_column}}` stays a placeholder, and that is the honest answer rather than a gap.**
-     * Which column the new one replaced is a DECISION — this class says so about itself at the top —
+     * **`{{old_column}}` stays a placeholder, and that is the honest answer rather than a gap.**
+     * Which column the new one replaced is a decision — this class says so about itself at the top —
      * and the rule that produces this payload deliberately never guesses it: the source column sits
      * inside the expression on the right of the back-fill, and lifting it out would mean parsing
      * expressions in the layer built to be free of grammar. A filled-in wrong name would read as
      * decided; an unfilled one reads as a question for the person who knows the answer.
      *
-     * @param  array<string, string>  $context  the table and the new column the RUN measured
+     * @param  array<string, string>  $context  the table and the new column the run measured
      */
     public function forPendingContract(array $context, string $ruleId, ?DowntimeClass $downtimeClass): RemediationPayload
     {

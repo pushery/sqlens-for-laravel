@@ -194,16 +194,16 @@ final readonly class AuditRunner implements AuditRuns
         // booleans passed by hand through a dozen private helpers is a shape where forgetting one
         // at one site compiles and produces a run that ignores the flag it was given.
         $overrides = new RunOverrides($strictUndetermined, $strictTools);
-        // ⚠️ THE RUN'S CLOCK, READ ONCE, HERE — and beside $overrides for the same stated reason:
+        // The run's clock, read once, here — and beside $overrides for the same stated reason:
         // a value threaded by hand through a dozen private helpers is a shape where forgetting one
-        // site compiles. This class read the clock TWICE inside one debt pass, so a run crossing
-        // midnight registered candidates against one calendar day and collected standings against
-        // another, with nothing in the report saying which side either was on.
+        // site compiles. Two readings inside one debt pass would let a run crossing midnight
+        // register candidates against one calendar day and collect standings against another,
+        // with nothing in the report saying which side either was on.
         $today = Today::fromClock();
-        // FIRST, so every header this method can produce — including the refusals below, which never
-        // reach a rule — states the scope the operator asked for. The audit used to resolve this
-        // deep inside the rule filter and never report it at all, which made a run narrowed to one
-        // category indistinguishable from an unnarrowed one in the only place a reader looks.
+        // First, so every header this method can produce — including the refusals below, which never
+        // reach a rule — states the scope the operator asked for. Resolved deep inside the rule
+        // filter and never reported, a run narrowed to one category would be indistinguishable from
+        // an unnarrowed one in the only place a reader looks.
         $scope = CategorySelection::forRun($categories, $this->config->get('sqlens.categories'));
         $selectedCategories = $scope->categories;
         $activeCategories = $scope->values();
@@ -462,7 +462,7 @@ final readonly class AuditRunner implements AuditRuns
             ...($ignoreBaseline && $baseline->entries === []
                 ? [AuditNotices::baselineBypassHadNothingToBypass($this->runContext($today, $activeLevel, 0, $overrides, $activeCategories, $target))]
                 : []),
-            // ⚠️ Independent of the bypass above. That one says a FLAG found nothing to act on;
+            // Independent of the bypass above. That one says a flag found nothing to act on;
             // this says the project's own configuration points at a file that is not there — and
             // the two can be true at once, for different reasons a reader has to tell apart.
             ...($this->baselineIsConfiguredButAbsent()
@@ -661,12 +661,12 @@ final readonly class AuditRunner implements AuditRuns
      * to tell a run that found nothing from one that could not look, and the second is the one
      * that needs a grant fixed. The duplication is the point rather than an oversight.
      *
-     * ⚠️ A `not_comparable` boundary is NOT one of them. The header lists what a run could not read,
+     * A `not_comparable` boundary is not one of them. The header lists what a run could not read,
      * and that object was read completely: its notice reports as `not_applicable`, under
-     * `AUDIT.CATALOG.NOT_COMPARED` rather than the unread family. Carried here, it made the header
-     * disagree with the findings about how much went unread — measured on PostgreSQL, two header
-     * skips over one unread finding — and it put every schema with an ordinary partial index in
-     * front of a reader as a partial reading, which is the misreading that id exists to end.
+     * `AUDIT.CATALOG.NOT_COMPARED` rather than the unread family. Carried here, it would make the
+     * header disagree with the findings about how much went unread, and put every schema with an
+     * ordinary partial index in front of a reader as a partial reading, which is the misreading that
+     * id exists to end.
      *
      * @return list<ReportedSkip>
      */

@@ -22,12 +22,11 @@ use Pushery\SQLens\Lint\ShadowClearance;
  * connection the run actually addresses. A guard that judged the default while the run addressed a
  * named production connection would be a guard in name only.
  *
- * ⚠️ That second half used to read `database.default` directly, which is NOT how a run resolves:
- * `sqlens.connection` comes first, and it is an ordinary documented key. With it set, the guard
- * judged a database nothing was running against — and the provisioner would have created on the
- * other one. The sentence above was already here and already promised otherwise; what was missing
- * was that the promise be kept by ASKING the resolver rather than by re-implementing it, which is
- * the only version of it that cannot drift again.
+ * That second half asks the resolver rather than reading `database.default`, which is not how a
+ * run resolves: `sqlens.connection` comes first, and it is an ordinary documented key. With it set,
+ * `database.default` would have the guard judge a database nothing is running against while the
+ * provisioner creates on the other one. Asking the resolver rather than re-implementing it is the
+ * only version of this that cannot drift.
  *
  * Nothing here decides. {@see ProductionGuard} decides, and it is the only thing that does; this
  * class knows where the inputs live.

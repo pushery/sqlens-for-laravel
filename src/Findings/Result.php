@@ -18,16 +18,10 @@ use Pushery\SQLens\Severity\Severity;
  * The run result as an immutable aggregate: a deduplicated, deterministically
  * ordered list of findings.
  *
- * ⚠️ **IT USED TO CARRY A `RunMetadata`, AND EVERY INSTANCE OF IT WAS WRONG.** The reproducibility
- * header of a run is {@see RunContext}, which every reporter is handed
- * beside this aggregate; the metadata was a second, thinner copy of the same facts, and nothing in
- * the package read it. `AuditRunner` filled it with `mode: Pretend` — the label the same file calls
- * a lie three lines higher, for a run that captures no migration at all — plus empty server and tool
- * version lists, and `LintRunner` did the same. A public property whose every value is wrong is
- * worse than an absent one: the first third-party reporter to read it, which its own docblock
- * invited, would have got all of it. It is the data reporters and
- * the exit-code contract build on — this aggregate does NOT decide
- * the exit code itself.
+ * It carries no run header. The reproducibility header of a run is {@see RunContext}, which every
+ * reporter is handed beside this aggregate, and a second, thinner copy of the same facts here would
+ * be one that drifts. It is the data reporters and the exit-code contract build on — this aggregate
+ * does not decide the exit code itself.
  *
  * The three-valued summary is the whole point: overallStatus() lets an
  * undetermined run never read as green. A run whose findings are all
@@ -323,17 +317,13 @@ final readonly class Result
         }
 
         foreach ($this->suppressed as $hidden) {
-            // ⚠️ `??= 0` RATHER THAN `++` ON A KEY THAT MAY NOT EXIST, and this is not defensive
-            // padding — it was a fatal waiting for a layer to start working. `ORDER` listed seven
-            // sources while the resolver ran EIGHT, and the eighth (`cross_source_dedupe`) was absent
-            // here. Measured: `$counts['cross_source_dedupe']++` raises "Undefined array key", which
-            // under Laravel's `HandleExceptions` is an ErrorException — so the console and JSON
-            // reports would have died on the first suppression that layer ever made.
-            //
-            // The layer is in ORDER now, so this line is no longer what stands between a working
-            // suppression and a dead report. It stays because the next layer will be added by somebody
-            // who edits the resolver and not this file, and a missing count is a wrong number while a
-            // missing key is a crash.
+            // `??= 0` rather than `++` on a key that may not exist, and this is not defensive
+            // padding. The counters are seeded from `ORDER`; a suppression source the resolver runs
+            // but `ORDER` does not list would make `$counts[$source]++` raise "Undefined array key",
+            // which under Laravel's `HandleExceptions` is an ErrorException — so the console and JSON
+            // reports would die on the first suppression that layer made. A new layer is added by
+            // somebody editing the resolver and not this file, and a missing count is a wrong number
+            // while a missing key is a crash.
             $counts[$hidden->suppression->source] ??= 0;
             $counts[$hidden->suppression->source]++;
         }

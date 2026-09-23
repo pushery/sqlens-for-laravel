@@ -33,10 +33,8 @@ use Pushery\SQLens\Subjects\SubjectContext;
  *     undetermined finding located to the line it fired on — so a migration flagged
  *     for several independent reasons reports each, not just the first;
  *   - the driver's own SQL rules, run over the canonicalized statements of a
- *     successful capture. ⚠️ THIS SAID "empty for now — the rule packs land later" long after they
- *     had: `LintRunner` hands `collect()` the run's ACTIVE rules, and both driver packs are
- *     populated. An empty rule set is still a documented intermediate state and is never read as
- *     "checked, all clean" — that part was always true and is what the sentence should have kept.
+ *     successful capture. `LintRunner` hands `collect()` the run's active rules, and an empty rule
+ *     set is never read as "checked, all clean".
  *
  * "No silent green" is the whole point of running all three: a migration the capture
  * could not conclude — a pre-scan flag, an unparsable file, a rejected statement —

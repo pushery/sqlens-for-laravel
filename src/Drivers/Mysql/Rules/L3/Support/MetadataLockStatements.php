@@ -108,8 +108,8 @@ final readonly class MetadataLockStatements
      *
      * Read off the canonical string because a plain `SET` is not a classified DDL kind.
      *
-     * ⚠️ **Over the MASKED string, and that is the whole difference between a rule and a grep.** This
-     * scanned `$digest->canonical` directly, so a statement that merely CONTAINED the words counted
+     * **Over the masked string, and that is the whole difference between a rule and a grep.**
+     * Scanning `$digest->canonical` directly would count a statement that merely contains the words
      * as setting the timeout:
      *
      * ```sql
@@ -117,14 +117,13 @@ final readonly class MetadataLockStatements
      * ALTER TABLE users MODIFY email VARCHAR(320);
      * ```
      *
-     * Both patterns match inside the literal, `timeoutSetBefore()` therefore reports a preamble that
-     * does not exist, and MY.L3.MISSING_LOCK_WAIT_TIMEOUT goes silent on the ALTER — a false green on
-     * the one rule whose entire job is to notice the missing bound.
+     * Both patterns would match inside the literal, `timeoutSetBefore()` would report a preamble that
+     * does not exist, and MY.L3.MISSING_LOCK_WAIT_TIMEOUT would go silent on the ALTER — a false green
+     * on the one rule whose entire job is to notice the missing bound.
      *
      * It needs no raw SQL and no double quote: `->insert()` with that string produces it, and the
-     * false silence survives for the rest of the migration because the gate index only has to be
-     * larger. The double-quote delimiter this was found beside makes it reachable a second way; the
-     * single-quoted form was reachable all along.
+     * false silence would survive for the rest of the migration because the gate index only has to be
+     * larger. A double-quoted literal reaches it a second way.
      */
     public static function setsTimeout(MigrationStatementDigest $digest, string $timeout): bool
     {

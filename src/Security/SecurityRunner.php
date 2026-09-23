@@ -94,11 +94,11 @@ final readonly class SecurityRunner
         // `GRANT … TO PUBLIC` when the catalog half reported the same grant, and until now no pass
         // ever held both sides at once.
         //
-        // ⚠️ VISIBLE, NOT EVERY AUDIT FINDING, AND THAT CHOICE IS THE WHOLE SAFETY OF THIS LAYER.
+        // Visible, not every audit finding, and that choice is the whole safety of this layer.
         // Feeding the hidden ones too would mean a baseline entry on the catalog side silently takes
         // the migration side down with it — the one fact leaves the report entirely, accepted in one
         // place and erased in another. A suppression says "this finding is accounted for", so only an
-        // accounted-for finding that is still ON THE REPORT can stand in for its twin.
+        // accounted-for finding that is still on the report can stand in for its twin.
         $lint = $this->lint($connection, $migrationPaths, $strictTools, $audit->findings);
         $analyse = $this->analyse($audit->context ?? $lint->context);
 

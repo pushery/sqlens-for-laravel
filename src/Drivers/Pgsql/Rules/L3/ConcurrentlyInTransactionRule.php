@@ -53,22 +53,20 @@ final class ConcurrentlyInTransactionRule extends AbstractPgsqlSafetyRule implem
     }
 
     /**
-     * The concurrent-build sequence, whose second step IS this finding's fix.
+     * The concurrent-build sequence, whose second step is this finding's fix.
      *
      * `public $withinTransaction = false;` is the line that is missing, and it is already step two
      * of the sequence the create-index rule hands over — so this rule points at that sequence
      * rather than carrying a one-line copy. A reader who lands here has written CONCURRENTLY and
-     * got its habitat wrong; the rest of the sequence is what stops them getting the NEXT part
+     * got its habitat wrong; the rest of the sequence is what stops them getting the next part
      * wrong too, which is the INVALID index an aborted build leaves behind.
      *
-     * ⚠️ **AND THE SEQUENCE DEPENDS ON THE STATEMENT, WHICH THIS USED TO GET WRONG.** The sentence
-     * that stood here — *the statement is a create-index either way* — was false, and the rule's own
-     * test proved it two arms down: this rule fires on `DROP INDEX CONCURRENTLY` too, correctly,
-     * because PostgreSQL refuses that in a transaction block for the same reason. `buildsConcurrently()`
-     * keys on the keyword, not on the create form, and the keyword appears on at least four
-     * statements.
+     * **And the sequence depends on the statement.** The statement is not a create-index either
+     * way: this rule fires on `DROP INDEX CONCURRENTLY` too, correctly, because PostgreSQL refuses
+     * that in a transaction block for the same reason. `buildsConcurrently()` keys on the keyword,
+     * not on the create form, and the keyword appears on at least four statements.
      *
-     * Measured before the fix, by reading `steps[2]` for each form:
+     * The create-index sequence handed to every form would read, at `steps[2]`:
      *
      * ```
      * CREATE INDEX CONCURRENTLY  ->  CREATE INDEX CONCURRENTLY <name> ON {{table}} ({{columns}})
@@ -78,12 +76,12 @@ final class ConcurrentlyInTransactionRule extends AbstractPgsqlSafetyRule implem
      * ```
      *
      * Row two is the expensive one: a fix plan that **creates the index the migration is trying to
-     * remove**. Row three hands over an unfilled `{{index}}` placeholder. And `forDropIndex()` — the
-     * right template — has been sitting in the same class all along, used by the sister rule, saying
-     * in its own docblock why reusing the create-side sweep is wrong.
+     * remove**. Row three hands over an unfilled `{{index}}` placeholder. `forDropIndex()` is the
+     * right template for the drop, the one the sister rule uses, and its docblock says why reusing
+     * the create-side sweep is wrong.
      *
-     * So the material branches on the statement's KIND, and the third arm is the load-bearing one:
-     * without it the next CONCURRENTLY form gets somebody else's plan again.
+     * So the material branches on the statement's kind, and the third arm is the load-bearing one:
+     * without it any other CONCURRENTLY form would get somebody else's plan.
      */
     public function remediationFor(MigrationStatementView $statement): ?RemediationPayload
     {

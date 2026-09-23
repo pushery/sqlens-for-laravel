@@ -350,15 +350,14 @@ final readonly class DeployCheckCatalog
     {
         return DeployCheckMetadata::fixed(
             'DEPLOY.LEGACY.INVALID_INDEX',
-            // ⚠️ MEDIUM, NOT HIGH, AND THE CATALOG SAID HIGH WHILE THE CHECK EMITTED MEDIUM.
-            // `InvalidIndexCheck` carries the reasoning for both halves and gets them right: the
-            // plain finding is debt somebody can carry another week, so it is `medium`, and HIGH
-            // belongs to its sibling `DEPLOY.LEGACY.INVALID_INDEX_NAME_COLLISION`, where the deploy
-            // is certain to fail. The catalog had taken the louder of the two for both.
+            // Medium, not high, as `InvalidIndexCheck` emits it. That check carries the reasoning
+            // for both halves: the plain finding is debt somebody can carry another week, so it is
+            // `medium`, and `high` belongs to its sibling `DEPLOY.LEGACY.INVALID_INDEX_NAME_COLLISION`,
+            // where the deploy is certain to fail.
             //
             // A consumer reads severity from this artifact — it is what the MCP tool serves and
-            // what a project scoring its backlog sorts on — so the two disagreeing means one of
-            // them is lying about every finding of this rule.
+            // what a project scoring its backlog sorts on — so the catalog and the check disagreeing
+            // would mean one of them is lying about every finding of this rule.
             Severity::Medium,
             self::deploy(),
             [

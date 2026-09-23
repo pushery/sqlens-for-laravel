@@ -126,14 +126,14 @@ final class ForeignKeyIdSuffixRule extends AbstractCatalogRule implements Declar
     {
         // A REFERENCED target is what makes this a foreign key, and the statement KIND is not.
         //
-        // ⚠️ Measured, because the obvious predicate is wrong on one of the two engines: MySQL's
+        // Measured, because the obvious predicate is wrong on one of the two engines: MySQL's
         // canonicalization classifies `ALTER TABLE … ADD CONSTRAINT … REFERENCES …` as
-        // `add_foreign_key`, and PostgreSQL's classifies the SAME statement as `add_constraint` —
+        // `add_foreign_key`, and PostgreSQL's classifies the same statement as `add_constraint` —
         // it has no `AddForeignKey` signature at all. A rule gated on the kind would therefore work
         // on MySQL and be dead on PostgreSQL, with nothing red to say so: no finding is exactly what
         // a schema whose keys are all named correctly produces.
         //
-        // Both engines DO mark the referenced table with `TargetRole::Referenced`, and only a
+        // Both engines do mark the referenced table with `TargetRole::Referenced`, and only a
         // foreign key has one — `UNIQUE` and `PRIMARY KEY` carry a column list and no reference. So
         // the discriminator is read from the parse on both sides, and it still cannot be satisfied
         // by a name.

@@ -248,12 +248,12 @@ final readonly class StatementClassifier implements CanonicalizationStage
                     //   depth 0            it is in the clause itself, not inside an expression
                     //   precededBy         null for the first target, `,` for every later one
                     //
-                    // ⚠️ And a THIRD property decides whether a target is kept: whether its own
+                    // And a third property decides whether a target is kept: whether its own
                     // value mentions a column at all. `SET status = 'new'` and
                     // `SET total_cents = amount * 100` are the same shape and different events —
                     // one gives a new column a value, the other moves data out of an existing one.
-                    // Measured on a committed fixture: without this, the debt rule that asks "was
-                    // this column back-filled" fired on the most ordinary migration there is.
+                    // Without this, the debt rule that asks "was this column back-filled" would
+                    // fire on the most ordinary migration there is.
                     $assigned = [];
                     $sawIdentifier = false;
                     $pending = null;
@@ -268,11 +268,9 @@ final readonly class StatementClassifier implements CanonicalizationStage
                         // over a statement that plainly moves data into `b`. With the depth check
                         // the run reaches the `WHERE` and answers `[b]`.
                         //
-                        // ⚠️ This comment used to illustrate the point with `SET a = (SELECT …),
-                        // b = 2`, and that example proves nothing: MEASURED, both readings answer
-                        // `[a]`. The literal `2` never makes `b` a target under the sourced test
-                        // below, so the half-answer the old wording warned about cannot arise
-                        // there. The example above is the one where the two readings differ.
+                        // `SET a = (SELECT …), b = 2` would not illustrate it: both readings answer
+                        // `[a]`, because the literal `2` never makes `b` a target under the sourced
+                        // test below. The example above is the one where the two readings differ.
                         if ($token->type === TokenType::Keyword && $token->depth === 0) {
                             break;
                         }
@@ -406,22 +404,22 @@ final readonly class StatementClassifier implements CanonicalizationStage
                 continue;
             }
 
-            // ⚠️ A COLUMN NAME IS QUOTED, and a bare identifier opening a member is not one.
+            // A column name is quoted, and a bare identifier opening a member is not one.
             //
             // This stage runs after identifier normalization, which is what makes the test sound:
             // the PostgreSQL keyword list says so in its own words — "a column named `text` is
-            // already quoted and a BARE word is unambiguously the keyword". The inverse holds here.
+            // already quoted and a bare word is unambiguously the keyword". The inverse holds here.
             //
             // It is not a nicety. `CREATE TABLE clone (LIKE users INCLUDING ALL)` is a real body
             // member that brings columns this reader cannot see, and `LIKE` is not in either
-            // driver's keyword list — so without this test it arrives as a COLUMN NAMED `like`,
+            // driver's keyword list — so without this test it arrives as a column named `like`,
             // typed `users including all`, and the table is described by half its own definition
             // with nothing saying so. Adding `LIKE` to the keyword lists would fix it and cost a
             // canonical form-version bump, which moves every fingerprint and every baseline entry
             // in every project: the wrong price for a member this reader can simply decline.
             //
             // A user-defined type keeps working, which is the case this must not break: in
-            // `"status" order_status not null` the NAME is quoted and only the type is bare.
+            // `"status" order_status not null` the name is quoted and only the type is bare.
             if (! str_starts_with($token->text, $this->driver->quotingCharacter())) {
                 return null;
             }

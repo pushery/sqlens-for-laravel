@@ -14,7 +14,7 @@ final readonly class SqlToken
     /**
      * Whether this is a SQL keyword, matched case-insensitively against a closed list.
      *
-     * ⚠️ Only a {@see SqlTokenKind::Word} can be one. `"select"` is a column somebody named badly,
+     * Only a {@see SqlTokenKind::Word} can be one. `"select"` is a column somebody named badly,
      * `'select'` is data, and `-- select` is a note — treating any of the three as a keyword is how a
      * formatter changes what a statement means.
      */

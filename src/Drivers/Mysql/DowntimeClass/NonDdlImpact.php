@@ -59,7 +59,7 @@ enum NonDdlImpact: string
      * `DROP TABLE` as `online` and another as `rewrite` because of the engine would be a difference
      * a reader cannot act on.
      *
-     * ⚠️ The counter-argument, stated rather than omitted: with InnoDB `file-per-table`, dropping a
+     * The counter-argument, stated rather than omitted: with InnoDB `file-per-table`, dropping a
      * very large table can stall the server while the filesystem unlinks its `.ibd`. MySQL 8.0+
      * releases the tablespace in the background, which is why this is a caveat and not the class.
      */

@@ -46,7 +46,7 @@ use Pushery\SQLens\Config\RuleIdValidator;
  *   is a schema object rather than a server, an account, a grant or a policy, so
  *   none of the five above fits it and it does not fit them.
  *
- * ⚠️ `PII` and `PRIV` are two characters apart and mean opposite things —
+ * `PII` and `PRIV` are two characters apart and mean opposite things —
  * personal data versus privileges. The longer spelling `PRIVACY` was rejected
  * for exactly that reason: `SEC.PRIV.*` beside `SEC.PRIVACY.*` is a pair a
  * reader mis-scans, and a suppression entry naming the wrong one silences a rule

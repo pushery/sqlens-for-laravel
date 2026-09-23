@@ -6,11 +6,19 @@ package ships.
 
 ## Third-party notices
 
-Dependencies whose license requires attribution are listed here with their SPDX
-identifier. SQLens bundles no vendored third-party source: its dependencies are
-resolved by Composer and carry their own license files.
+Work whose license requires attribution is listed here with its SPDX identifier.
+SQLens's own dependencies are resolved by Composer and carry their own license
+files; what this repository vendors is test material, and it is named below with
+where it was taken from.
 
-_None at present._
+- BookStack migrations, used as a corpus collection — MIT,
+  <https://github.com/BookStackApp/BookStack> at commit
+  `97fe7cca9dfe6618e258a5333ac19d4b1fa15ec9`. Fourteen of the files in
+  `database/migrations/` are copied unchanged into
+  `tests/Fixtures/Corpus/real/bookstack/`, and the upstream `LICENSE` sits beside
+  them. They are read as a SUBJECT — the corpus measures this package's rules
+  against somebody else's real migrations — and none of it ships: `tests/` is
+  `export-ignore`d, so nothing of BookStack reaches a consumer's vendor directory.
 
 ## Fact sources
 

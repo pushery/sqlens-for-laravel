@@ -373,10 +373,10 @@ final readonly class Finding
     /**
      * The same finding, carrying a context the run established after the finding was built.
      *
-     * ⚠️ The narrow case, and it is narrow on purpose. Almost every finding is born with the
+     * The narrow case, and it is narrow on purpose. Almost every finding is born with the
      * context of the subject it judged, and replacing that would be a report describing the wrong
      * thing. This exists for a finding that has no subject: the security suite's "this half
-     * examined nothing" notices are produced INSIDE a half that has just failed, at a moment when
+     * examined nothing" notices are produced inside a half that has just failed, at a moment when
      * the other half has not run and no profile is established -- so they carry a placeholder,
      * which a consumer then reads in the JSON beside a header saying something else.
      *

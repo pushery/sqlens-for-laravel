@@ -13,24 +13,20 @@ use Pushery\SQLens\Console\ExitCode;
  * it wrong is silent: an exit code nobody reads until a deploy script acts on it. Kept pure, every
  * combination is a test rather than a scenario somebody has to stage.
  *
- * ## ⚠️ THE DOCBLOCK SAID "in one place" WHILE THE COMMAND DECIDED ONE CASE ITSELF
+ * ## Every case is decided here, the unbuildable reference included
  *
- * `DriftCommand` used to answer the unbuildable-reference case inline, before ever reaching this
- * class — and it answered it differently: `UndeterminedInStrictMode` in **report** mode, where this
- * policy says report mode never blocks. Under the shipped defaults that was the ordinary CI outcome
- * rather than an edge: the reference is a shadow replay, `deploy.shadow.allowed_environments` is
- * `['local', 'testing']`, so in a `ci` environment the production guard refuses, no reference is
- * built, and a report run exited **3**.
+ * `DriftCommand` answers no case inline. Under the shipped defaults an unbuildable reference is the
+ * ordinary CI outcome rather than an edge: the reference is a shadow replay,
+ * `deploy.shadow.allowed_environments` is `['local', 'testing']`, so in a `ci` environment the
+ * production guard refuses and no reference is built. Report mode never blocks, and this case is no
+ * exception — as the command's class docblock (*"the default prints everything and exits clean"*)
+ * and the `--allow-undetermined` help text say too.
  *
- * Four sources described that case and three of them agreed with each other: the command's class
- * docblock (*"the default prints everything and exits clean"*), this policy's report arm, and the
- * `--allow-undetermined` help text. The behavior was the outlier, so the behavior moved.
- *
- * ⚠️ **Report mode exiting clean over an unbuildable reference is NOT a silent green, and the
+ * **Report mode exiting clean over an unbuildable reference is not a silent green, and the
  * distinction is the condition the command's own docblock names:** the mode and the named reason are
  * printed. A report run makes no claim about the schema — that is what gate mode is for — and a mode
  * that turns red on its first run against a real database is switched off rather than adopted. In
- * **gate** mode an unbuildable reference still blocks, because there the exit code IS the claim.
+ * **gate** mode an unbuildable reference still blocks, because there the exit code is the claim.
  */
 final readonly class DriftExitPolicy
 {

@@ -185,15 +185,10 @@ final class LintCommand extends Command
 
         // The --file fast path is pretend-only, and it takes as many files as you name.
         //
-        // ⚠️ IT REFUSED MORE THAN ONE UNTIL NOW, while its own `--help` line ended in Symfony's
-        // automatic "(multiple values allowed)" — the sentence contradicted itself, in one line,
-        // because the option was declared VALUE_IS_ARRAY and then rejected an array. It failed
-        // cleanly, so it cost time rather than correctness: a pre-commit hook over 53 migrations
-        // paid one artisan boot per file, measured at 0.58 s each, about 23 seconds for a run that
-        // should have been one.
-        //
-        // Resolved toward the capability rather than toward the narrower declaration, because a
-        // hook over several staged migrations is the use case the description itself names.
+        // The option is declared VALUE_IS_ARRAY, and its `--help` line says "(multiple values
+        // allowed)", so several files are one run. A pre-commit hook over several staged migrations
+        // is the use case the description itself names, and one artisan boot per file would cost
+        // about half a second each.
         $rawFiles = $this->option('file');
 
         // Declared `--file=*`, so this is an array by construction; only emptiness is a real
@@ -219,15 +214,15 @@ final class LintCommand extends Command
         $connection = $this->option('connection');
         $roundtrip = $this->option('roundtrip') === true;
 
-        // ⚠️ `--pretend` WAS DECLARED AND NEVER READ, so `--pretend --shadow` ran in shadow mode:
-        // the run created and dropped a database while the operator had asked, in as many words,
-        // for the do-no-harm one. `grep -rn "option('pretend')" src/` found nothing at all.
+        // `--pretend` is read, not only declared. Ignored, `--pretend --shadow` would run in shadow
+        // mode and create and drop a database while the operator had asked, in as many words, for
+        // the do-no-harm one.
         //
-        // That is the silent drop the block below refuses for `--roundtrip`, in its own words —
-        // "none of them is a silent drop of the flag, which would let a user believe a roundtrip
-        // happened" — and the flag it happened to is the one a cautious script appends BECAUSE it
-        // is cautious. An alias that sets it, a habit from another tool, a pipeline that spells the
-        // default out: each of them turned into a database-creating run.
+        // That is the silent drop the block below refuses for `--roundtrip` — "none of them is a
+        // silent drop of the flag, which would let a user believe a roundtrip happened" — and it is
+        // the flag a cautious script appends because it is cautious. An alias that sets it, a habit
+        // from another tool, a pipeline that spells the default out: each of them would turn into a
+        // database-creating run.
         //
         // Refused rather than made to win over `--shadow`. Two flags naming opposite modes is a
         // user who believes something about this run that is not true, and picking one for them
@@ -333,11 +328,11 @@ final class LintCommand extends Command
      *
      * A non-interactive run without `--force` is refused rather than assumed-yes.
      *
-     * ⚠️ The NAME comes from {@see DriverManager::defaultConnectionName()}, the same resolver the run
+     * The name comes from {@see DriverManager::defaultConnectionName()}, the same resolver the run
      * uses, and that is load-bearing twice over: the guard has to judge the connection the run
      * addresses, and the sentence below has to name it to the person being asked. Reading
-     * `database.default` here named a different database in the question than the run would have
-     * created on — an informed yes that was not informed about the right thing.
+     * `database.default` here could name a different database in the question than the run would
+     * create on — an informed yes that was not informed about the right thing.
      */
     private function guardDecision(ShadowClearance $clearance, DriverManager $drivers, mixed $connection): GuardDecision
     {

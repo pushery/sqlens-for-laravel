@@ -42,14 +42,11 @@ final class MysqlAdminPrivileges
         }
 
         $path = dirname(__DIR__, 3).'/resources/data/mysql-admin-privileges.json';
-        // ⚠️ THIS USED TO RETURN AN EMPTY LIST, and the docblock defending it said so itself: "an empty
-        // list would make the rule silently correct about every server". It then argued the fallback was
-        // acceptable because a shipped guard proves the file is present — but that guard lives under
-        // `tests/`, which is RELEASE_STRIP and exists in no `vendor/` tree. The belt was only ever
-        // fastened in the repository that did not need it.
-        //
-        // Both rules reading this list open with "if it is empty, report nothing", so an unreadable
-        // artifact turned SEC.PRIV.GRANT_ADMIN* into a PASS on every server — not an `undetermined`.
+        // Refused rather than read as an empty list: an empty list would make the rule silently
+        // correct about every server. Both rules reading this list open with "if it is empty, report
+        // nothing", so an unreadable artifact would turn SEC.PRIV.GRANT_ADMIN* into a pass on every
+        // server — not an `undetermined`. A check in the package's own repository does not help an
+        // installation, where the file either ships or does not.
         $decoded = ShippedJson::decode($path, 'entries');
         /** @var array<array-key, mixed> $entries */
         $entries = $decoded['entries'];

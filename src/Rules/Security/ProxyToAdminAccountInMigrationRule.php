@@ -33,7 +33,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  * So an entry there could never have matched, and the arm that offers every listed name to a real
  * server would have stayed red forever. It sits in that artifact's `excluded` set, pointing here.
  *
- * ## ⚠️ It judges the TARGET, and a rule that reported every proxy would be switched off
+ * ## It judges the target, and a rule that reported every proxy would be switched off
  *
  * A proxy onto an equally unprivileged account is an ordinary authentication arrangement — that is
  * what the mechanism is for, and MySQL's own default row is one: measured on 8.4.10, a stock server

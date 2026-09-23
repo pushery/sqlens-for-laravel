@@ -85,20 +85,18 @@ final readonly class PendingMigrationResolver implements PendingResolver
             return PendingResolution::skipped(PendingSkipReason::ConnectionUnreachable);
         }
 
-        // ⚠️ THE BOUND SITS HERE, IN THE RESOLVER, AND NOT AT THE CALL SITES. Three commands read
-        // the pending state; `sqlens:lint` bounded its session first and `sqlens:drift` and
-        // `sqlens:postdeploy --expect-shadow` did not, so two of three reads of a possibly
-        // PRODUCTION connection sat behind a lock with no budget at all. `sqlens:drift` is the
-        // likeliest of the three to point at production — comparing what is against what should be
-        // is its whole purpose. Discipline at each call site had already been tried and had a
-        // two-in-three failure rate; a fourth caller cannot forget what it cannot construct
-        // without.
+        // The bound sits here, in the resolver, and not at the call sites. Three commands read
+        // the pending state — `sqlens:lint`, `sqlens:drift` and `sqlens:postdeploy --expect-shadow`
+        // — each of them possibly against a production connection, and `sqlens:drift` is the
+        // likeliest to point at production: comparing what is against what should be is its whole
+        // purpose. A bound left to each call site is one a caller can forget; a caller cannot
+        // forget what it cannot construct without.
         //
-        // AFTER the reachability check and before the first catalog read, which is the only correct
+        // After the reachability check and before the first catalog read, which is the only correct
         // window rather than a stylistic choice. `bind()` writes with `Connection::statement()`,
-        // which THROWS on an unreachable server — binding above would turn the named
+        // which throws on an unreachable server — binding above would turn the named
         // `ConnectionUnreachable` skip into a stack trace, replacing the specific answer with a
-        // crash. Below it, the three reads this bounds are the three the audit found unbounded.
+        // crash. Below it are the three reads this bounds.
         //
         // Nesting is safe by construction, which is what lets the lint path keep its own outer
         // bound: `bind()` snapshots whatever it finds and restores exactly that, so an inner bind

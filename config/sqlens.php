@@ -841,18 +841,18 @@ return [
          * withheld, while `SEC.PRIV.GRANT_PUBLIC` is a grant on a table this project's own
          * migrations created and reports exactly as it would anywhere.
          *
-         * ⚠️ It withholds a verdict about the SERVER and about nothing else. Every finding about
-         * the SCHEMA — the thing the pipeline is there to judge, and the thing that will be
+         * It withholds a verdict about the server and about nothing else. Every finding about
+         * the schema — the thing the pipeline is there to judge, and the thing that will be
          * deployed onto a real host — is unaffected. This is not a way to make a red run green; a
          * declaration that could do that would be a different feature, and a worse one.
          *
          * There is no detection behind this and there deliberately is none: a container and a
          * production server answer every query identically, and the difference is what somebody
-         * INTENDS. So it is declared, an absent declaration means 'persistent', and a value that is
+         * intends. So it is declared, an absent declaration means 'persistent', and a value that is
          * neither is a misconfiguration naming the legal set rather than a quiet fall back — the
          * same contract every other named mode in this file holds to.
          *
-         * Read from `SQLENS_SERVER_LIFETIME`, because the declaration belongs to the ENVIRONMENT
+         * Read from `SQLENS_SERVER_LIFETIME`, because the declaration belongs to the environment
          * rather than to the project: this one file serves the pipeline, where the server is a
          * container, and the host, where it is not. Unset means 'persistent'. An environment that
          * says 'disposable' on a real host withholds the server checks of `sqlens:audit` there, and
@@ -1351,7 +1351,7 @@ return [
              *
              * This key is the deliberate way out. Set it and the comparison happens.
              *
-             * ⚠️ It is a CLAIM, not a reading, and the finding says so. Nothing here can verify it,
+             * It is a claim, not a reading, and the finding says so. Nothing here can verify it,
              * and a stale value is worse than none: an operator who set it once when the volume was
              * new has told the gate that a full disk is empty. Feed it from the same monitoring you
              * would have checked by hand, or leave it null and read the estimate.
@@ -1367,7 +1367,7 @@ return [
          */
         'postdeploy' => [
             /*
-             * The whole `sqlens:postdeploy` run's time budget, in MILLISECONDS.
+             * The whole `sqlens:postdeploy` run's time budget, in milliseconds.
              *
              * A run that hangs off the end of every deploy has one survival condition: it must not
              * be something people wait for. A gate that visibly delays a deploy gets configured
@@ -1378,17 +1378,17 @@ return [
              * which is why no file is named here. A path you cannot open reads as a promise you
              * could check, and this one you cannot.
              *
-             * ⚠️ Milliseconds, matching `preflight.budget_ms` and the `--budget` flag on both
+             * Milliseconds, matching `preflight.budget_ms` and the `--budget` flag on both
              * commands. Two sibling gates measuring the same thing in different units is a reader
              * getting it wrong by a factor of a thousand, in the direction that looks like it
              * worked.
              *
-             * ⚠️ This key exists because postdeploy used to read `preflight.budget_ms` -- the
-             * PREDEPLOY budget. Raising the pre-deploy gate's allowance silently raised the
-             * aftercare's too, and lowering it silently squeezed a run that had nothing to do with
-             * the change. Two commands, two promises, two numbers.
+             * It is a key of its own rather than a read of `preflight.budget_ms`, the pre-deploy
+             * budget: one shared number would let a change to the pre-deploy gate's allowance
+             * silently raise or squeeze a run that has nothing to do with it. Two commands, two
+             * promises, two numbers.
              *
-             * Exceeding it is a FINDING (`DEPLOY.RUN.TIME_BUDGET_EXCEEDED`), never an abort. The
+             * Exceeding it is a finding (`DEPLOY.RUN.TIME_BUDGET_EXCEEDED`), never an abort. The
              * run finishes and reports the measured duration and the most expensive check, because
              * a budget that breaks tells you the run is too slow and stopping early would destroy
              * the only information that says what to fix. `--budget` overrides it for a single run.
@@ -1398,7 +1398,7 @@ return [
             /*
              * The name shapes an unfinished expand/contract migration leaves behind.
              *
-             * PCRE patterns against the BARE object name, and every shipped one is anchored:
+             * PCRE patterns against the bare object name, and every shipped one is anchored:
              * `/_old$/` matches `users_old` and not `threshold_settings`. Replacing this list
              * replaces it wholly — a project with its own convention should say what that is
              * rather than inherit ours alongside it.
@@ -1407,7 +1407,7 @@ return [
              * that ends up empty falls back to the shipped one: an empty list would silence the
              * check completely, and "no findings" would read as "nothing left behind".
              *
-             * ⚠️ A match here is NEVER a failure. A name is not evidence -- `orders_old` is what
+             * A match here is never a failure. A name is not evidence -- `orders_old` is what
              * an abandoned rename leaves behind and what a team calls the archive it queries
              * every quarter, and the catalog holds nothing that separates them. Every match is
              * reported as `undetermined` with that reason named.
@@ -1763,11 +1763,11 @@ return [
         | would lose the checks over something that is not a problem.
         */
         /*
-        | ⚠️ PIN `path` IN A CI IMAGE, AND HERE THAT IS A CREDENTIAL BOUNDARY RATHER THAN A
-        | REPRODUCIBILITY ONE.
+        | Pin `path` in a CI image. For `pgls` that is a credential boundary as well as a
+        | reproducibility one.
         |
         | The prose above explains a pinned path as a statement about which binary produced the
-        | verdict. True, and for this one tool incomplete: `pgls` is the ONLY adapter handed the
+        | verdict. True, and for this one tool incomplete: `pgls` is the only adapter handed the
         | audited connection's password -- it goes to the process as `PGPASSWORD`, because
         | postgrestools connects to the database itself rather than reading files. So whichever
         | binary answers to `postgrestools` receives that password.
@@ -1779,8 +1779,7 @@ return [
         | passes.
         |
         | Naming the path is therefore worth doing even where reproducibility does not matter to
-        | you. This note exists because the reasoning was only written down as determinism, and a
-        | configuration whose security consequence is unstated gets set for convenience.
+        | you.
         */
         'pgls' => [
             'path' => null,
@@ -1799,17 +1798,17 @@ return [
     | application: it turns on Eloquent's strictness switches, reports a query
     | that took too long, and names DDL executed outside a migration.
     |
-    | ⚠️ It is off unless a profile is named, and off means ABSENT rather than
+    | It is off unless a profile is named, and off means absent rather than
     | cheap: with `profile` null nothing is bound, no listener is registered and
     | no object is built. "Disabled" costing a listener per request is how a
     | safety feature becomes a performance ticket.
     |
-    | ⚠️ A profile name this file does not define is an ERROR, not off. A typo
+    | A profile name this file does not define is an error, not off. A typo
     | that silently disabled every guardrail is exactly what a named profile is
     | supposed to prevent, and a run that treats it as "nothing configured"
     | reports a clean gate over an application nobody is watching.
     |
-    | ⚠️ These profiles are a SEPARATE AXIS from the run profiles above. They
+    | These profiles are a separate axis from the run profiles above. They
     | share the word and nothing else: a run profile decides how strict a lint
     | is, a guard profile decides what a running application refuses to do. One
     | is not an alias of the other, and a project may well want `ci` in one and
@@ -1955,12 +1954,12 @@ return [
     | `--check` answers whether it would have to, which is the form a CI step
     | uses.
     |
-    | ⚠️ `backend` is the one key worth understanding before setting it. `auto`
-    | picks the best AVAILABLE backend — pgFormatter, then SQLFluff, then the
-    | built-in PHP core, which is always there. NAMING one is a promise that it
-    | is installed: a named backend that cannot run is a REFUSAL rather than a
+    | `backend` is the one key worth understanding before setting it. `auto`
+    | picks the best available backend — pgFormatter, then SQLFluff, then the
+    | built-in PHP core, which is always there. Naming one is a promise that it
+    | is installed: a named backend that cannot run is a refusal rather than a
     | quiet fallback, because a fallback would produce output you did not ask
-    | for, and the next machine — the one where the binary IS installed — would
+    | for, and the next machine — the one where the binary is installed — would
     | rewrite every file.
     */
     'format' => [
@@ -1995,7 +1994,7 @@ return [
         /*
          * Which extensions count as a SQL file. Without the dot.
          *
-         * ⚠️ `php` and `phtml` are RESERVED and cannot be added. A Laravel
+         * `php` and `phtml` are reserved and cannot be added. A Laravel
          * migration is a PHP file whose SQL, where there is any, lives inside a
          * heredoc — running a SQL formatter over one does not format that SQL, it
          * reads the whole file as a statement and rewrites it. That is a destroyed
@@ -2076,8 +2075,8 @@ return [
             // is the one people argue about: leading commas make a git diff of an
             // added column one line instead of two.
             'leading_commas' => false,
-            // ⚠️ THE ONLY OPTION THE BUNDLED BACKEND CANNOT HONOR. The pure-PHP
-            // core wraps on STRUCTURE — per column, per clause, per bracket depth
+            // The only option the bundled backend cannot honor. The pure-PHP
+            // core wraps on structure — per column, per clause, per bracket depth
             // — and never on a column count, so it cannot bound a line at 100 or
             // at anything else.
             //

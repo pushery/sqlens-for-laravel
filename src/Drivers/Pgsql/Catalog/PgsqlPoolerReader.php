@@ -59,9 +59,8 @@ final readonly class PgsqlPoolerReader implements PoolerReader
     private const array POOLER_HOST_FRAGMENTS = ['pgbouncer', 'pooler'];
 
     /**
-     * ⚠️ No session budget. The probe used to take one and bound itself with a session
-     * `SET statement_timeout`; see {@see self::read()} for why that bound was the very leak the
-     * probe exists to detect, and what is carried instead.
+     * No session budget. See {@see self::read()} for why a session `SET statement_timeout` would
+     * be the very leak the probe exists to detect, and what is carried instead.
      */
     public function __construct(private Connection $connection) {}
 
@@ -71,24 +70,23 @@ final readonly class PgsqlPoolerReader implements PoolerReader
         $convention = $this->conventionSignals();
 
         try {
-            // ⚠️ NOT bounded by a session `SET statement_timeout`, and that is the decision this
-            // block used to make the other way.
+            // Not bounded by a session `SET statement_timeout`, and deliberately.
             //
             // The probe is the one read in the package that cannot run inside a transaction —
             // pooling is invisible in one, which is the guarantee a pooler exists to give — so
-            // `SET LOCAL`, which every other reader uses, is not available here. That left a plain
+            // `SET LOCAL`, which every other reader uses, is not available here. That leaves a plain
             // session `SET`, and on the connection this probe is most needed on it is precisely the
             // leak being measured: the `SET` lands on one backend, the restore looks for it on
-            // another, and the HOST APPLICATION inherits a timeout it never chose. Performed by the
-            // code whose job is to detect that this can happen.
+            // another, and the host application inherits a timeout it never chose, set by the code
+            // whose job is to detect that this can happen.
             //
-            // What is given up is named rather than waved away: four constant-time statements now
-            // run with whatever bound the connection already carries, usually none. That is a risk
-            // to THIS run — a pooler that accepts a connection and never answers holds it — and the
-            // leak was a risk to somebody else's session. Between a hazard we carry and one we hand
+            // What is given up is named rather than waved away: four constant-time statements run
+            // with whatever bound the connection already carries, usually none. That is a risk to
+            // this run — a pooler that accepts a connection and never answers holds it — and the
+            // leak would be a risk to somebody else's session. Between a hazard we carry and one we hand
             // to a stranger, the package takes its own.
 
-            // Two SEPARATE statements, outside any transaction. Inside one, a transaction pooler
+            // Two separate statements, outside any transaction. Inside one, a transaction pooler
             // behaves exactly like a direct connection — which is the guarantee it exists to give.
             $first = $this->backendPid();
             $second = $this->backendPid();
@@ -145,12 +143,12 @@ final readonly class PgsqlPoolerReader implements PoolerReader
     }
 
     /**
-     * ⚠️ `pg_catalog.`-qualified, like every call this probe makes. An unqualified catalog
+     * `pg_catalog.`-qualified, like every call this probe makes. An unqualified catalog
      * function can be outranked by a user function whose signature matches more closely, and this
-     * probe runs OUTSIDE a transaction, where nothing else covers it.
+     * probe runs outside a transaction, where nothing else covers it.
      *
-     * Measured on PostgreSQL 18.0 rather than assumed: a user `public.pg_backend_pid()` does NOT
-     * outrank the catalog one, and neither does a `public.current_setting(text)` — for an IDENTICAL
+     * Measured on PostgreSQL 18.0 rather than assumed: a user `public.pg_backend_pid()` does not
+     * outrank the catalog one, and neither does a `public.current_setting(text)` — for an identical
      * signature `pg_catalog` is searched first and wins. So neither call here was exploitable. The
      * qualification is still worth its four characters: it makes that a property of the line rather
      * than of an argument type, and the day one of these takes a parameter whose type stops being

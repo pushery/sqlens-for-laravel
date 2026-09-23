@@ -157,11 +157,9 @@ final class MysqlDriver implements AcceptsRunClock, Driver
     /**
      * A copy of this driver whose rules judge on the RUN's day.
      *
-     * ⚠️ `clone` PLUS AN ASSIGNMENT, NOT `clone($this, [...])`, AND NOT A CONSTRUCTOR CALL. The
-     * clone-with form reads better and is **PHP 8.5**; this package declares `php: ^8.4`, and the
-     * development machine happens to run 8.5 — so `php -l` and a local Pint both accepted it and the
-     * CI, on 8.4, answered with a parse error. A local syntax check measures the machine, not the
-     * floor the package promises.
+     * `clone` plus an assignment, not `clone($this, [...])`, and not a constructor call. The
+     * clone-with form reads better and is **PHP 8.5**; this package declares `php: ^8.4`, where it is
+     * a parse error.
      *
      * A constructor call re-passing every promoted parameter is the other 8.4-safe shape, and it is
      * worse: thirteen arguments here, twelve next door, and a wither that rebuilds by hand silently

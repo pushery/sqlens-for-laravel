@@ -40,7 +40,7 @@ use PHPStan\Type\VerbosityLevel;
  * the receiver resolves to nothing: `->unprepared()` is written on connections and on nothing else,
  * so the name is evidence by itself.
  *
- * ⚠️ **There is no such branch here, and leaving it out is the design rather than an omission.**
+ * **There is no such branch here, and leaving it out is the design rather than an omission.**
  * `prepare`, `query` and `exec` are among the most ordinary method names in PHP — a repository, a
  * cache, a template engine and an HTTP client may each declare all three. A name-based fallback
  * would put a finding on ordinary code in every project, which is the fastest way to get the whole

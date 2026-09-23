@@ -279,16 +279,15 @@ final readonly class MysqlSecurityReader implements SecurityReader
                 // chances to read the same small table in thirty different states.
                 "select 'database' as scope, Db as object_name, User, Host, "
                 .$static->unpivotExpression(MysqlStaticPrivileges::SCOPE_DATABASE).' as privilege from mysql.db'
-                // The global scope, which nothing read before: `mysql.global_grants` holds ONLY the
-                // dynamic privileges of MySQL 8, so `SUPER`, `FILE`, `PROCESS` and `SHUTDOWN` — the
-                // whole static administrative family — arrived nowhere.
+                // The global scope, read from `mysql.user`: `mysql.global_grants` holds only the
+                // dynamic privileges of MySQL 8, so without this arm `SUPER`, `FILE`, `PROCESS` and
+                // `SHUTDOWN` — the whole static administrative family — would arrive nowhere.
                 ." union all select 'global', '*', User, Host, ".$static->unpivotExpression(MysqlStaticPrivileges::SCOPE_GLOBAL).' from mysql.user'
-                // ⚠️ `Grant_priv` — the ability to HAND THE GRANT ON, and the one column this unpivot
-                // used to omit. Measured on a real 8.4: a grant made `WITH GRANT OPTION` sets
-                // `Grant_priv = 'Y'` here and at the global scope, and adds the `Grant` member to
-                // `tables_priv.Table_priv` — and the reader reported `grantable: false` at all three,
-                // because it never asked. A security fact the catalog holds was being dropped on the
-                // way out, with no error and no undetermined to notice it by.
+                // `Grant_priv` — the ability to hand the grant on. Measured on a real 8.4: a grant
+                // made `WITH GRANT OPTION` sets `Grant_priv = 'Y'` here and at the global scope, and
+                // adds the `Grant` member to `tables_priv.Table_priv`. Without these arms the reader
+                // would report `grantable: false` at all three, dropping a security fact the catalog
+                // holds with no error and no undetermined to notice it by.
                 //
                 // The marker name is lifted into the flag below and never becomes a privilege: it is
                 // not one, and letting it into the list would put `other` in every message that

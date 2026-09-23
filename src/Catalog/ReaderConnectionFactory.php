@@ -40,9 +40,16 @@ final readonly class ReaderConnectionFactory
      */
     public const string SHADOW_NAME_SUFFIX = '::sqlens_shadow_reader';
 
+    /**
+     * @param  SessionDefenses|null  $defenses  supplied by the container wherever the factory is
+     *                                          resolved. Null only where a test builds the factory by
+     *                                          hand, and the reader's copy then carries exactly the
+     *                                          application's own options.
+     */
     public function __construct(
         private DatabaseManager $database,
         private Repository $config,
+        private ?SessionDefenses $defenses = null,
     ) {}
 
     /**
@@ -94,6 +101,7 @@ final readonly class ReaderConnectionFactory
         }
 
         unset($settings['read'], $settings['write']);
+        $settings = $this->openedForReading($settings);
         $settings['database'] = $database;
 
         // Purged before it is set, not after: the manager holds a live handle under this name from
@@ -144,6 +152,7 @@ final readonly class ReaderConnectionFactory
             // snapshot of a database nobody asked about — including one whose replication lag makes
             // it a different schema. Which instance is audited becomes an explicit choice.
             unset($settings['read'], $settings['write']);
+            $settings = $this->openedForReading($settings);
 
             // The pinned host replaces whatever the base config named. Dropping the split above is
             // not enough on its own: a connection configured ONLY through read/write blocks has no
@@ -157,6 +166,36 @@ final readonly class ReaderConnectionFactory
         }
 
         return $this->database->connection($name);
+    }
+
+    /**
+     * The reader's copy with the PDO attributes its driver needs for reading, on top of whatever the
+     * application configured.
+     *
+     * Which attributes, and for which driver, is not decided here: this class names no engine. The
+     * answer comes from {@see SessionDefenses::readerConnectionOptions()}, and an engine that needs
+     * nothing, or one this build does not recognize, gets its settings back unchanged.
+     *
+     * Replaced by key rather than merged: the options are keyed by PDO attribute constants, which are
+     * integers, and a merge would renumber them into different attributes.
+     *
+     * @param  array<array-key, mixed>  $settings
+     * @return array<array-key, mixed>
+     */
+    private function openedForReading(array $settings): array
+    {
+        $driver = $settings['driver'] ?? null;
+        $attributes = is_string($driver) && $this->defenses instanceof SessionDefenses
+            ? $this->defenses->readerConnectionOptions($driver)
+            : [];
+
+        if ($attributes === []) {
+            return $settings;
+        }
+
+        $settings['options'] = array_replace(is_array($settings['options'] ?? null) ? $settings['options'] : [], $attributes);
+
+        return $settings;
     }
 
     /**
@@ -313,28 +352,25 @@ final readonly class ReaderConnectionFactory
     }
 
     /**
-     * ⚠️ ABSENT AND WRONG ARE DIFFERENT, AND TREATING THEM ALIKE CRASHED A RUN.
+     * Absent and wrong are different, and treating them alike would crash a run.
      *
-     * This used to return 0 for anything that was not an integer, absence included, and the
-     * budget refuses a 0 by name — so a config that simply did not mention `statement_timeout`
-     * ended the run with an uncaught `InvalidSessionBudget`. Nothing catches that exception
-     * anywhere in the package, so the user got a stack trace instead of the misconfiguration
-     * exit code, and the message named a value they had never written: "0 would mean wait
-     * forever".
+     * The budget refuses a 0 by name, so returning 0 for an absent key would end a run whose
+     * config simply does not mention `statement_timeout` with an uncaught `InvalidSessionBudget`
+     * — a stack trace instead of the misconfiguration exit code, naming a value the user never
+     * wrote: "0 would mean wait forever".
      *
      * Two ordinary situations produce an absent key, and neither is a mistake:
      *
-     *   * a config PUBLISHED by an earlier version, which froze before this key existed. Every
+     *   * a config published by an earlier version, which froze before this key existed. Every
      *     consuming app that ran `vendor:publish` has one, and it never gains a key again.
      *   * a config written with only the keys the project cares about, which is what the
      *     documentation recommends over copying the whole file.
      *
-     * So absence takes the shipped default — exactly the treatment `readBudgetMs()` below has
-     * always given its own key, which is why that one never had this defect.
+     * So absence takes the shipped default — exactly the treatment `readBudgetMs()` below gives
+     * its own key.
      *
-     * A value that IS present and is not an integer keeps the old behavior: it reaches the
-     * budget as a zero and the budget refuses it, naming the key. That is the case the original
-     * reasoning was about, and reading a typo as "no limit" would silently unbound a reader
+     * A value that is present and is not an integer reaches the budget as a zero, and the budget
+     * refuses it, naming the key: reading a typo as "no limit" would silently unbound a reader
      * pointed at production.
      */
     private function intSetting(string $key, int $default): int

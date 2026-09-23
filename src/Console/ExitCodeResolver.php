@@ -21,9 +21,8 @@ use Pushery\SQLens\Reporting\UndeterminedPolicy;
  *   3. Then a gate breach — a level or severity gate was crossed.
  *   4. Otherwise clean.
  *
- * ⚠️ THIS SAID "NO COMMAND WIRES THIS YET", and three do: `LintRunner`, `AuditRunner` and
- * `SecurityCommand` all take it as a constructor or handler dependency. It is the single source of a
- * run's exit code.
+ * `LintRunner`, `AuditRunner` and `SecurityCommand` all take it as a constructor or handler
+ * dependency. It is the single source of a run's exit code.
  */
 final class ExitCodeResolver
 {

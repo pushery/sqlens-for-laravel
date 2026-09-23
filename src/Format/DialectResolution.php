@@ -44,14 +44,14 @@ final readonly class DialectResolution
     /**
      * No connection to ask.
      *
-     * ⚠️ THIS SAID "NOT an error. The dialect-neutral core formats without one" — and the core is not
-     * dialect-neutral. `SqlTokenizer` switches comment syntax on the dialect and `SqlToken` switches
-     * keyword case on it, so formatting without one rewrote the file for whichever engine the guess
-     * picked. `sqlens:format` refuses instead now.
+     * `sqlens:format` refuses on this rather than formatting without a dialect, because the core is
+     * not dialect-neutral: `SqlTokenizer` switches comment syntax on the dialect and `SqlToken`
+     * switches keyword case on it, so formatting without one would rewrite the file for whichever
+     * engine a guess picked.
      *
-     * The objection it was answering is real and is answered elsewhere: a run that named its dialect
-     * never reads a connection at all (see {@see DialectResolver::resolve()}), so reformatting a text
-     * file still needs no database. It needs one sentence of configuration.
+     * That costs no database: a run that named its dialect never reads a connection at all (see
+     * {@see DialectResolver::resolve()}), so reformatting a text file needs one sentence of
+     * configuration, not a server.
      */
     public static function unknown(): self
     {

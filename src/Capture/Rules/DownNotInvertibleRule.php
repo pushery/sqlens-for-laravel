@@ -128,20 +128,19 @@ final readonly class DownNotInvertibleRule implements CaptureRule
     {
         $detail = (new CredentialRedactor)->redact($result->failureDetail ?? 'the capture recorded no further detail');
 
-        // ⚠️ TWO PASSES, AND THEY CATCH DIFFERENT THINGS. `CredentialRedactor` knows the values
-        // this application CONFIGURED — it takes the connection's own host, user and password out
+        // Two passes, and they catch different things. `CredentialRedactor` knows the values
+        // this application configured — it takes the connection's own host, user and password out
         // of the text. It cannot know a password somebody typed straight into a migration, because
         // that value appears in no configuration.
         //
-        // `SecretLiteralMask` is the other half: it finds a secret by the SHAPE of the statement
+        // `SecretLiteralMask` is the other half: it finds a secret by the shape of the statement
         // (`PASSWORD '…'`, `IDENTIFIED BY '…'`) rather than by knowing its value. A database error
         // quotes the statement that failed, so a failed `CREATE ROLE … PASSWORD 'literal'` puts
-        // that literal into this detail — and the package has a RULE for exactly that mistake, so
+        // that literal into this detail — and the package has a rule for exactly that mistake, so
         // the report would name the problem and then print it.
         //
-        // Only the agent reporter applied this mask, which left the console, JSON, SARIF and
-        // GitHub-annotation surfaces carrying the value. The mask's own docblock already says why
-        // it lives in the domain rather than in a reporter: "none of those has a redactor".
+        // Masked here rather than in a reporter, so the console, JSON, SARIF and GitHub-annotation
+        // surfaces never carry the value: "none of those has a redactor".
         $detail = SecretLiteralMask::in($detail);
 
         return str_replace(rtrim($projectRoot, '/').'/', '', $detail);

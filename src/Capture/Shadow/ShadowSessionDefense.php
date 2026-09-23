@@ -17,10 +17,9 @@ use Pushery\SQLens\Capture\SessionGuard;
  * the registered shadow connection, bounded by {@see ShadowMigrationRunner::captureFrom()} before its
  * first real query. A shadow run must never itself become the database's problem.
  *
- * ⚠️ **IT SAID "EACH GETS BOUNDED" AND THAT WAS NOT TRUE, WHICH IS WORSE THAN THE GAP IT DESCRIBED.**
- * The defense is applied at ONE call site. Three connections of the shadow path run without it, and
- * saying otherwise is what an operator relies on when deciding whether to point shadow mode at a shared
- * instance. Each is named here instead:
+ * **Not every shadow connection is bounded.** The defense is applied at one call site. Three
+ * connections of the shadow path run without it, and an operator deciding whether to point shadow mode
+ * at a shared instance needs to know which:
  *
  *   - the **maintenance link**, deliberately — a `CREATE DATABASE … TEMPLATE` of a real schema can take
  *     longer than the tight per-statement capture budget, and the whole provisioning is bounded by
@@ -28,11 +27,10 @@ use Pushery\SQLens\Capture\SessionGuard;
  *   - the **template connection**, which replays a whole schema dump through `getPdo()->exec()`.
  *   - the **MySQL replay**, likewise a whole dump.
  *
- * The last two are unbounded for no stated reason, and that is a real gap rather than a decision. It is
- * recorded rather than closed here because binding them is a behavior change on the provisioning path —
- * a per-statement budget over a schema dump aborts a legitimately long replay — and the harm that gap
- * carries today is bounded by the guards around shadow mode: throwaway databases, a refusal to run
- * against a production target, and the overall `capture.shadow.timeout`.
+ * The last two are a real gap rather than a decision. Binding them is a behavior change on the
+ * provisioning path — a per-statement budget over a schema dump aborts a legitimately long replay —
+ * and the harm the gap carries is bounded by the guards around shadow mode: throwaway databases, a
+ * refusal to run against a production target, and the overall `capture.shadow.timeout`.
  *
  * It reuses the ONE per-driver set-path, `SessionGuard::statementsFor()`, for the
  * statement and lock budgets rather than growing a second one, and adds only what

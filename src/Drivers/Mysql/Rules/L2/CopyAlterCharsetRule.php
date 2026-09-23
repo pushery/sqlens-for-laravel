@@ -43,17 +43,16 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * | `DEFAULT CHARACTER SET utf8mb4` | INPLACE | **untouched** — verified: a `latin1` column stays `latin1` |
  * | `DEFAULT COLLATE …` | INPLACE | untouched |
  *
- * ⚠️ **THE SOURCE CHARSET IS IN THAT TABLE NOW, AND IT USED TO BE ABSENT.** The row said COPY without
- * saying from what, and it was measured on a latin1 table — true for the pair anyone runs this on, and
- * false for utf8mb3, which 8.4 accepts in place with `LOCK=NONE`. Re-measured on 8.4.10 over four pairs:
- * only utf8mb3 to utf8mb4 is accepted in place; latin1, ascii and the narrowing back to utf8mb3 are all
- * refused with error 1846 and fall back to a copy.
+ * **The source charset decides the cost.** A copy is true for the pair anyone runs this on, latin1,
+ * and false for utf8mb3, which 8.4 accepts in place with `LOCK=NONE`. Measured on 8.4.10 over four
+ * pairs: only utf8mb3 to utf8mb4 is accepted in place; latin1, ascii and the narrowing back to
+ * utf8mb3 are all refused with error 1846 and fall back to a copy.
  *
- * ⚠️ **This rule cannot tell which case a reader is in**, and that is not a gap to be closed: it lints a
+ * **This rule cannot tell which case a reader is in**, and that is not a gap to be closed: it lints a
  * migration statement, and the source charset lives in the catalog. So the message names both and gives
  * the one instruction that works without knowing — issue it with `LOCK=NONE` and let the server refuse.
  *
- * So a table default is a statement about FUTURE columns and nothing else, and this rule stays
+ * So a table default is a statement about future columns and nothing else, and this rule stays
  * silent on it. That silence is the rule's main false-positive defense, not an oversight: flagging
  * the cheap statement that looks like the expensive one is how a linter teaches people to ignore
  * it.

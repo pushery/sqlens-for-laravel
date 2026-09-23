@@ -42,7 +42,7 @@ final readonly class MysqlPoolerReader implements PoolerReader
     private const array POOLER_HOST_FRAGMENTS = ['proxysql', 'maxscale', 'proxy', 'pooler'];
 
     /**
-     * ⚠️ No session budget, and the reason is the one {@see PgsqlPoolerReader} carries at length.
+     * No session budget, and the reason is the one {@see PgsqlPoolerReader} carries at length.
      *
      * This probe is the one read in the package that cannot run inside a transaction — pooling is
      * invisible in one, which is the guarantee a pooler exists to give — so the `SET LOCAL` every other
@@ -51,12 +51,9 @@ final readonly class MysqlPoolerReader implements PoolerReader
      * restore looks for it on another, and the host application inherits a limit it never chose.
      *
      * So the four constant-time statements run with whatever bound the connection already carries,
-     * usually none. The risk is to THIS run rather than to somebody else's session, which is the trade
-     * the PostgreSQL side states and this side follows.
-     *
-     * ⚠️ **This paragraph is here because its absence was the finding.** Both readers behaved the same
-     * and only one said why, so the obvious next reading of this file was "the MySQL probe forgot its
-     * bound" — and adding one would rebuild the leak the other side removed deliberately.
+     * usually none. The risk is to this run rather than to somebody else's session, which is the trade
+     * the PostgreSQL side states and this side follows. Adding a bound here would look like fixing an
+     * omission and would rebuild exactly that leak.
      */
     public function __construct(private Connection $connection) {}
 

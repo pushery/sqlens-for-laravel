@@ -48,7 +48,7 @@ final readonly class StrictModeGuard implements RuntimeGuard
 
     public function activate(GuardProfile $profile): void
     {
-        // ⚠️ THE MASKING CASE, and it is reported BEFORE anything is armed.
+        // The masking case, and it is reported before anything is armed.
         //
         // Laravel's automatic eager loading resolves a relation before `preventLazyLoading` can
         // object, so with both on, the guardrail never fires — and never fires is exactly what a

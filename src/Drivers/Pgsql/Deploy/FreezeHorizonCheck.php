@@ -60,16 +60,16 @@ use Throwable;
  * provider may ship its own default. A check holding an age against a hard-coded 200 million would
  * be wrong in both directions on such an instance, quietly. `current_setting()` asks.
  *
- * ⚠️ What it does NOT read is a per-table `reloptions` override. A table can carry its own
+ * What it does not read is a per-table `reloptions` override. A table can carry its own
  * `autovacuum_freeze_max_age`, and this check would then compare against the cluster's. The finding
- * says so rather than pretending otherwise: it is the direction that OVER-reports, which here costs
+ * says so rather than pretending otherwise: it is the direction that over-reports, which here costs
  * a sentence in a report rather than a deploy standing in a queue nobody can see.
  *
  * ## Why a running vacuum is never "cancel it"
  *
  * `pg_cancel_backend()` on an anti-wraparound worker buys nothing: the launcher starts it again
  * within `autovacuum_naptime`, and the horizon is closer than it was. Worse, every cancellation
- * throws away the work already done. So the finding NAMES it, reports its progress from
+ * throws away the work already done. So the finding names it, reports its progress from
  * `pg_stat_progress_vacuum`, and says to wait — which is the advice that is actually cheaper.
  *
  * @see https://www.postgresql.org/docs/18/routine-vacuuming.html
@@ -182,8 +182,8 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
             );
         }
 
-        // ⚠️ NOTHING FOUND IS ONLY A PASS IF BOTH AXES ANSWERED. The age axis reads `pg_class` and
-        // is readable by anyone; the vacuum axis reads `pg_stat_activity`, which MASKS foreign rows
+        // Nothing found is only a pass if both axes answered. The age axis reads `pg_class` and
+        // is readable by anyone; the vacuum axis reads `pg_stat_activity`, which masks foreign rows
         // for a role without `pg_read_all_stats` rather than refusing them — so it comes back empty,
         // without an error, and "no anti-wraparound vacuum is running" cannot be told from "I may
         // not see one". Reporting a pass there is the silent null this package refuses everywhere,
@@ -241,7 +241,7 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
      * Whether this role sees OTHER sessions in `pg_stat_activity` — the question an empty reading
      * from {@see self::runningAntiWraparound()} cannot answer for itself.
      *
-     * ⚠️ `pg_has_role` ON `pg_read_all_stats`, DELIBERATELY NOT `has_table_privilege` ON THE VIEW.
+     * `pg_has_role` on `pg_read_all_stats`, deliberately not `has_table_privilege` on the view.
      * The view is readable by PUBLIC, which is exactly why nothing throws: PostgreSQL masks foreign
      * rows instead of refusing them. So the question is not "may I read it" — I may — but "do
      * foreign sessions appear in what I read".

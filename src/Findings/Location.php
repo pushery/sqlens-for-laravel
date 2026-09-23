@@ -76,9 +76,9 @@ final readonly class Location
         string $objectName,
         SchemaObjectType $objectType,
         /**
-         * The migration that introduced this object, when one could be read — PRESENTATION only.
+         * The migration that introduced this object, when one could be read — presentation only.
          *
-         * ⚠️ IT IS DELIBERATELY ABSENT FROM `sortKey()`, AND THAT IS THE WHOLE CONTRACT. A catalog
+         * It is deliberately absent from `sortKey()`, and that is the whole contract. A catalog
          * finding's identity is the instance and the object; a renamed or deleted migration file
          * must not invalidate a baseline entry, because the database it describes did not change
          * when somebody moved a file. Adding it below would silently retire every suppressed

@@ -45,31 +45,28 @@ final readonly class PgsqlCatalogPrivileges implements CatalogPrivileges
                     AND pg_catalog.has_table_privilege('pg_catalog.pg_type', 'SELECT') AS ok",
                 'the reading role cannot read pg_constraint or pg_type, so nothing can be concluded about foreign keys, checks, domains or enums',
             ),
-            // Statistics are the input to every rule that reasons about table SIZE. A rule that quietly
+            // Statistics are the input to every rule that reasons about table size. A rule that quietly
             // assumed "small" would recommend a lock on a table with a hundred million rows.
             //
-            // ⚠️ THIS ASKED ABOUT `pg_statistic`, WHICH NOTHING IN THIS PACKAGE READS. Measured: the
-            // only occurrences of that name in `src/` were this probe and one docblock, while the size
-            // and estimate readers use `pg_class.reltuples` (five files), `pg_relation_size()` and the
-            // `pg_stat_*` views. And `pg_statistic` is deliberately not public — the user-facing view is
-            // `pg_stats` — so the probe demanded a privilege no reading needs.
+            // The probe reads `pg_stat_all_tables`, because that is what the size and estimate readers
+            // use, together with `pg_class.reltuples` and `pg_relation_size()`. It does not ask about
+            // `pg_statistic`: nothing in this package reads it, and it is deliberately not public (the
+            // user-facing view is `pg_stats`). Measured on PostgreSQL 18.0, for a role holding exactly
+            // `pg_monitor`, the role the README recommends:
             //
-            // ⚠️ WHAT THAT COST IS A FALSE VERDICT ON EVERY MANAGED INSTANCE, including the `pg_monitor`
-            // role this package's own README recommends. Measured on PostgreSQL 18.0, for a role holding
-            // exactly `pg_monitor`:
-            //
-            //   pg_statistic        SELECT  false   <- what the probe asked
+            //   pg_statistic        SELECT  false
             //   pg_class            SELECT  true
             //   pg_stats            SELECT  true
             //   pg_stat_all_tables  SELECT  true    <- what the readers use
             //
-            // So the snapshot came back partial and the run emitted
+            // Asking about `pg_statistic` would report the snapshot as partial and emit
             // `AUDIT.CATALOG.UNREAD.INSUFFICIENT_PRIVILEGE` saying "no rule may reason about table size"
-            // — while the size rules had already read it. Under `strict_undetermined`, which this package
-            // recommends, a least-privilege audit could never go green.
+            // on every managed instance, while the size rules read what they need. Under
+            // `strict_undetermined`, which this package recommends, a least-privilege audit could then
+            // never go green.
             //
-            // ⚠️ AND IT IS A REAL READ RATHER THAN `has_table_privilege`, which is not a style choice:
-            // that function reports the ACL of the RELATION, and for a view over a privileged function it
+            // It is a real read rather than `has_table_privilege`, which is not a style choice:
+            // that function reports the ACL of the relation, and for a view over a privileged function it
             // can say yes where the read still fails. Measured on the same server: a `pg_read_all_data`
             // role has `has_table_privilege('pg_hba_file_rules','SELECT') = true` and selecting from it
             // fails with "permission denied for function pg_hba_file_rules". `PrivilegeProbe` catches a

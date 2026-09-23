@@ -79,17 +79,15 @@ final readonly class ShadowCaptor implements Captor
             return $this->allUndetermined($pending, $section, UndeterminedReason::UnsupportedEngine);
         }
 
-        // ⚠️ THE WORST MISCONFIGURATION THIS PACKAGE CAN HAVE, and it had no check at all until
-        // now: a shadow connection pointed at the SAME place as the connection being
-        // examined. The direct-connection check further down refuses a link that builds somewhere
-        // nobody named; this one refuses a link that builds — and then DROPS — on the instance the
-        // run was supposed to be comparing.
+        // The worst misconfiguration this package can have: a shadow connection pointed at the
+        // same place as the connection being examined. The direct-connection check further down
+        // refuses a link that builds somewhere nobody named; this one refuses a link that builds —
+        // and then drops — on the instance the run was supposed to be comparing.
         //
-        // `ShadowTargetIdentity` was written for exactly this and calls itself "the second lock …
-        // mechanical rather than advisory: a collision is a refusal, never a warning". It had no
-        // caller.
+        // `ShadowTargetIdentity` is "the second lock … mechanical rather than advisory: a
+        // collision is a refusal, never a warning".
         //
-        // ⚠️ AHEAD OF THE REPLICA PROBE, and deliberately: this is decided from CONFIGURATION
+        // Ahead of the replica probe, and deliberately: this is decided from configuration
         // alone and opens nothing, while the probe opens a connection. A misconfiguration that is
         // knowable without touching a server should not wait behind a round trip that can fail for
         // its own reasons — the run would then stop with a connection error where a sentence about

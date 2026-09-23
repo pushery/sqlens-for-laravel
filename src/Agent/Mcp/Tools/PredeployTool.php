@@ -46,23 +46,22 @@ use Pushery\SQLens\Reporting\RunContext;
  * pipeline legitimately makes. What it must never be is invisible — so it is echoed in the answer
  * whether or not it changed anything, and a run that used it says so beside the verdict it produced.
  *
- * ## Leaving the parameter out falls back to the PROJECT's declaration, and that is the whole point
+ * ## Leaving the parameter out falls back to the project's declaration, and that is the whole point
  *
- * The parameter is the counterpart of the command's `--allow-undetermined` FLAG: a person watching
+ * The parameter is the counterpart of the command's `--allow-undetermined` flag: a person watching
  * this run decide to proceed, all-or-nothing on both sides. It is not the counterpart of the config
  * key, which is a project deciding in advance which questions it can deploy without and naming
- * them. So an explicit parameter wins in both directions, and its ABSENCE reads
+ * them. So an explicit parameter wins in both directions, and its absence reads
  * `sqlens.deploy.predeploy.allow_undetermined` — the same source, through the same
  * {@see UndeterminedWaiver}, as the `sqlens:predeploy` console command.
  *
- * ⚠️ That command is named in prose and NOT as a `{@see}`, which is not a style choice. A
+ * That command is named in prose and not as a `{@see}`, which is not a style choice. A
  * fully-qualified reference in a docblock is rewritten into a real `use` statement by the
- * formatter, and an import out of `Console\` is a coupling this layer is built not to have —
- * `AgentLayerArchTest` caught exactly that, one merge after it was written.
+ * formatter, and an import out of `Console\` is a coupling this layer is built not to have.
  *
- * Before that, absence meant `false`. A project that had named the reasons it can deploy past got
- * them honored on the command line and refused here, for the same run — and {@see gate()} below
- * promises in as many words that the two paths cannot disagree. They could.
+ * Absence does not mean `false`: a project that has named the reasons it can deploy past gets them
+ * honored here exactly as on the command line, for the same run — {@see gate()} below promises in as
+ * many words that the two paths cannot disagree.
  *
  * ## The budget and the session defense are the service's
  *
