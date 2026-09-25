@@ -17,7 +17,7 @@ use Pushery\SQLens\Severity\Severity;
  * code-scanning UI sorts and filters alerts by **`security-severity`**, a numeric property in the
  * rule's `properties` bag. `level` only decides the icon. So a `critical` finding published with the
  * right `level` and no `security-severity` arrives as an alert with no weight at all — visible,
- * greyed, and below everything that did carry a number.
+ * grayed, and below everything that did carry a number.
  *
  * ## The table is the single truth
  *

@@ -223,7 +223,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
                         }
 
                         // Only the words at the statement's own level are the type; anything deeper
-                        // is inside a parenthesised argument — a length, an enum's values.
+                        // is inside a parenthesized argument — a length, an enum's values.
                         if ($next->depth === 0) {
                             $trailing[] = $next->text;
                         }
@@ -448,7 +448,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
                 }
 
                 // Only the words at the member's own level are the type. Anything deeper belongs to
-                // a parenthesised argument — an enum's values, a generated column's expression.
+                // a parenthesized argument — an enum's values, a generated column's expression.
                 if ($next->depth === 1) {
                     $type[] = $next->text;
                 }
@@ -467,7 +467,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
             $index = $this->skipMember($tokens, $index, $count);
         }
 
-        // The body has to have held at least one COLUMN. A parenthesised group of nothing but
+        // The body has to have held at least one COLUMN. A parenthesized group of nothing but
         // constraints is not a table definition this reader understood, and answering with an empty
         // list would be the partial answer under another name.
         return $definitions === [] ? null : [$definitions, $index];

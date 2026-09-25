@@ -55,7 +55,7 @@ final readonly class JsonEnvelope
      * published number would depend on the order they merged in — and every other
      * change's pin test would be red until it rebased. One version, one source.
      */
-    public const int SCHEMA_VERSION = 7;
+    public const int SCHEMA_VERSION = 8;
 
     /**
      * The RUN-level fields version 4 introduces.
@@ -241,6 +241,23 @@ final readonly class JsonEnvelope
      */
     public const array RUN_FIELDS_ADDED_IN_V7 = [
         'run_day',
+    ];
+
+    /**
+     * The run field version 8 introduces: what the read-only guarantee of the run rests on.
+     *
+     * `session` when the session's own read-only flag refused the write probe, `privilege` when the
+     * account's grants did. Both prove the run could not write; the second rests on something a
+     * reviewer can check in the database without trusting this package.
+     *
+     * Null on every producer that opens no catalog session of its own, and on an audit that stopped
+     * before its first read. A consumer must not read that null as "unsealed": an unsealed session is
+     * never behind it, because the reading stops with an error the moment the probe goes through.
+     *
+     * @var list<string>
+     */
+    public const array RUN_FIELDS_ADDED_IN_V8 = [
+        'sealed_by',
     ];
 
     /**

@@ -107,7 +107,7 @@ final readonly class CanonicalType
         $unsigned = str_contains($normalized, ' unsigned');
 
         // Strip the modifiers the name does not include: `unsigned`, `zerofill`, an array suffix,
-        // and the parenthesised precision. What is left is the type's own name.
+        // and the parenthesized precision. What is left is the type's own name.
         $bare = preg_replace('/\s+(unsigned|zerofill)\b/', '', $normalized) ?? $normalized;
         $bare = preg_replace('/\s*\([^)]*\)/', '', $bare) ?? $bare;
         $bare = trim(preg_replace('/\[\]$/', '', $bare) ?? $bare);

@@ -224,7 +224,7 @@ final class FormatCommand extends Command
             $this->report(sprintf(
                 // The plural is spelled out, and that is not a style choice. A check that scans
                 // source for a debug leftover looks for the helper's name followed by an opening
-                // parenthesis and does not tell a string from a statement, so the parenthesised
+                // parenthesis and does not tell a string from a statement, so the parenthesized
                 // plural of the word for a database export would read as a call to it. Such a check
                 // should stay blunt, and the spelled-out phrase is clearer anyway.
                 'sqlens:format: formatting %d generated schema dump file(s) — `database/schema/*` is excluded '

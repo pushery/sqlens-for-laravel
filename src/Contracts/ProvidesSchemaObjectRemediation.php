@@ -21,7 +21,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * of a database and has no statement at all, so it can never satisfy that seam — measured, not
  * assumed: `remediationFor(MigrationStatementView)` is structurally unreachable from a catalog rule.
  *
- * Generalising the parameter to a union was considered and is refused, permanently. It would make
+ * Generalizing the parameter to a union was considered and is refused, permanently. It would make
  * the canonical-form guarantee CONDITIONAL — true when the argument happens to be a statement,
  * silent otherwise — which is a weaker contract wearing a more general one's clothes. Two acts, two
  * contracts, each with the guarantee it can actually give.

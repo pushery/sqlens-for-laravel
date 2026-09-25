@@ -35,8 +35,8 @@ final class ReaderSession
     /** The savepoint the write probe runs under. Named, so a stray one is traceable to this code. */
     private const string PROBE_SAVEPOINT = 'sqlens_read_only_probe';
 
-    /** Whether the seal rests on the account's lack of write privilege rather than on the session flag. */
-    private bool $sealedByPrivilege = false;
+    /** What the last write probe proved the seal rests on, or null while no probe has run. */
+    private ?SealedBy $sealedBy = null;
 
     public function __construct(
         private readonly Connection $connection,
@@ -75,7 +75,19 @@ final class ReaderSession
      */
     public function sealedByPrivilege(): bool
     {
-        return $this->sealedByPrivilege;
+        return $this->sealedBy === SealedBy::Privilege;
+    }
+
+    /**
+     * What the read-only guarantee rests on, as the write probe proved it, or null before any read.
+     *
+     * Null is an answer of its own. A session that has not read has proven nothing, and reporting
+     * {@see SealedBy::Session} for it would state a seal from configuration rather than from the
+     * refusal that establishes it.
+     */
+    public function sealedBy(): ?SealedBy
+    {
+        return $this->sealedBy;
     }
 
     /**
@@ -218,6 +230,9 @@ final class ReaderSession
     #[RawSql(reason: 'proves the read-only seal by attempting a write inside a savepoint and requiring it to fail; issuing statements a builder would refuse to model is the entire point')]
     private function assertSealed(): void
     {
+        // Cleared before the probe, so a proof that fails cannot leave an earlier one standing.
+        $this->sealedBy = null;
+
         $this->connection->statement('SAVEPOINT '.self::PROBE_SAVEPOINT);
 
         try {
@@ -228,6 +243,8 @@ final class ReaderSession
             $state = self::sqlStateOf($refusal);
 
             if ($state !== null && $this->defense->isReadOnlyRefusal($state)) {
+                $this->sealedBy = SealedBy::Session;
+
                 return;
             }
 
@@ -236,7 +253,7 @@ final class ReaderSession
                 // both prove this session cannot write, and the privilege proof is the more durable
                 // of the two — but a caller asking "what is this guarantee resting on?" deserves an
                 // answer, and folding them together would remove the question.
-                $this->sealedByPrivilege = true;
+                $this->sealedBy = SealedBy::Privilege;
 
                 return;
             }
