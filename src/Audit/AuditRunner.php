@@ -20,6 +20,8 @@ use Pushery\SQLens\Catalog\Objects\RoleReading;
 use Pushery\SQLens\Catalog\Objects\RoutineReading;
 use Pushery\SQLens\Catalog\PoolerReading;
 use Pushery\SQLens\Catalog\ReaderConnectionFactory;
+use Pushery\SQLens\Catalog\ReaderSession;
+use Pushery\SQLens\Catalog\SealedBy;
 use Pushery\SQLens\Catalog\Security\ConnectionSeparation;
 use Pushery\SQLens\Catalog\Security\SecuritySubjects;
 use Pushery\SQLens\Catalog\SettingCrossFacts;
@@ -37,6 +39,7 @@ use Pushery\SQLens\Console\ExitCode;
 use Pushery\SQLens\Console\ExitCodeResolver;
 use Pushery\SQLens\Contracts\AcceptsRunClock;
 use Pushery\SQLens\Contracts\Driver;
+use Pushery\SQLens\Contracts\ReadsSessionBounds;
 use Pushery\SQLens\Contracts\Rule;
 use Pushery\SQLens\Contracts\SecurityReader;
 use Pushery\SQLens\Deploy\DebtCollector;
@@ -178,6 +181,13 @@ final readonly class AuditRunner implements AuditRuns
          * {@see CompositeCredentialRedactor}.
          */
         private CompositeCredentialRedactor $redactor,
+        /**
+         * The bounds the reader session reports IN FORCE, read back rather than requested.
+         *
+         * The same seam the predeploy header reads through, so both suites state their bounds from
+         * one kind of read: two readings of one fact are two chances to disagree.
+         */
+        private ReadsSessionBounds $sessionBounds,
     ) {}
 
     public function run(
@@ -518,6 +528,12 @@ final readonly class AuditRunner implements AuditRuns
         // so without this a CI job branching on the code would read "nothing was checked" as a
         // pass — which is the exact silent green the finding exists to prevent, arriving one layer
         // further out.
+        // What the session proved about itself, asked once every reading is done. The bounds come
+        // first because reading them is a read like any other and proves the seal again, so the
+        // seal named after it is the one the last read of this run stood on.
+        $sessionTimeouts = $this->boundsInForce($target->driver, $readers->session);
+        $sealedBy = $readers->session?->sealedBy();
+
         return $this->outcome(
             $target,
             $context,
@@ -540,6 +556,8 @@ final readonly class AuditRunner implements AuditRuns
             // many rules this run SELECTED; this says which of them were actually handed something
             // to judge, and the gap between the two is a check that did not happen.
             evaluatedRuleIds: $judged->evaluatedRuleIds,
+            sealedBy: $sealedBy,
+            sessionTimeouts: $sessionTimeouts,
         );
     }
 
@@ -1526,6 +1544,7 @@ final readonly class AuditRunner implements AuditRuns
      * @param  list<string>  $activeCategories  the scope this run was narrowed to; empty means all
      * @param  list<ReportedSkip>  $skips  what the reading could not cover, for the header
      * @param  list<string>|null  $evaluatedRuleIds  which rules got a subject; null on a path that never dispatched
+     * @param  array<string, int|null>|null  $sessionTimeouts  the bounds the session read back; null where it could not say
      */
     private function outcome(
         InstanceTarget $target,
@@ -1540,6 +1559,8 @@ final readonly class AuditRunner implements AuditRuns
         array $skips = [],
         ?BaselineFile $baseline = null,
         ?array $evaluatedRuleIds = null,
+        ?SealedBy $sealedBy = null,
+        ?array $sessionTimeouts = null,
     ): AuditOutcome {
         // Sorted by the pair a reader navigates with — where it is, then which rule said it. The
         // rule id breaks ties inside one object so two runs cannot swap two findings on one table.
@@ -1627,6 +1648,8 @@ final readonly class AuditRunner implements AuditRuns
             max(0, $this->auditRuleCount($target) - $activeRules),
             $evaluatedRuleIds,
             ToolDiagnostic::versionsOf($diagnostics),
+            sealedBy: $sealedBy,
+            sessionTimeouts: $sessionTimeouts,
         );
 
         // A baseline entry that matched nothing is ALWAYS carried into the result above; this is the
@@ -1682,6 +1705,7 @@ final readonly class AuditRunner implements AuditRuns
      * @param  list<ReportedSkip>  $skips
      * @param  list<string>|null  $evaluatedRuleIds  which rules got a subject; null when no dispatch happened
      * @param  array<string, string>  $toolVersions  the tools this run located; empty when it never looked
+     * @param  array<string, int|null>|null  $sessionTimeouts  the bounds the session read back; null where it could not say
      */
     private function runContext(
         Today $today,
@@ -1694,6 +1718,8 @@ final readonly class AuditRunner implements AuditRuns
         int $hiddenRules = 0,
         ?array $evaluatedRuleIds = null,
         array $toolVersions = [],
+        ?SealedBy $sealedBy = null,
+        ?array $sessionTimeouts = null,
     ): RunContext {
         $profile = $this->config->get('sqlens.profile');
         // Named apart from the package version below, which used to reuse this name. It worked
@@ -1792,12 +1818,38 @@ final readonly class AuditRunner implements AuditRuns
             // reached a dispatch at all — an empty list there would claim a run that evaluated
             // nothing, which is a different and much louder statement than "there was no run".
             evaluatedRuleIds: $evaluatedRuleIds,
+            // What the reader session read back, handed in by the one path that read a catalog.
+            // Every refusal path leaves it null, like the seal below: it measured nothing.
+            sessionTimeouts: $sessionTimeouts,
             guardProfile: ConfigRunContextCollector::guardProfileFrom($this->config),
             // The SAME reading the rules got. This method is handed the value the run created at its
             // door rather than reading a clock of its own, so the day in the header is the day that
             // was judged on — not a second reading that agrees on every run but the one that matters.
             today: $today,
+            // What the write probe proved, from the same path and null on the same refusals.
+            sealedBy: $sealedBy,
         );
+    }
+
+    /**
+     * The timeouts the reader session reports in force, or null when it cannot say.
+     *
+     * Null rather than an empty map, because the header keeps "this run did not report its bounds"
+     * apart from "no bound is set", and a read-back that failed is the first of the two.
+     *
+     * @return array<string, int|null>|null
+     */
+    private function boundsInForce(string $driver, ?ReaderSession $session): ?array
+    {
+        if (! $session instanceof ReaderSession) {
+            return null;
+        }
+
+        try {
+            return $this->sessionBounds->inForce($driver, $session);
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     /**

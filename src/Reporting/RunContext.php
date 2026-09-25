@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Reporting;
 
 use Pushery\SQLens\Capture\Shadow\GuardDecision;
+use Pushery\SQLens\Catalog\SealedBy;
 use Pushery\SQLens\Deploy\Drift\DriftRunMode;
 use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Severity\Severity;
@@ -330,9 +331,9 @@ final readonly class RunContext
         /**
          * The calendar day this run judged on — the one reading the rules also got.
          *
-         * In {@see self::toArray()} as `run_day` since schema version 7, and it is the LAST key of
-         * the header for that reason: the register guard compares the post-v3 keys in header order,
-         * so a v7 field standing in front of a v6 one would announce itself to a consumer on schema 6.
+         * In {@see self::toArray()} as `run_day` since schema version 7, and after every earlier
+         * field for that reason: the register guard compares the post-v3 keys in header order, so a
+         * v7 field standing in front of a v6 one would announce itself to a consumer on schema 6.
          *
          * Nullable, and not because a run may lack a day. Every producer in this package hands one
          * down. A producer that forgets it emits `null` rather than a wrong day — the same choice
@@ -344,6 +345,17 @@ final readonly class RunContext
          * midnight, which is the one case this field exists to make visible.
          */
         public ?Today $today = null,
+        /**
+         * What the read-only guarantee of this run's reader session rests on, as its write probe proved it.
+         *
+         * In {@see self::toArray()} as `sealed_by` since schema version 8, after `run_day` for the
+         * reason that key gives: the registers compare the header in key order.
+         *
+         * Null for every producer that opens no catalog session of its own, and for one that failed
+         * before its first read. A value here always comes from a refusal the probe received, never
+         * from configuration, so a run that proved nothing claims nothing.
+         */
+        public ?SealedBy $sealedBy = null,
     ) {}
 
     /**
@@ -508,6 +520,9 @@ final readonly class RunContext
             // because a field appended to a list that already lost one is the next to go.
             guardProfile: $guardProfile,
             subjectCount: $subjectCount,
+            // A derivation describes the same run, so it keeps the day that run was judged on.
+            today: $this->today,
+            sealedBy: $this->sealedBy,
         );
     }
 
@@ -690,8 +705,11 @@ final readonly class RunContext
             // AFTER every version-5 field, because the registers pin the key order. Null where the
             // producer states none, which is not zero: zero is a run that judged nothing.
             'subject_count' => $this->subjectCount,
-            // LAST, and the position is the contract rather than tidiness — see the property.
+            // After every version-7 field, and the position is the contract rather than tidiness —
+            // see the property.
             'run_day' => $this->today?->value,
+            // Schema version 8. `session` or `privilege`, and null where no session proved a seal.
+            'sealed_by' => $this->sealedBy?->value,
         ];
     }
 }

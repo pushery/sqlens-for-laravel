@@ -96,7 +96,7 @@ final readonly class SqlFluffBackend extends ExternalSqlFormatter
      * newline off when there is one gives the statement back with its own ending.
      *
      * `sqlfluff format` does not change keyword case, measured: a `capitalisation_policy:upper`
-     * directive leaves `select` lower-case, because the formatter does not run the capitalisation
+     * directive leaves `select` lower-case, because the formatter does not run the capitalization
      * rules. So the case comes from the same tokenizer the PHP core formats with, and
      * `uppercase_keywords` means the same thing whichever of the two formatted a file. Output that
      * does not end in the directives is not the statement this backend handed over.

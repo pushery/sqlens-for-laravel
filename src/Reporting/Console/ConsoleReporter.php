@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Reporting\Console;
 
 use Illuminate\Contracts\Translation\Translator;
+use Pushery\SQLens\Catalog\SealedBy;
 use Pushery\SQLens\Contracts\Reporter;
 use Pushery\SQLens\Deploy\DebtContext;
 use Pushery\SQLens\Deploy\Escalation;
@@ -354,6 +355,19 @@ final readonly class ConsoleReporter implements Reporter
             $out->writeln('  instance '.$context->instance->describe());
         }
 
+        // What the reader session proved about itself, printed only by a run that read through one:
+        // a lint run over files has no session, and a line saying so would invent a subject.
+        if ($context->sealedBy instanceof SealedBy) {
+            $out->writeln('  sealed-by='.$context->sealedBy->value);
+        }
+
+        // The bounds the session READ BACK, never the ones it asked for. `off` is a bound the server
+        // reports as zero, which means none on both engines; `unreadable` is a bound it did not
+        // answer with at all. Those are different states, and only the first is a defect in the run.
+        if ($context->sessionTimeouts !== null) {
+            $out->writeln('  session-timeouts='.$this->timeouts($context->sessionTimeouts));
+        }
+
         // What could not be read, each with its reason, at the TOP. A run that skipped half the
         // catalog and one that found nothing to say produce the same clean summary, and only the
         // header can tell them apart before somebody acts on it.
@@ -377,6 +391,30 @@ final readonly class ConsoleReporter implements Reporter
         }
 
         $out->writeln('  suppressed='.count($result->suppressed).$this->ignoreBreakdown($result));
+    }
+
+    /**
+     * `lock_timeout=5000ms statement_timeout=30000ms`, sorted by name, so two runs print one line.
+     *
+     * @param  array<string, int|null>  $timeouts
+     */
+    private function timeouts(array $timeouts): string
+    {
+        if ($timeouts === []) {
+            return 'none';
+        }
+
+        ksort($timeouts);
+
+        return implode(' ', array_map(
+            static fn (string $name, ?int $milliseconds): string => $name.'='.match ($milliseconds) {
+                null => 'unreadable',
+                0 => 'off',
+                default => $milliseconds.'ms',
+            },
+            array_keys($timeouts),
+            $timeouts,
+        ));
     }
 
     /**

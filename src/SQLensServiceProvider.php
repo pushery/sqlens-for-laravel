@@ -340,6 +340,8 @@ final class SQLensServiceProvider extends ServiceProvider
                     // property of the connection as much as of the server, so a reading on a second
                     // one could miss the very blocker this run is about.
                     activity: new PgsqlActivityReader($session),
+                    // Handed back so the run can say what this session proved about its own seal.
+                    session: $session,
                 );
             });
 
@@ -355,6 +357,7 @@ final class SQLensServiceProvider extends ServiceProvider
                     new MysqlSecurityReader($session),
                     new MysqlStatisticsReader($session),
                     new MysqlActivityReader($session),
+                    session: $session,
                 );
             });
 

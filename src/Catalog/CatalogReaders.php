@@ -108,5 +108,16 @@ final readonly class CatalogReaders
          * reach by accident.
          */
         public ?ActivityReader $activity = null,
+        /**
+         * The session every reader above shares, or null when the readers were assembled without one.
+         *
+         * Exposed so a run can report what the session proved about itself: which refusal sealed it
+         * read-only, and which bounds it read back. Those are facts about THIS session, so they are
+         * asked of it rather than of a second one opened to answer them.
+         *
+         * Nullable because a double or a partial set of readers has no session to offer, and a run
+         * holding null reports no seal at all rather than a seal nothing proved.
+         */
+        public ?ReaderSession $session = null,
     ) {}
 }

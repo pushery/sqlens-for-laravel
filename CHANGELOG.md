@@ -2,6 +2,16 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.0] - 2026-09-25
+
+### Added
+
+- **An audit states what its read-only guarantee rests on, and which bounds held.** Every catalog reading opens with a write that must be refused, and the refusal names its cause: the session's own read-only flag, or the account's missing write privilege. The audit knew which one it got and said neither. The JSON header now carries `run.sealed_by` (`session` or `privilege`) and fills `run.session_timeouts` with the bounds the session read back from the server, and the console header prints both as `sealed-by` and `session-timeouts`. PostgreSQL refuses DDL inside a read-only transaction before it looks at a grant, so an audit there says `session` under any account. **The envelope's `schema_version` is 8**: a consumer that pins the version reads the new field as the change it is. The predeploy console header prints its session timeouts now as well.
+
+### Fixed
+
+- **Every report states the day it was judged on, not only the audit's.** `run.run_day` came back `null` from lint, predeploy, drift and postdeploy runs: those commands finish their header by deriving it from a first one, and the derivation lost the day, while the audit and the security run build their header in one step and kept it. A consumer comparing lint reports across midnight read that `null` as a producer that handed no clock down. A derived header now keeps the day of the run it describes.
+
 ## [0.24.0] - 2026-09-23
 
 ### Added
