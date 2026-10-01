@@ -112,6 +112,7 @@ final readonly class PgsqlStatisticsReader implements StatisticsReader
     private function tableQuery(StatisticsRequest $request): string
     {
         $placeholders = implode(', ', array_fill(0, count($request->objects), '?'));
+        $visible = ApplicationSearchPath::visible('c');
 
         return <<<SQL
             select n.nspname as schema_name,
@@ -136,7 +137,7 @@ final readonly class PgsqlStatisticsReader implements StatisticsReader
              where c.relkind in ('r', 'p', 'm')
                and (
                      n.nspname || '.' || c.relname in ({$placeholders})
-                  or (c.relname in ({$placeholders}) and pg_catalog.pg_table_is_visible(c.oid))
+                  or (c.relname in ({$placeholders}) and {$visible})
                    )
             SQL;
     }
@@ -151,6 +152,7 @@ final readonly class PgsqlStatisticsReader implements StatisticsReader
     private function indexQuery(StatisticsRequest $request): string
     {
         $placeholders = implode(', ', array_fill(0, count($request->objects), '?'));
+        $visible = ApplicationSearchPath::visible('c');
 
         return <<<SQL
             select n.nspname as schema_name,
@@ -166,7 +168,7 @@ final readonly class PgsqlStatisticsReader implements StatisticsReader
              where i.relispartition = false
                and (
                      n.nspname || '.' || c.relname in ({$placeholders})
-                  or (c.relname in ({$placeholders}) and pg_catalog.pg_table_is_visible(c.oid))
+                  or (c.relname in ({$placeholders}) and {$visible})
                    )
             SQL;
     }
@@ -191,10 +193,10 @@ final readonly class PgsqlStatisticsReader implements StatisticsReader
      * equals the composed name), so nothing has to guess which form it was handed and a table whose
      * name contains a literal dot stays safe.
      *
-     * `pg_table_is_visible()` is what makes the bare arm honest: it asks the SERVER whether an
-     * unqualified reference would find this table — `search_path` resolved by the thing that owns
-     * it. `search_path` is a LIST, so appending a guessed `public.` would have been the wrong answer
-     * on any project that sets one.
+     * What makes the bare arm honest is asking the SERVER whether an unqualified reference would
+     * find this table, over the application's `search_path` recorded before the reading pinned its
+     * own ({@see ApplicationSearchPath::visible()}). `search_path` is a LIST, so appending a guessed
+     * `public.` would have been the wrong answer on any project that sets one.
      *
      * @return list<string>
      * @return list<string>

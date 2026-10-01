@@ -24,11 +24,13 @@ interface MysqlMaintenanceGateway
     public function isMariaDb(): bool;
 
     /**
-     * Whether the current user can both create and drop databases — the two
-     * privileges the shadow lifecycle needs. Checked before any `CREATE DATABASE`,
-     * so a user who cannot provision produces a named result, not a mid-run error.
+     * Whether the current user can both create and drop the database $name — the
+     * two privileges the shadow lifecycle needs. Asked about the name because MySQL
+     * grants both per database, globally or on a name pattern. Checked before any
+     * `CREATE DATABASE`, so a user who cannot provision produces a named result, not
+     * a mid-run error.
      */
-    public function canCreateAndDropDatabases(): bool;
+    public function canCreateAndDropDatabase(string $name): bool;
 
     /** Whether a schema named $name already exists in `information_schema.SCHEMATA`. */
     public function databaseExists(string $name): bool;

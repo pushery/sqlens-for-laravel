@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Drivers\Pgsql\Rules\L4;
 
+use Pushery\SQLens\Canonical\ColumnDefinition;
 use Pushery\SQLens\Contracts\ProvidesRemediation;
 use Pushery\SQLens\Drivers\Pgsql\Rules\AbstractPgsqlSafetyRule;
 use Pushery\SQLens\Findings\DowntimeClass;
@@ -13,6 +14,7 @@ use Pushery\SQLens\Remediation\ExplicitIdentifierTemplate;
 use Pushery\SQLens\Rules\Convention\IdentifierLength;
 use Pushery\SQLens\Rules\RuleDriverNotes;
 use Pushery\SQLens\Subjects\MigrationStatementView;
+use Pushery\SQLens\Subjects\SchemaObjectType;
 
 /**
  * An identifier PostgreSQL will silently rename.
@@ -56,16 +58,21 @@ final class IdentifierLengthRule extends AbstractPgsqlSafetyRule implements Prov
     }
 
     /**
-     * The fix is an argument — but it is only a fix for a statement that has the problem.
+     * The fix is an argument — but it is only a fix for a statement that has the problem, and only
+     * for an index or a constraint.
      *
      * The shape is read through {@see self::overLongNames()}, the SAME call the judgment makes
      * rather than a second copy of the condition. A copy is the failure this seam is guarded
      * against: it agrees on the day it is written and drifts silently afterwards, and what a
      * reader gets is a work order for a problem that is not there.
+     *
+     * The template's one fix is to pass the index or the constraint a name of its own. A table or a
+     * column over the limit was named by whoever wrote the migration, so there is no argument to
+     * pass, and the rule offers no template rather than the wrong one.
      */
     public function remediationFor(MigrationStatementView $statement): ?RemediationPayload
     {
-        if ($this->overLongNames($statement) === []) {
+        if (! in_array(true, $this->overLongNames($statement), true)) {
             return null;
         }
 
@@ -90,7 +97,7 @@ final class IdentifierLengthRule extends AbstractPgsqlSafetyRule implements Prov
 
     protected function judge(MigrationStatementView $statement): ?string
     {
-        $names = $this->overLongNames($statement);
+        $names = array_keys($this->overLongNames($statement));
 
         if ($names === []) {
             return null;
@@ -109,15 +116,19 @@ final class IdentifierLengthRule extends AbstractPgsqlSafetyRule implements Prov
     }
 
     /**
-     * Every name this statement writes that the server will not accept as written.
+     * Every name this statement writes that the server will not accept as written, and whether it
+     * names an index or a constraint.
      *
      * Static and shared, so the judgment and the fix material can never disagree about whether
-     * there is a problem. It reads the statement's targets AND the columns a key names: reading
-     * only the table would miss the case that actually bites, because Laravel derives an index or
-     * constraint name from the table AND its columns, and the derived name goes over while every
-     * name a person typed is comfortably under.
+     * there is a problem. It reads the statement's targets, the columns a key names AND the columns
+     * a `CREATE TABLE` defines. Reading only the table would miss the case that actually bites,
+     * because Laravel derives an index or constraint name from the table AND its columns, and the
+     * derived name goes over while every name a person typed is comfortably under. And the columns
+     * of `Schema::create()`, where most columns are made, are in no target: they travel as the
+     * statement's column definitions.
      *
-     * @return list<string> sorted, deduplicated, and empty when the statement is fine
+     * @return array<string, bool> name => whether it names an index or a constraint, sorted by name,
+     *                             and empty when the statement is fine
      */
     private function overLongNames(MigrationStatementView $statement): array
     {
@@ -127,22 +138,28 @@ final class IdentifierLengthRule extends AbstractPgsqlSafetyRule implements Prov
             $bare = IdentifierLength::bareName($target->qualifiedName());
 
             if ($bare !== '' && IdentifierLength::exceeds($bare, IdentifierLength::POSTGRES_BYTES, true)) {
-                $over[$bare] = true;
+                $over[$bare] = ($over[$bare] ?? false)
+                    || $target->type === SchemaObjectType::Index
+                    || $target->type === SchemaObjectType::Constraint;
             }
         }
 
-        foreach ($statement->keyColumns as $column) {
+        $columns = [
+            ...$statement->keyColumns,
+            ...array_map(static fn (ColumnDefinition $definition): string => $definition->name, $statement->columnDefinitions ?? []),
+        ];
+
+        foreach ($columns as $column) {
             $bare = IdentifierLength::bareName($column);
 
             if ($bare !== '' && IdentifierLength::exceeds($bare, IdentifierLength::POSTGRES_BYTES, true)) {
-                $over[$bare] = true;
+                $over[$bare] ??= false;
             }
         }
 
-        $names = array_keys($over);
-        sort($names, SORT_STRING);
+        ksort($over, SORT_STRING);
 
-        return $names;
+        return $over;
     }
 
     /** One sentence about one offending name. */

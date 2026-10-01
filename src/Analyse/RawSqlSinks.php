@@ -14,7 +14,16 @@ namespace Pushery\SQLens\Analyse;
  * its own file and its own verification arm: `tests/Unit/Analyse/RawSqlSinksTest` reflects the
  * INSTALLED framework and fails if a listed method has disappeared or changed shape.
  *
- * Read out of `laravel/framework` v13.23.0 on 2026-08-14.
+ * Read out of `laravel/framework` v13.23.0 on 2026-08-14; the subquery methods and Eloquent's
+ * `fromQuery()` out of v13.30.1 on 2026-09-30.
+ *
+ * ## A name is not what makes a sink
+ *
+ * The first reading of this list walked the framework for methods with `raw` in their name, and it
+ * was blind to twelve that take SQL text under another name: `fromSub("select … {$tenant}", 'o')`
+ * hands its string to the statement exactly as `fromRaw()` does. What makes a sink is where the
+ * text GOES, so that is what `RawSqlSinksTest` now derives the lists from — the framework's own
+ * source, followed from each public method to the place a string becomes SQL.
  *
  * ## Two kinds of sink, and the difference decides which rule may use which
  *
@@ -28,6 +37,9 @@ namespace Pushery\SQLens\Analyse;
  *
  * Keeping them apart in the vocabulary rather than in each rule is what stops the distinction from
  * being re-derived, slightly differently, by every consumer.
+ *
+ * The two later lists fall on either side of that line: a subquery given as a string is a FRAGMENT
+ * of the statement the builder assembles, and `fromQuery()` is a complete STATEMENT.
  */
 final readonly class RawSqlSinks
 {
@@ -162,6 +174,69 @@ final readonly class RawSqlSinks
     public const array SINKS_WITHOUT_BINDINGS = [
         'raw',
         'unprepared',
+    ];
+
+    /**
+     * Methods that take a SUBQUERY — a closure, a builder, or a string of SQL.
+     *
+     * The string is the raw form, and nothing in the name says so. `Query\Builder::parseSub()` hands
+     * a string back unchanged and with no bindings, and these eleven are every public method that
+     * reaches it with an argument of its own, directly or through a sibling: `leftJoinSub()` is
+     * `joinSub()` with a join type. So `fromSub("select * from orders where tenant_id = {$tenant}",
+     * 'o')` is `fromRaw()` under another name.
+     *
+     * Only the string form is raw text. A closure or a builder instance is the query builder's own
+     * parameterized form — its values travel as bindings — and it is how all eleven are ordinarily
+     * called. A call whose subquery cannot be a string is therefore not a raw-SQL call site at all,
+     * and {@see RawSqlFragmentCollector} asks the argument's type before it asks anything else.
+     *
+     * The value is the position of the subquery argument, because two of the eleven do not take it
+     * first: `insertUsing(array $columns, $query)` names the target columns before the query.
+     *
+     * They stay out of {@see FRAGMENT_SINKS} for two reasons, and both are about correctness rather
+     * than tidiness. The text is not always argument 0, and the string form takes NO bindings: the
+     * argument after it is the alias, so advice to "pass it as a binding" would put the value in the
+     * alias.
+     *
+     * @var array<string, int> method => position of the subquery argument
+     */
+    public const array SUBQUERY_SINKS = [
+        'crossJoinSub' => 0,
+        'fromSub' => 0,
+        'insertOrIgnoreUsing' => 1,
+        'insertUsing' => 1,
+        'joinLateral' => 0,
+        'joinSub' => 0,
+        'leftJoinLateral' => 0,
+        'leftJoinSub' => 0,
+        'rightJoinSub' => 0,
+        'selectSub' => 0,
+        'straightJoinSub' => 0,
+    ];
+
+    /**
+     * Statement sinks that live on Eloquent rather than on a connection.
+     *
+     * `Eloquent\Builder::fromQuery($query, $bindings = [])` runs a complete statement through the
+     * model's connection — `getConnection()->select($query, $bindings)` — and turns the rows into
+     * models. So `Order::fromQuery("select * from orders where email = '{$email}'")` is
+     * `DB::select()` with hydration, and it owes the same two answers: why raw SQL, and where the
+     * value went.
+     *
+     * It is reached three ways, all ordinary: statically on a model, which forwards through
+     * `__callStatic`; on an Eloquent builder; and on a model instance or a relation, both of which
+     * forward to the builder.
+     *
+     * It is not in {@see STATEMENT_SINKS}, which is the connection's vocabulary and is held against
+     * `Connection` by its tests. Unlike {@see CONNECTION_ONLY_SINKS}, the name alone is no evidence
+     * here: `fromQuery` is also what a named constructor is called when it builds a value object
+     * out of a request's query string. A receiver the analyzer cannot resolve is therefore silence,
+     * not doubt.
+     *
+     * @var list<string>
+     */
+    public const array ELOQUENT_STATEMENT_SINKS = [
+        'fromQuery',
     ];
 
     /**

@@ -29,13 +29,18 @@ use Pushery\SQLens\Lint\LintOutcome;
  * config, an unreadable baseline, a strict-tool stop — and a check written against the two known
  * causes would go quiet again the first time a third arrived. The exit code is the engine's own
  * summary of "nothing was audited", so it is the condition, and the failures only sharpen the
- * sentence.
+ * sentence. The one exit it does not summarize is a run that examined everything and was ended by
+ * a stale baseline entry, which the outcome says in `examined`.
  *
  * ## Why it is not a method on the tool
  *
- * Three tools start a run — `lint_pending` now, `lint_shadow` and `predeploy` next — and a check
- * copied into each is a check two of them can be written without. This is the one place, and it is
- * the reason a new run-starting tool cannot reintroduce the silent green by omission.
+ * Two tools start a lint run, `lint_pending` and `lint_shadow`, and a check copied into each is a
+ * check one of them can be written without. This is the one place for them. `predeploy` starts a
+ * preflight instead, and the preflight service refuses a run whose lint half refused, so the refusal
+ * reaches the tool and the command alike without passing through here.
+ *
+ * A tool still has to call it, and nothing in PHP makes a new one do so. `RunRefusalTest` does: it
+ * reads every tool that starts a lint run and fails for one that does not call this class.
  *
  * Nothing here invents a reason. The identifiers come from the engine's own named failures and stay
  * stable English, exactly as they are in the JSON envelope: a translated reason id would be a
@@ -51,7 +56,10 @@ final readonly class RunRefusal
      */
     public static function in(LintOutcome $outcome): ?ToolAnswer
     {
-        if ($outcome->exitCode !== ExitCode::Misconfiguration) {
+        // A run that judged what it read and ended on a misconfiguration anyway was ended by its
+        // baseline, under `sqlens.baseline.stale = error`. It happened, and its findings are the
+        // answer; the gate beside them says what the baseline cost.
+        if ($outcome->exitCode !== ExitCode::Misconfiguration || $outcome->examined) {
             return null;
         }
 

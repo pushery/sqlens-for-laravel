@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Reporting\Sarif;
 
-use Pushery\SQLens\Canonical\Fingerprint;
 use Pushery\SQLens\Deploy\DebtContext;
 use Pushery\SQLens\Docs\DocumentationSite;
 use Pushery\SQLens\Exceptions\UnreadableSarifSchema;
@@ -247,11 +246,7 @@ final readonly class SarifDocument
             // that has accepted a finding in its baseline and a security tab that keeps reopening it
             // would be two answers to one question.
             'partialFingerprints' => [
-                'sqlensFindingFingerprint/v1' => FindingFingerprint::of(
-                    $finding->ruleId,
-                    $finding->location,
-                    Fingerprint::fromValue(''),
-                )->value,
+                'sqlensFindingFingerprint/v1' => FindingFingerprint::ofFinding($finding)->value,
             ],
             'properties' => [
                 'status' => $finding->status->outcome->value,
@@ -269,6 +264,8 @@ final readonly class SarifDocument
                 'category' => $finding->category->value,
                 'severity' => $finding->severity?->value,
                 'downtimeClass' => $finding->downtimeClass?->value,
+                // The reason a derived class could not be named, beside the key it stands in for.
+                'downtimeUndeterminedReason' => $finding->downtimeUndetermined?->reason->value,
                 'confidence' => $finding->confidence->value,
             ],
         ];

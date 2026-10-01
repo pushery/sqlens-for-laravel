@@ -6,6 +6,8 @@ namespace Pushery\SQLens\Drivers\Mysql\Deploy;
 
 use Illuminate\Database\Connection;
 use Pushery\SQLens\Attributes\RawSql;
+use Pushery\SQLens\Canonical\Identifier;
+use Pushery\SQLens\Canonical\IdentifierComponent;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\PreflightCheck;
 use Pushery\SQLens\Deploy\CheckResult;
@@ -14,6 +16,8 @@ use Pushery\SQLens\Deploy\PreflightContext;
 use Pushery\SQLens\Deploy\PrivilegeClass;
 use Pushery\SQLens\Deploy\PrivilegeRequirement;
 use Pushery\SQLens\Deploy\RequiredPrivileges;
+use Pushery\SQLens\Drivers\Mysql\Canonical\MysqlCanonicalization;
+use Pushery\SQLens\Drivers\Mysql\Catalog\MysqlDatabasePattern;
 use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
@@ -23,6 +27,7 @@ use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
 use Pushery\SQLens\Rules\StabilityTier;
 use Pushery\SQLens\Severity\Severity;
+use Pushery\SQLens\Subjects\SchemaObjectType;
 use Pushery\SQLens\Subjects\SubjectContext;
 use Throwable;
 
@@ -50,6 +55,24 @@ use Throwable;
  * - A privilege NOT found is only a finding when this run can also establish that the user holds no
  *   roles at all — which needs `SELECT` on `mysql.role_edges`. Without that, it is `undetermined`
  *   with the reason named.
+ *
+ * ## Which account, and on which object
+ *
+ * A MySQL account is a user AND a host, and the configuration names only the user. `'deploy'@'%'` and
+ * `'deploy'@'localhost'` are two accounts with separate grants, and which one `migrate` becomes
+ * depends on the host it connects from, which nothing here can see. So the grants are read per
+ * account and never pooled: a requirement every account meets is met, one no account meets is
+ * missing, and one they disagree on is `undetermined`, naming the accounts.
+ *
+ * And a grant has a scope. An `ALTER` on `app.audit_log` does not let anybody alter `app.orders`, so
+ * a requirement is met by a global grant, by a database-level grant whose name pattern reaches the
+ * object's database, or by a table-level grant on that very table. MySQL applies ONE matching
+ * database-level entry rather than their union, so only what every matching entry holds counts.
+ *
+ * The privilege views are filtered to what the READING connection may see, without a word: without
+ * `SELECT` on the `mysql` schema it sees its own grants and nobody else's. Every account has at
+ * least a `USAGE` row, so a user name the views show no account for is one this connection cannot
+ * see, and the answer is `undetermined` for that reason rather than for a role nobody asked about.
  *
  * ## No ownership here
  *
@@ -119,7 +142,7 @@ final readonly class GrantCheck implements PreflightCheck
         }
 
         try {
-            $held = $this->heldPrivileges($context, $role);
+            $reading = $this->grantsOfTheName($context, $role);
             $rolesVisible = $this->holdsNoRoles($context, $role);
         } catch (Throwable $failure) {
             return CheckResult::undetermined(
@@ -127,6 +150,21 @@ final readonly class GrantCheck implements PreflightCheck
                 UndeterminedReason::GrantsUnreadable,
                 'the privilege tables could not be read, so what the migration '
                 .'user may do is unknown: '.new CredentialRedactor()->redact($failure->getMessage()),
+            );
+        }
+
+        if ($reading['accounts'] === []) {
+            return CheckResult::undetermined(
+                self::ID,
+                UndeterminedReason::GrantsUnreadable,
+                sprintf(
+                    'the privilege views name no account called `%s`. MySQL filters them to what the '
+                    .'reading connection may see, and without `SELECT` on the `mysql` schema that is '
+                    .'its own grants and nobody else\'s, so nothing was established about what `%s` '
+                    .'may do.',
+                    $role,
+                    $role,
+                ),
             );
         }
 
@@ -142,8 +180,54 @@ final readonly class GrantCheck implements PreflightCheck
 
             // Safe without a second `instanceof`: `isDerived()` asserts it for the analyzer above.
             $needed = $this->privilegeName($requirement->class);
+            $scope = $this->objectScope($requirement, $reading['schema']);
 
-            if (in_array($needed, $held, true)) {
+            $reachedBy = [];
+            $missingFor = [];
+            $unknownFor = [];
+
+            foreach ($reading['accounts'] as $account => $grants) {
+                $reaches = $this->reaches($grants, $needed, $requirement->objectType, $scope, $reading['folds'], $reading['wildcards']);
+
+                if ($reaches === null) {
+                    $unknownFor[] = $account;
+                } elseif ($reaches) {
+                    $reachedBy[] = $account;
+                } else {
+                    $missingFor[] = $account;
+                }
+            }
+
+            if ($missingFor === [] && $unknownFor === []) {
+                continue;
+            }
+
+            if ($unknownFor !== []) {
+                $unanswered[] = sprintf(
+                    '%s: which database it is in could not be established. The name is not qualified '
+                    .'and the reading connection has no default database, so no grant below the global '
+                    .'level can be matched to it.',
+                    $requirement->object,
+                );
+
+                continue;
+            }
+
+            // The accounts disagree, and which one `migrate` becomes depends on the host it connects
+            // from. Pooling them is what let one account's grant answer for another.
+            if ($reachedBy !== []) {
+                $unanswered[] = sprintf(
+                    '%s: `%s` is %d accounts, and they differ on `%s`: held by %s, not by %s. Which one '
+                    .'`migrate` connects as depends on the host it connects from, which this check '
+                    .'cannot see.',
+                    $requirement->object,
+                    $role,
+                    count($reading['accounts']),
+                    $needed,
+                    implode(', ', $reachedBy),
+                    implode(', ', $missingFor),
+                );
+
                 continue;
             }
 
@@ -153,7 +237,7 @@ final readonly class GrantCheck implements PreflightCheck
             // the modern one.
             if (! $rolesVisible) {
                 $unanswered[] = sprintf(
-                    '%s: `%s` is not among the grants held directly by `%s`, and whether it is '
+                    '%s: `%s` is not among the grants `%s` holds directly on it, and whether it is '
                     .'reached through a ROLE could not be established — `mysql.role_edges` is not '
                     .'readable by this connection. Reporting it missing would be wrong for every '
                     .'setup that grants through roles.',
@@ -205,15 +289,17 @@ final readonly class GrantCheck implements PreflightCheck
     }
 
     /**
-     * The privilege names this user holds DIRECTLY, at any level.
+     * Every grant the privilege views list for this user name, by account, with the scope each one
+     * applies to — and what an unqualified name and a grant's database pattern mean on this server.
      *
-     * Global, schema and table grants collapsed into one set on purpose: the question is whether the
-     * user may do the thing, and a global `ALTER` answers it as well as a table-level one.
+     * The rows are grouped by `GRANTEE`, `'user'@'host'`, because each host variant is an account of
+     * its own. Global grants have neither a database nor a table, database-level grants a database
+     * (as the pattern it was granted with), table-level grants both.
      *
-     * @return list<string>
+     * @return array{accounts: array<string, list<array{privilege: string, schema: string|null, table: string|null}>>, schema: string|null, folds: bool, wildcards: bool}
      */
-    #[RawSql(reason: 'reads the privileges the deploying account actually holds; a preflight that guessed would pass a deploy that then fails halfway')]
-    private function heldPrivileges(PreflightContext $context, string $role): array
+    #[RawSql(reason: 'reads the privileges the deploying account actually holds, and where; a preflight that guessed would pass a deploy that then fails halfway')]
+    private function grantsOfTheName(PreflightContext $context, string $role): array
     {
         // A prefix comparison, not `LIKE`, and not `substring_index` either. `GRANTEE` is
         // rendered as `'user'@'host'`, so the account is everything up to and including the `'@`
@@ -236,22 +322,146 @@ final readonly class GrantCheck implements PreflightCheck
         // characters rather than bytes, which is what `substring` also counts.
         $prefix = "'".$role."'@";
 
-        $rows = $context->session->read(static fn (Connection $db): array => $db->select(
-            'select privilege_type as p from information_schema.USER_PRIVILEGES where substring(grantee, 1, char_length(?)) = ?
-             union select privilege_type from information_schema.SCHEMA_PRIVILEGES where substring(grantee, 1, char_length(?)) = ?
-             union select privilege_type from information_schema.TABLE_PRIVILEGES where substring(grantee, 1, char_length(?)) = ?',
-            array_fill(0, 6, $prefix),
-        ));
+        [$rows, $server] = $context->session->read(static fn (Connection $db): array => [
+            $db->select(
+                'select grantee as g, privilege_type as p, null as s, null as t from information_schema.USER_PRIVILEGES where substring(grantee, 1, char_length(?)) = ?
+                 union all select grantee, privilege_type, table_schema, null from information_schema.SCHEMA_PRIVILEGES where substring(grantee, 1, char_length(?)) = ?
+                 union all select grantee, privilege_type, table_schema, table_name from information_schema.TABLE_PRIVILEGES where substring(grantee, 1, char_length(?)) = ?',
+                array_fill(0, 6, $prefix),
+            ),
+            // The database an unqualified name lands in, whether table names compare folded, and
+            // whether `_` and `%` in a database-level grant are wildcards.
+            $db->select('select database() as db, @@lower_case_table_names as lctn, @@partial_revokes as pr'),
+        ]);
 
-        $held = [];
+        $accounts = [];
 
         foreach ($rows as $row) {
-            if (is_object($row) && is_scalar($row->p ?? null)) {
-                $held[] = strtoupper((string) $row->p);
+            if (! is_object($row) || ! is_scalar($row->g ?? null) || ! is_scalar($row->p ?? null)) {
+                continue;
+            }
+
+            $accounts[(string) $row->g][] = [
+                'privilege' => strtoupper((string) $row->p),
+                'schema' => is_scalar($row->s ?? null) ? (string) $row->s : null,
+                'table' => is_scalar($row->t ?? null) ? (string) $row->t : null,
+            ];
+        }
+
+        ksort($accounts);
+
+        $settings = $server[0] ?? null;
+        $schema = is_object($settings) && is_scalar($settings->db ?? null) ? (string) $settings->db : '';
+
+        return [
+            'accounts' => $accounts,
+            'schema' => $schema === '' ? null : $schema,
+            'folds' => is_object($settings) && is_numeric($settings->lctn ?? null) && (int) $settings->lctn > 0,
+            'wildcards' => ! (is_object($settings) && is_numeric($settings->pr ?? null) && (int) $settings->pr === 1),
+        ];
+    }
+
+    /**
+     * The database and the name a requirement's object stands for, as a grant spells them.
+     *
+     * An unqualified name lands in the reading connection's default database, which is null when it
+     * has none. Null as a whole when the object is not a name this reading can split.
+     *
+     * @return array{schema: string|null, name: string}|null
+     */
+    private function objectScope(PrivilegeRequirement $requirement, ?string $defaultSchema): ?array
+    {
+        $identifier = Identifier::parse($requirement->object, new MysqlCanonicalization);
+
+        if (! $identifier instanceof Identifier) {
+            return null;
+        }
+
+        // On MySQL a schema IS a database, so the object names the database itself.
+        if (in_array($requirement->objectType, [SchemaObjectType::Schema, SchemaObjectType::Database], true)) {
+            return ['schema' => $this->spelled($identifier->name), 'name' => $this->spelled($identifier->name)];
+        }
+
+        return [
+            'schema' => $identifier->schema instanceof IdentifierComponent ? $this->spelled($identifier->schema) : $defaultSchema,
+            'name' => $this->spelled($identifier->name),
+        ];
+    }
+
+    /** A component as the server spells it: the canonical form without its backticks. */
+    private function spelled(IdentifierComponent $component): string
+    {
+        $canonical = $component->canonical;
+
+        return strlen($canonical) >= 2 && str_starts_with($canonical, '`') && str_ends_with($canonical, '`')
+            ? str_replace('``', '`', substr($canonical, 1, -1))
+            : $canonical;
+    }
+
+    /**
+     * Whether one account's grants reach a privilege on an object, or null when that cannot be said.
+     *
+     * A global grant reaches everything. A database-level grant reaches the object when its name
+     * pattern covers the object's database; MySQL applies one matching entry and not their union, so
+     * only a privilege every matching entry holds counts. A table-level grant reaches its own table.
+     * An index or any other object below a table is reached through a table the same statement names,
+     * which is required on its own, so a table-level grant anywhere in its database counts. A database
+     * is reached by no table-level grant at all.
+     *
+     * @param  list<array{privilege: string, schema: string|null, table: string|null}>  $grants
+     * @param  array{schema: string|null, name: string}|null  $scope
+     */
+    private function reaches(array $grants, string $privilege, SchemaObjectType $type, ?array $scope, bool $folds, bool $wildcards): ?bool
+    {
+        foreach ($grants as $grant) {
+            if ($grant['schema'] === null && $grant['privilege'] === $privilege) {
+                return true;
             }
         }
 
-        return array_values(array_unique($held));
+        if ($scope === null || $scope['schema'] === null) {
+            return null;
+        }
+
+        $same = static fn (string $a, string $b): bool => $folds ? strtolower($a) === strtolower($b) : $a === $b;
+        $database = $folds ? strtolower($scope['schema']) : $scope['schema'];
+        $patterns = [];
+
+        foreach ($grants as $grant) {
+            if ($grant['schema'] !== null && $grant['table'] === null) {
+                $patterns[$grant['schema']][] = $grant['privilege'];
+            }
+        }
+
+        $matching = null;
+
+        foreach ($patterns as $pattern => $privileges) {
+            if (MysqlDatabasePattern::covers($folds ? strtolower((string) $pattern) : (string) $pattern, $database, $wildcards)) {
+                $matching = $matching === null ? $privileges : array_values(array_intersect($matching, $privileges));
+            }
+        }
+
+        if ($matching !== null && in_array($privilege, $matching, true)) {
+            return true;
+        }
+
+        if (in_array($type, [SchemaObjectType::Schema, SchemaObjectType::Database], true)) {
+            return false;
+        }
+
+        $onATable = in_array($type, [SchemaObjectType::Table, SchemaObjectType::View], true);
+
+        foreach ($grants as $grant) {
+            if ($grant['schema'] === null || $grant['table'] === null || $grant['privilege'] !== $privilege) {
+                continue;
+            }
+
+            if ($same($grant['schema'], $scope['schema']) && (! $onATable || $same($grant['table'], $scope['name']))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

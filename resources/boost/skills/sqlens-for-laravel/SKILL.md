@@ -559,8 +559,9 @@ A minor release of SQLens may make your build fail where it passed yesterday, an
 one way that happens on purpose. Knowing which one saves you from pinning the version — which is the
 outcome nobody wants, because a pinned project stops getting the fixes too.
 
-- **A new rule arrives as `preview` and is opt-in.** It does not join the level defaults until a
-  major, so a minor never turns on a rule you did not ask for.
+- **From 1.0, a new rule arrives as `preview` and is opt-in.** It does not join the level defaults
+  until a major, so a minor never turns on a rule you did not ask for. Before 1.0 a new rule ships
+  `stable` in a minor release, which a `^0.N` constraint does not install on its own.
 - **The one exception: a security severity may be RAISED in a minor**, and the changelog says so in
   a callout. A finding that turns out to be worse than first judged should not wait for a major —
   waiting would protect the release schedule at your expense. This is the case that can newly stop

@@ -89,8 +89,21 @@ final readonly class CanonicalFormVersion
      * column `id`: the server downcases A to Z and nothing else. `mb_strtolower` had folded the `É`
      * too, so `Élan` and `"élan"`, two tables, shared a form. It went in before form 5 was
      * released, so it is part of 5 rather than a 6.
+     *
+     * Went to 6 for MySQL's backslash escape. Three stages each carried a scanner of their own for
+     * quoted spans, and each knew only the doubled delimiter, so a literal Laravel writes through
+     * `addslashes()` ended at its `\'` and the rest of the statement read as a literal that never
+     * closes. Measured before and after, on what Laravel's MySQL grammar writes for a column comment
+     * with an apostrophe:
+     *
+     *     create table `settings` (`key` varchar(255) not null comment 'the setting\'s key', `value` text not null, primary key (`key`))
+     *       form 5 -> CREATE TABLE settings (`key` VARCHAR(255) NOT NULL comment 'the setting\'s KEY', `value` text not null, primary key (`key`))
+     *       form 6 -> CREATE TABLE settings (`key` VARCHAR(255) NOT NULL comment 'the setting\'s key', value TEXT NOT NULL, PRIMARY KEY (`key`))
+     *
+     * PostgreSQL does not escape with a backslash, so none of its forms moved, and neither did the
+     * keyword lists. The stages now share {@see QuotedSpan}, which asks the driver.
      */
-    public const int CURRENT = 5;
+    public const int CURRENT = 6;
 
     public function __construct(public int $version) {}
 

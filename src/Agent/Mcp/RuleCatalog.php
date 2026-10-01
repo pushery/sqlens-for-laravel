@@ -42,11 +42,27 @@ final class RuleCatalog
     /**
      * One rule's published metadata, or null when this build registers no such id.
      *
+     * A member of a family answers with the family's row. Its concrete id is built per finding, as
+     * `SEC.SKIPPED.<AREA>` or `DEPLOY.CONTEXT.SETTING.<NAME>`, so the registry holds one row for all
+     * of them, and a finding carrying such an id is explained by the page it links to.
+     *
      * @return array<string, mixed>|null
      */
     public function find(string $ruleId): ?array
     {
-        return $this->rows()[$ruleId] ?? null;
+        $rows = $this->rows();
+
+        if (isset($rows[$ruleId])) {
+            return $rows[$ruleId];
+        }
+
+        foreach ($rows as $id => $row) {
+            if (($row['covers'] ?? null) === 'family' && str_starts_with($ruleId, $id.'.')) {
+                return $row;
+            }
+        }
+
+        return null;
     }
 
     /**

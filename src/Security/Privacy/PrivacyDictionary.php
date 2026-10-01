@@ -124,17 +124,23 @@ final class PrivacyDictionary
 
         $groupOf = [];
 
-        foreach (is_array($decoded['terms'] ?? null) ? $decoded['terms'] : [] as $row) {
-            if (! is_array($row)) {
-                continue;
+        // A row this cannot use is refused rather than skipped. Every row is a term somebody wrote
+        // down so that a column carrying it is reported, and a skipped one is that column reported
+        // as nothing, with nothing saying why: a group spelled `Pii` where the file declares `pii`
+        // would have been exactly that.
+        foreach (is_array($decoded['terms'] ?? null) ? $decoded['terms'] : [] as $position => $row) {
+            $term = is_array($row) ? ($row['term'] ?? null) : null;
+            $group = is_array($row) ? ($row['group'] ?? null) : null;
+
+            if (! is_string($term) || $term === '' || ! is_string($group)) {
+                throw new UnreadablePrivacyDictionary($path, sprintf('entry %s of `terms` is not a term with a group', is_int($position) ? $position + 1 : $position));
             }
 
-            $term = $row['term'] ?? null;
-            $group = $row['group'] ?? null;
-
-            if (is_string($term) && $term !== '' && is_string($group) && isset($signalOf[$group])) {
-                $groupOf[mb_strtolower($term)] = $group;
+            if (! isset($signalOf[$group])) {
+                throw new UnreadablePrivacyDictionary($path, sprintf('the term "%s" names the group "%s", which the file does not declare with the signal strong or weak', $term, $group));
             }
+
+            $groupOf[mb_strtolower($term)] = $group;
         }
 
         if ($groupOf === []) {
@@ -194,20 +200,27 @@ final class PrivacyDictionary
      * a term knows the column is an identifier of some kind, and guessing a narrower group from the
      * word would be this package inventing a fact.
      *
+     * A project's own dictionary need not declare that group, and a term in a group with no signal
+     * matches and reports nothing. So the group is declared here when the dictionary lacks it, with
+     * the strong signal: a term a project names itself is one it knows to hold personal data. A
+     * dictionary that declares the group keeps its own signal for it.
+     *
      * @param  list<string>  $extra
      */
     private function with(array $extra): self
     {
         $groupOf = $this->groupOf;
+        $signalOf = $this->signalOf;
 
         foreach ($extra as $term) {
             $lowered = mb_strtolower(trim($term));
 
             if ($lowered !== '') {
                 $groupOf[$lowered] = 'identifiers';
+                $signalOf['identifiers'] ??= 'strong';
             }
         }
 
-        return new self($groupOf, $this->signalOf);
+        return new self($groupOf, $signalOf);
     }
 }

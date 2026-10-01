@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Drivers\Mysql\Shadow;
 use Illuminate\Database\ConnectionInterface;
 use Pushery\SQLens\Attributes\RawSql;
 use Pushery\SQLens\Contracts\ShadowDatabaseCatalog;
+use Pushery\SQLens\Drivers\Mysql\Catalog\MysqlDatabasePattern;
 
 /**
  * The real MySQL maintenance gateway: the concrete SQL behind the
@@ -64,11 +65,12 @@ final readonly class ConnectionMysqlMaintenanceGateway implements MysqlMaintenan
         return str_contains(strtolower($version), 'mariadb');
     }
 
-    #[RawSql(reason: 'asks whether this account may create and drop a database before the harness tries, so a refusal is reported rather than discovered as a crash')]
-    public function canCreateAndDropDatabases(): bool
+    #[RawSql(reason: 'asks whether this account may create and drop the shadow database before the harness tries, so a refusal is reported rather than discovered as a crash')]
+    public function canCreateAndDropDatabase(string $name): bool
     {
         // SHOW GRANTS returns one column per row whose NAME is "Grants for user@host",
-        // so each value is read positionally rather than by a fixed key.
+        // so each value is read positionally rather than by a fixed key. For the current
+        // user it also lists what the active roles confer.
         $grants = [];
 
         foreach ($this->maintenance->select('show grants for current_user()') as $row) {
@@ -76,28 +78,85 @@ final readonly class ConnectionMysqlMaintenanceGateway implements MysqlMaintenan
             $grants[] = $this->stringValue($values[0] ?? null);
         }
 
-        return self::grantsAllowProvisioning($grants);
+        // With partial_revokes on, MySQL reads `_` and `%` in a database-level grant as
+        // literal characters, so whether a pattern grant reaches $name depends on it.
+        // Anything but a plain "off" reads the grants literally, which can only make a
+        // pattern reach less.
+        $row = $this->maintenance->selectOne('select @@partial_revokes as partial_revokes');
+        $wildcards = $this->stringValue(is_object($row) ? $row->partial_revokes ?? null : null) === '0';
+
+        return self::grantsAllowProvisioning($grants, $name, $wildcards);
     }
 
     /**
-     * Whether a set of `SHOW GRANTS` lines grants the create-and-drop-database
-     * capability — a global `ALL PRIVILEGES`, or an explicit `CREATE` together with
-     * `DROP`. Pure, so both the granted and the denied outcome are testable without a
-     * second MySQL account.
+     * Whether a set of `SHOW GRANTS` lines lets the account create AND drop the
+     * database $name.
+     *
+     * MySQL grants both per database: held globally (`ON *.*`) they reach every
+     * database, held on a database-level pattern (`` ON `sqlens\_shadow\_%`.* ``) the
+     * names the pattern matches. So the level of a line decides, and so does the whole
+     * privilege name — `ALL PRIVILEGES` on the application's own database reaches no
+     * other one, and `CREATE TEMPORARY TABLES` or `DROP ROLE` are not `CREATE` or
+     * `DROP`. MySQL 8.4 refuses `CREATE DATABASE` to all three with error 1044.
+     *
+     * When several database-level lines match, MySQL applies one of them and not
+     * their union: with `CREATE` on `sqlens\_shadow\_%` and `DROP` on `sqlens\_%`, the
+     * database is created and its drop refused. So only what every matching line holds
+     * counts. Table-, routine-, role- and proxy lines grant no database and are skipped.
+     *
+     * Pure, so every outcome is testable without a second MySQL account.
      *
      * @param  list<string>  $grants
+     * @param  bool  $wildcards  whether `_` and `%` in a database-level grant match any
+     *                           character, as they do unless the server runs with
+     *                           `partial_revokes`
      */
-    public static function grantsAllowProvisioning(array $grants): bool
+    public static function grantsAllowProvisioning(array $grants, string $name, bool $wildcards = true): bool
     {
-        foreach ($grants as $grant) {
-            $grant = strtoupper($grant);
+        $global = [];
+        $matching = null;
 
-            if (str_contains($grant, 'ALL PRIVILEGES') || (str_contains($grant, 'CREATE') && str_contains($grant, 'DROP'))) {
-                return true;
+        foreach ($grants as $grant) {
+            if (preg_match('/^GRANT (?<privileges>.+) ON (?<level>\*\.\*|`(?:[^`]|``)+`\.\*) TO /i', $grant, $line) !== 1) {
+                continue;
+            }
+
+            $held = self::provisioningPrivilegesIn($line['privileges']);
+
+            if ($line['level'] === '*.*') {
+                $global = [...$global, ...$held];
+            } elseif (MysqlDatabasePattern::covers(str_replace('``', '`', substr($line['level'], 1, -3)), $name, $wildcards)) {
+                $matching = $matching === null ? $held : array_values(array_intersect($matching, $held));
             }
         }
 
-        return false;
+        $held = [...$global, ...($matching ?? [])];
+
+        return in_array('CREATE', $held, true) && in_array('DROP', $held, true);
+    }
+
+    /**
+     * Which of `CREATE` and `DROP` a privilege list holds, by whole name.
+     *
+     * @return list<string>
+     */
+    private static function provisioningPrivilegesIn(string $privileges): array
+    {
+        $held = [];
+
+        foreach (explode(',', $privileges) as $privilege) {
+            $privilege = strtoupper((string) preg_replace('/\s+/', ' ', trim($privilege)));
+
+            if ($privilege === 'ALL' || $privilege === 'ALL PRIVILEGES') {
+                return ['CREATE', 'DROP'];
+            }
+
+            if ($privilege === 'CREATE' || $privilege === 'DROP') {
+                $held[] = $privilege;
+            }
+        }
+
+        return $held;
     }
 
     #[RawSql(reason: 'asks information_schema whether the shadow database is already there; the schema catalog is not a model')]

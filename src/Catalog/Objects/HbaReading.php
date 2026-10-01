@@ -8,7 +8,9 @@ use Pushery\SQLens\Catalog\CatalogCompleteness;
 use Pushery\SQLens\Catalog\CatalogSkip;
 
 /**
- * The host-based authentication rules a server is running, or the named reason there are none.
+ * The host-based authentication rules in the server's configuration file, as the server parses the
+ * file on disk, or the named reason there are none. What the server has loaded can differ: an edit
+ * that has not been reloaded, or a reload the server refused.
  *
  * Modeled on {@see RlsReading} rather than invented, because the three states it has to tell apart
  * are the same three:

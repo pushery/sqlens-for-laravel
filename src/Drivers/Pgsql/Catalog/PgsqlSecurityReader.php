@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Drivers\Pgsql\Catalog;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Database\Connection;
 use Pushery\SQLens\Attributes\RawSql;
+use Pushery\SQLens\Canonical\QuotedIdentifier;
 use Pushery\SQLens\Catalog\CatalogSkip;
 use Pushery\SQLens\Catalog\Degradation\DatabaseErrorTranslator;
 use Pushery\SQLens\Catalog\Objects\GrantObject;
@@ -155,6 +156,7 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 reachableRoles: $reachable['roles'][$name] ?? [],
                 reachableAttributes: $reachable['attributes'][$name] ?? [],
                 reachablePaths: $reachable['paths'][$name] ?? [],
+                reachableRoleAttributes: $reachable['held'][$name] ?? [],
                 // PostgreSQL's predefined roles all carry the reserved `pg_` prefix, which the manual
                 // states and the server enforces on creation — so this is a rule rather than a list.
                 // Without it every role rule reports `pg_monitor` and its siblings on a fresh server.
@@ -205,7 +207,11 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 ." select 'table' as kind, n.nspname||'.'||c.relname as object_name,"
                 .' a.privilege_type, a.is_grantable, pg_catalog.pg_get_userbyid(a.grantor) as grantor,'
                 ." case when a.grantee = 0 then '' else pg_catalog.pg_get_userbyid(a.grantee) end as grantee,"
-                ." coalesce(i.privtype::text, case when a.grantee = c.relowner then 'o' end) as origin"
+                ." coalesce(i.privtype::text, case when a.grantee = c.relowner then 'o' end) as origin,"
+                // The PARTS of the name, beside the dotted one above: a GRANT or REVOKE needs each
+                // quoted on its own, and a dot inside a name makes the joined string impossible to
+                // split back. `relkind` because a sequence takes `ON SEQUENCE`, not `ON TABLE`.
+                .' n.nspname as target_schema, c.relname as target_local, c.relkind::text as target_detail'
                 .' from pg_class c join pg_namespace n on n.oid = c.relnamespace'
                 // CROSS JOIN LATERAL rather than a comma: the LEFT JOIN below has to see `c`, and a
                 // comma-joined item is out of scope for the join that follows it.
@@ -218,15 +224,21 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 .' union all'
                 ." select 'schema', n.nspname, a.privilege_type, a.is_grantable, pg_catalog.pg_get_userbyid(a.grantor),"
                 ." case when a.grantee = 0 then '' else pg_catalog.pg_get_userbyid(a.grantee) end,"
-                ." coalesce(i.privtype::text, case when a.grantee = n.nspowner then 'o' end)"
+                ." coalesce(i.privtype::text, case when a.grantee = n.nspowner then 'o' end),"
+                ." n.nspname, '', ''"
                 .' from pg_namespace n cross join lateral pg_catalog.aclexplode(n.nspacl) a'
                 ." left join init i on i.classoid = 'pg_namespace'::regclass and i.objoid = n.oid"
                 .' and i.grantee = a.grantee and i.privilege_type = a.privilege_type'
                 ." where n.nspacl is not null and n.nspname not in ('pg_catalog', 'information_schema')"
                 .' union all'
-                ." select 'routine', n.nspname||'.'||p.proname, a.privilege_type, a.is_grantable, pg_catalog.pg_get_userbyid(a.grantor),"
+                // With its argument types, because overloads are different routines with different
+                // ACLs: under the bare name they were one grant, and a REVOKE could not have said
+                // which of them it meant.
+                ." select 'routine', n.nspname||'.'||p.proname||'('||pg_catalog.pg_get_function_identity_arguments(p.oid)||')',"
+                .' a.privilege_type, a.is_grantable, pg_catalog.pg_get_userbyid(a.grantor),'
                 ." case when a.grantee = 0 then '' else pg_catalog.pg_get_userbyid(a.grantee) end,"
-                ." coalesce(i.privtype::text, case when a.grantee = p.proowner then 'o' end)"
+                ." coalesce(i.privtype::text, case when a.grantee = p.proowner then 'o' end),"
+                .' n.nspname, p.proname, pg_catalog.pg_get_function_identity_arguments(p.oid)'
                 .' from pg_proc p join pg_namespace n on n.oid = p.pronamespace cross join lateral pg_catalog.aclexplode(p.proacl) a'
                 ." left join init i on i.classoid = 'pg_proc'::regclass and i.objoid = p.oid"
                 .' and i.grantee = a.grantee and i.privilege_type = a.privilege_type'
@@ -238,7 +250,8 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 ." select 'database', d.datname, a.privilege_type, a.is_grantable, pg_catalog.pg_get_userbyid(a.grantor),"
                 ." case when a.grantee = 0 then '' else pg_catalog.pg_get_userbyid(a.grantee) end,"
                 ." case when a.grantee = 0 and a.privilege_type in ('CONNECT', 'TEMPORARY') then 'i'"
-                ." when a.grantee = d.datdba then 'o' end"
+                ." when a.grantee = d.datdba then 'o' end,"
+                ." '', d.datname, ''"
                 .' from pg_database d cross join lateral pg_catalog.aclexplode(d.datacl) a'
                 .' where d.datacl is not null'
                 .' order by 1, 2, 6, 3'
@@ -255,7 +268,18 @@ final readonly class PgsqlSecurityReader implements SecurityReader
 
         foreach ($rows as $row) {
             $key = $this->text($row, 'kind')."\0".$this->text($row, 'object_name')."\0".$this->text($row, 'grantee');
-            $collected[$key] ??= ['privileges' => [], 'grantable' => false, 'grantor' => $this->text($row, 'grantor'), 'origins' => []];
+            $collected[$key] ??= [
+                'privileges' => [],
+                'grantable' => false,
+                'grantor' => $this->text($row, 'grantor'),
+                'origins' => [],
+                'target' => $this->statementTarget($row),
+                // PUBLIC is a key word in a GRANT, not a role: quoted, it would name a role called
+                // "PUBLIC", which is not the grantee.
+                'statement_grantee' => $this->text($row, 'grantee') === ''
+                    ? GrantObject::PUBLIC_GRANTEE
+                    : QuotedIdentifier::of('"', $this->text($row, 'grantee')),
+            ];
 
             // Keyed by the catalog's own word for the privilege, so an unmapped one keeps its name
             // without a branch here deciding which ones deserve to. On PostgreSQL 18 every privilege
@@ -289,6 +313,8 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 grantable: $parts['grantable'],
                 origin: $this->strongestOrigin($parts['origins']),
                 coversEveryPrivilege: $this->coversEveryPrivilege($complete, $kind, $parts['privileges']),
+                statementTarget: $parts['target'],
+                statementGrantee: $parts['statement_grantee'],
             );
         }
 
@@ -411,8 +437,9 @@ final readonly class PgsqlSecurityReader implements SecurityReader
         // symptom and not the cause. A security list matching NOTHING also reports nothing, so it
         // looked configured.
         //
-        // `current_schema()` is not a guess about naming: it is the first existing entry of the
-        // session's own search_path, which is exactly where an unqualified CREATE TABLE puts a table.
+        // The application's `current_schema()` is not a guess about naming: it is the first existing
+        // entry of its search_path, which is exactly where an unqualified CREATE TABLE puts a table.
+        // Recorded before the reading pinned its own path, which leaves `pg_catalog` alone on it.
         // Both literals are built HERE rather than inside the query closure: that closure is `static`,
         // so `$this` does not exist in it and only what an arrow function captures is reachable.
         $qualifiedList = $this->textArray(array_values(array_filter($tables, static fn (string $t): bool => str_contains($t, '.'))));
@@ -425,6 +452,9 @@ final readonly class PgsqlSecurityReader implements SecurityReader
             /** @return list<object> */
             fn (): array => array_values($this->session->read(static fn (Connection $db): array => $db->select(
                 'select n.nspname||\'.\'||c.relname as table_name, c.relrowsecurity as enabled,'
+                // The parts as well, for the ALTER TABLE every finding here closes with: each is
+                // quoted on its own, which the dotted name cannot be split back into.
+                .' n.nspname as table_schema, c.relname as table_local,'
                 .' c.relforcerowsecurity as forced,'
                 // The OWNER by name, resolved by the server rather than joined by hand: `relowner` is
                 // an oid, and the rule that matters most here — the application connects as the role
@@ -453,7 +483,7 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 // table, and reporting n partitions would multiply one finding by however many exist.
                 .' where c.relkind in (\'r\', \'p\') and c.relispartition = false'
                 .' and (n.nspname||\'.\'||c.relname = any(?)'
-                .' or (n.nspname = pg_catalog.current_schema() and c.relname = any(?)))'
+                .' or (n.nspname = '.ApplicationSearchPath::currentSchema().' and c.relname = any(?)))'
                 .' order by 1, p.polname',
                 [$qualifiedList, $bareList],
             ))),
@@ -471,6 +501,7 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 'forced' => ($row->forced ?? false) === true,
                 'owner' => $this->text($row, 'owner'),
                 'policies' => [],
+                'statement_name' => QuotedIdentifier::of('"', $this->text($row, 'table_schema'), $this->text($row, 'table_local')),
             ];
 
             $command = RlsCommand::fromCatalog($this->text($row, 'polcmd'));
@@ -503,13 +534,13 @@ final readonly class PgsqlSecurityReader implements SecurityReader
         $states = [];
 
         foreach ($collected as $table => $parts) {
-            $states[] = RlsState::of($table, $parts['enabled'], $parts['forced'], $parts['policies'], Readability::complete(), $parts['owner']);
+            $states[] = RlsState::of($table, $parts['enabled'], $parts['forced'], $parts['policies'], Readability::complete(), $parts['owner'], $parts['statement_name']);
         }
 
         // A table the project named and the catalog does not have is a finding of its own kind — a
         // configuration that points at nothing — so it is a SKIP rather than a silent absence.
         //
-        // A bare name reached the result set only through the `current_schema()` branch above, so
+        // A bare name reached the result set only through the current-schema branch above, so
         // matching it back by its own bare half is exact rather than approximate. It gets its own
         // sentence too: `not found in the catalog` describes a missing table, and a reader who was
         // told that went looking for a typo or an unrun migration over a table that was there.
@@ -622,7 +653,7 @@ final readonly class PgsqlSecurityReader implements SecurityReader
      * every attribute arrive N times.
      *
      * @param  list<CatalogSkip>  $skips
-     * @return array{roles: array<string, list<string>>, attributes: array<string, list<RoleAttribute>>, paths: array<string, array<string, string>>}
+     * @return array{roles: array<string, list<string>>, attributes: array<string, list<RoleAttribute>>, paths: array<string, array<string, string>>, held: array<string, array<string, list<RoleAttribute>>>}
      */
     #[RawSql(reason: 'walks role membership recursively through pg_auth_members; inheritance has no builder form')]
     private function reachability(array &$skips): array
@@ -642,16 +673,32 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 // works on the whole row, and two rows differing only in their path are not duplicates
                 // to it — the walk would keep finding longer ways round. PostgreSQL refuses to CREATE a
                 // membership cycle, but the guard costs one comparison and does not rely on that.
+                //
+                // Only chains that carry RIGHTS. PostgreSQL 16 split a membership into ADMIN, INHERIT
+                // and SET: `SET ROLE` follows a chain of SET grants from the member, and after it the
+                // session has the rights of the role it became plus whatever that role inherits. So a
+                // chain is some SET grants followed by some INHERIT grants, and a grant with neither
+                // ends it. That last kind is what a CREATEROLE role receives in every role it creates,
+                // and a walk over every membership made such a role the owner of the tables that role
+                // owns, while PostgreSQL applies row-level security to it.
+                //
+                // `settable` is whether every grant on the way carries SET TRUE: only then can the
+                // member `SET ROLE` to the end and take on its ATTRIBUTES, which are not inherited.
+                // `grant su to app with set false` is the hardening that keeps `app` from becoming
+                // `su`, and a walk that ignored it reported exactly that as "can become a SUPERUSER
+                // with one SET ROLE". Per pair the settable path wins, and the shortest of those.
                 'with recursive reach as ('
-                .' select m.member as base, m.roleid as reached, array[m.roleid] as path'
+                .' select m.member as base, m.roleid as reached, array[m.roleid] as path, m.set_option as settable'
                 .' from pg_auth_members m'
+                .' where m.set_option or m.inherit_option'
                 .' union all'
-                .' select r.base, m.roleid, r.path || m.roleid from reach r'
+                .' select r.base, m.roleid, r.path || m.roleid, r.settable and m.set_option from reach r'
                 .' join pg_auth_members m on m.member = r.reached'
                 .' where not m.roleid = any(r.path)'
+                .' and (m.inherit_option or (r.settable and m.set_option))'
                 .')'
                 .' select distinct on (reach.base, reach.reached)'
-                .' b.rolname as base, g.rolname as reached,'
+                .' b.rolname as base, g.rolname as reached, reach.settable,'
                 .' g.rolsuper, g.rolcreaterole, g.rolcreatedb, g.rolbypassrls, g.rolcanlogin,'
                 .' g.rolreplication, g.rolinherit,'
                 // The path as names, in order, so the finding can print it verbatim.
@@ -660,7 +707,7 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 .'  join pg_roles p on p.oid = step.oid) as path'
                 .' from reach join pg_roles b on b.oid = reach.base'
                 .' join pg_roles g on g.oid = reach.reached'
-                .' order by reach.base, reach.reached, array_length(reach.path, 1)'
+                .' order by reach.base, reach.reached, reach.settable desc, pg_catalog.array_length(reach.path, 1)'
             ))),
             SchemaObjectType::Role,
             'pg_auth_members',
@@ -670,20 +717,55 @@ final readonly class PgsqlSecurityReader implements SecurityReader
         $roles = [];
         $attributes = [];
         $paths = [];
+        $held = [];
 
         foreach ($rows as $row) {
             $base = $this->text($row, 'base');
             $reached = $this->text($row, 'reached');
 
             $roles[$base][] = $reached;
+
+            // An attribute is not inherited, so it is only within reach at the end of a chain the
+            // account can `SET ROLE` along. A role reached through a grant WITH SET FALSE stays among
+            // the reachable roles and adds nothing to what the account can become.
+            if (($row->settable ?? false) !== true) {
+                continue;
+            }
+
             $attributes[$base] = [...$attributes[$base] ?? [], ...$this->attributes($row)];
+            // Per reached role as well as in the union: the union says whether the account can become
+            // something, and only this says which role on the way actually carries it.
+            $held[$base][$reached] = $this->attributes($row);
             // The membership that leads there, from the base role outwards. The base itself is not in
             // the catalog's path array — it is the row's own key — so it is prepended here, which is
             // what makes the printed chain read the way a person describes it.
             $paths[$base][$reached] = implode(' -> ', [$base, ...$this->memberships($row, 'path')]);
         }
 
-        return ['roles' => $roles, 'attributes' => $attributes, 'paths' => $paths];
+        return ['roles' => $roles, 'attributes' => $attributes, 'paths' => $paths, 'held' => $held];
+    }
+
+    /**
+     * What follows ON in a GRANT or REVOKE for one grant row, every name quoted.
+     *
+     * The keyword comes from the kind of object, because PostgreSQL reads a bare name after ON as a
+     * table: `REVOKE USAGE ON app` for a schema is an error, and for a sequence it is one too.
+     * `ROUTINE` covers functions, procedures and aggregates alike, and the argument types are part
+     * of the name, because overloads are separate routines.
+     */
+    private function statementTarget(object $row): string
+    {
+        $schema = $this->text($row, 'target_schema');
+        $local = $this->text($row, 'target_local');
+        $detail = $this->text($row, 'target_detail');
+
+        return match ($this->text($row, 'kind')) {
+            'table' => ($detail === 'S' ? 'SEQUENCE ' : 'TABLE ').QuotedIdentifier::of('"', $schema, $local),
+            'schema' => 'SCHEMA '.QuotedIdentifier::of('"', $schema),
+            'routine' => 'ROUTINE '.QuotedIdentifier::of('"', $schema, $local).'('.$detail.')',
+            'database' => 'DATABASE '.QuotedIdentifier::of('"', $local),
+            default => '',
+        };
     }
 
     /**

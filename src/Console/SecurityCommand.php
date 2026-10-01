@@ -117,8 +117,8 @@ final class SecurityCommand extends Command
         $today = Today::fromClock();
 
         // Beside it, and for the same reason: a name that resolves to nothing is a run that
-        // examined something other than what the project asked for.
-        if ($this->refuseUnknownAuditConnection($config)) {
+        // examined something other than what the project asked for, or nothing at all.
+        if ($this->refuseUnknownConnection($config)) {
             return ExitCode::Misconfiguration->value;
         }
 
@@ -232,6 +232,9 @@ final class SecurityCommand extends Command
         $result = Result::of(
             $this->findings($outcome, $context, $this->addressedConnection($config)),
             $outcome->suppressed,
+            // The stale entries likewise: each half judged its own, and the report counts and lists
+            // them the way `sqlens:lint` and `sqlens:audit` do.
+            $outcome->staleBaselineEntries,
         );
 
         $reporter->report($result, $context, $output);
@@ -240,7 +243,12 @@ final class SecurityCommand extends Command
         // Clean, not because anything was clean — because an undetermined moves the exit code only
         // under `strict_undetermined`, which is the project's decision and not this command's. The
         // report is where the run says what it did; this number says what it costs.
-        return $exitCodes->resolve($result, $context)->value;
+        //
+        // A half that ended on a MISCONFIGURATION is the exception, and not the project's call: a
+        // baseline that cannot be read, a connection nothing defines, a refusal before anything was
+        // looked at, a stale baseline entry under `error`. `sqlens:audit` and `sqlens:lint` end on
+        // one for the same input, and the report above still says which half and why.
+        return $exitCodes->resolve($result, $context, $outcome->misconfigured)->value;
     }
 
     /**
@@ -392,40 +400,38 @@ final class SecurityCommand extends Command
     }
 
     /**
-     * Refuse a configured connection no database config defines.
+     * Refuse a connection name, from the flag or from the setting, that no database config defines.
      *
-     * A MISCONFIGURATION rather than a fall back, and the distinction is the whole point of the
-     * setting: falling back would examine the run's own connection — the application role, with the
-     * application's rights — and report the result as if the audit connection had been used. The
-     * findings would be real and about the wrong instance.
+     * A MISCONFIGURATION either way, and the two sources fail differently if one is let through. A
+     * configured name would make the run fall back to its own connection — the application role,
+     * with the application's rights — and report the result as if the audit connection had been
+     * used: real findings, about the wrong instance. A flag reaches no instance at all. Nothing
+     * throws on the way, because each half answers a name it cannot resolve with a notice, so the
+     * run ended clean on a typo that `sqlens:audit` and `sqlens:lint` refuse.
      *
-     * Only the CONFIGURED name is checked here, and only when it is the one this run will actually
-     * use. `--connection` overrides it, and a setting the run never reads must not be able to stop
-     * it — the first version of this check did exactly that, and the arm that caught it is the one
-     * asserting the flag wins. A flag naming an unknown connection fails at the connection manager
-     * with Laravel's own message, which already names it.
+     * Only the name this run will actually use is checked. `--connection` overrides the setting,
+     * and a setting the run never reads must not be able to stop it — the first version of this
+     * check did exactly that, and the arm that caught it is the one asserting the flag wins.
      */
-    private function refuseUnknownAuditConnection(Repository $config): bool
+    private function refuseUnknownConnection(Repository $config): bool
     {
-        $configured = $config->get('sqlens.security.audit_connection');
+        $name = $this->auditConnection($config);
 
-        if (! is_string($configured) || $configured === '') {
+        if ($name === null || $config->get('database.connections.'.$name) !== null) {
             return false;
         }
 
-        if ($this->auditConnection($config) !== $configured) {
-            return false;
-        }
-
-        if ($config->get('database.connections.'.$configured) !== null) {
-            return false;
-        }
-
-        $this->stderr()->writeln(sprintf(
-            'sqlens.security.audit_connection names "%s", which config/database.php does not define. '
-            .'Refused rather than falling back: the run would examine a different instance and report it as clean.',
-            $configured,
-        ));
+        $this->stderr()->writeln($this->option('connection') === $name
+            ? sprintf(
+                '--connection names "%s", which config/database.php does not define. '
+                .'Refused: no half of the run would reach an instance, and it would still end clean.',
+                $name,
+            )
+            : sprintf(
+                'sqlens.security.audit_connection names "%s", which config/database.php does not define. '
+                .'Refused rather than falling back: the run would examine a different instance and report it as clean.',
+                $name,
+            ));
 
         return true;
     }

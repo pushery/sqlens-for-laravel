@@ -24,10 +24,16 @@ final readonly class PendingWork
      *                                               same run `lint` judged — they carry `canonicalSql`,
      *                                               `statementKind` and `targets`, so a caller never
      *                                               has to parse the SQL a second time
+     * @param  bool  $statementsComplete  whether `$statements` is everything the deploy will run:
+     *                                    true only when every pending migration's `up()` was
+     *                                    captured. A check that concludes from an ABSENCE among the
+     *                                    statements may do so only then; a migration the capture
+     *                                    could not determine contributes none
      */
     public function __construct(
         public array $files = [],
         public array $statements = [],
+        public bool $statementsComplete = false,
     ) {}
 
     public function isEmpty(): bool

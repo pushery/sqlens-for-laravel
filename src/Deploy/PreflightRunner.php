@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Deploy;
 
+use Pushery\SQLens\Catalog\UnsealedReaderSession;
 use Pushery\SQLens\Contracts\PreflightCheck;
 
 /**
@@ -48,6 +49,7 @@ final readonly class PreflightRunner
             static fn (int $at): bool => $checks[$at]->appliesTo($context->driver),
             static fn (): bool => $context->isExhausted(),
             static fn (int $at): CheckResult => $checks[$at]->run($context),
+            static fn (): ?UnsealedReaderSession => $context->session->refusal(),
         );
     }
 

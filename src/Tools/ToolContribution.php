@@ -36,5 +36,5 @@ interface ToolContribution
      * @param  list<Finding>  $own  what the run's own rules produced
      * @return list<Finding>
      */
-    public function contribute(array $own, ToolDiagnostic $diagnostic, string $connectionName, SubjectContext $context): array;
+    public function contribute(array $own, ToolDiagnostic $diagnostic, string $connectionName, SubjectContext $context, ?string $pinnedHost = null): array;
 }

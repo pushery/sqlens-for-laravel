@@ -14,8 +14,9 @@ use Pushery\SQLens\Rules\RuleEvidence;
 use Pushery\SQLens\Rules\RuleEvidenceEntry;
 
 /**
- * The raw statement Laravel's grammar cannot emit — with the two values read out of the online-DDL
- * matrix rather than chosen here.
+ * The raw statement that names both clauses — with the two values read out of the online-DDL matrix
+ * rather than chosen here. The schema builder emits some of these clauses on a recent Laravel, not
+ * every pair the matrix names; the raw statement names any of them on every version.
  *
  * ## What the clause actually buys, and why saying it wrong would be worse than silence
  *
@@ -96,7 +97,7 @@ final readonly class AlgorithmLockTemplate
                         kind: RemediationStepKind::MigrationStatement,
                         noteKey: self::LANG.'pin_the_clause',
                         sqlTemplate: 'ALTER TABLE {{table}} {{operation}}, ALGORITHM={{algorithm}}, LOCK={{lock}}',
-                        laravelSnippet: "// the builder cannot emit these two clauses — say why here\nDB::statement('ALTER TABLE {{table}} {{operation}}, ALGORITHM={{algorithm}}, LOCK={{lock}}');",
+                        laravelSnippet: "// both clauses pinned on purpose — say why here\nDB::statement('ALTER TABLE {{table}} {{operation}}, ALGORITHM={{algorithm}}, LOCK={{lock}}');",
                     ),
                     new RemediationStep(
                         order: 2,

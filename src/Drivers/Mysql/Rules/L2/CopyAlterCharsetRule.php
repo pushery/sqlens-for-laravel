@@ -14,8 +14,10 @@ use Pushery\SQLens\Drivers\Mysql\Canonical\MysqlCanonicalization;
 use Pushery\SQLens\Drivers\Mysql\DowntimeClass\MysqlDowntimeClassSource;
 use Pushery\SQLens\Drivers\Mysql\Remediation\CharsetMigrationTemplate;
 use Pushery\SQLens\Drivers\Mysql\Rules\AbstractMysqlRule;
+use Pushery\SQLens\Drivers\Mysql\Rules\Support\PinnedDdlClauses;
 use Pushery\SQLens\Engine\ResolvedServerVersion;
 use Pushery\SQLens\Findings\DowntimeClass;
+use Pushery\SQLens\Findings\DowntimeUndetermined;
 use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Subjects\MigrationStatementView;
@@ -51,6 +53,11 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * **This rule cannot tell which case a reader is in**, and that is not a gap to be closed: it lints a
  * migration statement, and the source charset lives in the catalog. So the message names both and gives
  * the one instruction that works without knowing — issue it with `LOCK=NONE` and let the server refuse.
+ *
+ * A statement that follows that instruction is not reported. Measured on 8.4.10: a `utf8mb3` column
+ * converted under `LOCK=NONE` ran while writes went on, and a `latin1` table converted under
+ * `LOCK=NONE` or `ALGORITHM=INPLACE` was refused; neither is a copy that queues writes
+ * ({@see PinnedDdlClauses}). `LOCK=SHARED` ran as exactly that copy and stays reported.
  *
  * So a table default is a statement about future columns and nothing else, and this rule stays
  * silent on it. That silence is the rule's main false-positive defense, not an oversight: flagging
@@ -112,7 +119,7 @@ final class CopyAlterCharsetRule extends AbstractMysqlRule implements DeclaresOp
             $context['table'] = $table->qualifiedName();
         }
 
-        return $this->template->payload($context, $this->id(), $this->downtimeClassFor($statement));
+        return $this->template->payload($context, $this->id(), $this->knownDowntimeClass($this->downtimeClassFor($statement)));
     }
 
     public function id(): string
@@ -135,7 +142,7 @@ final class CopyAlterCharsetRule extends AbstractMysqlRule implements DeclaresOp
     }
 
     /** From the matrix, for the one operation this rule is about — never named in this file. */
-    public function downtimeClassFor(MigrationStatementView $statement): ?DowntimeClass
+    public function downtimeClassFor(MigrationStatementView $statement): DowntimeClass|DowntimeUndetermined|null
     {
         if (! $this->convertsCharacterSet($statement)) {
             return null;
@@ -144,7 +151,7 @@ final class CopyAlterCharsetRule extends AbstractMysqlRule implements DeclaresOp
         return $this->downtimeClasses->forCandidateOperations(
             [self::OPERATION],
             $statement->serverVersion ?? ResolvedServerVersion::unresolvable(),
-        )->downtimeClass;
+        )->derived();
     }
 
     #[Override]
@@ -163,7 +170,8 @@ final class CopyAlterCharsetRule extends AbstractMysqlRule implements DeclaresOp
      * classified, and requiring it keeps the match anchored to a real ALTER TABLE.
      *
      * String literals are masked first, so a default or an inserted value that happens to spell
-     * the clause cannot conjure a finding out of data.
+     * the clause cannot conjure a finding out of data. A conversion whose pinned clauses rule out a
+     * copy that queues writes is not one this rule reports (see the class docblock).
      */
     private function convertsCharacterSet(MigrationStatementView $statement): bool
     {
@@ -173,7 +181,8 @@ final class CopyAlterCharsetRule extends AbstractMysqlRule implements DeclaresOp
 
         $masked = StringLiteralMask::forDriver(new MysqlCanonicalization)->apply($statement->canonical);
 
-        return preg_match('/^ALTER TABLE \S+ .*\bCONVERT TO CHARACTER SET\b/', $masked) === 1;
+        return preg_match('/^ALTER TABLE \S+ .*\bCONVERT TO CHARACTER SET\b/', $masked) === 1
+            && ! PinnedDdlClauses::of($statement->canonical)->ruleOutAQueuingCopy();
     }
 
     private function message(): string

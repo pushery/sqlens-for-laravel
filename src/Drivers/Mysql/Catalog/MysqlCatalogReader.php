@@ -318,7 +318,7 @@ final readonly class MysqlCatalogReader implements CatalogReader
                 // index — because MySQL names an index by its TABLE and a schema-only key would
                 // collide across tables that both call an index `idx_created`.
                 $relation = $canonicalizer->qualified($this->str($row, 'schema'), $this->str($row, 'relation'));
-                $scans[$relation.'.'.$canonicalizer->name($this->str($row, 'name'))] = (int) ($row['scans'] ?? 0);
+                $scans[$relation.'.'.$canonicalizer->memberName($this->str($row, 'name'))] = (int) ($row['scans'] ?? 0);
             }
 
             // No stats_reset counterpart exists on this engine, so the window start is unknown and
@@ -480,7 +480,7 @@ final readonly class MysqlCatalogReader implements CatalogReader
             $schema = $this->str($row, 'schema');
             $table = $this->str($row, 'table_name');
 
-            $qualified = $canonicalizer->qualified($schema, $table).'.'.$canonicalizer->name($this->str($row, 'name'));
+            $qualified = $canonicalizer->qualified($schema, $table).'.'.$canonicalizer->memberName($this->str($row, 'name'));
 
             $triggers[] = new SchemaObject(
                 SchemaObjectType::Trigger,
@@ -562,7 +562,7 @@ final readonly class MysqlCatalogReader implements CatalogReader
 
             $events[] = new SchemaObject(
                 SchemaObjectType::Event,
-                $canonicalizer->qualified($schema, $this->str($row, 'name')),
+                $canonicalizer->name($schema).'.'.$canonicalizer->memberName($this->str($row, 'name')),
                 $canonicalizer->name($schema),
                 array_filter([
                     'event_type' => $recurring ? 'recurring' : 'one_time',
@@ -751,7 +751,7 @@ final readonly class MysqlCatalogReader implements CatalogReader
 
             return new SchemaObject(
                 SchemaObjectType::Column,
-                $relation.'.'.$canonicalizer->name($this->str($row, 'name')),
+                $relation.'.'.$canonicalizer->memberName($this->str($row, 'name')),
                 $relation,
                 [
                     'type' => $type->name,
@@ -889,7 +889,7 @@ final readonly class MysqlCatalogReader implements CatalogReader
 
             return new SchemaObject(
                 SchemaObjectType::Index,
-                $relation.'.'.$canonicalizer->name($this->str($row, 'name')),
+                $relation.'.'.$canonicalizer->memberName($this->str($row, 'name')),
                 $relation,
                 [
                     'method' => mb_strtolower($this->str($row, 'index_type')),
@@ -982,7 +982,7 @@ final readonly class MysqlCatalogReader implements CatalogReader
                 // Qualified by its TABLE, not by its schema: every table's primary key is called
                 // `PRIMARY`, so a name-keyed identity would report one primary key for a database
                 // that has hundreds. Measured, on a two-table probe.
-                $relation.'.'.$canonicalizer->name($this->str($row, 'name')),
+                $relation.'.'.$canonicalizer->memberName($this->str($row, 'name')),
                 $relation,
                 array_filter([
                     'constraint_type' => $this->str($row, 'constraint_type'),

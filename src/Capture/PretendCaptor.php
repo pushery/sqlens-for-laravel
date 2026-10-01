@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Capture;
 
+use Illuminate\Container\Container;
 use Illuminate\Database\Connection;
+use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Migrations\Migration;
+use LogicException;
 use Pushery\SQLens\Contracts\Captor;
+use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Subjects\CaptureMode;
 use Throwable;
 
@@ -49,14 +53,23 @@ final readonly class PretendCaptor implements Captor
 {
     private MigrationLoader $loader;
 
+    private DatabaseManager $database;
+
+    private CaptureConnectionFence $fence;
+
     /**
      * The loader is injectable and SHARED on purpose: the same run reads a migration's forward leg
      * and its rollback leg, and a second `require` of a named-class migration is an uncatchable
      * fatal. See {@see MigrationLoader}.
+     *
+     * The manager is the one the `Schema` and `DB` facades resolve through, and the fence keeps the
+     * method on the capture connection. See {@see self::captureOne()} for both.
      */
-    public function __construct(private Connection $connection, ?MigrationLoader $loader = null)
+    public function __construct(private Connection $connection, ?MigrationLoader $loader = null, ?DatabaseManager $database = null, ?CaptureConnectionFence $fence = null)
     {
         $this->loader = $loader ?? new MigrationLoader;
+        $this->database = $database ?? Container::getInstance()->make(DatabaseManager::class);
+        $this->fence = $fence ?? Container::getInstance()->make(CaptureConnectionFence::class);
     }
 
     public function capture(iterable $migrations, CaptureSection $section): CaptureRun
@@ -83,37 +96,62 @@ final readonly class PretendCaptor implements Captor
 
     private function captureOne(PendingMigration $pending, CaptureSection $section): CaptureResult
     {
-        $migration = $this->loader->load($pending->file);
         $method = $section->direction()->value;
-
-        // A migration without the method for this section (a down-less migration
-        // for a `down` run) is a clean, empty result — NOT a failure and NOT an
-        // undetermined. The framework's own migrator guards with method_exists for
-        // exactly this; capturing nothing here is the honest answer.
-        // The REAL class of the instance just loaded — the carrier of a class-level
-        // `#[SqlensIgnore]`. The migration NAME (the file basename) is not a class for
-        // Laravel's anonymous migrations, so the annotation layer needs this instead.
-        $annotationClass = $migration::class;
-
-        if (! method_exists($migration, $method)) {
-            return CaptureResult::captured($pending->file, $pending->migrationClass, [], $section, $this->mode(), $annotationClass);
-        }
-
-        $withinTransaction = $this->withinTransaction($migration);
+        $migration = null;
 
         try {
-            // ONLY the migration method is inside the closure. `pretend()` returns
-            // the log of everything the method caused; wrapping anything else would
-            // attribute the captor's own queries to the migration.
-            $log = $this->connection->pretend(static function () use ($migration, $method): void {
-                $migration->{$method}();
-            });
+            // The facades find the default connection by NAME. A connection built outside the
+            // manager has none and cannot become the default, so nothing of the migration runs.
+            $name = $this->connection->getNameWithReadWriteType() ?? throw new LogicException('the capture connection has no name, so the facade calls of a migration cannot be pointed at it');
+
+            // Everything the migration file runs happens inside this frame, and nothing of the
+            // captor's own: loading the file, which runs its top-level code and the migration's
+            // constructor, and the method for this section. `pretend()` returns the log of what
+            // they caused, and wrapping anything else would attribute the captor's queries to the
+            // migration.
+            //
+            // The frame has the capture connection as the default, the way Laravel's migrator runs
+            // a migration: `Schema::create()` and `DB::table()` without a connection name resolve
+            // the default connection, and only this one is pretending. And pretend covers this one
+            // connection object, so the fence refuses what the migration sends to any other.
+            //
+            // The read handle is swapped for one that quotes without a server, and put back. In
+            // pretend mode Laravel writes each binding into the logged statement through the read
+            // handle's `quote()`, and resolving that handle connects: a migration writing one string
+            // value would dial the database. The replacement quotes as the driver's own handle
+            // does, so the log is the same whether or not a server answers.
+            $readHandle = $this->connection->getRawReadPdo();
+            $this->connection->setReadPdo(new OfflineQuotingPdo($this->connection->getDriverName()));
+
+            $elsewhere = null;
+
+            try {
+                $log = $this->connection->pretend(function () use ($pending, $method, $name, &$migration, &$elsewhere): void {
+                    $this->fence->around($this->connection, function () use ($pending, $method, $name, &$migration, &$elsewhere): void {
+                        $this->database->usingConnection($name, function () use ($pending, $method, &$migration, &$elsewhere): void {
+                            $migration = $this->loader->load($pending->file);
+
+                            // A migration that names a connection of its own runs there under
+                            // `migrate`, and capturing it here would judge it against a database it
+                            // never touches. It is not run, and says why below.
+                            $elsewhere = $this->declaredElsewhere($migration);
+
+                            if ($elsewhere === null && method_exists($migration, $method)) {
+                                $migration->{$method}();
+                            }
+                        });
+                    });
+                });
+            } finally {
+                $this->connection->setReadPdo($readHandle);
+            }
         } catch (Throwable $exception) {
             // A migration that throws under pretend does not crash the run: it is
             // recorded as a failure carrying the exception message, the level-0
             // capture rule judges it, and the remaining migrations still run. The
             // pretend state is already torn down — `pretend()` restores it in its
-            // own finally before the throwable reaches here.
+            // own finally before the throwable reaches here. That holds for a file that
+            // cannot be loaded as well, which is why the load sits inside.
             return CaptureResult::failed(
                 $pending->file,
                 $pending->migrationClass,
@@ -121,18 +159,60 @@ final readonly class PretendCaptor implements Captor
                 $section,
                 $this->mode(),
                 $exception->getMessage(),
-                $annotationClass,
+                $migration instanceof Migration ? $migration::class : null,
             );
+        }
+
+        // The REAL class of the instance loaded above — the carrier of a class-level
+        // `#[SqlensIgnore]`. The migration NAME (the file basename) is not a class for
+        // Laravel's anonymous migrations, so the annotation layer needs this instead.
+        $annotationClass = $migration instanceof Migration ? $migration::class : null;
+
+        if ($elsewhere !== null) {
+            return CaptureResult::undetermined(
+                $pending->file,
+                $pending->migrationClass,
+                $section,
+                $this->mode(),
+                UndeterminedReason::MigrationOnAnotherConnection,
+                annotationClass: $annotationClass,
+            );
+        }
+
+        // A migration without the method for this section (a down-less migration
+        // for a `down` run) is a clean, empty result — NOT a failure and NOT an
+        // undetermined. The framework's own migrator guards with method_exists for
+        // exactly this; capturing nothing here is the honest answer.
+        if (! $migration instanceof Migration || ! method_exists($migration, $method)) {
+            return CaptureResult::captured($pending->file, $pending->migrationClass, [], $section, $this->mode(), $annotationClass);
         }
 
         return CaptureResult::captured(
             $pending->file,
             $pending->migrationClass,
-            $this->statementsFrom($log, $section, $withinTransaction),
+            $this->statementsFrom($log, $section, $this->withinTransaction($migration)),
             $section,
             $this->mode(),
             $annotationClass,
         );
+    }
+
+    /**
+     * The connection a migration declares, when it is not the one this run captures on.
+     *
+     * Laravel's migrator resolves a migration's connection from `getConnection()` and runs the
+     * method with it as the default; `null` means the connection being migrated, which is this one.
+     * A name that differs, even one that reaches the same database, is another connection as far as
+     * the migrator is concerned, and so here.
+     *
+     * The argument is what {@see MigrationLoader::load()} answered, and the loader answers a migration
+     * or throws, so there is no other kind of object to ask.
+     */
+    private function declaredElsewhere(Migration $migration): ?string
+    {
+        $declared = $migration->getConnection();
+
+        return is_string($declared) && $declared !== '' && $declared !== $this->connection->getName() ? $declared : null;
     }
 
     /**

@@ -118,9 +118,16 @@ final class ExplainRuleTool extends SqlensTool
         // The registry row and the example register are two shipped artifacts, joined HERE rather
         // than in the catalog: that class is "the shipped rule registry, read", and a second file
         // inside it would make the name a half-truth. Composing an explanation is this tool's job.
-        $rule['examples'] = $this->examplesFor($ruleId);
+        //
+        // A member of a family is answered by the family's row, so the examples and the sentence
+        // name the family: the member has no register entry of its own to look up.
+        $explained = is_string($rule['id'] ?? null) ? $rule['id'] : $ruleId;
+        $rule['examples'] = $this->examplesFor($explained);
 
-        return ToolAnswer::of(['rule' => $rule], 'Rule '.$ruleId.' explained.')->toResponse();
+        return ToolAnswer::of(
+            ['rule' => $rule],
+            $explained === $ruleId ? 'Rule '.$ruleId.' explained.' : 'Rule '.$ruleId.' explained by its family, '.$explained.'.',
+        )->toResponse();
     }
 
     /**

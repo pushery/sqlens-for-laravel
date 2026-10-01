@@ -8,6 +8,7 @@ use Generator;
 use Laravel\Mcp\Exceptions\JsonRpcException;
 use Laravel\Mcp\Server\Methods\CallTool;
 use Laravel\Mcp\Server\ServerContext;
+use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Transport\JsonRpcRequest;
 use Laravel\Mcp\Transport\JsonRpcResponse;
 use Override;
@@ -35,6 +36,13 @@ use Pushery\SQLens\Config\ConfigSchema;
  * The policy decides; this reads it. The opt-in check lives in exactly one place — the registry
  * filter that builds the exposed set — and a second decision here would be a second answer about
  * which tools are on, free to disagree with the listing a client already holds.
+ *
+ * ## Why it looks the tool up itself
+ *
+ * The SDK's handler does the same lookup and hands the tool to an invoker it builds itself, one that
+ * answers a failure with the exception's message whenever the application runs with `app.debug` on.
+ * The lookup is repeated here so the tool reaches {@see WithholdingToolInvoker} instead, which answers
+ * with what failed and keeps the message out of the answer.
  */
 final class CallDeclaredTool extends CallTool
 {
@@ -59,7 +67,16 @@ final class CallDeclaredTool extends CallTool
             throw new JsonRpcException($refusal, -32601, $request->id);
         }
 
-        return parent::handle($request, $context);
+        if ($name === null) {
+            throw new JsonRpcException('Missing [name] parameter.', -32602, $request->id);
+        }
+
+        $tool = $context->tools()->first(
+            static fn (Tool $tool): bool => $tool->name() === $name,
+            static fn () => throw new JsonRpcException(sprintf('Tool [%s] not found.', is_scalar($name) ? (string) $name : get_debug_type($name)), -32602, $request->id),
+        );
+
+        return new WithholdingToolInvoker()->invoke($tool, $request);
     }
 
     /**

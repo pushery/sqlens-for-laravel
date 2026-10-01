@@ -281,9 +281,7 @@ final readonly class CaptureResult
 
         $migration = new MigrationContext(
             $this->createdTables(),
-            $this->columnsWithNotNullCheck(),
             $this->createdEnumTypes(),
-            $this->dropsAConstraint(),
             $digests,
             $this->downMethodState,
             $this->downLeg,
@@ -316,6 +314,8 @@ final readonly class CaptureResult
                     // whether ANY value came from outside the file, and the empty bindings array is
                     // the positive statement that none did.
                     valueOrigin: ValueOrigin::of($statement->bindings),
+                    actions: $statement->actions,
+                    excerpt: $statement->excerpt,
                 );
             },
             $this->statements,
@@ -353,37 +353,6 @@ final readonly class CaptureResult
     }
 
     /**
-     * The lowercased column names this migration adds a `CHECK (col IS NOT NULL)` for.
-     *
-     * This one IS read from the canonical text: the constraint's CHECK expression is not
-     * a classified target (the classifier resolves the constrained TABLE, not the column
-     * inside an arbitrary boolean expression), so the column is recovered from the
-     * normalized form. It is the deliberate safe-pattern marker — a user who wrote this
-     * check is applying the pattern that lets a later SET NOT NULL skip its scan.
-     *
-     * @return list<string>
-     */
-    private function columnsWithNotNullCheck(): array
-    {
-        $columns = [];
-
-        foreach ($this->statements as $statement) {
-            if ($statement->canonicalSql === null) {
-                continue;
-            }
-
-            // CHECK ( <col> is not null ) — CHECK is a normalized keyword; the column and
-            // `is` are lowercased in the canonical form. Anchored to the not-null shape so
-            // an unrelated CHECK never counts.
-            if (preg_match('/\bCHECK\s*\(\s*"?([a-z_][a-z0-9_]*)"?\s+is\s+NOT NULL\s*\)/i', $statement->canonicalSql, $matches) === 1) {
-                $columns[] = strtolower($matches[1]);
-            }
-        }
-
-        return array_values(array_unique($columns));
-    }
-
-    /**
      * The lowercased names of enum types this migration creates (`CREATE TYPE … AS ENUM`).
      *
      * Read from the canonical text, like the not-null checks: `CREATE TYPE` is not a
@@ -406,17 +375,6 @@ final readonly class CaptureResult
         }
 
         return array_values(array_unique($types));
-    }
-
-    /**
-     * Whether the migration drops any constraint — read from the classification
-     * ({@see StatementKind::DropConstraint}), not the SQL text. It is the signal that
-     * tells Laravel's enum() CHANGE (a drop then an add of a CHECK) apart from a
-     * first-time enum column (only an add).
-     */
-    private function dropsAConstraint(): bool
-    {
-        return array_any($this->statements, fn (CapturedStatement $statement): bool => $statement->statementKind === StatementKind::DropConstraint);
     }
 
     /**

@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Drivers\Mysql\Deploy;
 
 use Illuminate\Database\Connection;
 use Pushery\SQLens\Attributes\RawSql;
+use Pushery\SQLens\Canonical\QuotedIdentifier;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\PostdeployCheck;
 use Pushery\SQLens\Deploy\CheckResult;
@@ -149,15 +150,15 @@ final readonly class UnenforcedConstraintCheck implements PostdeployCheck
                 .'looking for that guarantee finds it and it is not there. Worse, the view that holds '
                 .'the expression does not hold the flag: reading '
                 .'information_schema.CHECK_CONSTRAINTS shows an enforced and an unenforced '
-                .'constraint identically. Turning it on is `ALTER TABLE %s ALTER CHECK %s ENFORCED;` '
+                .'constraint identically. Turning it on is `` ALTER TABLE %s ALTER CHECK %s ENFORCED; `` '
                 .'— a PROPOSAL, not an instruction, and not a formality: that statement re-validates '
                 .'against the rows already there and can simply fail, because the likely reason it '
                 .'was switched off is that the data did not satisfy it. SQLens never runs it.',
                 $constraint,
                 $qualifiedTable === '' ? 'its table' : $qualifiedTable,
                 $expression === '' ? '' : ' — its expression is `'.$expression.'`',
-                $qualifiedTable === '' ? 'the table' : $qualifiedTable,
-                $constraint,
+                $qualifiedTable === '' ? 'the table' : QuotedIdentifier::of('`', $schema, $table),
+                QuotedIdentifier::of('`', $constraint),
             ),
             location: Location::inCatalog($context->driver, $context->connection, $qualified, SchemaObjectType::Constraint),
             category: Category::Safety,

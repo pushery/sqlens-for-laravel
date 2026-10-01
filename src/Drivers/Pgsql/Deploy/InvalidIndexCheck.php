@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Drivers\Pgsql\Deploy;
 
 use Illuminate\Database\Connection;
 use Pushery\SQLens\Attributes\RawSql;
+use Pushery\SQLens\Canonical\QuotedIdentifier;
 use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\PreflightCheck;
@@ -232,7 +233,7 @@ final readonly class InvalidIndexCheck implements PreflightCheck
                 .'for whoever owns the window. This command drops nothing itself.',
                 $index,
                 $table,
-                $qualified,
+                QuotedIdentifier::of('"', $schema, $index),
             ),
             location: Location::inCatalog($context->driver, $context->connection, $qualified, SchemaObjectType::Index),
             category: Category::Safety,
@@ -290,7 +291,9 @@ final readonly class InvalidIndexCheck implements PreflightCheck
                 $index,
                 $table,
                 $neverReady ? ' (it never reached the point of tracking new rows)' : '',
-                $qualified,
+                // Quoted, because a name out of the catalog was chosen by whoever may create an
+                // index here, and unquoted it can end the statement and start another.
+                QuotedIdentifier::of('"', $schema, $index),
             ),
             location: Location::inCatalog($context->driver, $context->connection, $qualified, SchemaObjectType::Index),
             category: Category::Safety,

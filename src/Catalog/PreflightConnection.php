@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Catalog;
 
 use Illuminate\Contracts\Config\Repository;
+use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
 /**
@@ -103,7 +104,10 @@ final readonly class PreflightConnection
      */
     private static function roleOf(Repository $config, string $connection): ?string
     {
-        $username = $config->get('database.connections.'.$connection.'.username');
+        // The account the framework migrates as, not the `username` key: a `url` names its own
+        // account, a read/write split migrates on its `write` block, and from Laravel 13.17 a
+        // PostgreSQL `direct` block carries the schema owner.
+        $username = EffectiveConnectionConfig::forMigrations($config->get('database.connections.'.$connection))['username'] ?? null;
 
         return is_string($username) && $username !== '' ? $username : null;
     }
@@ -167,9 +171,9 @@ final readonly class PreflightConnection
     /**
      * The connection migrations run on.
      *
-     * `database.migrations.connection` when the application sets it, and the default otherwise —
-     * which is what Laravel itself does. Reading only the first would report every ordinary project
-     * as separated, because most never set it.
+     * The one this package was told, and the application's default otherwise, which is what
+     * Laravel's `migrate` uses without `--database`. There is no framework setting in between:
+     * `database.migrations` configures the repository table and nothing else.
      */
     private static function migrationConnectionName(Repository $config): string
     {
@@ -180,12 +184,6 @@ final readonly class PreflightConnection
 
         if (is_string($declared) && $declared !== '') {
             return $declared;
-        }
-
-        $configured = $config->get('database.migrations.connection');
-
-        if (is_string($configured) && $configured !== '') {
-            return $configured;
         }
 
         $default = $config->get('database.default');

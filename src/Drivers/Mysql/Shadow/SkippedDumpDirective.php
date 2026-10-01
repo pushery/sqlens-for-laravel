@@ -12,6 +12,8 @@ namespace Pushery\SQLens\Drivers\Mysql\Shadow;
  * A version-gated conditional comment such as `/*!40101 SET NAMES … *​/` sets
  * client session state (character set, collation, SQL mode) that the shadow
  * database has no need of; replaying it would at best be a no-op and at worst fail.
+ * One that builds nothing of the dumped schema, such as a `DROP DATABASE`, is
+ * skipped the same way, with a reason of its own.
  * "No silent green" applies to the dump layer too: a directive dropped without a
  * word is indistinguishable from one the splitter simply missed, so each carries
  * the reason it was skipped.

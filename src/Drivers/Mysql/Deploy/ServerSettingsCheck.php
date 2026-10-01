@@ -4,13 +4,20 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Drivers\Mysql\Deploy;
 
+use Pushery\SQLens\Canonical\StatementKind;
+use Pushery\SQLens\Canonical\StatementTarget;
+use Pushery\SQLens\Canonical\StringLiteralMask;
+use Pushery\SQLens\Capture\CapturedStatement;
+use Pushery\SQLens\Catalog\ReaderConnectionFactory;
 use Pushery\SQLens\Catalog\Setting;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\PreflightCheck;
 use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PreflightContext;
+use Pushery\SQLens\Drivers\Mysql\Canonical\MysqlCanonicalization;
 use Pushery\SQLens\Drivers\Mysql\Catalog\MysqlServerSettingsReader;
+use Pushery\SQLens\Drivers\Mysql\Rules\L3\Support\MetadataLockStatements;
 use Pushery\SQLens\Drivers\Mysql\Rules\Support\SqlModeFlags;
 use Pushery\SQLens\Findings\Confidence;
 use Pushery\SQLens\Findings\DowntimeClass;
@@ -23,6 +30,8 @@ use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
 use Pushery\SQLens\Rules\StabilityTier;
 use Pushery\SQLens\Severity\Severity;
+use Pushery\SQLens\Subjects\MigrationDirection;
+use Pushery\SQLens\Subjects\MigrationStatementDigest;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 use Pushery\SQLens\Subjects\SubjectContext;
 
@@ -33,13 +42,25 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * substance, which is why they are two classes rather than one with a `match`. The hazards differ,
  * the defaults differ, and the way each engine withholds a value differs.
  *
- * ## Why it reads the GLOBAL value and not the session's
+ * ## Which value each judgment reads: the one the migration runs under
  *
- * Laravel sets `sql_mode` and the time zone per connection, and SQLens bounds its own session on top
- * of that. So the value in effect for this connection routinely differs from the server's, and a
- * check reading the session value would report the framework's choice back to the project as its
- * server configuration. Every judgment here reads {@see Setting::serverValue()}, which on MySQL is
- * the `GLOBAL` row.
+ * The question is what the migration's session runs with, and the answer is not the same variable
+ * for every variable.
+ *
+ * - `sql_mode` is set per connection by Laravel, from the `strict` and `modes` keys of the
+ *   connection's configuration, and left at the server's value when neither is set. The session this
+ *   check reads through is opened from the migration connection's own configuration
+ *   ({@see ReaderConnectionFactory::forPrimary()}), so Laravel set the same
+ *   value on it, and SQLens does not touch `sql_mode`. So this one reads {@see Setting::$value}: a
+ *   project with `strict => true` runs strict on a server that is not, and one with
+ *   `strict => false` does not on a server that is.
+ * - `lock_wait_timeout` is not set by Laravel, so a migration's session starts with the server's
+ *   value, and SQLens bounds its OWN session, so the session value here is SQLens's and says nothing
+ *   about the migration. This one reads {@see Setting::serverValue()}, and then the pending
+ *   statements: a migration that sets its own bound before its first metadata lock, as
+ *   `MY.L3.MISSING_LOCK_WAIT_TIMEOUT` asks, does not wait under the server's value.
+ * - `foreign_key_checks` and `innodb_online_alter_log_max_size` read the server's value. Nothing
+ *   sets the first per connection, and the second is global only.
  *
  * ## Why `performance_schema` being off is NOT undetermined here
  *
@@ -148,15 +169,23 @@ final readonly class ServerSettingsCheck implements PreflightCheck
         foreach ($this->judgments() as $name => $judge) {
             $setting = $reading->get($name);
 
-            $reason = $this->unreadableReason($name, $setting);
-
-            if ($reason !== null) {
-                $unreadable[] = $reason;
+            // MySQL withholds nothing per row for an ordinary account — the reading either answered
+            // or did not — so a missing name here means this build is asking for a variable this
+            // server does not have. Reported rather than shrugged off: a variable renamed across a
+            // MySQL version would otherwise silently stop being judged.
+            //
+            // It is the only reason a variable here cannot be judged, which is a difference from the
+            // PostgreSQL sibling rather than an omission. PostgreSQL masks `reset_val` for a role
+            // without the privilege, so a present row with an absent value is an ordinary state there.
+            // MySQL does not: the reader builds every `Setting` from the GLOBAL row it just read, so a
+            // setting that exists has a value.
+            if (! $setting instanceof Setting) {
+                $unreadable[] = "`{$name}` is not among this server's variables, so it could not be judged";
 
                 continue;
             }
 
-            $finding = $judge((string) $setting?->serverValue(), $context, $pending);
+            $finding = $judge($setting, $context, $pending);
 
             if ($finding instanceof Finding) {
                 $findings[] = $finding;
@@ -206,26 +235,6 @@ final readonly class ServerSettingsCheck implements PreflightCheck
             : CheckResult::fail(self::ID, [...$blocking, ...$reported]);
     }
 
-    /** Why this variable could not be judged, or null when it can be. */
-    private function unreadableReason(string $name, ?Setting $setting): ?string
-    {
-        if (! $setting instanceof Setting) {
-            // MySQL withholds nothing per row for an ordinary account — the reading either answered
-            // or did not — so a missing name here means this build is asking for a variable this
-            // server does not have. Reported rather than shrugged off: a variable renamed across a
-            // MySQL version would otherwise silently stop being judged.
-            return "`{$name}` is not among this server's variables, so it could not be judged";
-        }
-
-        // No null-value branch here, and that is a difference from the PostgreSQL sibling rather
-        // than an omission. PostgreSQL MASKS `reset_val` for a role without the privilege, so a
-        // present row with an absent value is an ordinary state there. MySQL does not: the reader
-        // builds every `Setting` from the GLOBAL row it just read, so a setting that exists has a
-        // value. The coverage gate found the branch unreachable, which is what that difference looks
-        // like from the outside.
-        return null;
-    }
-
     /**
      * The variables this check judges, and what each verdict is.
      *
@@ -235,29 +244,13 @@ final readonly class ServerSettingsCheck implements PreflightCheck
      * about to run" beneath a header saying none was read teaches a reader to take the next real red
      * for noise.
      *
-     * @return array<string, callable(string, PreflightContext, bool): ?Finding>
+     * @return array<string, callable(Setting, PreflightContext, bool): ?Finding>
      */
     private function judgments(): array
     {
         return [
-            'lock_wait_timeout' => fn (string $value, PreflightContext $context, bool $pending): ?Finding => ! ctype_digit($value) || (int) $value <= self::LOCK_WAIT_CEILING_SECONDS ? null : $this->finding(
-                $context,
-                $pending,
-                'LOCK_WAIT_TIMEOUT_UNBOUNDED',
-                'lock_wait_timeout',
-                sprintf(
-                    'The server runs with `lock_wait_timeout = %s` seconds. MySQL ships one year, '
-                    .'which at deploy time is the same thing as forever: a DDL blocked on a metadata '
-                    .'lock will sit there, and every statement that needs that table sits behind it. '
-                    .'Nothing here says a blocker exists — only that if one appears, nothing will end '
-                    .'the wait.',
-                    $value,
-                ),
-                ' A migration is about to run under it.',
-                Severity::High,
-                DowntimeClass::Blocking,
-            ),
-            'foreign_key_checks' => fn (string $value, PreflightContext $context, bool $pending): ?Finding => $this->isOn($value) ? null : $this->finding(
+            'lock_wait_timeout' => fn (Setting $setting, PreflightContext $context, bool $pending): ?Finding => $this->lockWaitFinding((string) $setting->serverValue(), $context, $pending),
+            'foreign_key_checks' => fn (Setting $setting, PreflightContext $context, bool $pending): ?Finding => $this->isOn((string) $setting->serverValue()) ? null : $this->finding(
                 $context,
                 $pending,
                 'FOREIGN_KEY_CHECKS_OFF',
@@ -270,20 +263,27 @@ final readonly class ServerSettingsCheck implements PreflightCheck
                 Severity::High,
                 DowntimeClass::Online,
             ),
-            'sql_mode' => fn (string $value, PreflightContext $context, bool $pending): ?Finding => SqlModeFlags::parse($value)->has('STRICT_TRANS_TABLES') || SqlModeFlags::parse($value)->has('STRICT_ALL_TABLES') ? null : $this->finding(
+            'sql_mode' => fn (Setting $setting, PreflightContext $context, bool $pending): ?Finding => $this->isStrict((string) $setting->value) ? null : $this->finding(
                 $context,
                 $pending,
                 'SQL_MODE_NOT_STRICT',
                 'sql_mode',
-                'The server\'s `sql_mode` carries neither `STRICT_TRANS_TABLES` nor '
-                .'`STRICT_ALL_TABLES`. Outside strict mode a migration that narrows a column '
-                .'TRUNCATES the values that no longer fit and reports a warning rather than an '
-                .'error — so the migration succeeds, the deploy goes green, and the data is gone.',
+                sprintf(
+                    'The connection the migrations run on has `sql_mode = \'%s\'`, which carries '
+                    .'neither `STRICT_TRANS_TABLES` nor `STRICT_ALL_TABLES`. Laravel sets it per '
+                    .'connection from the `strict` and `modes` keys of its configuration and leaves '
+                    .'the server\'s value, `\'%s\'`, in place when neither is set. Outside strict mode '
+                    .'a migration that narrows a column TRUNCATES the values that no longer fit and '
+                    .'reports a warning rather than an error — so the migration succeeds, the deploy '
+                    .'goes green, and the data is gone.',
+                    (string) $setting->value,
+                    (string) $setting->serverValue(),
+                ),
                 ' A migration is about to run under it.',
                 Severity::High,
                 DowntimeClass::Online,
             ),
-            'innodb_online_alter_log_max_size' => fn (string $value, PreflightContext $context, bool $pending): ?Finding => ! ctype_digit($value) || (int) $value > self::DEFAULT_ONLINE_ALTER_LOG_BYTES ? null : $this->finding(
+            'innodb_online_alter_log_max_size' => fn (Setting $setting, PreflightContext $context, bool $pending): ?Finding => ! ctype_digit((string) $setting->serverValue()) || (int) $setting->serverValue() > self::DEFAULT_ONLINE_ALTER_LOG_BYTES ? null : $this->finding(
                 $context,
                 $pending,
                 'ONLINE_ALTER_LOG_AT_DEFAULT',
@@ -294,7 +294,7 @@ final readonly class ServerSettingsCheck implements PreflightCheck
                     .'buffer fills, the ALTER FAILS — after doing most of its work, and under exactly '
                     .'the write load that made it fill. Nothing here has seen your traffic; this is the '
                     .'default being reported, not a computed need.',
-                    $value,
+                    $setting->serverValue(),
                 ),
                 ' A schema change is pending against it.',
                 Severity::Medium,
@@ -308,6 +308,183 @@ final readonly class ServerSettingsCheck implements PreflightCheck
     private function isOn(string $value): bool
     {
         return strtoupper($value) === 'ON' || $value === '1';
+    }
+
+    /** Whether a `sql_mode` value carries either strict flag. */
+    private function isStrict(string $value): bool
+    {
+        $flags = SqlModeFlags::parse($value);
+
+        return $flags->has('STRICT_TRANS_TABLES') || $flags->has('STRICT_ALL_TABLES');
+    }
+
+    /**
+     * The verdict on `lock_wait_timeout`: the server's value, and whether the pending migrations run
+     * under it.
+     *
+     * A migration's session starts with the server's value and stops waiting under it once the
+     * migration sets its own. So the finding stops the deploy when a pending statement would wait
+     * under the server's value, or when the statements handed over are not all the deploy runs and
+     * nothing can say whether one would. Otherwise the value is still reported, as a note.
+     */
+    private function lockWaitFinding(string $value, PreflightContext $context, bool $pending): ?Finding
+    {
+        if (! ctype_digit($value) || (int) $value <= self::LOCK_WAIT_CEILING_SECONDS) {
+            return null;
+        }
+
+        $state = sprintf(
+            'The server runs with `lock_wait_timeout = %s` seconds. MySQL ships one year, '
+            .'which at deploy time is the same thing as forever: a DDL blocked on a metadata '
+            .'lock will sit there, and every statement that needs that table sits behind it. '
+            .'Nothing here says a blocker exists — only that if one appears, nothing will end '
+            .'the wait.',
+            $value,
+        );
+
+        [$unbounded, $locking] = $this->lockWaitsIn($context->pending->statements);
+
+        if ($unbounded instanceof CapturedStatement) {
+            $premise = sprintf(
+                ' A migration is about to run under it: a statement on %s takes a metadata lock before '
+                .'its session sets a `lock_wait_timeout` of at most an hour.',
+                $this->tablesOf($unbounded),
+            );
+        } elseif (! $context->pending->statementsComplete) {
+            $premise = ' A migration is about to run under it, and the statements handed to this check are '
+                .'not all the deploy runs, so nothing here can say whether it sets its own bound first.';
+        } else {
+            return $this->finding(
+                $context,
+                $pending,
+                'LOCK_WAIT_TIMEOUT_UNBOUNDED',
+                'lock_wait_timeout',
+                $state,
+                $this->unwaitedPremise($locking),
+                Severity::Info,
+                DowntimeClass::Online,
+            );
+        }
+
+        return $this->finding(
+            $context,
+            $pending,
+            'LOCK_WAIT_TIMEOUT_UNBOUNDED',
+            'lock_wait_timeout',
+            $state,
+            $premise,
+            Severity::High,
+            DowntimeClass::Blocking,
+        );
+    }
+
+    /**
+     * Why the pending migrations do not wait under the server's `lock_wait_timeout`: none of them
+     * takes a metadata lock on a table that already exists, or each that does runs after its session
+     * sets its own bound.
+     */
+    private function unwaitedPremise(int $locking): string
+    {
+        if ($locking === 0) {
+            return ' No pending statement takes a metadata lock on a table that already exists, so '
+                .'nothing in this deploy waits under it.';
+        }
+
+        return ' The pending migrations do not wait under it: each statement that takes a metadata '
+            .'lock on a table that already exists runs after its session sets a '
+            .'`lock_wait_timeout` of at most an hour.';
+    }
+
+    /**
+     * The first pending statement that would wait under the server's `lock_wait_timeout`, and how many
+     * statements take a metadata lock on a table that already exists.
+     *
+     * Read in the order the deploy runs them, and per connection: a `SET SESSION` bounds the session
+     * that ran it and every later statement on it, the preamble `MY.L3.MISSING_LOCK_WAIT_TIMEOUT` asks
+     * for. A table created earlier in the run is left out, since nobody can hold a lock on an object
+     * that did not exist a statement ago. Only `up()` runs at deploy time.
+     *
+     * @param  list<CapturedStatement>  $statements
+     * @return array{?CapturedStatement, int}
+     */
+    private function lockWaitsIn(array $statements): array
+    {
+        $bounded = [];
+        $created = [];
+        $first = null;
+        $locking = 0;
+
+        foreach ($statements as $index => $statement) {
+            if ($statement->direction !== MigrationDirection::Up || $statement->canonicalSql === null) {
+                continue;
+            }
+
+            $seconds = $this->sessionLockWaitIn($statement->canonicalSql);
+
+            if ($seconds !== null) {
+                $bounded[$statement->connectionName] = $seconds <= self::LOCK_WAIT_CEILING_SECONDS;
+
+                continue;
+            }
+
+            $tables = array_values(array_filter(
+                $statement->targets ?? [],
+                static fn (StatementTarget $target): bool => $target->type === SchemaObjectType::Table,
+            ));
+
+            if ($statement->statementKind === StatementKind::CreateTable) {
+                foreach ($tables as $table) {
+                    $created[$table->qualifiedName()] = true;
+                }
+
+                continue;
+            }
+
+            $digest = new MigrationStatementDigest($index, $statement->statementKind, $statement->canonicalSql, $statement->withinTransaction, $statement->targets ?? []);
+
+            if (! MetadataLockStatements::takesMetadataLock($digest)
+                || ($tables !== [] && array_all($tables, static fn (StatementTarget $table): bool => isset($created[$table->qualifiedName()])))) {
+                continue;
+            }
+
+            $locking++;
+
+            if ($first === null && ! ($bounded[$statement->connectionName] ?? false)) {
+                $first = $statement;
+            }
+        }
+
+        return [$first, $locking];
+    }
+
+    /**
+     * The seconds a statement bounds its own session's `lock_wait_timeout` to, or null when it sets none.
+     *
+     * `SET SESSION lock_wait_timeout = 5`, and the same without the keyword or through `@@`. Not
+     * `SET GLOBAL`: that changes what later connections start with, and the session that ran it keeps
+     * its own value. A value that is not a plain number is no bound this check can read.
+     */
+    private function sessionLockWaitIn(string $canonical): ?int
+    {
+        $masked = StringLiteralMask::forDriver(new MysqlCanonicalization)->apply($canonical);
+
+        return preg_match('/^SET\s+(?:SESSION\s+|LOCAL\s+|@@SESSION\.|@@LOCAL\.|@@)?lock_wait_timeout\s*(?::=|=)\s*(\d+)\s*(?:,|$)/i', $masked, $matches) === 1
+            ? (int) $matches[1]
+            : null;
+    }
+
+    /** The tables a statement names, for a message: `orders`, or `orders` and `customers`. */
+    private function tablesOf(CapturedStatement $statement): string
+    {
+        $names = array_map(
+            static fn (StatementTarget $target): string => '`'.$target->qualifiedName().'`',
+            array_values(array_filter(
+                $statement->targets ?? [],
+                static fn (StatementTarget $target): bool => $target->type === SchemaObjectType::Table,
+            )),
+        );
+
+        return $names === [] ? 'a table' : implode(' and ', $names);
     }
 
     /**
@@ -347,7 +524,7 @@ final readonly class ServerSettingsCheck implements PreflightCheck
                 category: Category::Safety,
                 level: Level::Capturable,
                 stability: StabilityTier::Stable,
-                documentationUrl: RuleDocumentationUrl::for($ruleId),
+                documentationUrl: RuleDocumentationUrl::for(self::ID),
                 context: $subject,
                 severity: $severity,
             ),
@@ -359,7 +536,7 @@ final readonly class ServerSettingsCheck implements PreflightCheck
                 category: Category::Safety,
                 level: Level::Capturable,
                 stability: StabilityTier::Stable,
-                documentationUrl: RuleDocumentationUrl::for($ruleId),
+                documentationUrl: RuleDocumentationUrl::for(self::ID),
                 context: $subject,
                 severity: $severity,
             ),
@@ -371,7 +548,7 @@ final readonly class ServerSettingsCheck implements PreflightCheck
                 category: Category::Safety,
                 level: Level::Capturable,
                 stability: StabilityTier::Stable,
-                documentationUrl: RuleDocumentationUrl::for($ruleId),
+                documentationUrl: RuleDocumentationUrl::for(self::ID),
                 context: $subject,
                 severity: $severity,
             ),

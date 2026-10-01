@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Capture;
 
 use LogicException;
 use Pushery\SQLens\Agent\Remediation\RemediationValidator;
+use Pushery\SQLens\Canonical\Fingerprint;
 use Pushery\SQLens\Capture\PreScan\PreScanHit;
 use Pushery\SQLens\Capture\Rules\CaptureRule;
 use Pushery\SQLens\Contracts\DerivesDowntimeClass;
@@ -13,6 +14,7 @@ use Pushery\SQLens\Contracts\PreScanDetector;
 use Pushery\SQLens\Contracts\ProvidesRemediation;
 use Pushery\SQLens\Contracts\Rule;
 use Pushery\SQLens\Findings\DowntimeClass;
+use Pushery\SQLens\Findings\DowntimeUndetermined;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
 use Pushery\SQLens\Findings\RemediationPayload;
@@ -118,10 +120,40 @@ final readonly class CaptureFindingCollector
             // The driver's SQL rules see only a successful capture's canonicalized
             // statements; a failed or undetermined result has no subject to hand them.
             if ($result->isPass()) {
-                foreach ($result->toSubjects($context, $runStatements[$result->section->value] ?? []) as $subject) {
-                    foreach ($subjectRules as $rule) {
-                        if ($rule->appliesTo($subject)) {
-                            foreach ($rule->evaluate($subject) as $finding) {
+                foreach ($result->toSubjects($context, $runStatements[$result->section->value] ?? []) as $statement) {
+                    // The statement, then each later action of an `ALTER TABLE` action list that does
+                    // something else, as the statement it would be on its own. A finding the
+                    // statement already produced is not reported again for one of its actions: a rule
+                    // about the whole statement gives every action of it the same answer and the
+                    // same fix. A rule about a column does not. `drop a, drop b` loses two columns,
+                    // and the fix for each names its own, so the fix is part of what makes a finding
+                    // the same one.
+                    $reported = [];
+
+                    foreach ([$statement, ...$statement->actionSubjects()] as $subject) {
+                        foreach ($subjectRules as $rule) {
+                            if (! $rule->appliesTo($subject)) {
+                                continue;
+                            }
+
+                            $judged = $rule->evaluate($subject);
+
+                            if ($judged === []) {
+                                continue;
+                            }
+
+                            $remediation = $this->remediationFor($rule, $subject);
+                            $fix = $remediation instanceof RemediationPayload ? json_encode($remediation->toArray(), JSON_THROW_ON_ERROR) : '';
+
+                            foreach ($judged as $finding) {
+                                $identity = $finding->ruleId."\x1f".$finding->message."\x1f".$finding->location->sortKey()."\x1f".$fix;
+
+                                if (isset($reported[$identity])) {
+                                    continue;
+                                }
+
+                                $reported[$identity] = true;
+
                                 // Both marks come from what the rule DECLARED on the
                                 // contract, stamped here rather than inside the rule.
                                 // For confidence that is what stops a heuristic verdict
@@ -131,10 +163,19 @@ final readonly class CaptureFindingCollector
                                 // can name its deploy impact and, without this, the
                                 // finding a deploy script reads would never carry it.
                                 $marked = $finding->withConfidence($rule->confidence());
+
+                                // The statement's canonical form, which is what a baseline tells
+                                // two findings of one rule in one migration apart by.
+                                if ($subject->excerpt instanceof Fingerprint) {
+                                    $marked = $marked->withExcerpt($subject->excerpt);
+                                }
+
                                 $downtime = $this->downtimeClassFor($rule, $subject);
 
                                 if ($downtime instanceof DowntimeClass) {
                                     $marked = $marked->withDowntimeClass($downtime);
+                                } elseif ($downtime instanceof DowntimeUndetermined) {
+                                    $marked = $marked->withDowntimeUndetermined($downtime);
                                 }
 
                                 // The fix material, from the one rule that judged this statement.
@@ -142,7 +183,7 @@ final readonly class CaptureFindingCollector
                                 // a capability a few rules have, and asking for it at the single
                                 // place findings are assembled is what stops a rule from being
                                 // able to forget to attach its own.
-                                $findings[] = $this->stamped($marked, $this->remediationFor($rule, $subject));
+                                $findings[] = $this->stamped($marked, $remediation);
                             }
                         }
                     }
@@ -162,12 +203,13 @@ final readonly class CaptureFindingCollector
      * and a single constant would have to be wrong about one of them.
      *
      * The derived answer REPLACES the constant rather than supplementing it, so there is exactly
-     * one class per finding and never a question of which of two wins. A rule that derives null
-     * leaves the finding without a class — it does not silently fall back to the constant, because
-     * a rule whose data source could not classify the operation is saying something, and quietly
-     * substituting a default would be exactly the silent green this package refuses.
+     * one class per finding and never a question of which of two wins. A rule whose data source
+     * could not classify the operation answers with the undetermined and its reason, which the
+     * finding carries in place of a class; a rule that derives null makes no claim, and the finding
+     * carries neither. Neither falls back to the constant: substituting a default would be exactly
+     * the silent green this package refuses.
      */
-    private function downtimeClassFor(Rule $rule, MigrationSql $subject): ?DowntimeClass
+    private function downtimeClassFor(Rule $rule, MigrationSql $subject): DowntimeClass|DowntimeUndetermined|null
     {
         return $rule instanceof DerivesDowntimeClass
             ? $rule->downtimeClassFor($subject->canonicalView())

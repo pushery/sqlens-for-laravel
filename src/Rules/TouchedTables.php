@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Rules;
 
+use Pushery\SQLens\Canonical\QuotedSpan;
 use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Canonical\StatementTarget;
 use Pushery\SQLens\Subjects\MigrationStatementView;
@@ -30,6 +31,14 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  */
 final readonly class TouchedTables
 {
+    /**
+     * Where a query begins, asked at one offset: after an `AS`, or as a `SELECT` without one.
+     */
+    private const string QUERY_START = '/\G\b(?:AS(?:\s+(?:SELECT|TABLE|VALUES|WITH|EXECUTE)\b|\s*\()|SELECT\b)/i';
+
+    /** The clause that runs no query: the table gets the query's columns and no rows. */
+    private const string NO_DATA = '/\bWITH\s+NO\s+DATA\s*;?\s*$/i';
+
     /**
      * The table targets this statement names, in the classifier's deterministic order.
      *
@@ -85,7 +94,8 @@ final readonly class TouchedTables
      * Three ways a table is NOT born empty, and each is checked rather than assumed:
      *
      *  - it was not created here at all,
-     *  - it was created FROM A QUERY (`CREATE TABLE … AS SELECT`), so it has rows from birth,
+     *  - it was created FROM A QUERY (`CREATE TABLE … AS SELECT`, `AS TABLE`, `AS (SELECT …)` and
+     *    the other forms {@see filledByQuery()} names), so it has rows from birth,
      *  - an earlier statement in this migration writes into it — the create-then-backfill shape,
      *    where the scan is real and the advice worth taking.
      */
@@ -114,14 +124,70 @@ final readonly class TouchedTables
                 continue;
             }
 
-            // A write into it, or a create that filled it. `CREATE TABLE … AS SELECT` is read off
-            // the canonical form because it is a create, not a DML statement — a kind check alone
-            // would call a table born with a million rows empty.
-            if ($earlier->kind === StatementKind::Dml || preg_match('/\bAS\s+SELECT\b/i', $earlier->canonical) === 1) {
+            // A write into it, or the create that filled it. The query is read off the canonical
+            // form because the classification says only that the statement creates the table — a
+            // kind check alone would call a table born with a million rows empty. A missing column
+            // body is no substitute: it also stands for a body the classifier declined, and every
+            // ordinary create would then count as filled.
+            if ($earlier->kind === StatementKind::Dml || ($earlier->kind === StatementKind::CreateTable && self::filledByQuery($earlier->canonical))) {
                 return false;
             }
         }
 
         return true;
+    }
+
+    /**
+     * Whether a `CREATE TABLE` fills the table from a query as it creates it.
+     *
+     * Read at parenthesis depth zero and outside every quoted span, where the column body cannot
+     * reach: a generated column's `AS (…)` sits inside that body, and a table comment's text inside
+     * a literal. PostgreSQL writes the query after an `AS` in six ways — `SELECT`, `TABLE s`,
+     * `(SELECT …)`, `VALUES`, `WITH … SELECT` and `EXECUTE` of a prepared statement — and MySQL
+     * also takes a `SELECT` with no `AS` before it. `WITH NO DATA` at the end runs none of them.
+     */
+    private static function filledByQuery(string $canonical): bool
+    {
+        if (preg_match(self::NO_DATA, $canonical) === 1) {
+            return false;
+        }
+
+        $depth = 0;
+        $at = 0;
+        $length = strlen($canonical);
+
+        while ($at < $length) {
+            $char = $canonical[$at];
+
+            if ($char === "'") {
+                // MySQL's escape rules, because its table options are the only literals that stand
+                // at depth zero before a query. On PostgreSQL a create with a column body has no
+                // query to find, so a literal inside that body cannot hide one.
+                $at = QuotedSpan::endOfLiteral($canonical, $at, $char, true) ?? $length;
+
+                continue;
+            }
+
+            if ($char === '"' || $char === '`') {
+                $at = QuotedSpan::endOfQuotedIdentifier($canonical, $at, $char) ?? $length;
+
+                continue;
+            }
+
+            if ($char === '(' || $char === ')') {
+                $depth = max(0, $depth + ($char === '(' ? 1 : -1));
+                $at++;
+
+                continue;
+            }
+
+            if ($depth === 0 && preg_match(self::QUERY_START, $canonical, offset: $at) === 1) {
+                return true;
+            }
+
+            $at++;
+        }
+
+        return false;
     }
 }

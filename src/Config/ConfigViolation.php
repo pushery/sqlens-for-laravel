@@ -134,6 +134,22 @@ final readonly class ConfigViolation
     }
 
     /**
+     * An absent key inside a guard profile: the guard reads it as off, so it stops the run.
+     *
+     * The same shape as {@see defaultedKey()}, so a reader sees the same path and expectation and
+     * only the consequence differs — see {@see ConfigViolationKind::UnsetGuardKey} for why it does.
+     */
+    public static function unsetGuardKey(string $path, string $expected): self
+    {
+        return new self(
+            kind: ConfigViolationKind::UnsetGuardKey,
+            path: $path,
+            expected: $expected,
+            found: 'nothing (the key is absent)',
+        );
+    }
+
+    /**
      * A key this package used to read and has retired: reported, ignored, and the run continues.
      *
      * The found value is described like any other, because a project deleting the line wants to be

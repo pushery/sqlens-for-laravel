@@ -6,12 +6,14 @@ namespace Pushery\SQLens\Reporting\Agent;
 
 use Pushery\SQLens\Contracts\Reporter;
 use Pushery\SQLens\Findings\DowntimeClass;
+use Pushery\SQLens\Findings\DowntimeUndetermined;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Outcome;
 use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Findings\Result;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Reporting\ReportedServerVersion;
+use Pushery\SQLens\Reporting\ReportText;
 use Pushery\SQLens\Reporting\RunContext;
 use Pushery\SQLens\Severity\GateAxis;
 use Pushery\SQLens\Severity\GateDecision;
@@ -107,7 +109,7 @@ final readonly class AgentReporter implements Reporter
             ...$this->boundaries(),
         ]), "\n");
 
-        $out->writeln($this->redactor->in($document));
+        ReportText::line($out, $this->redactor->in($document));
     }
 
     /**
@@ -277,7 +279,8 @@ final readonly class AgentReporter implements Reporter
             '- '.$finding->message,
             '- **Where:** '.$where.($finding->location->line !== null ? ':'.$finding->location->line : ''),
             '- **Judged by:** '.$axis
-                .($finding->downtimeClass instanceof DowntimeClass ? ' · **Downtime:** '.$finding->downtimeClass->value : ''),
+                .($finding->downtimeClass instanceof DowntimeClass ? ' · **Downtime:** '.$finding->downtimeClass->value : '')
+                .($finding->downtimeUndetermined instanceof DowntimeUndetermined ? ' · **Downtime:** undetermined ('.$finding->downtimeUndetermined->reason->value.')' : ''),
             '- **Why and how:** '.$finding->documentationUrl,
             // Three states and none of them silence: the sequence, a named absence, or the note
             // that SQLens built something and refused it. An empty gap here would make the second

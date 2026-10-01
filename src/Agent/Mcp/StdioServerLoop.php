@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Agent\Mcp;
 
+use Illuminate\Container\Container;
 use Illuminate\Contracts\Config\Repository;
 use Laravel\Mcp\Server;
 use Pushery\SQLens\Agent\Mcp\Transport\SqlensStdioTransport;
@@ -83,6 +84,11 @@ final class StdioServerLoop implements ServesMcp
         // because the loop must not depend on that having happened — an application that resolves
         // this class some other way still gets a clean channel.
         $this->shield->engage();
+
+        // Again for the log channels, now that the configuration is final: one configured after the
+        // provider looked is re-pointed here, before the first frame.
+        $container = Container::getInstance();
+        $this->shield->divertLogStreams($this->config, $container->bound('log') ? $container->make('log') : null);
 
         // A fatal never reaches the error handler, and it is the one message a user most needs:
         // without it the process dies with an empty stream and the client reports only "server

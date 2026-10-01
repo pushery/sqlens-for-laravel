@@ -192,6 +192,16 @@ final class CollationVersionMismatchRule extends AbstractCatalogRule implements 
      * COLLATION, and the indexes that sort under it are a join away. Listing them for the reader
      * beats guessing the set, because an index left out keeps answering with the old sort order
      * after everything else has been repaired -- and nothing at all reports that.
+     *
+     * ## Two kinds of collation, and each is found and refreshed its own way
+     *
+     * The database's own collation is refreshed with `ALTER DATABASE … REFRESH COLLATION VERSION`,
+     * an explicitly created one with `ALTER COLLATION … REFRESH VERSION`, and neither command accepts
+     * the other's object. Finding the indexes differs too: PostgreSQL records no `pg_depend` row for
+     * the database's default collation, which is pinned, so its indexes are the ones with a key column
+     * in it, read from `pg_index.indcollation`, where it is the one collation whose provider is `d`.
+     * An explicitly created collation does have its rows, and it is named schema-qualified, so it is
+     * resolved with `regcollation` rather than compared by bare name. Measured on PostgreSQL 18.4.
      */
     public function remediationForObject(SchemaObject $object): ?RemediationPayload
     {
@@ -205,17 +215,15 @@ final class CollationVersionMismatchRule extends AbstractCatalogRule implements 
             return null;
         }
 
+        $database = $object->getString('collation_scope') === 'database';
+
         return new RemediationPayload(
             steps: [
                 new RemediationStep(
                     order: 1,
                     kind: RemediationStepKind::ManualGate,
                     noteKey: 'sqlens::messages.remediation.reindex_before_refresh.find_dependents',
-                    sqlTemplate: 'SELECT i.indexrelid::regclass AS index_name FROM pg_index i '
-                        .'JOIN pg_class c ON c.oid = i.indexrelid '
-                        .'JOIN pg_depend d ON d.objid = i.indexrelid AND d.refclassid = \'pg_collation\'::regclass '
-                        .'JOIN pg_collation col ON col.oid = d.refobjid '
-                        .'WHERE col.collname = {{collation}}',
+                    sqlTemplate: $this->dependentsQuery($database),
                     withinTransaction: false,
                 ),
                 new RemediationStep(
@@ -229,7 +237,9 @@ final class CollationVersionMismatchRule extends AbstractCatalogRule implements 
                     order: 3,
                     kind: RemediationStepKind::SeparateMigration,
                     noteKey: 'sqlens::messages.remediation.reindex_before_refresh.refresh_version',
-                    sqlTemplate: 'ALTER COLLATION {{collation}} REFRESH VERSION',
+                    sqlTemplate: $database
+                        ? 'ALTER DATABASE {{database}} REFRESH COLLATION VERSION'
+                        : 'ALTER COLLATION {{collation}} REFRESH VERSION',
                     withinTransaction: true,
                 ),
             ],
@@ -242,5 +252,20 @@ final class CollationVersionMismatchRule extends AbstractCatalogRule implements 
             verification: 'sqlens::messages.remediation.reindex_before_refresh.verification',
             subject: RemediationSubject::SchemaObject,
         );
+    }
+
+    /** The query that lists the indexes sorted under the collation, for either kind of collation. */
+    private function dependentsQuery(bool $database): string
+    {
+        if ($database) {
+            return 'SELECT DISTINCT i.indexrelid::regclass AS index_name FROM pg_index i '
+                .'JOIN pg_collation col ON col.oid = ANY (i.indcollation) '
+                .'WHERE col.collprovider = \'d\' ORDER BY 1';
+        }
+
+        return 'SELECT DISTINCT i.indexrelid::regclass AS index_name FROM pg_index i '
+            .'JOIN pg_depend d ON d.classid = \'pg_class\'::regclass AND d.objid = i.indexrelid '
+            .'AND d.refclassid = \'pg_collation\'::regclass '
+            .'WHERE d.refobjid = \'{{collation}}\'::regcollation ORDER BY 1';
     }
 }

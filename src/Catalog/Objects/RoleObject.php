@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Catalog\Objects;
 
+use Pushery\SQLens\Canonical\QuotedIdentifier;
+
 /**
  * One database account, in the form a driver-neutral rule can judge.
  *
@@ -33,9 +35,22 @@ namespace Pushery\SQLens\Catalog\Objects;
 final readonly class RoleObject
 {
     /**
+     * The attributes that make an account dangerous to run an application as, on either engine.
+     *
+     * @see self::isPrivileged()
+     */
+    public const array PRIVILEGED = [
+        RoleAttribute::Superuser,
+        RoleAttribute::CreateRole,
+        RoleAttribute::CreateDatabase,
+        RoleAttribute::BypassRls,
+        RoleAttribute::Replication,
+    ];
+
+    /**
      * @param  list<RoleAttribute>  $attributes  sorted by value
      * @param  list<string>  $memberships  role names this account is a member of, sorted
-     * @param  list<string>  $reachableRoles  the transitive closure of that, sorted
+     * @param  list<string>  $reachableRoles  the roles reachable along chains that carry rights, sorted
      * @param  list<RoleAttribute>  $reachableAttributes  what those roles hold, sorted
      */
     private function __construct(
@@ -49,10 +64,20 @@ final readonly class RoleObject
          * The transitive closure rather than one hop, because that is what the exposure is: `app` is a
          * member of `deploy`, `deploy` is a member of `admin`, and `app` can become `admin` in two
          * steps that no single-hop reading shows.
+         *
+         * Over the chains that carry rights, because the questions asked of this set are about
+         * rights: whether the account is exempt from row-level security as a table's owner, and
+         * whether a grant is one it holds. Those are SET grants followed by INHERIT grants. A grant
+         * with neither ends the chain even though it is a membership, and {@see self::$memberships}
+         * still lists it. The three fields below are narrower.
          */
         public array $reachableRoles,
         /**
          * The attributes those reachable roles hold — what this account can BECOME, not what it is.
+         *
+         * Only roles at the end of a chain of grants that each carry SET TRUE count, because that is
+         * the chain `SET ROLE` follows. A grant WITH SET FALSE is the hardening PostgreSQL 16 added
+         * for exactly this, and a member behind one cannot take on the attributes of the role.
          *
          * The distinction is the engine's, not ours, and getting it wrong would make the reader claim
          * something PostgreSQL does not do: role ATTRIBUTES are not inherited through membership. A
@@ -63,7 +88,8 @@ final readonly class RoleObject
          */
         public array $reachableAttributes,
         /**
-         * How each reachable role is reached — `app -> deploy -> admin`, keyed by the role at the end.
+         * How each role the account can `SET ROLE` to is reached — `app -> deploy -> admin`, keyed by
+         * the role at the end.
          *
          * A finding that says "this account reaches superuser" and stops is not resolvable: the person
          * fixing it has to know WHICH grant to revoke, and on a three-step chain that is two grants
@@ -73,6 +99,17 @@ final readonly class RoleObject
          * @var array<string, string>
          */
         public array $reachablePaths,
+        /**
+         * What each reachable role holds itself, keyed like {@see self::$reachablePaths}.
+         *
+         * `$reachableAttributes` is the union over all of them, which answers WHETHER the account can
+         * become something and not THROUGH WHICH role. A finding that printed the first path it had
+         * named a membership that grants nothing whenever a harmless role sorted before the one with
+         * the attribute, and the advice beside it was to revoke exactly that membership.
+         *
+         * @var array<string, list<RoleAttribute>>
+         */
+        public array $reachableRoleAttributes,
         public PasswordHashType $hashType,
         public ?string $validUntil,
         /**
@@ -120,6 +157,7 @@ final readonly class RoleObject
      * @param  list<string>  $reachableRoles
      * @param  list<RoleAttribute>  $reachableAttributes
      * @param  array<string, string>  $reachablePaths
+     * @param  array<string, list<RoleAttribute>>  $reachableRoleAttributes
      */
     public static function of(
         string $name,
@@ -132,6 +170,7 @@ final readonly class RoleObject
         array $reachableRoles = [],
         array $reachableAttributes = [],
         array $reachablePaths = [],
+        array $reachableRoleAttributes = [],
         bool $system = false,
         bool $connectionRole = false,
         bool $usable = true,
@@ -158,6 +197,19 @@ final readonly class RoleObject
         )));
         sort($reachableValues);
 
+        $held = [];
+
+        foreach ($reachableRoleAttributes as $role => $roleAttributes) {
+            $values = array_values(array_unique(array_map(
+                static fn (RoleAttribute $attribute): string => $attribute->value,
+                $roleAttributes,
+            )));
+            sort($values);
+            $held[$role] = array_map(RoleAttribute::from(...), $values);
+        }
+
+        ksort($held, SORT_STRING);
+
         return new self(
             self::canonicalName($name),
             $host === null ? null : self::canonicalHost($host),
@@ -166,6 +218,7 @@ final readonly class RoleObject
             $sortedReachable,
             array_map(RoleAttribute::from(...), $reachableValues),
             $reachablePaths,
+            $held,
             $hashType,
             $validUntil === null || trim($validUntil) === '' ? null : trim($validUntil),
             $system,
@@ -180,12 +233,29 @@ final readonly class RoleObject
      * The identity a report prints and a fixture compares: `name` on PostgreSQL, `'name'@'host'` on
      * MySQL.
      *
-     * The MySQL form is quoted the way MySQL itself writes it in `SHOW GRANTS`, so an operator can
-     * paste the identity straight into a `REVOKE` without translating it.
+     * The MySQL form is the string-literal spelling of an account, with a quote inside a part
+     * doubled, so a name holding one cannot end the literal early. It is the name for reading;
+     * a statement uses {@see self::statementName()}.
      */
     public function identity(): string
     {
-        return $this->host === null ? $this->name : sprintf("'%s'@'%s'", $this->name, $this->host);
+        return $this->host === null
+            ? $this->name
+            : sprintf("'%s'@'%s'", str_replace("'", "''", $this->name), str_replace("'", "''", $this->host));
+    }
+
+    /**
+     * The account as a statement names it: `"app"` on PostgreSQL, `` `app`@`%` `` on MySQL.
+     *
+     * Every part is quoted as an identifier. MySQL 8.4 prints accounts this way itself in `SHOW
+     * GRANTS`, measured, and a backtick-quoted part is read the same under every `sql_mode`, where a
+     * string literal reads a backslash differently depending on `NO_BACKSLASH_ESCAPES`.
+     */
+    public function statementName(): string
+    {
+        return $this->host === null
+            ? QuotedIdentifier::of('"', $this->name)
+            : QuotedIdentifier::of('`', $this->name).'@'.QuotedIdentifier::of('`', $this->host);
     }
 
     /**
@@ -207,14 +277,36 @@ final readonly class RoleObject
     /**
      * Whether the account's host pattern lets it connect from anywhere.
      *
-     * MySQL only: `'app'@'%'` accepts every source address, and `_` is its single-character wildcard.
-     * A PostgreSQL role carries no host at all — where a connection may come from is decided by
-     * `pg_hba.conf` there, which is a different object entirely, so this answers false rather than
-     * pretending the question applies.
+     * MySQL only: `'app'@'%'` accepts every source address, and so does a pattern made of nothing but
+     * wildcards and dots, such as `%.%.%.%`. A PostgreSQL role carries no host at all — where a
+     * connection may come from is decided by `pg_hba.conf` there, which is a different object
+     * entirely, so this answers false rather than pretending the question applies.
      */
-    public function hasWildcardHost(): bool
+    public function acceptsAnyHost(): bool
     {
-        return $this->host !== null && (str_contains($this->host, '%') || str_contains($this->host, '_'));
+        return $this->host !== null && str_contains($this->host, '%') && trim($this->host, '%_.') === '';
+    }
+
+    /**
+     * Whether the host is a pattern over host NAMES, such as `%.example.com`.
+     *
+     * MySQL matches it against the name the client's address resolves to, so the account accepts
+     * every host whose name fits. Two narrower shapes are deliberately not one:
+     *
+     * - An address pattern, such as `10.0.0.%` or `fe80::%`. MySQL matches an IP wildcard value only
+     *   against IP addresses, never against a host name, so the pattern is an address range: the
+     *   narrowing an open host is told to make, not a widening.
+     * - `_` without `%`. It matches exactly one character, so `db_host.internal` accepts only the
+     *   names that differ from it in that place.
+     */
+    public function hasHostNamePattern(): bool
+    {
+        if ($this->host === null || ! str_contains($this->host, '%') || $this->acceptsAnyHost()) {
+            return false;
+        }
+
+        // Digits, dots and wildcards are an IPv4 pattern, and only an IPv6 address carries a colon.
+        return preg_match('/^[0-9.%_]+$/', $this->host) !== 1 && ! str_contains($this->host, ':');
     }
 
     public function has(RoleAttribute $attribute): bool
@@ -223,20 +315,36 @@ final readonly class RoleObject
     }
 
     /**
-     * How the account reaches the first role holding this attribute, or null when it does not.
-     *
-     * The first by NAME rather than the first found: two roles may both carry the attribute, and a
-     * finding whose path changed between two runs of an unchanged server would make every diff noise.
+     * How the account reaches the nearest role holding this attribute, or null when it does not.
      */
     public function pathTo(RoleAttribute $attribute): ?string
     {
-        foreach ($this->reachableRoles as $role) {
-            if (isset($this->reachablePaths[$role]) && in_array($attribute, $this->reachableAttributes, true)) {
-                return $this->reachablePaths[$role];
+        return $this->pathsTo($attribute)[0] ?? null;
+    }
+
+    /**
+     * The path to every reachable role that holds this attribute itself, shortest first.
+     *
+     * Every one of them, because each is a membership somebody has to revoke: with two roles
+     * carrying the attribute, a finding that named one would leave the other route open after the
+     * fix. Ordered by length and then by text, so an unchanged server gives the same list on every
+     * run and a diff between two reports only moves when the server did.
+     *
+     * @return list<string>
+     */
+    public function pathsTo(RoleAttribute $attribute): array
+    {
+        $paths = [];
+
+        foreach ($this->reachablePaths as $role => $path) {
+            if (in_array($attribute, $this->reachableRoleAttributes[$role] ?? [], true)) {
+                $paths[] = $path;
             }
         }
 
-        return null;
+        usort($paths, static fn (string $a, string $b): int => [substr_count($a, ' -> '), $a] <=> [substr_count($b, ' -> '), $b]);
+
+        return $paths;
     }
 
     /**
@@ -258,7 +366,7 @@ final readonly class RoleObject
      */
     public function isPrivileged(): bool
     {
-        return array_any([RoleAttribute::Superuser, RoleAttribute::CreateRole, RoleAttribute::CreateDatabase, RoleAttribute::BypassRls, RoleAttribute::Replication], fn (RoleAttribute $attribute): bool => $this->has($attribute));
+        return array_any(self::PRIVILEGED, fn (RoleAttribute $attribute): bool => $this->has($attribute));
     }
 
     /** The deterministic sort key: identity, so two readings of a server order identically. */
@@ -273,7 +381,7 @@ final readonly class RoleObject
     }
 
     /**
-     * @return array{name: string, host: string|null, attributes: list<string>, memberships: list<string>, reachable_roles: list<string>, reachable_paths: array<string, string>, reachable_attributes: list<string>, hash_type: string, valid_until: string|null, system: bool, connection_role: bool, usable: bool, readability: array{state: string, reason: string|null, withheld_fields: list<string>, detail: string|null}}
+     * @return array{name: string, host: string|null, attributes: list<string>, memberships: list<string>, reachable_roles: list<string>, reachable_paths: array<string, string>, reachable_role_attributes: array<string, list<string>>, reachable_attributes: list<string>, hash_type: string, valid_until: string|null, system: bool, connection_role: bool, usable: bool, readability: array{state: string, reason: string|null, withheld_fields: list<string>, detail: string|null}}
      */
     public function toArray(): array
     {
@@ -284,6 +392,10 @@ final readonly class RoleObject
             'memberships' => $this->memberships,
             'reachable_roles' => $this->reachableRoles,
             'reachable_paths' => $this->reachablePaths,
+            'reachable_role_attributes' => array_map(
+                static fn (array $held): array => array_map(static fn (RoleAttribute $attribute): string => $attribute->value, $held),
+                $this->reachableRoleAttributes,
+            ),
             'reachable_attributes' => array_map(static fn (RoleAttribute $attribute): string => $attribute->value, $this->reachableAttributes),
             'hash_type' => $this->hashType->value,
             'valid_until' => $this->validUntil,

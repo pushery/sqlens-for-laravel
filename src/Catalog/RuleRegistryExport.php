@@ -402,7 +402,7 @@ final readonly class RuleRegistryExport
         return self::row(
             id: $metadata->id,
             source: self::SOURCE_DEPLOY,
-            coversFamily: false,
+            coversFamily: $metadata->coversFamily,
             pages: $pages,
             category: $metadata->category->value,
             level: $metadata->level->value,

@@ -9,6 +9,7 @@ use Pushery\SQLens\Catalog\CatalogReaderFactory;
 use Pushery\SQLens\Catalog\PreflightConnection;
 use Pushery\SQLens\Catalog\ReaderConnectionFactory;
 use Pushery\SQLens\Catalog\ReaderSession;
+use Pushery\SQLens\Console\ExitCode;
 use Pushery\SQLens\Contracts\ReadsSessionBounds;
 use Pushery\SQLens\Contracts\SessionDefenses;
 use Pushery\SQLens\Findings\Result;
@@ -61,6 +62,14 @@ final readonly class PreflightService implements PreflightRuns
 
     public function run(?string $connection = null, ?string $profile = null, ?int $budgetMs = null): PreflightOutcome
     {
+        // The clock starts HERE, before the session opens and before the pending migrations are
+        // linted, because the budget is promised for the whole run. It used to start after the lint
+        // half, so the reading, the capture and the rules over every pending migration ran outside
+        // it, unbounded and unmeasured. The lint half cannot be interrupted; what it spends comes out
+        // of what the catalog checks get, and a run where it spent everything reports the checks it
+        // never reached as `undetermined`, with the budget named.
+        $startedAt = hrtime(true);
+
         // The run's day, read once at the door and handed to the header. A `gmdate` further down
         // would be a second reading, and across midnight it names a day this run was not about.
         $today = Today::fromClock();
@@ -78,6 +87,7 @@ final readonly class PreflightService implements PreflightRuns
             $this->defenses,
             $this->readers,
             new SubjectContext(driver: '', profile: $profileName, strictTools: false),
+            requested: $name,
         );
 
         if (! $preflight->session instanceof ReaderSession) {
@@ -113,6 +123,21 @@ final readonly class PreflightService implements PreflightRuns
             includeVendorMigrations: true,
         );
 
+        // The lint half REFUSED, and it is the half this gate stands on. An engine it does not
+        // support behind a supported driver, a MariaDB behind `mysql`, comes back with no finding
+        // and no pending migration, and the checks below would read "nothing pending" and pass: a
+        // verdict about migrations nobody linted, moments before they run. The exit code decides,
+        // as it does for the MCP tools in `RunRefusal`, because it is the engine's own summary of
+        // "nothing was checked"; the named failure only words the reason. Unless the lint examined
+        // everything and its baseline ended it: then the pending migrations were judged, and the
+        // verdict below stops the deploy over the baseline instead.
+        if ($lint->exitCode === ExitCode::Misconfiguration && ! $lint->examined) {
+            return PreflightOutcome::refused(sprintf(
+                'the pending migrations could not be linted, so this preflight checked nothing: %s.',
+                $lint->unsupported->detail ?? 'the lint run stopped as a misconfiguration',
+            ), $name, $profileName);
+        }
+
         $context = new PreflightContext(
             connection: $name,
             driver: $preflight->driver,
@@ -131,27 +156,22 @@ final readonly class PreflightService implements PreflightRuns
             pending: new PendingWork(
                 files: $lint->pendingFiles,
                 statements: $lint->pendingStatements,
+                statementsComplete: $lint->pendingStatementsComplete,
             ),
             profile: $profileName,
-            deadlineAt: $deadlineAt = hrtime(true) + ($budget * 1_000_000),
-            // The switch is honored here. `use_statistics` is documented as deciding "whether checks
-            // may reason about the server's table statistics", it is validated by the schema, and a
-            // profile may override it; no shipped lint rule implements `StatisticsDependent`, so this
-            // path, which escalates severities by table size, is where the switch takes effect.
-            //
-            // A project that sets it to `false` "where reproducibility matters more than depth" gets
-            // no statistics-driven severities. Anything else would be invisible, because a severity
-            // that was escalated looks like a severity that was assigned.
-            //
-            // Withholding the reader rather than skipping the escalation, because the absence is
-            // already a case `FindingEscalation` handles and explains: no reader means the findings
-            // stand at the severity lint gave them, and the checks that needed one have already
-            // said so by name. One absence, one shape, whatever the reason for it.
-            statistics: $this->config->get('sqlens.use_statistics') === true ? $preflight->statistics : null,
+            deadlineAt: $startedAt + ($budget * 1_000_000),
+            // Always the reader the preflight has. The disk headroom check asks how much space the
+            // pending rewrite needs, and object sizes are the question it exists to answer rather
+            // than a way of sharpening a finding. Withheld under the shipped `use_statistics = false`,
+            // it ended undetermined on every migration that adds a column or an index, and ignored
+            // the free space an operator had declared for exactly that comparison.
+            statistics: $preflight->statistics,
             activity: $preflight->activity,
             migrationRole: $preflight->migrationRole,
             longRunningMs: $this->threshold(self::LONG_RUNNING_KEY, PreflightContext::DEFAULT_LONG_RUNNING_MS),
             replicationLagMs: $this->threshold(self::REPLICATION_LAG_KEY, PreflightContext::DEFAULT_REPLICATION_LAG_MS),
+            // Read now, after the command applied its profile, which is when the lint half above read it.
+            assumedServerVersion: is_string($pin = $this->config->get('sqlens.assume_server_version')) ? $pin : null,
         );
 
         // Redacted the moment the checks are done and before anything reads them. A database error
@@ -162,9 +182,21 @@ final readonly class PreflightService implements PreflightRuns
 
         // Weighed against the live database BEFORE the budget is read off, so the reading it needs
         // comes out of the same budget every check spends rather than out of the slack afterwards.
-        $escalation = $this->escalation->applyTo($lint->result->findings, $context);
+        //
+        // `use_statistics` decides this half. It is documented as deciding "whether checks may reason
+        // about the server's table statistics", and escalating a severity by table size is where
+        // that reasoning happens: a project that set it to `false` "where reproducibility matters
+        // more than depth" gets no statistics-driven severities, which would otherwise be invisible,
+        // because a severity that was escalated looks like one that was assigned.
+        $escalation = $this->config->get('sqlens.use_statistics') === true
+            ? $this->escalation->applyTo($lint->result->findings, $context)
+            : new EscalationOutcome($lint->result->findings);
 
-        $remaining = max(0, (int) round(($deadlineAt - hrtime(true)) / 1_000_000));
+        // What the run cost, from the START rather than as the budget minus what is left. The
+        // remainder is floored at zero, so that spelling reported a run that took eight times its
+        // budget as having used exactly its budget, the one value that means "on time" to a deploy
+        // script reading the header. `sqlens:postdeploy` measures the same way for the same reason.
+        $consumed = (int) round((hrtime(true) - $startedAt) / 1_000_000);
 
         // Read from the SAME call the check judges on: two reads of one fact are two chances to
         // disagree, and the disagreement would surface as a header claiming a bound beside a verdict
@@ -189,17 +221,20 @@ final readonly class PreflightService implements PreflightRuns
             $preflight->advisory,
             $timeouts,
             $budget,
-            $budget - $remaining,
+            $consumed,
             $profileName,
             // Both halves travel as ONE result, assembled here rather than by whoever renders it. A
             // finding about a migration and a finding about the instance are the same kind of
             // statement, and two documents would make a consumer choose which one is "the" verdict —
             // so the choice is not offered.
-            Result::of([...$escalation->weighed, ...$report->findings(), ...$escalation->unweighed]),
+            // The lint half's book rides along with its findings: what it hid, so the report does not
+            // read as though nothing was hidden, and its stale baseline entries, which under
+            // `sqlens.baseline.stale = error` are what stops the deploy.
+            Result::of([...$escalation->weighed, ...$report->findings(), ...$escalation->unweighed], $lint->result->suppressed, $lint->result->staleBaselineEntries),
             // `pretend`, because that is what this run DID: it lints the pending migrations with
             // Laravel's --pretend and then reads the catalog. The header used to say whatever
             // `sqlens.mode` held, for a run that never consulted it.
-            $this->runContext->collect(ReportingCaptureMode::Pretend, $timeouts, $report->describeTimings() ?: null, $budget - $remaining, $today),
+            $this->runContext->collect(ReportingCaptureMode::Pretend, $timeouts, $report->describeTimings() ?: null, $consumed, $today),
         );
     }
 

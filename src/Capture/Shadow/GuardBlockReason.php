@@ -20,7 +20,7 @@ enum GuardBlockReason: string
     /** The current environment is not on the allowed list — not overridable by --force. */
     case DisallowedEnvironment = 'disallowed_environment';
 
-    /** The target connection is marked as a production connection. */
+    /** The connection the run examines, or the one it builds its throwaway databases on, looks like production. */
     case ProductionConnection = 'production_connection';
 
     /** An interactive run the user did not confirm, or a non-interactive run without --force. */
@@ -31,7 +31,7 @@ enum GuardBlockReason: string
     {
         return match ($this) {
             self::DisallowedEnvironment => 'The shadow mode may only run in an allowed environment, and this one is not on the list.',
-            self::ProductionConnection => 'The target connection is a production connection, which a database-creating mode must never run against.',
+            self::ProductionConnection => 'The connection the run examines, or the one it creates and drops its throwaway databases on, looks like a production connection, which a database-creating mode must never run against.',
             self::NotConfirmed => 'The run was not confirmed: pass --force, or run interactively and confirm.',
         };
     }

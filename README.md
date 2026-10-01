@@ -143,7 +143,8 @@ the code, and each is held by a test rather than by this paragraph.
   `SELECT` on `performance_schema`.
 - **No write access, and the seal is proved rather than assumed.** The session is sealed read-only
   and then attempts one write, requiring the server to refuse it. A session that accepted the write
-  ends the run instead of continuing.
+  is not probed again and reads nothing more: the audit ends there, and the deploy checks answer
+  `reader_session_unsealed` from that point on instead of reading.
 - **No access to your data.** Every query reads a catalog or a state view. No user table is selected
   from, no `EXPLAIN` is run, and no row contents reach a finding.
 - **No locks of its own** — including the checks that are *about* locks. Proved from a SECOND
@@ -260,7 +261,8 @@ understood late is still risk, and holding a correction until the next major wou
 the package knows to be wrong. Lowering a severity, renaming a rule id, or removing one is
 breaking and waits. A rule id is never removed at all — a superseded rule is deprecated and goes
 on answering the suppressions that name it, so a committed baseline stays readable across majors.
-New rules arrive as `preview` and opt-in rather than in a minor's defaults;
+From 1.0, new rules arrive as `preview` and opt-in rather than in a minor's defaults. Before 1.0
+a new rule ships `stable` in a minor release, which a `^0.N` constraint does not install on its own;
 [GOVERNANCE.md](GOVERNANCE.md) is the full contract.
 
 ## The security suite
@@ -432,7 +434,7 @@ a decade of schema changes — with the verdict each rule should reach annotated
 the reasoning written down beside it.
 
 The current number is **no false positive in 13 measured cases** on MySQL 8.4. The second half of
-that sentence matters more than the first: 228 of the 241 rules this build ships have no case in
+that sentence matters more than the first: 231 of the 244 rules this build ships have no case in
 the corpus yet, and PostgreSQL has no collection at all, so its rate is unknown rather than good.
 
 [False positives, measured](https://docs.pushery.com/sqlens-for-laravel/false-positive-rate/)
@@ -458,8 +460,8 @@ Browse the rest of our work at [pushery.com](https://www.pushery.com).
 ## Governance
 
 [GOVERNANCE.md](GOVERNANCE.md) is the contract behind the rules: what counts as
-public API from 1.0, why a new rule arrives as `preview` rather than in a minor's
-defaults, and the list of things SQLens never does.
+public API from 1.0, why from 1.0 a new rule arrives as `preview` rather than in a
+minor's defaults, and the list of things SQLens never does.
 
 ## Trademarks
 

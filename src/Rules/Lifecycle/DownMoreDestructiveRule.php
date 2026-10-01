@@ -251,24 +251,33 @@ final class DownMoreDestructiveRule extends AbstractLifecycleRule implements Pro
         $unaccounted = [];
 
         foreach ($leg->statements as $rollback) {
+            // A drop or a truncate destroys EVERY table it names, so there is no side to pick:
+            // `DROP TABLE orders, users` in a rollback whose up() created only `orders` takes
+            // `users` with it, rows and all, and that second name is the one this rule exists for.
+            if (in_array($rollback->kind, self::TABLE_DESTROYING, true)) {
+                foreach ($rollback->targets as $target) {
+                    if ($target->type !== SchemaObjectType::Table || $statement->migration->createsTable($target->qualifiedName())) {
+                        continue;
+                    }
+
+                    $unaccounted[] = $rollback->kind === StatementKind::DropTable
+                        ? sprintf('it drops the table %s, which up() did not create', $target->qualifiedName())
+                        : sprintf('it truncates the table %s, which up() did not create', $target->qualifiedName());
+                }
+
+                continue;
+            }
+
             $table = $rollback->soleTarget(SchemaObjectType::Table);
 
-            // A rollback statement naming no single table — or naming two, as a foreign key does —
-            // is not one this comparison can place. It is not treated as a destruction, because a
-            // finding has to be able to name what it is about.
+            // A statement that destroys a MEMBER of a table and names no single table — or names
+            // two, as a foreign key does — is not one this comparison can place. It is not treated as
+            // a destruction, because a finding has to be able to name what it is about.
             if (! $table instanceof StatementTarget) {
                 continue;
             }
 
             $name = $table->qualifiedName();
-
-            if (in_array($rollback->kind, self::TABLE_DESTROYING, true) && ! $statement->migration->createsTable($name)) {
-                $unaccounted[] = $rollback->kind === StatementKind::DropTable
-                    ? sprintf('it drops the table %s, which up() did not create', $name)
-                    : sprintf('it truncates the table %s, which up() did not create', $name);
-
-                continue;
-            }
 
             if (in_array($rollback->kind, self::MEMBER_DESTROYING, true) && ! in_array($name, $touched, true)) {
                 $unaccounted[] = sprintf(

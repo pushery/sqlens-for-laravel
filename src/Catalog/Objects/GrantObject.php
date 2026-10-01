@@ -51,6 +51,19 @@ final readonly class GrantObject
         public Readability $readability,
         public bool $coversEveryPrivilege,
         public array $structuralOtherPrivileges,
+        /**
+         * What follows `ON` in a GRANT or REVOKE for this object, in the engine's own grammar and
+         * with every name quoted: `TABLE "public"."orders"`, `ROUTINE "app"."f"(integer)`,
+         * `` `shop`.* ``. Empty when the reader could not write one.
+         *
+         * Written by the reader because only the reader holds the parts. {@see self::$objectName}
+         * joins them with a dot for a person to read, and a dot inside a name makes that string
+         * impossible to split back. Printed raw into a sentence that reads like a statement, a name
+         * chosen by whoever may create objects in the schema becomes SQL in the operator's hands.
+         */
+        public string $statementTarget,
+        /** The grantee as a GRANT or REVOKE names it: `PUBLIC`, a quoted role, or a MySQL account. */
+        public string $statementGrantee,
     ) {}
 
     /**
@@ -86,6 +99,8 @@ final readonly class GrantObject
         GrantOrigin $origin = GrantOrigin::Project,
         bool $coversEveryPrivilege = false,
         array $structuralOtherPrivileges = [],
+        string $statementTarget = '',
+        string $statementGrantee = '',
     ): self {
         $values = array_values(array_unique(array_map(static fn (Privilege $p): string => $p->value, $privileges)));
         sort($values);
@@ -108,6 +123,8 @@ final readonly class GrantObject
             $readability,
             $coversEveryPrivilege,
             self::upperCased($structuralOtherPrivileges),
+            $statementTarget,
+            $statementGrantee,
         );
     }
 

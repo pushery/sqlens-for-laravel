@@ -11,11 +11,15 @@ use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Name;
 use Override;
+use Pushery\SQLens\Agent\Mcp\McpConnection;
+use Pushery\SQLens\Agent\Mcp\ProfileRefusal;
 use Pushery\SQLens\Agent\Mcp\ReportPage;
 use Pushery\SQLens\Agent\Mcp\RunRefusal;
+use Pushery\SQLens\Agent\Mcp\RunUnresolved;
 use Pushery\SQLens\Agent\Mcp\ShadowRefusalAdvice;
 use Pushery\SQLens\Agent\Mcp\ToolAnswer;
 use Pushery\SQLens\Categories\Category;
+use Pushery\SQLens\Config\ProfileApplication;
 use Pushery\SQLens\Lint\LintRuns;
 use Pushery\SQLens\Lint\ShadowClearance;
 use Pushery\SQLens\Reporting\Json\JsonEnvelope;
@@ -71,7 +75,29 @@ final class LintShadowTool extends SqlensTool
     public function handle(Request $request, Repository $config, LintRuns $runs, ShadowClearance $clearance): Response
     {
         $validated = $this->validated($request);
-        $connection = is_string($validated['connection'] ?? null) ? $validated['connection'] : null;
+        $profiles = new ProfileApplication($config);
+
+        // The profile `sqlens:lint --shadow` runs under when it is given no `--profile`:
+        // SQLENS_PROFILE, then `sqlens.profile`. Not a parameter, as the mode is not one.
+        $profile = $profiles->select(null);
+
+        if (! $profile->isValid()) {
+            return Response::json(ProfileRefusal::forLint((string) $profile->rejectedValue, $profile->source));
+        }
+
+        // Applied for this call and put back afterwards, because the next call is answered in the
+        // same process.
+        return $profiles->during($profile, fn (): Response => $this->answer($validated, $config, $runs, $clearance));
+    }
+
+    /**
+     * The run and its answer, under the profile the call chose.
+     *
+     * @param  array<string, mixed>  $validated
+     */
+    private function answer(array $validated, Repository $config, LintRuns $runs, ShadowClearance $clearance): Response
+    {
+        $connection = new McpConnection($config)->chosen($validated['connection'] ?? null);
 
         $outcome = $runs->run(
             connection: $connection,
@@ -93,10 +119,17 @@ final class LintShadowTool extends SqlensTool
 
         $envelope = JsonEnvelope::for($outcome->result, $outcome->context)->toArray();
         $page = ReportPage::of($envelope['findings'], 0, null, $this->ceiling($config));
-        $blocked = $this->guardBlock($envelope);
+        $summary = trim($this->summary($outcome->connectionName, $page, RunUnresolved::reasons($envelope) === []).($outcome->staleBaselineBreaks ? ' '.$outcome->gateMeaning() : ''));
 
+        // The run that never happened, then the guard's refusal, then the run that happened and
+        // could not determine everything, and only then the ordinary answer. The third is not a
+        // refusal: the guard allowed the run, and the captor found afterwards that no shadow could
+        // be provisioned — behind a transaction pooler, on a replica — and judged every migration
+        // undetermined without creating a database.
         $answer = RunRefusal::in($outcome)
-            ?? ($blocked !== null ? $this->refusal($blocked) : ToolAnswer::of([], $this->summary($outcome->connectionName, $page)));
+            ?? $this->refusal($this->guardBlock($envelope))
+            ?? RunUnresolved::in($envelope, $summary)
+            ?? ToolAnswer::of([], $summary);
 
         return Response::json([
             ...$answer->toArray(),
@@ -104,7 +137,7 @@ final class LintShadowTool extends SqlensTool
             'gate' => [
                 'breached' => $outcome->exitCode->value !== 0,
                 'exit_code' => $outcome->exitCode->value,
-                'meaning' => $outcome->exitCode->description(),
+                'meaning' => $outcome->gateMeaning(),
             ],
             // The contract the findings below are shaped by. The CLI's JSON consumer is told this
             // and an MCP caller was not, which made the version a promise kept in one channel only —
@@ -126,7 +159,7 @@ final class LintShadowTool extends SqlensTool
         return [
             'level' => ['sometimes', 'integer', 'min:0', 'max:9'],
             'category' => ['sometimes', 'string', 'in:'.implode(',', array_column(Category::cases(), 'value'))],
-            'connection' => ['sometimes', 'string', 'in:'.implode(',', $this->connectionNames($config))],
+            'connection' => ['sometimes', 'string', 'in:'.implode(',', new McpConnection($config)->allowed())],
         ];
     }
 
@@ -146,7 +179,7 @@ final class LintShadowTool extends SqlensTool
         return [
             'level' => $schema->integer()->description('Strictness level 0-9. Defaults to the project configuration.'),
             'category' => $schema->string()->description('Scope the run to one category: '.implode(', ', array_column(Category::cases(), 'value')).'.'),
-            'connection' => $schema->string()->description('The name of a connection this application has configured. Never a connection string.'),
+            'connection' => $schema->string()->description('The name of a connection this application has configured, and only the one sqlens.agent.mcp.connection names when it is set. Never a connection string.'),
         ];
     }
 
@@ -168,9 +201,13 @@ final class LintShadowTool extends SqlensTool
         return is_string($verdict) && $verdict !== 'allowed' ? $verdict : null;
     }
 
-    /** The refusal, with the sentence that fits the check that actually refused. */
-    private function refusal(string $check): ToolAnswer
+    /** The refusal, with the sentence that fits the check that actually refused, or null when none did. */
+    private function refusal(?string $check): ?ToolAnswer
     {
+        if ($check === null) {
+            return null;
+        }
+
         return ToolAnswer::undetermined(
             ShadowRefusalAdvice::for($check),
             // Structured beside the sentence, and it is the guard's own identifier — the same string
@@ -179,34 +216,30 @@ final class LintShadowTool extends SqlensTool
         );
     }
 
-    private function summary(string $connection, ReportPage $page): string
+    /**
+     * A sentence for a client that shows text rather than structure.
+     *
+     * It names the mode in words, so a shadow answer cannot be mistaken for a pretend one. It says
+     * the findings came from a real run against a throwaway database only when the run determined
+     * everything it looked at, because only then did one certainly exist: a shadow that could not be
+     * provisioned leaves every migration undetermined, and no database was ever created.
+     */
+    private function summary(string $connection, ReportPage $page, bool $determined): string
     {
+        $source = $determined ? 'from a real run against a throwaway database' : 'in shadow mode';
+
         if ($page->total === 0) {
-            return 'No findings on '.$connection.', from a real run against a throwaway database.';
+            return 'No findings on '.$connection.', '.$source.'.';
         }
 
         return sprintf(
-            '%d finding(s) on %s from a real run against a throwaway database, %d returned. %s',
+            '%d finding(s) on %s %s, %d returned. %s',
             $page->total,
             $connection,
+            $source,
             count($page->rows),
             $page->truncated ? 'The list is CUT: '.$page->reason.'.' : 'Nothing was left out.',
         );
-    }
-
-    /**
-     * The connection names this application has configured.
-     *
-     * @return list<string>
-     */
-    private function connectionNames(Repository $config): array
-    {
-        $connections = $config->get('database.connections');
-
-        return array_values(array_filter(
-            array_map(strval(...), array_keys(is_array($connections) ? $connections : [])),
-            static fn (string $name): bool => $name !== '',
-        ));
     }
 
     private function ceiling(Repository $config): int

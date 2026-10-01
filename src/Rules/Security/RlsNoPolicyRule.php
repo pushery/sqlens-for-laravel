@@ -115,11 +115,13 @@ final class RlsNoPolicyRule extends AbstractSchemaObjectSecurityRule implements 
             .'denies every row %s. Nothing is exposed here — the data is simply unavailable, which is '
             .'why this shape reaches production so often: whoever created the table sees it working, '
             .'the migration passes, and the application connects as a different role and gets empty '
-            .'result sets with no error anywhere. Add the policy the table was switched on for, or '
-            .'ALTER TABLE %s DISABLE ROW LEVEL SECURITY until there is one.',
+            .'result sets with no error anywhere. Add the policy the table was switched on for. '
+            .'Switching row-level security off instead is not a way out here: this project lists the '
+            .'table as holding tenant data, and without row-level security every row of it is visible '
+            .'to any role with SELECT, which SEC.RLS.DISABLED reports at high. If the table does not '
+            .'hold tenant data after all, take it out of sqlens.security.rls.tables first.',
             $object->qualifiedName,
             $whoCanRead,
-            $object->qualifiedName,
         ))];
     }
 

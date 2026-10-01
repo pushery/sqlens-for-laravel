@@ -24,13 +24,23 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
 /**
- * A schema-builder operation MySQL will not run online, written the one way that cannot say so.
+ * A schema operation MySQL will not run online, in a statement that does not say so.
  *
- * Laravel's MySQL grammar has no way to emit `ALGORITHM=` or `LOCK=` — verified against the
- * installed framework and pinned by a characterization test, not assumed. Those are precisely the
- * two clauses that would keep an InnoDB migration provably online, so the gap is not cosmetic: a
- * migration written through the builder takes whatever algorithm the server picks, and finds out
- * which one that was afterwards.
+ * The statement names neither `ALGORITHM=` nor `LOCK=`, precisely the two clauses that would keep
+ * an InnoDB migration provably online, so it takes whatever algorithm the server picks and finds out
+ * which one that was afterwards. How a clause gets into the statement is not this rule's question.
+ * It reads the statement a migration sends, so a raw `DB::statement()` naming both and a builder
+ * modifier that emits one are the same answer to it.
+ *
+ * ## The builder emits some of them, on the framework versions that have the modifier
+ *
+ * Laravel's MySQL grammar emits `ALGORITHM=INSTANT` for a column added, changed or dropped with
+ * `->instant()` (Laravel 12.40.1 onwards), `LOCK=` for a column, an index, a primary key or a
+ * foreign key with `->lock()` (12.46.0), and `ALGORITHM=INPLACE` for an index, a primary key or a
+ * foreign key with `->inplace()` (13.33.0). On a version without it, the modifier is an attribute the
+ * grammar ignores, and this rule keeps reporting the statement, which is why it reads the statement
+ * rather than the migration. Any other clause, such as `ALGORITHM=INPLACE` on a column or
+ * `ALGORITHM=COPY` anywhere, still needs a raw statement.
  *
  * ## What an explicit ALGORITHM actually buys, stated honestly
  *
@@ -236,15 +246,18 @@ final class AlgorithmLockNotExpressibleRule extends AbstractMysqlRule implements
 
     private function message(): string
     {
-        return 'MySQL will not run this operation online, and Laravel\'s schema builder cannot say so: its MySQL '
-            .'grammar has no way to emit ALGORITHM= or LOCK=, the two clauses that would pin the behavior. Written '
-            .'through the builder, the statement takes whatever algorithm the server picks and you learn which one '
-            .'afterwards. Issue it as a raw statement instead, naming both — for example '
+        return 'MySQL will not run this operation online, and the statement does not say so: it names neither '
+            .'ALGORITHM= nor LOCK=, the two clauses that would pin the behavior, so it takes whatever algorithm the '
+            .'server picks and you learn which one afterwards. On a recent Laravel the schema builder emits some of '
+            .'them itself: ->instant() and ->lock() on a column (Laravel 12.40.1 and 12.46.0 onwards), ->lock() on '
+            .'an index, a primary key or a foreign key (12.46.0), ->inplace() on an index, a primary key or a '
+            .'foreign key (13.33.0). Where it cannot, issue a raw statement naming both — for example '
             .'DB::statement(\'ALTER TABLE … , ALGORITHM=INPLACE, LOCK=NONE\') — and leave a comment saying why: raw '
             .'SQL is a deliberate exception here, not the normal way to write a migration, and the next reader has '
-            .'to be able to tell those apart. Be clear about what the clause buys, though: it does NOT make a '
-            .'copying operation online. It makes the server REFUSE — an operation MySQL can only do by copying '
-            .'fails outright instead of silently copying the table, so the deploy stops before it locks anything '
-            .'rather than in the middle of it.';
+            .'to be able to tell those apart. This finding reads the statement the migration sends, so it goes away '
+            .'once a clause is really in it and not before. Be clear about what the clause buys, though: it does NOT '
+            .'make a copying operation online. It makes the server REFUSE — an operation MySQL can only do by '
+            .'copying fails outright instead of silently copying the table, so the deploy stops before it locks '
+            .'anything rather than in the middle of it.';
     }
 }

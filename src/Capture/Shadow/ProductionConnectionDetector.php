@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Capture\Shadow;
 
 use Illuminate\Contracts\Config\Repository;
+use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 
 /**
  * Decides whether a connection looks like it addresses a production instance —
@@ -107,7 +108,9 @@ final readonly class ProductionConnectionDetector
             return ['name' => $connection, ...$match];
         }
 
-        $database = $this->config->get('database.connections.'.$connection.'.database');
+        // The database the connection reaches, which on a `url`-configured connection is the URL's
+        // path rather than the `database` key beside it.
+        $database = EffectiveConnectionConfig::for($this->config->get('database.connections.'.$connection))['database'] ?? null;
 
         if (! is_string($database)) {
             return null;

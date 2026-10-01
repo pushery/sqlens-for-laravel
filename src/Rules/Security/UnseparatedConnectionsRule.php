@@ -119,16 +119,18 @@ final class UnseparatedConnectionsRule extends AbstractSchemaObjectSecurityRule 
                 : $runtimeIdentity === $migrationIdentity;
 
         return match ($sharesIdentity) {
+            // The identity is compared and never printed: the user, the host and the database are
+            // the coordinates this package keeps out of every finding, and the two connection names
+            // already say which entries a reader has to look at.
             true => [RuleVerdict::flag(sprintf(
                 'the application names two connections (%s and %s) that authenticate as the same '
-                .'identity (%s), so the separation exists in config/database.php and nowhere else: '
-                .'requests are still served by the account the migrations run as, holding whatever '
-                .'DDL they need. Give the migration connection its own database user and leave the '
-                .'DDL rights only there — a second entry pointing at the same credentials buys the '
-                .'application nothing.',
+                .'identity, the same user against the same host and database, so the separation exists '
+                .'in config/database.php and nowhere else: requests are still served by the account the '
+                .'migrations run as, holding whatever DDL they need. Give the migration connection its '
+                .'own database user and leave the DDL rights only there — a second entry pointing at the '
+                .'same credentials buys the application nothing.',
                 $runtime,
                 $migration,
-                (string) $runtimeIdentity,
             ))],
 
             null => [RuleVerdict::undetermined(sprintf(

@@ -101,23 +101,46 @@ final readonly class RlsPolicy
         return $this->using !== null && in_array($this->using, self::ALWAYS_TRUE, true);
     }
 
-    /**
-     * Whether the WRITE path is unchecked while the read path is not.
-     *
-     * Only an EXPLICIT always-true `WITH CHECK` counts. An omitted one is not a hole: PostgreSQL
-     * applies the `USING` expression to the check when no `WITH CHECK` is given, so a policy with a
-     * real filter and no check is fully guarded on both paths — and reporting it would be a false
-     * positive on the ordinary way people write policies.
-     */
-    public function checkAdmitsEverything(): bool
-    {
-        return $this->withCheck !== null && in_array($this->withCheck, self::ALWAYS_TRUE, true);
-    }
-
     /** Whether it reaches every role on the server, present and future. */
     public function appliesToPublic(): bool
     {
         return in_array(self::PUBLIC_ROLE, $this->roles, true);
+    }
+
+    /**
+     * The expression a WRITE is checked against: the WITH CHECK, or the USING that stands in for a
+     * missing one on the commands that take both. Null when the policy checks no write.
+     *
+     * An omitted `WITH CHECK` is not a hole: PostgreSQL applies the `USING` expression to the check
+     * when none is given, so a policy with a real filter and no check is guarded on both paths, and
+     * reporting it would be a false positive on the ordinary way people write policies.
+     */
+    public function effectiveCheck(): ?string
+    {
+        return $this->withCheck ?? (in_array($this->command, [RlsCommand::All, RlsCommand::Update], true) ? $this->using : null);
+    }
+
+    /** Whether every row a write offers passes this policy's check. */
+    public function effectiveCheckAdmitsEverything(): bool
+    {
+        $check = $this->effectiveCheck();
+
+        return $check !== null && in_array($check, self::ALWAYS_TRUE, true);
+    }
+
+    /**
+     * Whether this policy applies to every command and every role `$other` applies to.
+     *
+     * Asked of a RESTRICTIVE policy about a permissive one: a row is visible only if some permissive
+     * policy passes AND every restrictive one does, so a restrictive policy that covers a permissive
+     * `USING (true)` is what gives it a filter. A restrictive policy for another role, or for only
+     * one of the commands, leaves the rest as open as before; measured on PostgreSQL 18.4, one for
+     * SELECT alone narrowed the reads and let a write of another tenant's row through.
+     */
+    public function covers(self $other): bool
+    {
+        return ($this->command === RlsCommand::All || $this->command === $other->command)
+            && ($this->appliesToPublic() || array_diff($other->roles, $this->roles) === []);
     }
 
     /**

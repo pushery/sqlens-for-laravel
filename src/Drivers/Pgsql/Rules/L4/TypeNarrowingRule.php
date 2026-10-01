@@ -84,7 +84,7 @@ final class TypeNarrowingRule extends AbstractPgsqlSafetyRule implements Provide
     {
         $change = ColumnTypeChange::of($statement);
 
-        if (! $change instanceof ColumnTypeChange || ! $this->matrix->isNarrowing($change->targetType())) {
+        if (! $change instanceof ColumnTypeChange || ! $this->matrix->isNarrowing($change->targetType()) || $change->restatesTheColumn()) {
             return null;
         }
 
@@ -142,7 +142,10 @@ final class TypeNarrowingRule extends AbstractPgsqlSafetyRule implements Provide
             return null;
         }
 
-        if (! $this->matrix->isNarrowing($change->targetType())) {
+        // Laravel's `->change()` names the type on every call, so an `integer` there is as often the
+        // type the column already has as a narrower one. Left to the rewrite axis, which reports the
+        // statement as undetermined, rather than claiming a truncation nobody can see.
+        if (! $this->matrix->isNarrowing($change->targetType()) || $change->restatesTheColumn()) {
             return null;
         }
 

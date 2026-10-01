@@ -28,6 +28,21 @@ final class UnsealedReaderSession extends RuntimeException
         );
     }
 
+    /**
+     * A privilege refused the probe, and nothing else proves the seal: the account's grants do not
+     * show that it cannot write, and the transaction's read-only flag is off.
+     */
+    public static function refusedByPrivilegeAlone(string $sqlState, Throwable $previous): self
+    {
+        return new self(sprintf(
+            'The catalog reader session\'s write probe was refused with SQLSTATE %s, which says the account '
+            .'lacks the one privilege the probe needs, not that it cannot write. Its grants do not show that it '
+            .'cannot, and the transaction\'s read-only flag is off, so the seal did not take and the read was '
+            .'abandoned: SQLens will not audit a database from a session it cannot prove is read-only.',
+            $sqlState,
+        ), previous: $previous);
+    }
+
     /** The probe failed for some other reason, which proves nothing about the seal. */
     public static function refusedForTheWrongReason(string $sqlState, Throwable $previous): self
     {

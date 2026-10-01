@@ -54,9 +54,10 @@ final class RoutineDefinerRule extends AbstractRoutineRule
     protected function message(SchemaObject $object): string
     {
         return sprintf(
-            '%s runs with the privileges of %s (SECURITY DEFINER) and pins its search_path (%s), which is '
-            .'the construction done right — the escalation path SEC.PRIV.ROUTINE_DEFINER_MUTABLE_PATH '
-            .'reports is closed here. It is listed because EXECUTE on it is a bounded loan of %s\'s '
+            '%s runs with the privileges of %s (SECURITY DEFINER) and pins its search_path (%s), so the '
+            .'escalation path SEC.PRIV.ROUTINE_DEFINER_MUTABLE_PATH reports does not apply here; whether '
+            .'the pinned path is itself closed is SEC.PRIV.ROUTINE_DEFINER_UNSAFE_PATH\'s question. It is '
+            .'listed because EXECUTE on it is a bounded loan of %s\'s '
             .'rights rather than an ordinary privilege: a role holding only EXECUTE can look minimal and '
             .'still reach further than its other grants allow. Confirm the grant list on this routine is '
             .'the one you meant.',

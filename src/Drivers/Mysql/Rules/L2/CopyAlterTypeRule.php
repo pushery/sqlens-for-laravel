@@ -14,9 +14,11 @@ use Pushery\SQLens\Drivers\Mysql\DowntimeClass\MysqlDowntimeClassSource;
 use Pushery\SQLens\Drivers\Mysql\OnlineDdl\DowntimeClassMapping;
 use Pushery\SQLens\Drivers\Mysql\Rules\AbstractMysqlRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\Support\ColumnRedefinition;
+use Pushery\SQLens\Drivers\Mysql\Rules\Support\PinnedDdlClauses;
 use Pushery\SQLens\Engine\ResolvedServerVersion;
 use Pushery\SQLens\Findings\Confidence;
 use Pushery\SQLens\Findings\DowntimeClass;
+use Pushery\SQLens\Findings\DowntimeUndetermined;
 use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
@@ -73,6 +75,15 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ENUM and SET are handed over untouched: appending a member is instant, inserting one in the
  * middle is a COPY, and that distinction is a rule of its own rather than a footnote to this one.
+ *
+ * ## A statement that pins its way out is not reported
+ *
+ * The message tells a reader who must run the change in place to add `ALGORITHM=INPLACE,
+ * LOCK=NONE`, and a statement that does is left alone. With `LOCK=NONE`, or with `ALGORITHM=INPLACE`
+ * or `INSTANT` and no lock level that queues writes, the server either runs the redefinition without
+ * a copy or refuses it; measured on MySQL 8.4.10, an `INT` to `BIGINT` change under each of those
+ * pins was refused ({@see PinnedDdlClauses}). A refused statement stops the deploy where somebody
+ * sees it, which is the outcome the advice asks for. `ALGORITHM=COPY` and `LOCK=SHARED` stay reported.
  *
  * ## The downtime class is derived, never declared
  *
@@ -169,7 +180,7 @@ final class CopyAlterTypeRule extends AbstractMysqlRule implements DeclaresOpera
             $context['table'] = $table->qualifiedName();
         }
 
-        return $this->template->payload($context, $this->id(), $this->downtimeClassFor($statement));
+        return $this->template->payload($context, $this->id(), $this->knownDowntimeClass($this->downtimeClassFor($statement)));
     }
 
     public function id(): string
@@ -206,12 +217,12 @@ final class CopyAlterTypeRule extends AbstractMysqlRule implements DeclaresOpera
      * The class for THIS statement, from the matrix — or null when the matrix could not settle
      * it, in which case the verdict below is an undetermined and a class would contradict it.
      */
-    public function downtimeClassFor(MigrationStatementView $statement): ?DowntimeClass
+    public function downtimeClassFor(MigrationStatementView $statement): DowntimeClass|DowntimeUndetermined|null
     {
         $redefinition = $this->redefinitionIn($statement);
 
         return $redefinition instanceof ColumnRedefinition
-            ? $this->mappingFor($redefinition, $statement)->downtimeClass
+            ? $this->mappingFor($redefinition, $statement)->derived()
             : null;
     }
 
@@ -242,17 +253,21 @@ final class CopyAlterTypeRule extends AbstractMysqlRule implements DeclaresOpera
 
     /**
      * The redefinition this statement performs, or null when the rule has nothing to say about it
-     * at all — it is not a redefinition, it is an enumerated type (a rule of its own), or the
-     * table is born in this very migration.
+     * at all — it is not a redefinition, it is an enumerated type (a rule of its own), the table is
+     * born in this very migration, or the statement pins clauses that rule out a copy.
      *
      * Both entry points — {@see verdict()} and {@see downtimeClassFor()} — start here, so a
      * finding's class and its verdict can never come from two different readings of one statement.
      */
     private function redefinitionIn(MigrationStatementView $statement): ?ColumnRedefinition
     {
-        $redefinition = ColumnRedefinition::parse($statement->canonical);
+        $redefinition = ColumnRedefinition::of($statement);
 
         if (! $redefinition instanceof ColumnRedefinition || $redefinition->isEnumerated()) {
+            return null;
+        }
+
+        if (PinnedDdlClauses::of($statement->canonical)->ruleOutAQueuingCopy()) {
             return null;
         }
 

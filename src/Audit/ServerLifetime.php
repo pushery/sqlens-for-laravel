@@ -45,8 +45,8 @@ namespace Pushery\SQLens\Audit;
  * be a way to make a red run green, which is a different feature and one this package should not
  * have.
  *
- * The checks it quiets are not lost either. They are exactly the checks `sqlens:predeploy` runs
- * against the target host, where the same server facts are real and a finding about them is
+ * The checks it quiets are not lost either. `sqlens:security` and `sqlens:audit` run them against
+ * the host that is operated, where the same server facts are real and a finding about them is
  * actionable — so the declaration moves a question rather than dropping it, and the report says so.
  */
 enum ServerLifetime: string

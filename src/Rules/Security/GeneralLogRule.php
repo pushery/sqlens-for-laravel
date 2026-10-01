@@ -70,18 +70,20 @@ final class GeneralLogRule extends AbstractSettingSecurityRule
      * describing one server value must not disagree about when it matters.
      *
      * What makes this safe on a SECURITY rule is the third value. Only a project declaring, in its
-     * own `app.env`, that this is not production quiets it; an environment nothing places is a
-     * FINDING. So the failure mode people fear here — a security check silent against production on
-     * the default path — cannot happen: silence has to be asked for.
+     * own `app.env`, that the server its application runs on is not production quiets it, and only
+     * on that server; an environment nothing places is a FINDING. So the failure mode people fear
+     * here — a security check silent against production on the default path — cannot happen:
+     * silence has to be asked for.
      *
      * Note what does NOT gate it: the audit's `--profile` flag. That is a label the caller picks per
      * invocation, and letting it withhold a security finding is the shape this package refuses
-     * everywhere else. `app.env` is the application's own statement about itself.
+     * everywhere else. `app.env` is the application's own statement about itself, which is why it
+     * does not speak for a server the same command is pointed at from outside.
      */
     #[Override]
-    protected function precondition(SchemaObject $object): ?RuleVerdict
+    protected function findingCondition(SchemaObject $object): ?RuleVerdict
     {
-        return $this->productionPrecondition($object, $this->environment);
+        return $this->productionCondition($object, $this->environment);
     }
 
     /** @return string what this rule would report on production — for the not-production sentence */

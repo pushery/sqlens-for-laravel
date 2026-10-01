@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Tools\Pgls;
 
 use Illuminate\Contracts\Config\Repository as Config;
+use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Subjects\SubjectContext;
 use Pushery\SQLens\Tools\ToolContribution;
@@ -51,7 +52,7 @@ final readonly class PglsContribution implements ToolContribution
      * @param  list<Finding>  $own  the findings the run's own rules produced
      * @return list<Finding>
      */
-    public function contribute(array $own, ToolDiagnostic $diagnostic, string $connectionName, SubjectContext $context): array
+    public function contribute(array $own, ToolDiagnostic $diagnostic, string $connectionName, SubjectContext $context, ?string $pinnedHost = null): array
     {
         // An unavailable tool is already reported by the run's missing-tool notice, which says what
         // it would have added and why it did not run. A second sentence here would be the same
@@ -60,7 +61,13 @@ final readonly class PglsContribution implements ToolContribution
             return $own;
         }
 
-        $connection = PglsConnection::fromConfig($this->connectionConfig($connectionName));
+        // The server the audit read: the connection as the catalog reader resolves it, with the host
+        // the run pinned. Read raw, a `url` connection named no host at all, and one that kept
+        // Laravel's defaults beside its `url` sent the tool to 127.0.0.1.
+        $connection = PglsConnection::fromConfig(EffectiveConnectionConfig::forReading(
+            $this->config->get('database.connections.'.$connectionName),
+            $pinnedHost,
+        ));
 
         if (! $connection instanceof PglsConnection) {
             return [...$own, $this->mapper->unavailable(
@@ -98,35 +105,6 @@ final readonly class PglsContribution implements ToolContribution
         // same advice twice starts skimming, and the next thing they skim is the finding they had
         // not seen. Our own findings are never dropped or changed by anything the tool said.
         return new PglsDeduplicator($version)->merge($own, $mapped)->all();
-    }
-
-    /**
-     * The named connection's configuration, reduced to the string-keyed entries.
-     *
-     * The reduction is not ceremony: a connection is addressed by name everywhere in this package,
-     * and an integer key in that array is not a setting anybody wrote — it is the shape a list ends
-     * up with when a config file was assembled wrong. Dropping it here means the assembler below
-     * reads settings and only settings.
-     *
-     * @return array<string, mixed>
-     */
-    private function connectionConfig(string $connectionName): array
-    {
-        $config = $this->config->get('database.connections.'.$connectionName);
-
-        if (! is_array($config)) {
-            return [];
-        }
-
-        $settings = [];
-
-        foreach ($config as $key => $value) {
-            if (is_string($key)) {
-                $settings[$key] = $value;
-            }
-        }
-
-        return $settings;
     }
 
     /**

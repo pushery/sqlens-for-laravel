@@ -13,10 +13,12 @@ use Pushery\SQLens\Levels\LevelGate;
  *
  * ## The promise this exists to keep
  *
- * The versioning contract says a new rule lands as `preview` and runs only on request. That is not
- * a nicety — without it, **every minor release is a silent breaking change for any pipeline that
- * branches on the exit code.** A rule added in 0.4.1 would start failing builds that passed on
- * 0.4.0, over code nobody touched, and the only signal would be a red pipeline on a Tuesday.
+ * From 1.0 the versioning contract says a new rule lands as `preview` and runs only on request.
+ * That is not a nicety — without it, **every minor release is a silent breaking change for any
+ * pipeline that branches on the exit code.** A rule added in 1.4.0 would start failing builds that
+ * passed on 1.3.0, over code nobody touched, and the only signal would be a red pipeline on a
+ * Tuesday. Before 1.0 a new rule ships `stable` in a minor, which a `^0.N` constraint does not
+ * install on its own, and the tier gates the few rules that declare another one.
  *
  * So the tier has to gate something. Before this class existed, {@see StabilityTier} was a field
  * that traveled all the way into the report and changed nothing on the way — the report showed

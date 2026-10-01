@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Canonical\Stages;
 
 use Pushery\SQLens\Canonical\RawStatement;
+use Pushery\SQLens\Canonical\ScanAt;
 use Pushery\SQLens\Contracts\CanonicalizationStage;
 use Pushery\SQLens\Contracts\DriverCanonicalization;
 use Pushery\SQLens\Subjects\SubjectContext;
@@ -51,9 +52,8 @@ final readonly class WhitespaceNormalizer implements CanonicalizationStage
 
         while ($i < $length) {
             $char = $sql[$i];
-            $rest = substr($sql, $i);
 
-            if ($this->matchPrefix($rest, $lineComments) !== null) {
+            if (ScanAt::firstOf($sql, $i, $lineComments) !== null) {
                 $newline = strpos($sql, "\n", $i);
 
                 if ($newline === false) {
@@ -76,7 +76,7 @@ final readonly class WhitespaceNormalizer implements CanonicalizationStage
                 continue;
             }
 
-            if ($hasBlockComment && str_starts_with($rest, '/*')) {
+            if ($hasBlockComment && ScanAt::startsWith($sql, $i, '/*')) {
                 $close = strpos($sql, '*/', $i + 2);
                 $end = $close === false ? $length : $close + 2;
                 $out .= substr($sql, $i, $end - $i);
@@ -85,7 +85,7 @@ final readonly class WhitespaceNormalizer implements CanonicalizationStage
                 continue;
             }
 
-            if ($this->driver->supportsDollarQuotedStrings() && $char === '$' && preg_match('/\A\$\w*\$/', $rest, $matches) === 1) {
+            if ($this->driver->supportsDollarQuotedStrings() && $char === '$' && preg_match('/\G\$\w*\$/', $sql, $matches, 0, $i) === 1) {
                 $tag = $matches[0];
                 $close = strpos($sql, $tag, $i + strlen($tag));
                 $end = $close === false ? $length : $close + strlen($tag);
@@ -95,7 +95,7 @@ final readonly class WhitespaceNormalizer implements CanonicalizationStage
                 continue;
             }
 
-            $literal = $this->matchPrefix($rest, $literals);
+            $literal = ScanAt::firstOf($sql, $i, $literals);
             if ($literal !== null) {
                 $end = $this->scanQuoted($sql, $i, $literal, $backslashEscapes);
                 $end ??= $length;
@@ -132,20 +132,6 @@ final readonly class WhitespaceNormalizer implements CanonicalizationStage
         }
 
         return rtrim($out);
-    }
-
-    /**
-     * @param  list<string>  $candidates
-     */
-    private function matchPrefix(string $haystack, array $candidates): ?string
-    {
-        foreach ($candidates as $candidate) {
-            if ($candidate !== '' && str_starts_with($haystack, $candidate)) {
-                return $candidate;
-            }
-        }
-
-        return null;
     }
 
     private function scanQuoted(string $sql, int $start, string $quote, bool $backslashEscapes): ?int

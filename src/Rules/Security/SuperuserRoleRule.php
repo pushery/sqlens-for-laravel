@@ -50,19 +50,19 @@ final class SuperuserRoleRule extends AbstractRoleAttributeRule
         return RoleAttribute::Superuser;
     }
 
-    protected function heldMessage(string $role): string
+    protected function heldMessage(string $role, string $statementName): string
     {
         return sprintf(
             '%s is a SUPERUSER. That is not a strong permission but the absence of permission checks: '
             .'row-level security does not apply to it, GRANT and REVOKE do not constrain it, and it can '
             .'read and write every file the database process can. If this is the role an application '
             .'connects as, every other protection in this database is advisory. Create a role with the '
-            .'privileges the application actually needs and point the connection at it: '
-            .'ALTER ROLE %s NOSUPERUSER once nothing depends on it. This finding also stands in for '
-            .'SEC.PRIV.ROLE_BYPASSRLS and SEC.PRIV.ROLE_CREATEROLE: a superuser holds both by definition, '
-            .'so they are not reported separately for this account.',
+            .'privileges the application actually needs, point the connection at it, and run %s once '
+            .'nothing depends on it. This finding also stands in for SEC.PRIV.ROLE_BYPASSRLS and '
+            .'SEC.PRIV.ROLE_CREATEROLE: a superuser holds both by definition, so they are not reported '
+            .'separately for this account.',
             $role,
-            $role,
+            StatementSpan::naming('ALTER ROLE %s NOSUPERUSER;', $statementName),
         );
     }
 

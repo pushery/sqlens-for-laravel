@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Security;
 
 use Pushery\SQLens\Findings\Finding;
+use Pushery\SQLens\Reporting\Baseline\BaselineEntry;
 use Pushery\SQLens\Reporting\RunContext;
 use Pushery\SQLens\Reporting\Suppression\SuppressedFinding;
 
@@ -50,6 +51,26 @@ final readonly class SecurityOutcome
          * @var list<SuppressedFinding>
          */
         public array $suppressed = [],
+        /**
+         * Whether a half ended on a misconfiguration: a baseline that cannot be read, a connection
+         * nothing defines, a refusal before anything was looked at, or a stale baseline entry
+         * under `sqlens.baseline.stale = error` in a half that ran.
+         *
+         * The exit code reads it and the report does not need to, because each refused half already
+         * left a notice saying so and each stale entry is listed. Defaulted for the reason
+         * `analyseReached` is.
+         */
+        public bool $misconfigured = false,
+        /**
+         * The baseline entries the live halves judged and found nothing for, concatenated.
+         *
+         * Without them the report of this run counted no stale entry at all, so a baseline that had
+         * stopped matching went unmentioned, and under `error` the run ended on a misconfiguration
+         * nothing in the report explained.
+         *
+         * @var list<BaselineEntry>
+         */
+        public array $staleBaselineEntries = [],
     ) {}
 
     /**

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Security\Analyse;
 
 use JsonException;
+use Pushery\SQLens\Analyse\AnalyseResultTrace;
 use Pushery\SQLens\Analyse\AnalyseRuleCatalog;
 use Pushery\SQLens\Analyse\AnalyseRuleMetadata;
 use Pushery\SQLens\Findings\Finding;
@@ -21,15 +22,23 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * deciding for them which configuration, which level and which baseline applied — and would be wrong
  * about all three on the first project that had opinions.
  *
- * So the contract is the file: PHPStan runs as its own step, writes `--error-format=json`, and this
+ * So the contract is the file: PHPStan runs as its own step, writes `--error-format=sqlens`, and this
  * reads it. In CI that is one extra line in a workflow both steps already share a workspace with.
+ *
+ * ## Why the file has to come from the extension's own format
+ *
+ * `--error-format=json` from a run whose configuration forgot the extension is the same document a
+ * run over a codebase with no raw SQL writes, so a JSON result cannot say which of the two it is.
+ * The `sqlens` format exists only where the extension was loaded, and it records whether PHPStan
+ * analyzed every file to the end. {@see AnalyseResultTrace} is the contract.
  *
  * ## Every way this can fail to answer is NAMED
  *
  * Not configured, a path that is not there, a file that is not JSON, a document whose shape is not
- * PHPStan's — each is an `undetermined` carrying which one it was. None of them is silence, because a
- * codebase nobody analyzed and a codebase with no raw SQL produce the same empty list, and only one
- * of them is good news.
+ * PHPStan's, a result the extension did not write, an analysis PHPStan could not finish — each is an
+ * `undetermined` carrying which one it was. None of them is silence, because a codebase nobody
+ * analyzed and a codebase with no raw SQL produce the same empty list, and only one of them is good
+ * news.
  *
  * ## The identifier is the join, and it is PHPStan's to own
  *
@@ -105,7 +114,51 @@ final readonly class AnalyseBridge
             ));
         }
 
+        $trace = $decoded[AnalyseResultTrace::KEY] ?? null;
+
+        if (! is_array($trace)) {
+            return AnalyseReading::didNotRun(sprintf(
+                'the PHPStan result at `%s` was not written in the SQLens error format, so nothing in it '
+                .'shows that the SQLens extension was loaded: a run without it and a run that found no '
+                .'raw SQL write the same JSON. Write it with `phpstan analyse --error-format=%s`, which '
+                .'only a PHPStan that loaded the extension can produce',
+                $path,
+                AnalyseResultTrace::FORMAT,
+            ));
+        }
+
+        $internalErrors = $trace['internal_errors'] ?? null;
+
+        if (($trace['version'] ?? null) !== AnalyseResultTrace::VERSION || ! is_array($internalErrors)) {
+            return AnalyseReading::didNotRun(sprintf(
+                'the PHPStan result at `%s` carries a SQLens trace of a shape this version does not '
+                .'read, so it was not read; write it again with the extension this version ships',
+                $path,
+            ));
+        }
+
+        if ($internalErrors !== []) {
+            return AnalyseReading::didNotRun(sprintf(
+                'PHPStan did not finish the analysis behind `%s`: it hit %d internal %s, the first "%s". '
+                .'A file it could not analyze is one whose raw SQL nobody examined',
+                $path,
+                count($internalErrors),
+                count($internalErrors) === 1 ? 'error' : 'errors',
+                $this->firstLine(array_values($internalErrors)[0]),
+            ));
+        }
+
         return AnalyseReading::of($this->mapped($decoded['files'], $context));
+    }
+
+    /** One internal error as a clause: its first line, which is where PHPStan puts the message. */
+    private function firstLine(mixed $message): string
+    {
+        if (! is_string($message) || trim($message) === '') {
+            return '(no message)';
+        }
+
+        return trim(strtok(trim($message), "\n") ?: '');
     }
 
     /**

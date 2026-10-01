@@ -256,10 +256,13 @@ final class MysqlCanonicalization implements DriverCanonicalization
                     SignatureElement::target($index),
                     SignatureElement::keyword('ON'), SignatureElement::target($table),
                 ]),
-                // DROP TABLE [IF EXISTS] <t>
+                // DROP TABLE [IF EXISTS] <t> [, <t> …]
+                //
+                // Every name in the list is a target, as on PostgreSQL. TRUNCATE below keeps a single
+                // one, because MySQL's TRUNCATE takes exactly one table and refuses a list.
                 new StatementSignature(StatementKind::DropTable, [
                     SignatureElement::keyword('DROP'), SignatureElement::keyword('TABLE'),
-                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::optionalModifiers(), SignatureElement::targetList($table),
                 ]),
                 // TRUNCATE TABLE <t>  /  TRUNCATE <t>
                 new StatementSignature(StatementKind::TruncateTable, [
@@ -277,6 +280,12 @@ final class MysqlCanonicalization implements DriverCanonicalization
                 // MODIFY/CHANGE and ADD COLUMN sit among the DROP block for historical reasons —
                 // harmless, since they share no keyword with anything around them. Moving any of
                 // them is safe ONLY while the two bare forms stay last; measure, do not assume.
+                //
+                // A second ordering holds inside the groups: a spelling that is the longer form of
+                // another comes BEFORE it — `ADD UNIQUE KEY` before `ADD UNIQUE`, `MODIFY COLUMN`
+                // before `MODIFY`. The shorter form would read the extra keyword as a name, and a
+                // name slot holding a keyword fails the whole statement instead of passing it on to
+                // the next signature.
                 // ---------------------------------------------------------------------------
                 // ALTER TABLE <t> ADD PRIMARY KEY (…)  — Laravel's primary(); carries no index name.
                 // MySQL-only refinement: the PostgreSQL profile keeps AddConstraint, and its rules
@@ -290,6 +299,11 @@ final class MysqlCanonicalization implements DriverCanonicalization
                 // ALTER TABLE <t> ADD {INDEX|UNIQUE|FULLTEXT|SPATIAL} <i> (…) — the four index
                 // shapes Laravel emits from index()/unique()/fullText()/spatialIndex(). Each is a
                 // separate signature because the keyword differs; the resulting kind is the same.
+                //
+                // Beside them stand the manual's other spellings, which hand-written SQL uses as
+                // often: `KEY` wherever `INDEX` may stand, and an optional `INDEX` or `KEY` after
+                // UNIQUE, FULLTEXT and SPATIAL. Each longer spelling precedes the shorter one it
+                // extends — the ordering rule above.
                 new StatementSignature(StatementKind::CreateIndex, [
                     SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
                     SignatureElement::optionalModifiers(), SignatureElement::target($table),
@@ -299,8 +313,38 @@ final class MysqlCanonicalization implements DriverCanonicalization
                 new StatementSignature(StatementKind::CreateIndex, [
                     SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
                     SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('KEY'),
+                    SignatureElement::target($index),
+                ]),
+                new StatementSignature(StatementKind::CreateIndex, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('UNIQUE'),
+                    SignatureElement::keyword('INDEX'), SignatureElement::target($index),
+                ]),
+                new StatementSignature(StatementKind::CreateIndex, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('UNIQUE'),
+                    SignatureElement::keyword('KEY'), SignatureElement::target($index),
+                ]),
+                new StatementSignature(StatementKind::CreateIndex, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
                     SignatureElement::keyword('ADD'), SignatureElement::keyword('UNIQUE'),
                     SignatureElement::target($index),
+                ]),
+                new StatementSignature(StatementKind::CreateFulltextIndex, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('FULLTEXT'),
+                    SignatureElement::keyword('INDEX'), SignatureElement::target($index),
+                ]),
+                new StatementSignature(StatementKind::CreateFulltextIndex, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('FULLTEXT'),
+                    SignatureElement::keyword('KEY'), SignatureElement::target($index),
                 ]),
                 new StatementSignature(StatementKind::CreateFulltextIndex, [
                     SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
@@ -319,6 +363,18 @@ final class MysqlCanonicalization implements DriverCanonicalization
                     SignatureElement::optionalModifiers(), SignatureElement::target($table),
                     SignatureElement::keyword('ADD'), SignatureElement::keyword('SPATIAL'),
                     SignatureElement::keyword('INDEX'), SignatureElement::target($index),
+                ]),
+                new StatementSignature(StatementKind::CreateSpatialIndex, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('SPATIAL'),
+                    SignatureElement::keyword('KEY'), SignatureElement::target($index),
+                ]),
+                new StatementSignature(StatementKind::CreateSpatialIndex, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('SPATIAL'),
+                    SignatureElement::target($index),
                 ]),
                 // ALTER TABLE <t> ADD CONSTRAINT <k> FOREIGN KEY (<c>, …) REFERENCES <t2>
                 //
@@ -348,6 +404,17 @@ final class MysqlCanonicalization implements DriverCanonicalization
                     SignatureElement::target($constraint),
                     SignatureElement::seekKeyword('REFERENCES'), SignatureElement::target($table, TargetRole::Referenced),
                 ]),
+                // ALTER TABLE <t> ADD FOREIGN KEY (<c>, …) REFERENCES <t2> — the manual's form without
+                // a CONSTRAINT clause, where the server names the key itself (`<t>_ibfk_<n>`). It
+                // carries no constraint target because the statement carries no name; the columns and
+                // the referenced table travel exactly as in the named form above.
+                new StatementSignature(StatementKind::AddForeignKey, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('FOREIGN'),
+                    SignatureElement::keyword('KEY'), SignatureElement::columnList(),
+                    SignatureElement::seekKeyword('REFERENCES'), SignatureElement::target($table, TargetRole::Referenced),
+                ]),
                 // ALTER TABLE <t> ADD CONSTRAINT <k>
                 new StatementSignature(StatementKind::AddConstraint, [
                     SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
@@ -366,6 +433,22 @@ final class MysqlCanonicalization implements DriverCanonicalization
                 // MODIFY keeps the name, CHANGE renames while redefining; both redefine a column,
                 // which is the distinction that matters here. Placed before the bare ADD below,
                 // though they cannot collide — different keywords.
+                //
+                // The manual allows `COLUMN` after either keyword, and hand-written SQL usually
+                // writes it, so the spelled-out forms come first: the plain ones would read `COLUMN`
+                // as the column's name.
+                new StatementSignature(StatementKind::AlterColumn, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('MODIFY'), SignatureElement::keyword('COLUMN'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($column),
+                ]),
+                new StatementSignature(StatementKind::AlterColumn, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('CHANGE'), SignatureElement::keyword('COLUMN'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($column),
+                ]),
                 new StatementSignature(StatementKind::AlterColumn, [
                     SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
                     SignatureElement::optionalModifiers(), SignatureElement::target($table),
@@ -409,6 +492,13 @@ final class MysqlCanonicalization implements DriverCanonicalization
                     SignatureElement::keyword('DROP'), SignatureElement::keyword('INDEX'),
                     SignatureElement::target($index),
                 ]),
+                // ALTER TABLE <t> DROP KEY <i>  — the manual's synonym for the shape above.
+                new StatementSignature(StatementKind::DropIndex, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('DROP'), SignatureElement::keyword('KEY'),
+                    SignatureElement::target($index),
+                ]),
                 // ALTER TABLE <t> DROP COLUMN [IF EXISTS] <c>
                 new StatementSignature(StatementKind::DropColumn, [
                     SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
@@ -418,8 +508,8 @@ final class MysqlCanonicalization implements DriverCanonicalization
                 ]),
                 // ALTER TABLE <t> ADD <c> …  — the BARE form, and the one Laravel emits for a new
                 // column. Same rule as the bare DROP below: it must sit after every specific ADD
-                // shape (PRIMARY KEY, INDEX, UNIQUE, FULLTEXT, SPATIAL, CONSTRAINT, COLUMN), or it
-                // reads their keyword as a column name.
+                // shape (PRIMARY KEY, INDEX, KEY, UNIQUE, FULLTEXT, SPATIAL, CONSTRAINT, FOREIGN KEY,
+                // COLUMN), or it reads their keyword as a column name.
                 new StatementSignature(StatementKind::AddColumn, [
                     SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
                     SignatureElement::optionalModifiers(), SignatureElement::target($table),
@@ -430,8 +520,8 @@ final class MysqlCanonicalization implements DriverCanonicalization
                 ]),
                 // ALTER TABLE <t> DROP <c>  — the BARE form, and the one Laravel actually emits for
                 // dropColumn(). It must stay LAST of the DROP shapes: every specific one above
-                // (PRIMARY KEY, FOREIGN KEY, INDEX, CONSTRAINT, COLUMN) would otherwise be read as
-                // a column named after its own keyword.
+                // (PRIMARY KEY, FOREIGN KEY, INDEX, KEY, CONSTRAINT, COLUMN) would otherwise be read
+                // as a column named after its own keyword.
                 new StatementSignature(StatementKind::DropColumn, [
                     SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
                     SignatureElement::optionalModifiers(), SignatureElement::target($table),
@@ -531,6 +621,9 @@ final class MysqlCanonicalization implements DriverCanonicalization
                 'GRANT' => StatementKind::DdlOther,
                 'REVOKE' => StatementKind::DdlOther,
             ],
+            // `ALTER TABLE t ADD INDEX i (a), ALGORITHM=INPLACE, LOCK=NONE`: the last two qualify how
+            // the index is built and are not actions of their own.
+            actionOptions: ['ALGORITHM', 'LOCK'],
         );
     }
 }

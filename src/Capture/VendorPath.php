@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Capture;
 
+use Composer\Autoload\ClassLoader;
+
 /**
  * Whether a file lives inside the dependency tree — asked in ONE place, because two places would
  * disagree.
@@ -32,7 +34,18 @@ namespace Pushery\SQLens\Capture;
  * package is a local checkout you are working on: code you can change, which is the whole
  * distinction the vendor switch draws.
  *
- * ## The segment, not the substring
+ * ## The project's dependency tree, not every directory called vendor
+ *
+ * The dependency tree is where Composer installs, and Composer says where that is: every
+ * autoloader it registered is keyed by its vendor directory, a `vendor-dir` the project configured
+ * included. A `vendor` directory below the project root counts as well, the tree of a nested
+ * Composer project. A `vendor` ABOVE the root does not. It used to, because the whole absolute
+ * path was searched for the segment, and a checkout that happened to lie in `/builds/vendor/app`
+ * then filed every migration of the project as a package's: the same repository gave a different
+ * result in another directory, and a Critical in its own migration went silent.
+ *
+ * A file outside the project and outside every tree Composer registered answers false. Its
+ * spelling is not evidence, and false is the direction that costs no finding.
  *
  * Matched as a path SEGMENT: a project directory called `app/Vendors/` or a migration named
  * `2026_01_01_add_vendor_id.php` contains the word and is not the dependency tree, and treating
@@ -41,14 +54,14 @@ namespace Pushery\SQLens\Capture;
 final readonly class VendorPath
 {
     /**
-     * Whether $path resolves to a file inside a `vendor/` directory.
+     * Whether $path resolves to a file inside the dependency tree of the project at $projectRoot.
      *
      * A path that does not exist answers FALSE rather than guessing from its spelling. The two
      * cases that reach here are a file deleted between resolution and judgment and a synthetic path
      * built by a test or a tool, and neither is evidence that something is vendor code — while
      * answering true would drop it from a run silently, which is the direction that costs a finding.
      */
-    public static function contains(string $path): bool
+    public static function contains(string $path, string $projectRoot): bool
     {
         $resolved = realpath($path);
 
@@ -56,8 +69,41 @@ final readonly class VendorPath
             return false;
         }
 
-        $separator = DIRECTORY_SEPARATOR;
+        foreach (self::composerVendorDirectories() as $directory) {
+            if (str_starts_with($resolved, $directory.DIRECTORY_SEPARATOR)) {
+                return true;
+            }
+        }
 
-        return str_contains($resolved, $separator.'vendor'.$separator);
+        $root = realpath($projectRoot);
+
+        if ($root === false) {
+            return false;
+        }
+
+        $prefix = rtrim($root, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR;
+
+        return str_starts_with($resolved, $prefix)
+            && in_array('vendor', explode(DIRECTORY_SEPARATOR, dirname(substr($resolved, strlen($prefix)))), true);
+    }
+
+    /**
+     * The vendor directory of every autoloader Composer registered in this process, resolved.
+     *
+     * @return list<string>
+     */
+    private static function composerVendorDirectories(): array
+    {
+        $directories = [];
+
+        foreach (array_keys(ClassLoader::getRegisteredLoaders()) as $directory) {
+            $resolved = realpath($directory);
+
+            if ($resolved !== false) {
+                $directories[] = rtrim($resolved, DIRECTORY_SEPARATOR);
+            }
+        }
+
+        return $directories;
     }
 }

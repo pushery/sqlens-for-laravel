@@ -128,6 +128,55 @@ final class DebtNotices
     }
 
     /**
+     * A recorded debt whose standing the catalog cannot give — the question left open, and why.
+     *
+     * Two causes, told apart by the standing: no catalog question settles the debt, or the read
+     * failed. Neither is an absence, so neither says the object is missing, and the expand without
+     * its contract, the one kind the package records whose added column outlives the debt, says in
+     * its own words why the catalog cannot answer for it.
+     */
+    public static function standingUnknown(CollectedDebt $debt, string $driver, string $connection, SubjectContext $context): Finding
+    {
+        $message = match (true) {
+            $debt->standing === DebtStanding::Unreadable => sprintf(
+                'The debt account records %s on `%s`, and the catalog could not be read to say where it '
+                .'stands. It is not settled and not missing: the question failed, and the next run with '
+                .'a readable catalog answers it.',
+                $debt->entry->kind,
+                $debt->entry->object,
+            ),
+            $debt->entry->kind === 'expand_without_contract' => sprintf(
+                'The debt account records %s on `%s`, the column that was added, and a table in the '
+                .'catalog still carries a column of that name. That says nothing about the column it '
+                .'replaces, which the account does not name, so whether the contract step ran cannot be '
+                .'read from here. `sqlens:lint --debt=record` answers that from the repository once the '
+                .'contract migration is in.',
+                $debt->entry->kind,
+                $debt->entry->object,
+            ),
+            default => sprintf(
+                'The debt account records %s on `%s`, and this build has no catalog question for a debt of '
+                .'that kind on %s, so its standing was not asked. It is not reported missing, because '
+                .'nobody looked for it.',
+                $debt->entry->kind,
+                $debt->entry->object,
+                $driver,
+            ),
+        };
+
+        return self::undetermined(
+            DebtNotice::StandingUnknown,
+            $message,
+            $debt->standing->reason() ?? UndeterminedReason::DebtStandingNotInCatalog,
+            $driver,
+            $connection,
+            $context,
+            $debt->entry->object,
+            DebtContext::of($debt->entry, $debt->age),
+        );
+    }
+
+    /**
      * A debt the catalog shows and the account has never heard of.
      *
      * A FAIL rather than an undetermined: nothing here is unknown. The catalog was read, the debt is

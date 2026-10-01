@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Drivers\Mysql\Rules;
 
 use Override;
+use Pushery\SQLens\Findings\DowntimeClass;
+use Pushery\SQLens\Findings\DowntimeUndetermined;
 use Pushery\SQLens\Rules\AbstractSafetyRule;
 use Pushery\SQLens\Rules\ServerVersion;
 use Pushery\SQLens\Rules\VersionWindow;
@@ -37,5 +39,15 @@ abstract class AbstractMysqlRule extends AbstractSafetyRule
     public function versionWindow(): VersionWindow
     {
         return VersionWindow::from(ServerVersion::of(8, 4, 0, 'mysql'));
+    }
+
+    /**
+     * The class a remediation template names for a derived answer: the class where it is known,
+     * none where the rule could not settle it. A template states what a sequence costs, and it
+     * has nothing to state about a class nobody established.
+     */
+    protected function knownDowntimeClass(DowntimeClass|DowntimeUndetermined|null $derived): ?DowntimeClass
+    {
+        return $derived instanceof DowntimeClass ? $derived : null;
     }
 }

@@ -105,7 +105,7 @@ final class HbaCleartextRule extends AbstractHbaRule
     {
         return [
             'judges each line on its own, and `pg_hba.conf` is FIRST-MATCH-WINS: a line reported here may sit below one that already matches every connection it would have accepted, in which case nothing ever reaches it. Reading the file as an ordered decision table is a different question',
-            'reads what the server has LOADED, not what is on disk — an edit made and not reloaded is invisible here, and so is one already written that has not taken effect yet',
+            'reads the FILE as it is on disk, through the server\'s own parse of it, which is not necessarily what the server has loaded: an edit that has not been reloaded is judged as if it were in force, and a reload the server refused leaves its previous rules running where this reading cannot see them',
             'judges the auth METHOD. Whether the password actually crosses the wire in the clear also depends on the line type and on the server\'s TLS being both enabled and required — three facts, of which this rule reads one',
         ];
     }

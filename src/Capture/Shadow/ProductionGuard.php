@@ -17,7 +17,9 @@ namespace Pushery\SQLens\Capture\Shadow;
  *      NOT overridable by `--force` — `--force` answers "yes, I mean it" to a
  *      confirmation, it does not answer "yes, run in production". A force flag that
  *      could override the environment would defeat the whole guard.
- *   2. The target connection must not be a production connection.
+ *   2. The target connection must not be a production connection, and neither may the
+ *      connection the throwaway databases are created and dropped on, when that is
+ *      another one.
  *   3. The run must be confirmed: `--force`, or an interactive run the user
  *      confirmed. A non-interactive run without `--force` is refused rather than
  *      assumed-yes.

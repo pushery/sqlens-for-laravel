@@ -32,6 +32,9 @@ use Pushery\SQLens\Subjects\SchemaObject;
  */
 final class ProcessGrantRule extends AbstractServerReachRule
 {
+    /** The privilege, public because SEC.PRIV.GRANT_SERVER_ADMIN leaves it to this rule. */
+    public const string PRIVILEGE = 'PROCESS';
+
     public function id(): string
     {
         return 'SEC.PRIV.GRANT_PROCESS';
@@ -44,7 +47,7 @@ final class ProcessGrantRule extends AbstractServerReachRule
 
     protected function privilege(): string
     {
-        return 'PROCESS';
+        return self::PRIVILEGE;
     }
 
     protected function message(SchemaObject $object): string

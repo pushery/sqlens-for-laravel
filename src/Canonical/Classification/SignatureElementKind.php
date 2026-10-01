@@ -21,6 +21,17 @@ enum SignatureElementKind
     /** An identifier token, captured as a target of the element's object type. */
     case Target;
 
+    /**
+     * A comma-separated run of identifiers on the statement's own level, each captured as a target
+     * of the element's object type — `DROP TABLE a, b`, `TRUNCATE a, b`.
+     *
+     * Its own kind because a single Target read the first name and stopped, and everything after
+     * the first comma then existed for no rule: a rollback that drops a table `up()` never created
+     * was invisible whenever that table came second. A member it cannot read as an identifier makes
+     * the statement unresolvable rather than shorter, so no name can fall out of the list silently.
+     */
+    case TargetList;
+
     /** Advance past the next occurrence of a keyword (e.g. ON, REFERENCES); fail the signature if it is absent. */
     case SeekKeyword;
 

@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Agent\Mcp;
 
+use Illuminate\Contracts\Config\Repository;
+use Symfony\Component\VarDumper\Cloner\VarCloner;
+use Symfony\Component\VarDumper\Dumper\CliDumper;
+use Symfony\Component\VarDumper\VarDumper;
+
 /**
  * Keeps `stdout` for the protocol and nothing else.
  *
@@ -24,6 +29,16 @@ namespace Pushery\SQLens\Agent\Mcp;
  * NOT capture `fwrite()` to the stdout stream resource. The transport writes frames with `fwrite`,
  * so they pass straight through while foreign output is intercepted. That is what makes a blanket
  * buffer safe here rather than a way to swallow the protocol.
+ *
+ * ## The two lanes that write like the frames do
+ *
+ * The same property lets two ordinary kinds of foreign output past the buffer. Laravel's CLI
+ * dumper, which a forgotten `dump` reaches, writes through a console output built on `STDOUT`,
+ * and a log channel on `php://stdout` opens that stream itself; both use `fwrite`. So the shield
+ * takes the dump handler while it is up and sends dumps to the diagnostic channel, and
+ * {@see self::divertLogStreams()} points such log channels at `php://stderr`. What stays out of
+ * reach is code that writes to `STDOUT` itself, and a log handler built around a stream it was
+ * handed rather than one it opens from the configuration.
  *
  * ## Why captured output is REPORTED, not dropped
  *
@@ -59,6 +74,21 @@ final class StdoutShield
     private bool $engaged = false;
 
     private ?string $previousDisplayErrors = null;
+
+    /** Whether the dump handler is this shield's, and so has to be handed back. */
+    private bool $holdsDumps = false;
+
+    /** @var callable|null the dump handler this shield replaced */
+    private $previousDumpHandler;
+
+    /**
+     * The log streams this shield re-pointed, by configuration key, with what they said before.
+     *
+     * @var array<string, string>
+     */
+    private array $divertedLogStreams = [];
+
+    private ?Repository $divertedIn = null;
 
     /** @var resource */
     private $diagnostics;
@@ -98,6 +128,14 @@ final class StdoutShield
             return true;
         });
 
+        // A dump, next. The handler Laravel registers in the console writes with `fwrite` to
+        // `STDOUT`, past the buffer below, so a forgotten `dump` would land in the frame stream.
+        // Only where the dumper is installed at all: without it there is no `dump` to forget.
+        if (class_exists(VarDumper::class)) {
+            $this->previousDumpHandler = VarDumper::setHandler($this->divertDump(...));
+            $this->holdsDumps = true;
+        }
+
         // Chunk size 1 so a stray line is diverted when it is written rather than at the end of a
         // session that may last an afternoon.
         ob_start(function (string $chunk): string {
@@ -109,6 +147,56 @@ final class StdoutShield
             // passes through here.
             return '';
         }, 1);
+    }
+
+    /**
+     * Point every log channel that writes to standard output at standard error.
+     *
+     * A log handler opens its stream itself and writes it with `fwrite`, the lane the frames use,
+     * so the buffer never sees the line: a channel on `php://stdout` put a log line into the frame
+     * stream on every call that logged. Each such stream, as `path` or as the `stream` a monolog
+     * channel is built with, now names `php://stderr`, and a channel the logger already opened is
+     * dropped so that it opens again on the new stream.
+     *
+     * Called where the shield goes up and again where the conversation starts, so a channel the
+     * host configures in between is caught too. Re-pointing a stream twice is a no-op.
+     *
+     * @param  object|null  $log  the application's log manager, to drop channels it already opened
+     */
+    public function divertLogStreams(Repository $config, ?object $log = null): void
+    {
+        $channels = $config->get('logging.channels');
+
+        if (! is_array($channels)) {
+            return;
+        }
+
+        foreach ($channels as $name => $channel) {
+            if (! is_string($name) || ! is_array($channel)) {
+                continue;
+            }
+
+            $diverted = false;
+
+            foreach (['path', 'with.stream', 'handler_with.stream'] as $key) {
+                $stream = data_get($channel, $key);
+
+                if (is_string($stream) && strtolower($stream) === 'php://stdout') {
+                    $this->divertedLogStreams['logging.channels.'.$name.'.'.$key] ??= $stream;
+                    $config->set('logging.channels.'.$name.'.'.$key, 'php://stderr');
+                    $diverted = true;
+                }
+            }
+
+            if ($diverted) {
+                $this->divertedIn = $config;
+                $this->write(sprintf('[sqlens:mcp] log channel "%s" wrote to standard output, which carries the protocol; it writes to standard error while the server runs', $name));
+
+                if ($log !== null && method_exists($log, 'forgetChannel')) {
+                    $log->forgetChannel($name);
+                }
+            }
+        }
     }
 
     /**
@@ -158,6 +246,19 @@ final class StdoutShield
         ob_end_clean();
         restore_error_handler();
 
+        if ($this->holdsDumps) {
+            VarDumper::setHandler($this->previousDumpHandler);
+            $this->holdsDumps = false;
+            $this->previousDumpHandler = null;
+        }
+
+        foreach ($this->divertedLogStreams as $key => $stream) {
+            $this->divertedIn?->set($key, $stream);
+        }
+
+        $this->divertedLogStreams = [];
+        $this->divertedIn = null;
+
         if ($this->previousDisplayErrors !== null) {
             ini_set('display_errors', $this->previousDisplayErrors);
         }
@@ -167,6 +268,17 @@ final class StdoutShield
     public function isEngaged(): bool
     {
         return $this->engaged;
+    }
+
+    /** A dump, rendered without colors and reported like any other foreign output. */
+    private function divertDump(mixed $value, ?string $label = null): void
+    {
+        $dumper = new CliDumper;
+        $dumper->setColors(false);
+
+        $rendered = (string) $dumper->dump(new VarCloner()->cloneVar($value), true);
+
+        $this->write(self::CAPTURE_PREFIX.($label !== null && $label !== '' ? $label.' ' : '').rtrim($rendered, "\n"));
     }
 
     private function write(string $line): void

@@ -70,28 +70,20 @@ final readonly class RemediationStep
      * would read as a complete statement about the wrong object, which is worse than one that
      * visibly still has a hole in it.
      *
+     * Each value is written for the place it stands in, a string literal of the SQL or a string of
+     * the snippet, and one that cannot be written safely there stands as its placeholder too. See
+     * {@see PlaceholderFill}.
+     *
      * @param  array<string, string>  $context  placeholder name => value, without the braces
      */
     public function filled(array $context): self
     {
-        $replace = static function (?string $template) use ($context): ?string {
-            if ($template === null) {
-                return null;
-            }
-
-            foreach ($context as $name => $value) {
-                $template = str_replace('{{'.$name.'}}', $value, $template);
-            }
-
-            return $template;
-        };
-
         return new self(
             $this->order,
             $this->kind,
             $this->noteKey,
-            $replace($this->sqlTemplate),
-            $replace($this->laravelSnippet),
+            $this->sqlTemplate === null ? null : PlaceholderFill::sql($this->sqlTemplate, $context),
+            $this->laravelSnippet === null ? null : PlaceholderFill::php($this->laravelSnippet, $context),
             $this->withinTransaction,
         );
     }

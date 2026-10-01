@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Reporting\Baseline;
 
 use Pushery\SQLens\Canonical\Fingerprint;
+use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
+use Pushery\SQLens\Findings\LocationKind;
 use Pushery\SQLens\Subjects\MigrationDirection;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
@@ -30,6 +32,16 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
 final readonly class FindingFingerprint
 {
     private function __construct(public string $value) {}
+
+    /**
+     * The identity of a finding as it stands: its rule, its location and the canonical statement it
+     * carries. The one way the baseline, the suppression candidates and SARIF read it, so the three
+     * cannot disagree about which finding is which.
+     */
+    public static function ofFinding(Finding $finding): self
+    {
+        return self::of($finding->ruleId, $finding->location, $finding->excerpt ?? Fingerprint::fromValue(''));
+    }
 
     public static function of(string $ruleId, Location $location, Fingerprint $excerpt): self
     {
@@ -63,13 +75,20 @@ final readonly class FindingFingerprint
      * index are DELIBERATELY absent (positional noise); the path is forced to
      * forward slashes so macOS, Linux, and Windows agree on one fingerprint.
      *
+     * A catalog finding's path is absent too, and for a stronger reason than noise. It is the
+     * migration that introduced the object, read for presentation: the finding is about the
+     * instance and the object, and the database it describes does not change when somebody renames
+     * a migration, moves it into a folder or squashes it with `schema:dump --prune`. Hashed, the
+     * path gave the same finding a new identity after each of those, which retired its baseline
+     * entry and reopened its SARIF alert.
+     *
      * @return list<string>
      */
     private static function normalizedLocation(Location $location): array
     {
         return [
             $location->kind->value,
-            self::forwardSlash($location->file),
+            $location->kind === LocationKind::Catalog ? '' : self::forwardSlash($location->file),
             $location->migrationClass ?? '',
             $location->direction instanceof MigrationDirection ? $location->direction->value : '',
             $location->driver ?? '',

@@ -41,6 +41,19 @@ use Pushery\SQLens\Subjects\SubjectContext;
  */
 final readonly class DriftFindings
 {
+    /**
+     * Attributes a finding names as different and never prints.
+     *
+     * A routine's body is where a catalog most often holds a credential: an API key a migration
+     * pasted in, a connection string, a password a trigger uses to reach another system. That is why
+     * the security readings never read `pg_proc.prosrc` at all. Drift compares it, which it has to,
+     * and a finding that printed both sides would carry the old and the new secret into the console,
+     * JSON, SARIF and every CI log the run writes to.
+     *
+     * @var list<string>
+     */
+    private const array SHOWN_BY_DIGEST = ['body'];
+
     /** The id every blind spot reports under — the absence of a comparison, not one of its answers. */
     public const string UNCOMPARED_ID = 'DEPLOY.DRIFT.UNCOMPARED';
 
@@ -162,14 +175,28 @@ final readonly class DriftFindings
         $rendered = [];
 
         foreach ($changes as $attribute => $sides) {
-            $rendered[] = $attribute.' is '.self::side($sides['live'])
-                .' in the database and '.self::side($sides['expected']).' in the migrations';
+            $rendered[] = in_array($attribute, self::SHOWN_BY_DIGEST, true)
+                ? $attribute.' differs: '.self::digest($sides['live']).' in the database and '
+                    .self::digest($sides['expected']).' in the migrations (compared in full, printed '
+                    .'only as a digest)'
+                : $attribute.' is '.self::side($sides['live'])
+                    .' in the database and '.self::side($sides['expected']).' in the migrations';
         }
 
         // An empty diff would leave a sentence ending in a colon. The comparator does not produce a
         // divergence without one, so this is a guard against a future caller rather than a case
         // seen — and it says so rather than rendering an empty list as though nothing differed.
         return $rendered === [] ? 'the attributes that differ were not recorded' : implode('; ', $rendered);
+    }
+
+    /**
+     * A value as a short digest, which tells two versions apart without printing either.
+     *
+     * Enough of `sha256` to compare two runs by eye; the comparison itself uses the whole value.
+     */
+    private static function digest(string|int|float|bool|null $value): string
+    {
+        return $value === null ? 'absent' : '`sha256:'.substr(hash('sha256', (string) $value), 0, 12).'`';
     }
 
     private static function side(string|int|float|bool|null $value): string

@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Deploy\Drift;
 use Pushery\SQLens\Capture\CaptureSection;
 use Pushery\SQLens\Capture\PendingMigration;
 use Pushery\SQLens\Capture\Shadow\GuardDecision;
+use Pushery\SQLens\Capture\Shadow\ShadowConnectionLatch;
 use Pushery\SQLens\Catalog\CatalogReaderFactory;
 use Pushery\SQLens\Catalog\CatalogRequest;
 use Pushery\SQLens\Catalog\ReaderConnectionFactory;
@@ -53,7 +54,6 @@ final readonly class ShadowReferenceBuilder
         private ShadowRunner $runner,
         private ReaderConnectionFactory $connections,
         private CatalogReaderFactory $readers,
-        private string $sourceConnection,
         private string $sourceDatabase,
         private string $driver,
         private bool $keepOnFailure = false,
@@ -115,7 +115,24 @@ final readonly class ShadowReferenceBuilder
                 }
             }
 
-            $connection = $this->connections->forShadowDatabase($this->sourceConnection, $session->shadowDatabase);
+            // Read through the connection the shadow was provisioned and migrated through, never
+            // through the application's. With `capture.shadow.connection` or `direct_connection`
+            // set, those are another server or another account: the application's would look for
+            // the database on its own server, where it does not exist, or reach it through the
+            // pooler the build had to go around, or be refused by an account granted only its own
+            // database.
+            $connection = $this->connections->forShadowDatabase($session->connectionName, $session->shadowDatabase);
+
+            // The expected schema comes from the throwaway database and from nowhere else. Read from
+            // the database it was copied from, it would be the live schema compared with itself, and
+            // the comparison would find nothing whatever the migrations expect.
+            try {
+                ShadowConnectionLatch::assertReaches($connection, $session->shadowDatabase);
+            } catch (ShadowProvisioningUndetermined $refusal) {
+                $failed = true;
+
+                return ShadowReferenceOutcome::undetermined($refusal->reason);
+            }
 
             $snapshot = $this->readers
                 ->for($this->driver, $connection, $this->connections->budget(), $context)

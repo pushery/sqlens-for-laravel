@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Capture;
 
+use Pushery\SQLens\Canonical\CanonicalizationFailure;
 use Pushery\SQLens\Canonical\CanonicalizationPipeline;
 use Pushery\SQLens\Canonical\Canonicalizer;
 use Pushery\SQLens\Canonical\CanonicalStatement;
+use Pushery\SQLens\Canonical\Fingerprint;
 use Pushery\SQLens\Canonical\RawStatement;
+use Pushery\SQLens\Canonical\Stages\StatementSplitter;
 use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Canonical\StatementOrigin;
 use Pushery\SQLens\Contracts\BindingFormatter;
@@ -38,6 +41,14 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * later) owns HOW the SQL is obtained; this owns turning what it obtained into
  * the one form the rules read. A second capture mode gets canonicalization for
  * free by being wrapped, with no second canonicalizing path to drift.
+ *
+ * One captured entry is not always one statement. `DB::unprepared()` hands the
+ * server a whole batch, a trigger with its function or a `.sql` file read in,
+ * and both capture modes see it as a single entry. Read as one statement it is
+ * classified by its first command, and every later one reaches no rule: a
+ * `DROP TABLE` behind a `CREATE INDEX` would pass. So each entry is split here,
+ * with the {@see StatementSplitter} every batch in this package goes through,
+ * and each statement it holds is canonicalized and judged on its own.
  */
 final readonly class CanonicalizingCaptorDecorator implements Captor
 {
@@ -46,6 +57,7 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
         private BindingSubstitutor $substitutor,
         private Canonicalizer $canonicalizer,
         private SubjectContext $context,
+        private DriverCanonicalization $syntax,
     ) {}
 
     /**
@@ -70,6 +82,7 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
             new BindingSubstitutor($formatter),
             CanonicalizationPipeline::forDriver($canonicalization),
             $context,
+            $canonicalization,
         );
     }
 
@@ -109,20 +122,23 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
         $canonicalized = [];
 
         foreach ($result->statements as $statement) {
-            $rendered = $this->canonicalizeStatement($result, $statement);
+            $statements = $this->statementsIn($statement);
 
-            if (! $rendered instanceof CapturedStatement) {
-                return CaptureResult::undetermined(
-                    $result->file,
-                    $result->migrationClass,
-                    $result->section,
-                    $result->mode,
-                    $rendered,
-                    annotationClass: $result->annotationClass,
-                );
+            if ($statements instanceof UndeterminedReason) {
+                return $this->undetermined($result, $statements);
             }
 
-            $canonicalized[] = $rendered;
+            foreach ($statements as [$each, $substituted]) {
+                // Numbered as they come: an entry that held three statements moves every later one
+                // along, so a sequence stays a statement's place in what the migration runs.
+                $rendered = $this->canonicalizeStatement($result, $each->withSequence(count($canonicalized)), $substituted);
+
+                if (! $rendered instanceof CapturedStatement) {
+                    return $this->undetermined($result, $rendered);
+                }
+
+                $canonicalized[] = $rendered;
+            }
         }
 
         // The annotation carrier is carried THROUGH: this decorator rewrites the
@@ -139,11 +155,36 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
         );
     }
 
+    /** The whole migration as undetermined, for the reason one of its statements could not be rendered. */
+    private function undetermined(CaptureResult $result, UndeterminedReason $reason): CaptureResult
+    {
+        return CaptureResult::undetermined(
+            $result->file,
+            $result->migrationClass,
+            $result->section,
+            $result->mode,
+            $reason,
+            annotationClass: $result->annotationClass,
+        );
+    }
+
     /**
-     * Substitute and canonicalize one statement, returning the enriched statement
-     * or the reason it could not be rendered.
+     * The statements one captured entry hands the server, each beside its text with the bindings
+     * inlined, or the reason the entry could not be rendered.
+     *
+     * An entry the splitter finds one statement in stays the entry it was. One holding several
+     * becomes several, each carrying its own text as the raw form: the bindings are inlined by then,
+     * and a statement of a batch has no grammar output of its own to keep apart from them.
+     *
+     * An entry the splitter cannot read stays whole, and the canonicalization decides about it as it
+     * decides about any single statement. The splitter is stricter than the canonicalization on one
+     * point: it reads a MySQL backslash as an escape, so a value ending in one leaves a literal open.
+     * Refusing such an entry would turn a migration the canonicalization reads today into an
+     * undetermined one.
+     *
+     * @return list<array{CapturedStatement, string}>|UndeterminedReason
      */
-    private function canonicalizeStatement(CaptureResult $result, CapturedStatement $statement): CapturedStatement|UndeterminedReason
+    private function statementsIn(CapturedStatement $statement): array|UndeterminedReason
     {
         $substituted = $this->substitutor->substitute($statement->rawSql, $statement->bindings);
 
@@ -151,6 +192,35 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
             return $substituted->reason;
         }
 
+        $parts = new StatementSplitter()->split($substituted, $this->syntax);
+
+        if ($parts instanceof CanonicalizationFailure || count($parts) < 2) {
+            return [[$statement, $substituted]];
+        }
+
+        return array_map(
+            static fn (string $part): array => [new CapturedStatement(
+                rawSql: $part,
+                bindings: [],
+                sequence: $statement->sequence,
+                direction: $statement->direction,
+                withinTransaction: $statement->withinTransaction,
+                connectionName: $statement->connectionName,
+                driver: $statement->driver,
+            ), $part],
+            $parts,
+        );
+    }
+
+    /**
+     * Canonicalize one statement from its text with the bindings inlined, returning the enriched
+     * statement or the reason it could not be rendered.
+     *
+     * The text travels beside the statement as a string rather than being read back off its nullable
+     * field, so there is never raw grammar output with placeholders in it to fall back to.
+     */
+    private function canonicalizeStatement(CaptureResult $result, CapturedStatement $statement, string $substituted): CapturedStatement|UndeterminedReason
+    {
         $raw = new RawStatement(
             sql: $substituted,
             origin: new StatementOrigin(
@@ -171,6 +241,9 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
         $enriched = $statement
             ->withSubstitutedSql($substituted)
             ->withCanonicalSql($canonical->canonicalSql)
+            // The whole canonical form, kind and targets included, so a finding about this statement
+            // is told apart from one about another by what the statement is, not by where it sits.
+            ->withExcerpt(Fingerprint::of($canonical))
             // The RESOLVED transaction mode, not the migrator flag it started from. The
             // resolver can land on Undetermined — an explicit transaction opening inside
             // the migrator's, an unbalanced marker — and a lock-hygiene rule that only
@@ -184,7 +257,7 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
         $kind = $canonical->statementKind;
 
         return $kind instanceof StatementKind && $canonical->targets !== null
-            ? $enriched->withClassification($kind, $canonical->targets, $canonical->keyColumns, $canonical->columnDefinitions)
+            ? $enriched->withClassification($kind, $canonical->targets, $canonical->keyColumns, $canonical->columnDefinitions, $canonical->actions)
             : $enriched;
     }
 }

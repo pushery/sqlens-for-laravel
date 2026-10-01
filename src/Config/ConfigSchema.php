@@ -14,6 +14,7 @@ use Pushery\SQLens\Deploy\Drift\DriftRunMode;
 use Pushery\SQLens\Exceptions\UndeclaredConfigPath;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Format\FormatDiscovery;
+use Pushery\SQLens\ProjectPath;
 use Pushery\SQLens\Reporting\Baseline\StaleBaselinePolicy;
 use Pushery\SQLens\Reporting\RunProfile;
 use Pushery\SQLens\Rules\RuleIdFormat;
@@ -525,11 +526,11 @@ final readonly class ConfigSchema
             'security.advisories.path' => 'an absolute path to an end-of-life data file, or null to use the published or bundled copy',
             'security.rls' => 'an array with the keys: mode, tables, tenant_column, reason',
             'security.server' => 'an array with the key: lifetime',
-            'security.server.lifetime' => "one of: 'persistent' (somebody deploys onto this server and operates it, so its own configuration is judged) or 'disposable' (the job creates and destroys it, so the checks whose subject is the server or the connecting role answer not_applicable and point at sqlens:predeploy). Declared, never detected: a container and a production server answer every query identically",
+            'security.server.lifetime' => "one of: 'persistent' (somebody deploys onto this server and operates it, so its own configuration is judged) or 'disposable' (the job creates and destroys it, so the checks whose subject is the server or the connecting role answer not_applicable and point at sqlens:security and sqlens:audit, run against the host that is operated). Declared, never detected: a container and a production server answer every query identically",
             'security.privacy' => 'an array with the keys: enabled, dictionary, extra_terms, ignore_columns',
             'security.analyse' => 'an array with the keys: mode, result_path',
             'security.analyse.mode' => 'one of: '.AnalyseMode::names().'. `off` is the shipped state and a real answer rather than an omission — the run reports that the injection half examined nothing, instead of returning an empty list that reads as a clean bill of health. `read` takes a result PHPStan has already written',
-            'security.analyse.result_path' => 'a path to a PHPStan `--error-format=json` result, repository-relative like every other path here (an absolute one is accepted too), or null when the half is off',
+            'security.analyse.result_path' => 'a path to a PHPStan `--error-format=sqlens` result, repository-relative like every other path here (an absolute one is accepted too), or null when the half is off',
             'security.privacy.enabled' => 'a boolean — whether the privacy rules are registered at all. Off by default: they read column NAMES and guess what lives in them, and a pack that guesses wrong by default teaches a team to ignore the category it guessed in',
             'security.privacy.dictionary' => 'a repository-relative path to a dictionary replacing the bundled one, or null to use the bundled one (absolute is refused: it pins a configuration to one machine)',
             'security.privacy.extra_terms' => 'a list of terms to ADD to whichever dictionary is in force, or an empty list',
@@ -1400,6 +1401,6 @@ final readonly class ConfigSchema
      */
     private function isAbsolutePath(string $path): bool
     {
-        return preg_match('#^(?:/|\\\\|[A-Za-z]:[/\\\\])#', $path) === 1;
+        return ProjectPath::isAbsolute($path);
     }
 }

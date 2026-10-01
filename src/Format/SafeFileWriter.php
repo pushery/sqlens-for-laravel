@@ -35,7 +35,8 @@ final readonly class SafeFileWriter
     /**
      * Write the contents if they differ, and answer whether anything changed.
      *
-     * @return bool true when the file was rewritten, false when it already held these bytes
+     * @return bool true when the file was rewritten; false when it already held these bytes, or when
+     *              it could not be written, which a caller that asked for a change has to tell apart
      */
     public static function write(string $path, string $contents): bool
     {

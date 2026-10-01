@@ -36,6 +36,16 @@ final readonly class LongRunningSession
         public string $state,
         /** The relation it is working on, where the server names one. */
         public ?string $relation = null,
+        /**
+         * The relations it holds a lock on among those the request named, each with the strongest
+         * mode it holds there, or null where the server named a mode this build cannot place.
+         *
+         * Empty where the reader does not tell modes apart. A check then has to treat a held lock as
+         * one that stops everything, because nothing says it is weaker.
+         *
+         * @var array<string, LockMode|null>
+         */
+        public array $heldModes = [],
     ) {}
 
     /** The stable sort key — longest first is a REPORTING choice, so ordering here stays by name. */

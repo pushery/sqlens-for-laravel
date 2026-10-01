@@ -124,6 +124,11 @@ final readonly class UnjustifiedRawSqlRule implements Rule
             // underneath and the reason on it went stale, which is the wrong half to lose -- the
             // statement had not gone anywhere.
             RawSqlPdoCallCollector::class => '$pdo->',
+            // Eloquent's `fromQuery()` hands the same complete statement to the model's connection
+            // and returns models instead of rows. Reaching for it is the same decision, so it owes
+            // the same sentence, in both of the ways it is written.
+            RawSqlEloquentCallCollector::class => '$query->',
+            RawSqlEloquentStaticCallCollector::class => 'Model::',
         ];
 
         foreach ($sources as $collector => $prefix) {

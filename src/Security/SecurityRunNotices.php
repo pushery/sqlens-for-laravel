@@ -34,10 +34,12 @@ final readonly class SecurityRunNotices
     public const string PREFIX = 'sqlens.security';
 
     /**
-     * One half threw — a genuine crash rather than a refusal.
+     * One half failed with a message of its own — a crash, a baseline it could not read, or a
+     * connection nothing defines.
      *
-     * The rarest of the three and the only one that is not an ordinary state, so it keeps the
-     * exception's own message: a paraphrase would lose exactly the part a reader needs.
+     * None of them is an ordinary state, so the notice keeps the failure's own message: a
+     * paraphrase would lose exactly the part a reader needs, such as the connection names that ARE
+     * configured.
      *
      * The detail is redacted here rather than at the caller. Producers write
      * `Throwable::getMessage()` into this field, and `QueryException::formatMessage()` appends

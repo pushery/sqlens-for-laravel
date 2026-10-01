@@ -69,6 +69,16 @@ final class DefinerWithoutSearchPathRule extends AbstractMigrationSecurityRule
     private const string MYSQL_SQL_SECURITY = '/\bSQL\s+SECURITY\b/i';
 
     /**
+     * A language clause, taken out of a copy before MySQL's spelling is looked for.
+     *
+     * PostgreSQL's natural order for an SQL function is `LANGUAGE sql SECURITY DEFINER`, and there
+     * `sql SECURITY` reads as MySQL's `SQL SECURITY`: the rule stood down on exactly the commonest
+     * form. MySQL may write its own `LANGUAGE SQL` characteristic too, before or after `SQL SECURITY`,
+     * so with the language clause gone its `SQL SECURITY` is still there and PostgreSQL's is not.
+     */
+    private const string LANGUAGE_CLAUSE = '/\bLANGUAGE\s+\w+/i';
+
+    /**
      * A pinned path, in either spelling PostgreSQL accepts.
      *
      * `SET search_path = …` and `SET search_path TO …` are the same clause. Whether the value is a
@@ -124,7 +134,7 @@ final class DefinerWithoutSearchPathRule extends AbstractMigrationSecurityRule
         // MySQL first: its routines are always `SQL SECURITY {DEFINER|INVOKER}`, and it has no
         // search_path for this rule to ask about. Standing down here is what keeps the silence a
         // property of the statement rather than of a driver check the ruleset deliberately avoids.
-        if (preg_match(self::MYSQL_SQL_SECURITY, $canonical) === 1) {
+        if (preg_match(self::MYSQL_SQL_SECURITY, preg_replace(self::LANGUAGE_CLAUSE, '', $canonical) ?? $canonical) === 1) {
             return null;
         }
 
@@ -142,9 +152,9 @@ final class DefinerWithoutSearchPathRule extends AbstractMigrationSecurityRule
             .'while an unqualified name inside it resolves against the CALLER\'s search_path. A '
             .'caller who can create an object in a schema earlier on their path therefore chooses '
             .'what the privileged routine executes, and needs no injection to do it. Add a '
-            .'SET search_path clause naming only schemas the owner controls (and schema-qualify what '
-            .'the body touches), or declare the routine SECURITY INVOKER if it does not need the '
-            .'owner\'s rights. The rule\'s page carries the exact clause. Statement: %s',
+            .'SET search_path clause naming only schemas the owner controls and ending with pg_temp '
+            .'(and schema-qualify what the body touches), or declare the routine SECURITY INVOKER if it '
+            .'does not need the owner\'s rights. The rule\'s page carries the exact clause. Statement: %s',
             StatementExcerpt::of($canonical),
         );
     }

@@ -141,10 +141,11 @@ final class RuntimeDdlRule extends AbstractSchemaObjectSecurityRule implements D
      *
      * ## Why it speaks only when the run is looking at the runtime connection
      *
-     * This branch judges the CONNECTING role, and that is a different risk from the grant branch
-     * above. A grant branch pointed at the wrong connection finds no matching row and stays quiet —
-     * a false negative nobody acts on. This one would report the MIGRATION role as the runtime one
-     * and tell somebody to revoke exactly the privilege their deploy needs.
+     * This branch judges the CONNECTING role. Pointed at the wrong connection it would report the
+     * MIGRATION role as the runtime one and tell somebody to revoke exactly the privilege their
+     * deploy needs, and the grant branch above has the same exposure: the connecting account's own
+     * grant rows exist, which is why `runtime_grantee` is false on any run not over the runtime
+     * connection.
      *
      * So it requires the run to have established that it is looking at the runtime connection.
      * `undetermined` there is deliberately SILENT rather than a second undetermined finding: the
@@ -212,10 +213,12 @@ final class RuntimeDdlRule extends AbstractSchemaObjectSecurityRule implements D
     private function separateConnectionAdvice(SchemaObject $object): string
     {
         return sprintf(
-            'REVOKE %s ON %s FROM %s once the migration connection is the one that deploys.',
-            $this->privilegeList($object),
-            $object->getString('target') ?? '?',
-            $object->getString('grantee') ?? '?',
+            'Revoke them once the migration connection is the one that deploys: %s',
+            StatementSpan::naming(
+                sprintf('REVOKE %s ON %%s FROM %%s;', $this->privilegeList($object)),
+                $object->getString('statement_target') ?? '',
+                $object->getString('statement_grantee') ?? '',
+            ),
         );
     }
 

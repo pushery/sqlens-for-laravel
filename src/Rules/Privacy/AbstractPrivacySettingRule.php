@@ -94,7 +94,7 @@ abstract class AbstractPrivacySettingRule extends AbstractServerSettingRule
      *
      * The matrix abstains on these settings for a reason that is right and that this family answers:
      * the value alone cannot say whether it is a problem. Having established the environment in
-     * {@see self::precondition()}, the rule has what the matrix could not have.
+     * {@see self::findingCondition()}, the rule has what the matrix could not have.
      */
     #[Override]
     protected function bringsOwnExpectation(): bool
@@ -118,8 +118,9 @@ abstract class AbstractPrivacySettingRule extends AbstractServerSettingRule
         return $this->privacyConcern();
     }
 
-    protected function precondition(SchemaObject $object): ?RuleVerdict
+    #[Override]
+    protected function findingCondition(SchemaObject $object): ?RuleVerdict
     {
-        return $this->productionPrecondition($object, $this->environment);
+        return $this->productionCondition($object, $this->environment);
     }
 }

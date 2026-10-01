@@ -6,11 +6,6 @@ namespace Pushery\SQLens\Catalog;
 
 use Closure;
 use Illuminate\Database\Connection;
-use Pushery\SQLens\Catalog\Activity\ActivityResolution;
-use Pushery\SQLens\Catalog\Statistics\StatisticsResolution;
-use Pushery\SQLens\Contracts\ActivityReader;
-use Pushery\SQLens\Contracts\StatisticsReader;
-use Pushery\SQLens\Drivers\EngineIdentity;
 use Pushery\SQLens\Exceptions\UnsupportedCatalogDriver;
 use Pushery\SQLens\Subjects\SubjectContext;
 
@@ -74,77 +69,5 @@ final class CatalogReaderFactory
         }
 
         return $builder($connection, $budget, $context);
-    }
-
-    /**
-     * The statistics reader for this connection, or a NAMED reason there is none.
-     *
-     * The deploy suite's entry point, and deliberately the ONLY thing about it that differs from
-     * {@see self::for()}: same registration, same builders, same session — a second resolution
-     * mechanism beside this one would be free to disagree with it about which driver answers, and
-     * it would disagree quietly, because both would look right in isolation.
-     *
-     * What differs is that this one never throws. `for()` throws for an unregistered driver on
-     * purpose: reaching it means the instance resolver already accepted the connection, so an
-     * unknown driver there is a wiring bug in this package. This runs somewhere else entirely —
-     * inside a gate, at the moment nobody has decided yet whether the deploy should happen — and an
-     * exception there would stop the deploy without having said anything about the database.
-     *
-     * The banner is passed through so MariaDB can be told from MySQL by what the server calls
-     * itself rather than by its version, which clears every MySQL floor.
-     */
-    public function statisticsFor(
-        string $driver,
-        Connection $connection,
-        SessionBudget $budget,
-        SubjectContext $context,
-        ?string $banner = null,
-    ): StatisticsResolution {
-        if (! $this->supports($driver)) {
-            return StatisticsResolution::unsupported($driver, $banner);
-        }
-
-        if ($banner !== null && EngineIdentity::isMariaDb($banner)) {
-            return StatisticsResolution::unsupported($driver, $banner);
-        }
-
-        $statistics = $this->for($driver, $connection, $budget, $context)->statistics;
-
-        return $statistics instanceof StatisticsReader
-            ? StatisticsResolution::reader($statistics)
-            : StatisticsResolution::unsupported($driver, $banner);
-    }
-
-    /**
-     * The same resolution for the deploy suite's other reader, and deliberately the same shape.
-     *
-     * Every sentence on {@see self::statisticsFor()} applies here: same registration, same
-     * builders, same session, never throws, MariaDB told apart by its banner rather than by a
-     * version that clears every floor.
-     *
-     * It is a second method rather than a parameter on the first because the two are asked at
-     * different moments — sizes when a finding needs weighing, activity when a deploy is about to
-     * start — and a caller that only wanted one should not have to receive, or discard, the other.
-     */
-    public function activityFor(
-        string $driver,
-        Connection $connection,
-        SessionBudget $budget,
-        SubjectContext $context,
-        ?string $banner = null,
-    ): ActivityResolution {
-        if (! $this->supports($driver)) {
-            return ActivityResolution::unsupported($driver, $banner);
-        }
-
-        if ($banner !== null && EngineIdentity::isMariaDb($banner)) {
-            return ActivityResolution::unsupported($driver, $banner);
-        }
-
-        $activity = $this->for($driver, $connection, $budget, $context)->activity;
-
-        return $activity instanceof ActivityReader
-            ? ActivityResolution::reader($activity)
-            : ActivityResolution::unsupported($driver, $banner);
     }
 }

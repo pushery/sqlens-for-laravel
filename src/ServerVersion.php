@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens;
 
+use Illuminate\Database\Connection;
 use Illuminate\Database\DatabaseManager;
 use PDO;
 use Pushery\SQLens\Drivers\DriverManager;
@@ -55,7 +56,20 @@ final readonly class ServerVersion
         // Reading the WRITE side is a decision, not an accident: a read replica can
         // lag a major version behind, and every judgment SQLens makes is about the
         // instance a migration will actually run against.
-        $pdo = $this->database->connection($name)->getRawPdo();
+        return self::bannerOf($this->database->connection($name));
+    }
+
+    /**
+     * The banner a connection's handshake carried, or null when it carries none.
+     *
+     * The acquisition itself, for a caller that already holds the connection it means: a deploy
+     * gate reads through its own named reader rather than a connection this unit could look up by
+     * name. The same rules as {@see self::resolve()}: the PDO the connection already holds, never a
+     * connect, never a query.
+     */
+    public static function bannerOf(Connection $connection): ?string
+    {
+        $pdo = $connection->getRawPdo();
 
         if (! $pdo instanceof PDO) {
             return null;

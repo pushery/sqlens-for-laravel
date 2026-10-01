@@ -42,6 +42,7 @@ final class ReaderSession
         private readonly Connection $connection,
         private readonly SessionDefense $defense,
         private readonly SessionBudget $budget,
+        private readonly ReaderSessionRefusal $refused = new ReaderSessionRefusal,
     ) {}
 
     /**
@@ -58,7 +59,21 @@ final class ReaderSession
      */
     public function withBudget(SessionBudget $budget): self
     {
-        return new self($this->connection, $this->defense, $budget);
+        // The refusal travels with the connection: a seal that did not take on it did not take on
+        // the narrowed session either.
+        return new self($this->connection, $this->defense, $budget, $this->refused);
+    }
+
+    /**
+     * The refusal that ended this session's reading, or null while it has not been refused.
+     *
+     * Once a probe could not prove the seal, the session does not probe again and refuses every
+     * later read with the same exception. A caller that runs several readings asks this to end
+     * the run by name rather than reporting each refused reading as an ordinary failure.
+     */
+    public function refusal(): ?UnsealedReaderSession
+    {
+        return $this->refused->refusal;
     }
 
     /** The bounds this session runs under — what a caller narrows from. */
@@ -115,6 +130,12 @@ final class ReaderSession
     #[RawSql(reason: 'transaction control -- BEGIN and SET TRANSACTION READ ONLY. The builder has no verb for either, and this is the seal every reader in the package stands on')]
     public function read(callable $read): mixed
     {
+        // Refused once, refused for good: another probe on a session whose seal did not take would
+        // be another write the server accepts.
+        if ($this->refused->refusal instanceof UnsealedReaderSession) {
+            throw $this->refused->refusal;
+        }
+
         foreach ($this->defense->sessionStatements($this->budget) as $statement) {
             $this->connection->statement($statement);
         }
@@ -249,22 +270,80 @@ final class ReaderSession
             }
 
             if ($state !== null && $this->defense->isPrivilegeRefusal($state)) {
-                // Sealed by the GRANT rather than by the session flag. Recorded, not conflated:
-                // both prove this session cannot write, and the privilege proof is the more durable
-                // of the two — but a caller asking "what is this guarantee resting on?" deserves an
-                // answer, and folding them together would remove the question.
-                $this->sealedBy = SealedBy::Privilege;
+                $this->sealedBy = $this->sealBehindAPrivilegeRefusal($state, $refusal);
 
                 return;
             }
 
-            throw UnsealedReaderSession::refusedForTheWrongReason($state ?? '(no SQLSTATE)', $refusal);
+            throw $this->refuse(UnsealedReaderSession::refusedForTheWrongReason($state ?? '(no SQLSTATE)', $refusal));
         }
 
         // The probe went through. Undo whatever it made before saying so — the failure is that the
         // session accepts writes, and leaving one behind while reporting it would be absurd.
         $this->connection->statement('ROLLBACK TO SAVEPOINT '.self::PROBE_SAVEPOINT);
 
-        throw UnsealedReaderSession::acceptedAWrite();
+        throw $this->refuse(UnsealedReaderSession::acceptedAWrite());
+    }
+
+    /** Keep the refusal for every later read, then hand it back to be thrown. */
+    private function refuse(UnsealedReaderSession $refusal): UnsealedReaderSession
+    {
+        return $this->refused->refusal = $refusal;
+    }
+
+    /**
+     * What the seal rests on when a privilege, not the seal, refused the probe.
+     *
+     * The refusal alone proves too little. The probe needs the right to create a temporary table,
+     * and an engine that asks the grant before the transaction's access mode refuses an account
+     * without that right the same way whether or not it may write elsewhere and whether or not
+     * the seal took. So two readings decide, in this order. The account's grants, where the
+     * engine lists them, carry the seal when every privilege they name only reads. Otherwise the
+     * transaction's read-only flag, read from the server, carries it when it is on. Neither, and
+     * the session is not proven sealed at all.
+     *
+     * A listing the server refuses proves nothing and leaves the flag to decide.
+     */
+    private function sealBehindAPrivilegeRefusal(string $sqlState, Throwable $refusal): SealedBy
+    {
+        $listing = $this->defense->grantListingQuery();
+
+        if ($listing !== null) {
+            try {
+                $onlyReads = $this->defense->grantsForbidWriting($this->firstColumn($listing));
+            } catch (Throwable) {
+                $onlyReads = false;
+            }
+
+            if ($onlyReads) {
+                return SealedBy::Privilege;
+            }
+        }
+
+        if ($this->defense->flagMeansReadOnly($this->firstColumn($this->defense->readOnlyFlagQuery())[0] ?? '')) {
+            return SealedBy::Session;
+        }
+
+        throw $this->refuse(UnsealedReaderSession::refusedByPrivilegeAlone($sqlState, $refusal));
+    }
+
+    /**
+     * The first value of every row a query answers, as text.
+     *
+     * By position, because MySQL names the column of `SHOW GRANTS` after the account.
+     *
+     * @return list<string>
+     */
+    #[RawSql(reason: 'reads the account\'s own grants and the transaction\'s read-only flag, the two facts that decide what a privilege refusal of the write probe proves; each statement comes from the engine\'s defense, and neither has a builder form')]
+    private function firstColumn(string $query): array
+    {
+        $values = [];
+
+        foreach ($this->connection->select($query) as $row) {
+            $first = array_values((array) $row)[0] ?? null;
+            $values[] = is_scalar($first) ? (string) $first : '';
+        }
+
+        return $values;
     }
 }

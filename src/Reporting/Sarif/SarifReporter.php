@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Reporting\Sarif;
 
 use Pushery\SQLens\Contracts\Reporter;
 use Pushery\SQLens\Findings\Result;
+use Pushery\SQLens\Reporting\ReportText;
 use Pushery\SQLens\Reporting\RunContext;
 use Symfony\Component\Console\Output\OutputInterface;
 
@@ -46,7 +47,7 @@ final readonly class SarifReporter implements Reporter
         // carry invalid UTF-8 — a latin1 column value, a truncated multibyte sequence — and that
         // must not abort the whole report. The bad bytes become U+FFFD and serialization continues,
         // while JSON_THROW_ON_ERROR still catches a genuine structural bug.
-        $out->writeln(json_encode(
+        ReportText::document($out, json_encode(
             SarifDocument::for($result, $context, $this->locations)->toArray(),
             JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
         ));

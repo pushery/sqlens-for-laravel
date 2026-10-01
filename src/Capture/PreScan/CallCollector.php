@@ -10,13 +10,20 @@ use PhpParser\Node\Expr\Array_;
 use PhpParser\Node\Expr\ArrayDimFetch;
 use PhpParser\Node\Expr\ClassConstFetch;
 use PhpParser\Node\Expr\ConstFetch;
+use PhpParser\Node\Expr\Eval_;
 use PhpParser\Node\Expr\FuncCall;
+use PhpParser\Node\Expr\Include_;
 use PhpParser\Node\Expr\Match_;
 use PhpParser\Node\Expr\MethodCall;
+use PhpParser\Node\Expr\New_;
+use PhpParser\Node\Expr\ShellExec;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Expr\Ternary;
+use PhpParser\Node\Expr\Throw_;
 use PhpParser\Node\MatchArm;
+use PhpParser\Node\Name;
 use PhpParser\Node\Stmt\Case_;
+use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Do_;
 use PhpParser\Node\Stmt\ElseIf_;
@@ -31,6 +38,15 @@ use PhpParser\NodeVisitorAbstract;
 /**
  * Walks a parsed migration once and records every call it makes — resolved, with
  * the named method it sits in, and with its control-flow context.
+ *
+ * A call is anything that runs code: a function, method or static call, and four
+ * forms that are no call node and run code all the same. `new Foo` runs Foo's
+ * constructor, backticks run a shell command, and `include`, `require` and `eval()`
+ * run code from outside the file. Left out, each of them was a way past every
+ * detector. Two `new` forms stay out because they run nothing the pre-scan cannot
+ * read: an anonymous class is written out in this file, and so is the migration's
+ * own, reached as `self`, `static` or `parent`. An object built to be thrown ends
+ * the migration instead of doing its work, so it stays out as well.
  *
  * One traversal, one shared result. Every detector reads this list instead of
  * walking the tree again for its own pattern — the pre-scan runs in front of the
@@ -69,6 +85,14 @@ final class CallCollector extends NodeVisitorAbstract
      */
     private array $regions = [];
 
+    /**
+     * The `new` expressions that are thrown, keyed by object id. A `throw` is entered before the
+     * object it throws, so the mark is there when the `new` is reached.
+     *
+     * @var array<int, true>
+     */
+    private array $thrown = [];
+
     public function __construct(private readonly NameResolver $resolver) {}
 
     public function enterNode(Node $node): null
@@ -81,9 +105,17 @@ final class CallCollector extends NodeVisitorAbstract
             $this->regions[] = $region;
         }
 
+        if ($node instanceof Throw_ && $node->expr instanceof New_) {
+            $this->thrown[spl_object_id($node->expr)] = true;
+        }
+
         if ($node instanceof StaticCall
             || $node instanceof MethodCall
-            || $node instanceof FuncCall) {
+            || $node instanceof FuncCall
+            || $node instanceof ShellExec
+            || $node instanceof Include_
+            || $node instanceof Eval_
+            || ($node instanceof New_ && $this->runsAConstructor($node))) {
             $this->calls[] = [
                 'node' => $node,
                 'target' => $this->resolver->resolve($node),
@@ -116,6 +148,16 @@ final class CallCollector extends NodeVisitorAbstract
     public function calls(): array
     {
         return $this->calls;
+    }
+
+    /** Whether a `new` runs a constructor this file does not hold, and is not built to be thrown. */
+    private function runsAConstructor(New_ $node): bool
+    {
+        if ($node->class instanceof Class_ || isset($this->thrown[spl_object_id($node)])) {
+            return false;
+        }
+
+        return ! $node->class instanceof Name || ! in_array($node->class->toLowerString(), ['self', 'static', 'parent'], true);
     }
 
     /**

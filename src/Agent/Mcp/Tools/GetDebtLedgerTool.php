@@ -102,7 +102,7 @@ final class GetDebtLedgerTool extends SqlensTool
 
         foreach ($ledger->entries as $entry) {
             $age = DebtAge::between($entry->firstSeen, $reference);
-            $rows[] = ['entry' => $entry, 'age' => $age->isKnown() ? (int) $age->days() : null];
+            $rows[] = ['entry' => $entry, 'age' => $age->isKnown() ? (int) $age->days() : null, 'unknown' => $age->isKnown() ? null : $age->detail];
         }
 
         $rows = $this->narrowed($rows, $validated);
@@ -128,7 +128,8 @@ final class GetDebtLedgerTool extends SqlensTool
             // with fewer open ends than it has.
             'truncated' => $offset + count($page) < $total,
             'debts' => array_map(
-                static fn (array $row): array => [...$row['entry']->toArray(), 'age_days' => $row['age']],
+                // An age that could not be established says why, beside the null.
+                static fn (array $row): array => [...$row['entry']->toArray(), 'age_days' => $row['age'], 'age_unknown' => $row['unknown']],
                 $page,
             ),
         ], sprintf('%d debt(s) recorded, %d returned, counted from %s.', $total, count($page), $asOf))->toResponse();
@@ -172,6 +173,12 @@ final class GetDebtLedgerTool extends SqlensTool
      * run. An empty ledger has no date to derive, and the epoch is used — every age is then zero,
      * which is honest for a file with nothing in it.
      *
+     * Newest as a DATE, and only among the dates {@see DebtAge} can read. Compared as strings, a
+     * word such as `yesterday` sorted after every date and became the reference, which PHP then
+     * read against the clock; `unknown` ended the call on an exception; and `2026-1-5` beat
+     * `2026-03-01`. An entry whose date cannot be read stays in the answer with its age unknown, and
+     * takes no part in choosing the date the others are counted from.
+     *
      * @param  array<string, mixed>  $validated
      */
     private function referenceDate(array $validated, DebtLedger $ledger): string
@@ -180,23 +187,25 @@ final class GetDebtLedgerTool extends SqlensTool
             return $validated['as_of'];
         }
 
-        $newest = '1970-01-01';
+        $newest = null;
 
         foreach ($ledger->entries as $entry) {
-            if (strcmp($entry->firstSeen, $newest) > 0) {
-                $newest = $entry->firstSeen;
+            $day = DebtAge::calendarDay($entry->firstSeen);
+
+            if ($day instanceof DateTimeImmutable && (! $newest instanceof DateTimeImmutable || $day > $newest)) {
+                $newest = $day;
             }
         }
 
-        return $newest;
+        return $newest instanceof DateTimeImmutable ? $newest->format('Y-m-d') : '1970-01-01';
     }
 
     /**
      * The rows a caller asked for.
      *
-     * @param  list<array{entry: DebtEntry, age: int|null}>  $rows
+     * @param  list<array{entry: DebtEntry, age: int|null, unknown: string|null}>  $rows
      * @param  array<string, mixed>  $validated
-     * @return list<array{entry: DebtEntry, age: int|null}>
+     * @return list<array{entry: DebtEntry, age: int|null, unknown: string|null}>
      */
     private function narrowed(array $rows, array $validated): array
     {

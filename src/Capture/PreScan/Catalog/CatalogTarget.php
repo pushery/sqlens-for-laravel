@@ -11,7 +11,7 @@ use Pushery\SQLens\Exceptions\InvalidPreScanCatalog;
  * One catalog line's target, parsed from its written form into something that
  * can be held against a resolved call.
  *
- * The written form is deliberately small and total — five shapes, no wildcards
+ * The written form is deliberately small and total — six shapes, no wildcards
  * inside a name, no regular expressions:
  *
  * - `Vendor\Package\Thing::method` — that method on that class.
@@ -20,11 +20,16 @@ use Pushery\SQLens\Exceptions\InvalidPreScanCatalog;
  * - `method()` — a free function.
  * - `Vendor\Package\Thing` — any call on that class.
  * - `Vendor\Package\*` — any call on a class under that namespace.
+ * - `app('key')` — that key resolved out of the container, in any of the spellings
+ *   that hand the container a literal key: `app('key')`, `resolve('key')`,
+ *   `app()->make('key')`, `Container::getInstance()->make('key')`, `App::make('key')`.
  *
  * Static and instance calls are matched by the SAME shape on purpose. A facade
  * reached as `Notification::send(...)` and one resolved out of the container as
  * `$notification->send(...)` fire the same side effect, and a catalog that
  * distinguished them would be bypassed by the spelling rather than by the fact.
+ * The container key is the same idea one step earlier: `app('cache')` hands back
+ * what `Cache::` reaches, so the catalog names it beside the facade.
  */
 final readonly class CatalogTarget
 {
@@ -32,12 +37,16 @@ final readonly class CatalogTarget
 
     private const string MEMBER_PATTERN = '/^[A-Za-z_]\w*$/';
 
+    /** `app('key')`: a container key of dotted names or a class name, quoted once. */
+    private const string CONTAINER_PATTERN = '/^app\(\'([A-Za-z_]\w*(?:[.\\\\][A-Za-z_]\w*)*)\'\)$/';
+
     /**
      * @param  string|null  $class  the exact class, or null for a receiver-agnostic
      *                              or function target
      * @param  string|null  $method  the method name, or null when any member matches
      * @param  string|null  $function  the free function name
      * @param  string|null  $namespacePrefix  the namespace a class must sit under
+     * @param  string|null  $containerKey  the key resolved out of the container
      */
     private function __construct(
         public string $raw,
@@ -45,6 +54,7 @@ final readonly class CatalogTarget
         public ?string $method,
         public ?string $function,
         public ?string $namespacePrefix,
+        public ?string $containerKey = null,
     ) {}
 
     /**
@@ -77,6 +87,10 @@ final readonly class CatalogTarget
 
         if ($written === '') {
             return null;
+        }
+
+        if (preg_match(self::CONTAINER_PATTERN, $written, $container) === 1) {
+            return new self($written, null, null, null, null, $container[1]);
         }
 
         if (str_ends_with($written, '()')) {
@@ -129,6 +143,10 @@ final readonly class CatalogTarget
             return false;
         }
 
+        if ($this->containerKey !== null) {
+            return $target->resolvesContainerKey($this->containerKey);
+        }
+
         if ($this->function !== null) {
             return $target->targetsFunction($this->function);
         }
@@ -144,6 +162,17 @@ final readonly class CatalogTarget
         return $this->method === null
             ? $target->class === $this->class
             : $target->targets($this->class, $this->method);
+    }
+
+    /**
+     * Whether this is `*::method`: a method on any receiver, rather than one surface.
+     *
+     * Such an entry catches a call whose receiver a reading cannot name, and it can only say what
+     * that method usually does. A named surface on the same line says what the call reaches.
+     */
+    public function isReceiverAgnostic(): bool
+    {
+        return $this->class === null && $this->method !== null;
     }
 
     private static function className(string $value): ?string

@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Guard;
 
 use Psr\Log\LoggerInterface;
+use Pushery\SQLens\Canonical\Extensions\CanonicalExtensionRegistry;
+use Pushery\SQLens\Canonical\StringLiteralMask;
+use Pushery\SQLens\Contracts\DriverCanonicalization;
 use Pushery\SQLens\Guard\Violations\Violation;
 use Pushery\SQLens\Security\SecretLiteralMask;
 use Pushery\SQLens\Severity\Severity;
@@ -27,6 +30,15 @@ use Throwable;
  * question a developer actually has ("did it bind a string or an integer, and was it empty?") is
  * answered completely by the shape.
  *
+ * ## The statement's own literals are shapes too
+ *
+ * A value written into the statement text is the same row data as a bound one, and `unbound_raw_sql`
+ * selects exactly the statements that carry one. So every literal in a logged statement becomes its
+ * length, `'alice@example.com'` becoming `'<string(17)>'`, whatever `include_bindings` says. Where a
+ * literal ends is a question of the engine's grammar, read from the connection's registered
+ * canonicalization; an engine without one has everything from its first quote to its last masked,
+ * because any other guess can end a literal early and log the rest of it as text.
+ *
  * ## Severity RAISES the level; the profile level is a floor
  *
  * A `security` violation and a slow query at the same profile level would otherwise arrive as the
@@ -38,7 +50,8 @@ use Throwable;
  * It does not throw on a logging failure. A logger that is misconfigured must not become the reason
  * a request fails — the guardrail was already reporting something the application survived, and
  * turning that into a fatal would be the guard causing the outage it was watching for. The channel
- * itself is validated at BOOT ({@see GuardProfile::resolve()}) precisely so this path stays quiet.
+ * and the level are validated at BOOT ({@see GuardProfile::resolve()}) precisely so this path stays
+ * quiet.
  */
 final readonly class ViolationLogger
 {
@@ -70,13 +83,16 @@ final readonly class ViolationLogger
      * `illuminate/*` components. Which CHANNEL to write to is a resolution question, and it happens
      * once at boot where the channel's existence is validated anyway.
      */
-    public function __construct(private LoggerInterface $log) {}
+    public function __construct(
+        private LoggerInterface $log,
+        private ?CanonicalExtensionRegistry $grammars = null,
+    ) {}
 
     public function record(GuardProfile $profile, Violation $violation): void
     {
         $context = $violation->contextFor(
             $profile->name,
-            $violation->sql === null ? null : $this->clipped($violation->sql, $profile->maxSqlLength),
+            $violation->sql === null ? null : $this->clipped($this->withoutLiteralValues($violation->sql, $violation->connection), $profile->maxSqlLength),
             $profile->includeBindings ? $this->shapes($violation->bindings) : null,
         );
 
@@ -137,6 +153,31 @@ final readonly class ViolationLogger
             is_int($value), is_float($value) => get_debug_type($value),
             default => get_debug_type($value),
         }, $bindings);
+    }
+
+    /**
+     * The statement with every literal replaced by its shape, in the grammar of the connection it ran
+     * on.
+     *
+     * Masked before anything else touches it, the credential mask and the clip included: both read
+     * the statement's literals, and a clip that cut one in half would leave a fragment no grammar
+     * reads as a literal any more.
+     *
+     * The lookup is caught rather than trusted. A driver's canonicalization can be a third party's,
+     * and a guardrail must never become the reason a request fails; the coarse mask is the answer
+     * that stays correct without a grammar.
+     */
+    private function withoutLiteralValues(string $sql, ?string $connection): string
+    {
+        try {
+            $grammar = $connection === null ? null : $this->grammars?->forConnection($connection);
+        } catch (Throwable) {
+            $grammar = null;
+        }
+
+        return $grammar instanceof DriverCanonicalization
+            ? StringLiteralMask::forDriver($grammar)->shaped($sql)
+            : StringLiteralMask::coarse($sql);
     }
 
     /**

@@ -37,6 +37,14 @@ enum UndeterminedReason: string
      */
     case UnknownServerVersion = 'unknown_server_version';
     case PretendLimit = 'pretend_limit';
+    /**
+     * The migration names a connection of its own, and the run captured on another one.
+     *
+     * Laravel's migrator runs a migration on the connection it declares, so a verdict drawn from the
+     * capture connection's driver, catalog and version is about a database the migration never
+     * touches. Reported instead of judged: a pass here would be a pass for the wrong database.
+     */
+    case MigrationOnAnotherConnection = 'migration_on_another_connection';
     case UnsupportedEngine = 'unsupported_engine';
     case MissingExternalTool = 'missing_external_tool';
     case ManagedDatabaseRestriction = 'managed_database_restriction';
@@ -180,6 +188,18 @@ enum UndeterminedReason: string
      * strength of an absence.
      */
     case DebtObjectNotFound = 'debt_object_not_found';
+
+    /**
+     * The catalog holds no fact that settles a recorded debt, so its standing was not asked.
+     *
+     * Distinct from {@see self::DebtObjectNotFound}, which is an answer: the question was put and
+     * the object is absent. Here there was no question to put. An engine this build has no debt
+     * reader for is one case; an expand without its contract is the other, because the account
+     * records the column that was ADDED, and the catalog showing it says nothing about whether the
+     * column it replaces is gone. Named apart so nobody goes looking for a dropped table that is
+     * right where it was.
+     */
+    case DebtStandingNotInCatalog = 'debt_standing_not_in_catalog';
 
     /**
      * The debt account was expected here and is not on disk.
@@ -680,13 +700,18 @@ enum UndeterminedReason: string
     case ShadowDirectConnectionElsewhere = 'shadow_direct_connection_elsewhere';
 
     /**
-     * `capture.shadow.connection` names the same place as the connection being examined.
+     * A connection meant for a throwaway database reaches a database the run must not touch.
      *
-     * The second lock on the only path that creates and drops databases. `ShadowTargetIdentity`
+     * Two locks report it. `capture.shadow.connection` naming the same place as the connection being
+     * examined is found from configuration alone, before anything is created: `ShadowTargetIdentity`
      * is "the second lock … mechanical rather than advisory: a collision is a refusal, never a
      * warning". A developer who points the key at the wrong entry in `config/database.php` passes
      * every question the production guard asks, and without this lock the tool would build a
      * scratch database on the instance it was supposed to be comparing.
+     *
+     * The third lock asks the server. A connection into a template, a clone or a shadow names the
+     * throwaway database, and `ShadowConnectionLatch` refuses it before its first statement when the
+     * session landed anywhere else.
      */
     case ShadowConnectionCollides = 'shadow_connection_collides';
 
@@ -759,11 +784,26 @@ enum UndeterminedReason: string
     case ShadowMysqlDumpUnparseable = 'shadow_mysql_dump_unparseable';
 
     /**
+     * The `schema:dump` artifact holds a statement the replay refuses: one that would reach past the
+     * throwaway database, by switching the session to another database, acting on a database or the
+     * server, or naming another database's object, or one a schema dump does not build a schema
+     * with. Refused before anything runs, so no part of the dump is replayed.
+     */
+    case ShadowMysqlDumpRefused = 'shadow_mysql_dump_refused';
+
+    /**
      * A statement from the `schema:dump` failed while it was being replayed into the
      * throwaway MySQL database. The half-built database is dropped and the run is
      * undetermined — never a lint against a schema that only partially rebuilt.
      */
     case ShadowMysqlReplayFailed = 'shadow_mysql_replay_failed';
+
+    /**
+     * The orphan sweep of a shadow run left throwaway databases on the server that an earlier,
+     * killed run created: it could not remove them, or it could not list the shadow databases at
+     * all. Nothing about the migrations this run judged; the next shadow run tries again.
+     */
+    case ShadowOrphansRemain = 'shadow_orphans_remain';
 
     /**
      * An earlier migration failed during the real shadow migrate, so this one was
@@ -781,6 +821,16 @@ enum UndeterminedReason: string
      * error. The orphan sweep on a later run is the safety net that removes it.
      */
     case ShadowTeardownFailed = 'shadow_teardown_failed';
+
+    /**
+     * `capture.shadow.keep_on_failure` kept a throwaway shadow database after a run that did not
+     * come through clean, so a person can look at the state it failed in.
+     *
+     * Reported with the database's name, one result per database, for the reason
+     * {@see self::ShadowTeardownFailed} is: a database left on the server is one somebody has to
+     * remove, and the setting's promise is that it is never kept silently.
+     */
+    case ShadowKeptOnFailure = 'shadow_kept_on_failure';
 
     /**
      * The roundtrip reached the `down` leg and the migration defines no `down()` at
@@ -1129,6 +1179,17 @@ enum UndeterminedReason: string
     case RunTimeBudgetExhausted = 'run_time_budget_exhausted';
 
     /**
+     * The reader session could not prove it is read-only earlier in this run, so this check never
+     * read.
+     *
+     * Distinct from {@see self::CatalogReadFailed}: nothing about the catalog failed. The session
+     * refused itself, and it stays refused, because every further probe on a session whose seal did
+     * not take is a write the server accepts. So the run ends by name here rather than as a column of
+     * ordinary read failures.
+     */
+    case ReaderSessionUnsealed = 'reader_session_unsealed';
+
+    /**
      * The server would not say whether it accepts writes.
      *
      * An unread setting is not a permissive one. A deploy sent at a standby fails whether or not
@@ -1188,6 +1249,7 @@ enum UndeterminedReason: string
             self::InvalidIndexFoundButBuildsUnverifiable => 'Invalid indexes were found and whether a build is still running for them could not be verified, so a leftover to drop could not be told from one to leave alone.',
             self::SessionTimeoutsUnreadable => 'The session would not say which statement timeouts are in force, and an unread bound is not a bound.',
             self::RunTimeBudgetExhausted => 'The run reached its own time budget before this check started, so the check never asked.',
+            self::ReaderSessionUnsealed => 'The reader session could not prove it is read-only earlier in this run, so this check did not read, and nothing else in the run does.',
             self::WriteAcceptanceUnreadable => 'The server would not say whether it accepts writes, and an unread setting is not a permissive one.',
             self::WriteAcceptanceUnsupported => 'No driver capability answers the write state on this connection, so a writable primary cannot be told from a standby.',
             self::TransitionArtifactsMayBeInFlight => 'Online-schema-change artifacts are present, and a run still in flight looks exactly like one that died.',
@@ -1206,6 +1268,7 @@ enum UndeterminedReason: string
             self::BaselineAbsent => 'A baseline is configured and no file is there, so nothing was accepted; every finding the baseline held is in this report until sqlens:baseline creates it.',
             self::DebtAgeUnknown => 'The debt records a first-seen date this build cannot read, or one that lies after the instant measured against, so how long it has been outstanding is unknown.',
             self::DebtObjectNotFound => 'A recorded debt names an object the catalog does not show, so whether it was settled, dropped, or simply out of this run\'s scope cannot be said.',
+            self::DebtStandingNotInCatalog => 'The catalog holds no fact that settles this recorded debt, so its standing was not asked; the object is not reported missing, because nobody looked for it.',
             self::DebtLedgerMissing => 'The debt account was expected on this machine and is not there, so whether the project has open debts is unknown — not answered with "none".',
             self::ModelNotFound => 'No Eloquent model in this application maps to that table, so whether the column is encrypted could not be read — not answered with "unprotected".',
             self::ModelReadingNotWired => 'This run was assembled without the reading of the application\'s models, so no column was checked for an encrypted cast — a fact about the run, not about any model.',
@@ -1239,8 +1302,8 @@ enum UndeterminedReason: string
             self::ShadowSessionTimeout => 'A shadow session hit its own statement, lock, or idle-transaction timeout.',
             self::ShadowTransactionPooling => 'The shadow target sits behind a transaction pooler; configure a direct connection under capture.shadow.direct_connection.',
             self::ShadowDirectConnectionElsewhere => 'capture.shadow.direct_connection addresses a different server than the connection under examination; it must reach the same server, bypassing the pooler.',
-            self::ShadowConnectionCollides => 'capture.shadow.connection resolves to the same place as the connection under examination, so building the reference there would create and then DROP a database on the instance being compared. Point it at a separate server or a separate database.',
-            self::ShadowInsufficientPrivileges => 'The provisioning role lacks the privilege to create a database (PostgreSQL CREATEDB).',
+            self::ShadowConnectionCollides => 'A connection meant for a throwaway database reaches a database the run must not touch, so nothing was built or replayed through it. Either capture.shadow.connection resolves to the same place as the connection under examination, and building the reference there would create and then DROP a database on the instance being compared: point it at a separate server or a separate database. Or the server placed a connection built for a throwaway database in another one, which the detail names.',
+            self::ShadowInsufficientPrivileges => 'The provisioning role lacks the privilege to create the shadow database: CREATEDB on PostgreSQL, CREATE and DROP on the generated name on MySQL.',
             self::ShadowTemplateInUse => 'The template database has other active connections, so it cannot be cloned; disconnect them and retry.',
             self::DriftSideUnreadable => 'One object type could not be read on one side of the comparison, so that part of the schema was not compared at all; finding no drift in it would have been a claim this run cannot make.',
             self::ShadowNameCollision => 'A database with the generated shadow name already exists, so the run stopped rather than touch a database it did not create.',
@@ -1248,12 +1311,15 @@ enum UndeterminedReason: string
             self::ShadowPgsqlSchemaDumpMissing => 'The PostgreSQL schema dump the shadow template is built from is missing or unreadable; run php artisan schema:dump.',
             self::ShadowTemplateBuildFailed => 'The empty shadow template could not be built, so nothing was cloned; the half-built database was dropped.',
             self::ShadowMysqlDumpUnparseable => 'The MySQL schema dump could not be split into statements safely, so no part of it was replayed.',
+            self::ShadowMysqlDumpRefused => 'The MySQL schema dump holds a statement the replay refuses, because it would reach past the throwaway database or builds no schema, so no part of it was replayed.',
             self::ShadowMysqlReplayFailed => 'A statement from the MySQL schema dump failed while it was being replayed, so the half-built shadow database was dropped.',
+            self::ShadowOrphansRemain => 'Throwaway databases an earlier, killed shadow run created are still on the server: the orphan sweep could not remove them, or could not list them.',
             self::ShadowMigrateFailed => 'An earlier migration failed during the real shadow migrate, so this one was not run.',
             self::RoundtripNoDownMethod => 'The migration defines no down(), so the roundtrip had nothing to replay and could not judge whether down() inverts up().',
             self::UpStateNotCapturable => 'A statement of the migration\'s up() was captured but not classified, so what the migration creates could not be enumerated.',
             self::DownStateNotCapturable => 'A statement of the migration\'s down() was captured but not classified, so what a rollback would destroy could not be enumerated.',
             self::ShadowTeardownFailed => 'The throwaway shadow database could not be dropped after the run and may need manual removal.',
+            self::ShadowKeptOnFailure => 'capture.shadow.keep_on_failure kept this throwaway shadow database after a run that did not come through clean, so the state it stopped in can be inspected. Drop it when done.',
             self::CatalogReadBudgetExceeded => 'The catalog read hit the time budget SQLens set for itself, so the reading stopped before it was complete.',
             self::CatalogReadFailed => 'The catalog read failed for a reason nothing anticipated; the database error code is reported with it.',
             self::CatalogReadingImplausible => 'The catalog answered without refusing, and what it returned cannot describe the server that answered, so the reading itself is suspect; confirm what the server loaded.',
@@ -1266,6 +1332,7 @@ enum UndeterminedReason: string
             self::UnreadableServerVersionPin => 'The assume_server_version pin could not be read as a version; nothing was assumed in its place.',
             self::UnclassifiedTypeChange => 'The column type change targets a type the type-change matrix does not classify, so whether it rewrites the table is unknown.',
             self::PretendLimit => 'A result-dependent migration cannot be captured in pretend mode; shadow is needed.',
+            self::MigrationOnAnotherConnection => 'The migration declares a connection of its own, which migrate runs it on, and this run captured on another one; lint that connection to judge it.',
             self::UnsupportedEngine => 'The engine is not supported (MariaDB, SQLite).',
             self::ServerBelowSupportedFloor => 'The server (or the pinned version this run reasons from) is below the floor this driver\'s rules were written for, so the findings may be wrong in both directions; upgrade the server or raise the pin.',
             self::MissingExternalTool => 'An optional external tool the check relies on is not installed.',

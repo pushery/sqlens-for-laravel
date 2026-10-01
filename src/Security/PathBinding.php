@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Security;
 
 use Pushery\SQLens\Capture\VendorPath;
+use Pushery\SQLens\ProjectPath;
 
 /**
  * Decides whether a captured statement came from a migration — the mechanism behind "a password
@@ -106,20 +107,9 @@ final readonly class PathBinding
     /** The absolute, symlink-resolved path, or null when it does not exist. */
     private function resolve(string $sourceFile): ?string
     {
-        $absolute = $this->absolute($sourceFile);
-        $real = realpath($absolute);
+        $real = realpath(ProjectPath::anchored($sourceFile, $this->projectRoot));
 
         return $real === false ? null : $real;
-    }
-
-    /** An absolute path stays; a relative one resolves against the project root. */
-    private function absolute(string $path): string
-    {
-        if (str_starts_with($path, '/') || preg_match('#^[A-Za-z]:[\\\\/]#', $path) === 1) {
-            return $path;
-        }
-
-        return rtrim($this->projectRoot, '/\\').DIRECTORY_SEPARATOR.ltrim($path, '/\\');
     }
 
     /**
@@ -134,7 +124,7 @@ final readonly class PathBinding
     private function withinRegisteredPath(string $resolved): bool
     {
         foreach ($this->migrationPaths as $path) {
-            $base = realpath($path);
+            $base = realpath(ProjectPath::anchored($path, $this->projectRoot));
 
             if ($base === false) {
                 continue;
@@ -162,6 +152,6 @@ final readonly class PathBinding
      */
     private function withinVendor(string $resolved): bool
     {
-        return VendorPath::contains($resolved);
+        return VendorPath::contains($resolved, $this->projectRoot);
     }
 }

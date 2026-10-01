@@ -123,27 +123,41 @@ final readonly class DiskHeadroomCheck implements PreflightCheck
             );
         }
 
+        $created = $this->createdEmpty($context);
         $needBytes = 0;
-        $measured = 0;
+        $unmeasured = [];
 
         foreach ($targets as $target) {
             $bytes = $snapshot->forTable($target)?->totalBytes?->value;
 
-            if ($bytes === null) {
+            if ($bytes !== null) {
+                $needBytes += $bytes;
+
                 continue;
             }
 
-            $needBytes += $bytes;
-            $measured++;
+            // A table this batch creates with a column list holds no rows when the rewrite reaches
+            // it, and the reader, which has never seen it, answers nothing about it. Every other
+            // silence is a size nobody knows, and counting it as zero let one measured table carry
+            // the verdict for all of them.
+            if (! in_array($target, $created, true)) {
+                $unmeasured[] = $target;
+            }
         }
 
-        if ($measured === 0) {
+        if ($unmeasured !== []) {
             return CheckResult::undetermined(
                 self::ID,
                 UndeterminedReason::ObjectStatisticsUnread,
-                'none of the objects this migration rewrites reported a size, so the space it needs '
-                .'could not be estimated. An unmeasured table is not a small one.',
+                $this->unmeasuredReason($unmeasured, count($targets), $needBytes),
             );
+        }
+
+        // Nothing to hold room for: every object is new and empty, or measured at zero. The headroom
+        // question has no weight here, and asking it would make a batch that only indexes the table
+        // it creates undetermined on every managed database.
+        if ($needBytes === 0) {
+            return CheckResult::pass(self::ID);
         }
 
         // The headroom half, and the one that usually cannot be answered. Reported as its own
@@ -175,7 +189,7 @@ final readonly class DiskHeadroomCheck implements PreflightCheck
                     .'monitoring — or set `deploy.predeploy.available_disk_bytes` and this check '
                     .'will make the comparison for you. It is an ESTIMATE from current object '
                     .'sizes, not a measurement.',
-                    $measured,
+                    count($targets),
                     $this->humanBytes($needBytes),
                 ),
             );
@@ -185,7 +199,66 @@ final readonly class DiskHeadroomCheck implements PreflightCheck
             return CheckResult::pass(self::ID);
         }
 
-        return CheckResult::fail(self::ID, [$this->finding($context, $needBytes, $freeBytes, $measured, $declared)]);
+        return CheckResult::fail(self::ID, [$this->finding($context, $needBytes, $freeBytes, count($targets), $declared)]);
+    }
+
+    /**
+     * Why the need is unknown, naming every object without a size and what the others came to.
+     *
+     * @param  list<string>  $unmeasured
+     */
+    private function unmeasuredReason(array $unmeasured, int $targets, int $measuredBytes): string
+    {
+        $named = implode(', ', $unmeasured);
+
+        if ($measuredBytes === 0 && count($unmeasured) === $targets) {
+            return sprintf(
+                'none of the objects this migration rewrites reported a size (%s), so the space it '
+                .'needs could not be estimated. An unmeasured table is not a small one.',
+                $named,
+            );
+        }
+
+        return sprintf(
+            '%d of the %d objects this migration rewrites reported no size (%s), so the space it '
+            .'needs is unknown. The others come to about %s, and a rewrite needs that much AGAIN '
+            .'while it runs, plus whatever the unmeasured ones hold. An unmeasured table is not a '
+            .'small one.',
+            count($unmeasured),
+            $targets,
+            $named,
+            $this->humanBytes($measuredBytes),
+        );
+    }
+
+    /**
+     * The tables this batch creates with a column list, which hold no rows yet.
+     *
+     * Only those: `CREATE TABLE … AS SELECT` is filled by its query, and a body the classifier could
+     * not read is not known to be empty. MySQL's `CREATE TABLE t (…) SELECT …` has a body and rows
+     * both, so a statement that selects is never counted as empty either.
+     *
+     * @return list<string>
+     */
+    private function createdEmpty(PreflightContext $context): array
+    {
+        $created = [];
+
+        foreach ($context->pending->statements as $statement) {
+            if ($statement->statementKind !== StatementKind::CreateTable || $statement->columnDefinitions === null) {
+                continue;
+            }
+
+            if (preg_match('/\bselect\b/i', $statement->canonicalSql ?? $statement->rawSql) === 1) {
+                continue;
+            }
+
+            foreach ($statement->targets ?? [] as $target) {
+                $created[] = $target->qualifiedName();
+            }
+        }
+
+        return $created;
     }
 
     /**
@@ -264,7 +337,12 @@ final readonly class DiskHeadroomCheck implements PreflightCheck
             }
 
             foreach ($statement->targets ?? [] as $target) {
-                $targets[] = $target->qualifiedName();
+                // Only what already holds rows. A `CREATE INDEX` names the index it is about to build
+                // as well as the table it reads, and that index does not exist before the deploy, so
+                // no reading can size it; what the build needs follows from the table.
+                if (in_array($target->type, [SchemaObjectType::Table, SchemaObjectType::MaterializedView], true)) {
+                    $targets[] = $target->qualifiedName();
+                }
             }
         }
 

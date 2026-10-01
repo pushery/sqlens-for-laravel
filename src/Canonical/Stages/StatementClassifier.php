@@ -9,12 +9,16 @@ use Pushery\SQLens\Canonical\CanonicalFormVersion;
 use Pushery\SQLens\Canonical\CanonicalizationFailure;
 use Pushery\SQLens\Canonical\CanonicalStatement;
 use Pushery\SQLens\Canonical\Classification\SignatureElementKind;
+use Pushery\SQLens\Canonical\Classification\StatementClassificationProfile;
 use Pushery\SQLens\Canonical\Classification\StatementSignature;
 use Pushery\SQLens\Canonical\Classification\StatementToken;
 use Pushery\SQLens\Canonical\Classification\TokenType;
 use Pushery\SQLens\Canonical\ColumnDefinition;
 use Pushery\SQLens\Canonical\Identifier;
+use Pushery\SQLens\Canonical\QuotedSpan;
 use Pushery\SQLens\Canonical\RawStatement;
+use Pushery\SQLens\Canonical\ScanAt;
+use Pushery\SQLens\Canonical\StatementAction;
 use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Canonical\StatementTarget;
 use Pushery\SQLens\Canonical\TransactionContext;
@@ -52,6 +56,9 @@ use Pushery\SQLens\Subjects\SubjectContext;
  */
 final readonly class StatementClassifier implements CanonicalizationStage
 {
+    /** The bare words that open a table-body member which is not a column; see readColumnDefinitions(). */
+    private const array NON_COLUMN_MEMBERS = ['LIKE', 'CHECK', 'EXCLUDE'];
+
     public function __construct(private DriverCanonicalization $driver) {}
 
     public function __invoke(RawStatement $statement, SubjectContext $context): mixed
@@ -61,7 +68,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
             return $classification;
         }
 
-        [$kind, $targets, $columns, $definitions] = $classification;
+        [$kind, $targets, $columns, $definitions, $actions] = $classification;
 
         return new CanonicalStatement(
             canonicalSql: $statement->sql,
@@ -72,11 +79,12 @@ final readonly class StatementClassifier implements CanonicalizationStage
             targets: $targets,
             keyColumns: $columns,
             columnDefinitions: $definitions,
+            actions: $actions,
         );
     }
 
     /**
-     * @return array{StatementKind, list<StatementTarget>, list<string>, list<ColumnDefinition>|null}|CanonicalizationFailure
+     * @return array{StatementKind, list<StatementTarget>, list<string>, list<ColumnDefinition>|null, list<StatementAction>}|CanonicalizationFailure
      */
     private function classify(string $sql): array|CanonicalizationFailure
     {
@@ -86,7 +94,23 @@ final readonly class StatementClassifier implements CanonicalizationStage
         }
 
         $tokens = $this->tokenize($sql);
+        $classification = $this->classifyTokens($tokens, $profile);
 
+        if ($classification instanceof CanonicalizationFailure) {
+            return $classification;
+        }
+
+        return [...$classification, $this->actionsOf($tokens, $profile, $classification)];
+    }
+
+    /**
+     * The first signature the tokens match, or the fallback for their leading keyword.
+     *
+     * @param  list<StatementToken>  $tokens
+     * @return array{StatementKind, list<StatementTarget>, list<string>, list<ColumnDefinition>|null}|CanonicalizationFailure
+     */
+    private function classifyTokens(array $tokens, StatementClassificationProfile $profile): array|CanonicalizationFailure
+    {
         foreach ($profile->signatures as $signature) {
             $match = $this->match($signature, $tokens, $profile->modifiers);
             if ($match instanceof CanonicalizationFailure) {
@@ -101,6 +125,145 @@ final readonly class StatementClassifier implements CanonicalizationStage
         }
 
         return $this->fallback($tokens, $profile->leadFallback);
+    }
+
+    /**
+     * The later actions of an `ALTER TABLE` action list that ask a rule something the first does not.
+     *
+     * The signatures match a statement from its start, so the first action decides its kind, and in
+     * `ADD COLUMN nickname text, DROP COLUMN legacy` the drop reached no rule. Each later action is
+     * therefore read as the statement it would be on its own: the `ALTER TABLE` and the table, then
+     * the action. An action starts at a token on the statement's own level that follows a comma;
+     * the commas inside `numeric(10, 2)` or a column list sit deeper.
+     *
+     * Kept: every action that asks a question the statement and the actions before it have not
+     * asked, which is another kind, or the same kind about another object. Laravel drops several
+     * columns in one statement, `drop a, drop b`, and the second column is a question of its own for
+     * every rule that names the column it judges. Left out: an action that repeats a question, such
+     * as the `ALTER COLUMN name …` clauses PostgreSQL's `change()` emits one after another about one
+     * table; a table option the driver declares, such as MySQL's `ALGORITHM`, which qualifies the
+     * other actions and does nothing of its own; and an action the signatures and the fallback
+     * cannot classify, which reaches no rule here, as it did before.
+     *
+     * @param  list<StatementToken>  $tokens
+     * @param  array{StatementKind, list<StatementTarget>, list<string>, list<ColumnDefinition>|null}  $statement
+     * @return list<StatementAction>
+     */
+    private function actionsOf(array $tokens, StatementClassificationProfile $profile, array $statement): array
+    {
+        $header = $this->alterTableHeader($tokens, $profile->modifiers);
+
+        if ($header === null) {
+            return [];
+        }
+
+        $actions = [];
+        $asked = [$this->questionOf($statement) => true];
+
+        foreach (array_slice($this->actionSegments(array_slice($tokens, count($header))), 1) as $segment) {
+            if ($segment[0]->type === TokenType::Keyword && in_array($segment[0]->text, $profile->actionOptions, true)) {
+                continue;
+            }
+
+            $classification = $this->classifyTokens([...$header, ...$segment], $profile);
+
+            if ($classification instanceof CanonicalizationFailure) {
+                continue;
+            }
+
+            $question = $this->questionOf($classification);
+
+            if (isset($asked[$question])) {
+                continue;
+            }
+
+            $asked[$question] = true;
+
+            [$actionKind, $targets, $columns, $definitions] = $classification;
+            $actions[] = new StatementAction($actionKind, $targets, $columns, $definitions);
+        }
+
+        return $actions;
+    }
+
+    /**
+     * What a classification asks a rule: its kind, the objects it names and the columns it carries.
+     *
+     * Two actions that agree on all three are one question, whatever else their text says. The
+     * column definitions are left out: they belong to the column target, so two actions can only
+     * differ in them by naming one column twice, and that is still one column to judge.
+     *
+     * @param  array{StatementKind, list<StatementTarget>, list<string>, list<ColumnDefinition>|null}  $classification
+     */
+    private function questionOf(array $classification): string
+    {
+        [$kind, $targets, $columns] = $classification;
+
+        return implode("\x1f", [
+            $kind->value,
+            ...array_map(
+                static fn (StatementTarget $target): string => $target->type->value.' '.$target->qualifiedName().' '.$target->role->value,
+                $targets,
+            ),
+            "\x1e",
+            ...$columns,
+        ]);
+    }
+
+    /**
+     * The tokens of an `ALTER TABLE` up to and including its table, or null for any other statement.
+     *
+     * @param  list<StatementToken>  $tokens
+     * @param  list<string>  $modifiers
+     * @return non-empty-list<StatementToken>|null
+     */
+    private function alterTableHeader(array $tokens, array $modifiers): ?array
+    {
+        $count = count($tokens);
+
+        if ($count < 3
+            || $tokens[0]->type !== TokenType::Keyword || $tokens[0]->text !== 'ALTER'
+            || $tokens[1]->type !== TokenType::Keyword || $tokens[1]->text !== 'TABLE') {
+            return null;
+        }
+
+        $index = 2;
+
+        while ($index < $count && $tokens[$index]->type === TokenType::Keyword && in_array($tokens[$index]->text, $modifiers, true)) {
+            $index++;
+        }
+
+        return $index < $count && $tokens[$index]->type === TokenType::Identifier
+            ? array_slice($tokens, 0, $index + 1)
+            : null;
+    }
+
+    /**
+     * An action list cut into its actions: a new one starts at a token on the statement's own
+     * level that a comma precedes.
+     *
+     * @param  list<StatementToken>  $tokens
+     * @return list<non-empty-list<StatementToken>>
+     */
+    private function actionSegments(array $tokens): array
+    {
+        $segments = [];
+        $current = [];
+
+        foreach ($tokens as $token) {
+            if ($current !== [] && $token->depth === 0 && $token->precededBy === ',') {
+                $segments[] = $current;
+                $current = [];
+            }
+
+            $current[] = $token;
+        }
+
+        if ($current !== []) {
+            $segments[] = $current;
+        }
+
+        return $segments;
     }
 
     /**
@@ -350,6 +513,44 @@ final readonly class StatementClassifier implements CanonicalizationStage
                     $targets[] = new StatementTarget($type, $identifier, $element->targetRole);
                     $index++;
                     break;
+
+                case SignatureElementKind::TargetList:
+                    $type = $element->targetType ?? throw new LogicException('a TargetList element must carry a type');
+
+                    // One member, then one more for every identifier on the statement's own level
+                    // that a comma precedes. A member may carry the driver's own modifiers in front of
+                    // it, as PostgreSQL's `TRUNCATE a, ONLY b` does. A member that is not a resolvable
+                    // identifier fails the statement instead of ending the list early.
+                    do {
+                        while ($index < $count && $tokens[$index]->type === TokenType::Keyword && in_array($tokens[$index]->text, $modifiers, true)) {
+                            $index++;
+                        }
+
+                        if ($index >= $count || $tokens[$index]->type !== TokenType::Identifier) {
+                            return CanonicalizationFailure::ambiguousTarget(
+                                sprintf('a %s in the target list of a recognized statement is not a resolvable identifier', $type->value),
+                            );
+                        }
+
+                        $identifier = Identifier::parse($tokens[$index]->text, $this->driver);
+
+                        if ($identifier instanceof CanonicalizationFailure) {
+                            return $identifier;
+                        }
+
+                        $targets[] = new StatementTarget($type, $identifier, $element->targetRole);
+                        $index++;
+                    } while ($index < $count && $tokens[$index]->depth === 0 && $tokens[$index]->precededBy === ',');
+
+                    // Anything later on the statement's own level that a comma precedes is a member
+                    // the run above could not reach, and a name dropped from the list is exactly the
+                    // failure this element exists to end.
+                    if (array_any(array_slice($tokens, $index), static fn (StatementToken $rest): bool => $rest->depth === 0 && $rest->precededBy === ',')) {
+                        return CanonicalizationFailure::ambiguousTarget(
+                            sprintf('the %s target list of a recognized statement has a member that is not a resolvable identifier', $type->value),
+                        );
+                    }
+                    break;
             }
         }
 
@@ -404,23 +605,19 @@ final readonly class StatementClassifier implements CanonicalizationStage
                 continue;
             }
 
-            // A column name is quoted, and a bare identifier opening a member is not one.
+            // Any other member opens with its column's name, quoted or not. Identifier normalization
+            // runs before this stage and drops every quote a name does not need, so `"id"` arrives
+            // here as `id`, and only a name such as `"Note"` keeps its quotes.
             //
-            // This stage runs after identifier normalization, which is what makes the test sound:
-            // the PostgreSQL keyword list says so in its own words — "a column named `text` is
-            // already quoted and a bare word is unambiguously the keyword". The inverse holds here.
-            //
-            // It is not a nicety. `CREATE TABLE clone (LIKE users INCLUDING ALL)` is a real body
-            // member that brings columns this reader cannot see, and `LIKE` is not in either
-            // driver's keyword list — so without this test it arrives as a column named `like`,
-            // typed `users including all`, and the table is described by half its own definition
-            // with nothing saying so. Adding `LIKE` to the keyword lists would fix it and cost a
-            // canonical form-version bump, which moves every fingerprint and every baseline entry
-            // in every project: the wrong price for a member this reader can simply decline.
-            //
-            // A user-defined type keeps working, which is the case this must not break: in
-            // `"status" order_status not null` the name is quoted and only the type is bare.
-            if (! str_starts_with($token->text, $this->driver->quotingCharacter())) {
+            // Three bare words open a member that is not a column and are in no keyword list of the
+            // engine that writes them. `CREATE TABLE clone (LIKE users INCLUDING ALL)` brings columns
+            // this reader cannot see, and an unnamed `CHECK` on MySQL and `EXCLUDE` on PostgreSQL are
+            // table constraints. A column can carry one of those names once its quotes are gone, so
+            // the body is declined rather than guessed at: a table described by half its own
+            // definition is the one answer that must not travel. Adding the words to the keyword
+            // lists would cost a canonical form-version bump, which moves every fingerprint and every
+            // baseline entry in every project.
+            if (in_array(strtoupper($token->text), self::NON_COLUMN_MEMBERS, true)) {
                 return null;
             }
 
@@ -572,23 +769,22 @@ final readonly class StatementClassifier implements CanonicalizationStage
 
         while ($i < $length) {
             $char = $sql[$i];
-            $rest = substr($sql, $i);
 
-            if ($this->matchPrefix($rest, $lineComments) !== null) {
+            if (ScanAt::firstOf($sql, $i, $lineComments) !== null) {
                 $newline = strpos($sql, "\n", $i);
                 $i = $newline === false ? $length : $newline;
 
                 continue;
             }
 
-            if ($hasBlockComment && str_starts_with($rest, '/*')) {
+            if ($hasBlockComment && ScanAt::startsWith($sql, $i, '/*')) {
                 $close = strpos($sql, '*/', $i + 2);
                 $i = $close === false ? $length : $close + 2;
 
                 continue;
             }
 
-            if ($this->driver->supportsDollarQuotedStrings() && $char === '$' && preg_match('/\A\$\w*\$/', $rest, $matches) === 1) {
+            if ($this->driver->supportsDollarQuotedStrings() && $char === '$' && preg_match('/\G\$\w*\$/', $sql, $matches, 0, $i) === 1) {
                 $tag = $matches[0];
                 $close = strpos($sql, $tag, $i + strlen($tag));
                 $i = $close === false ? $length : $close + strlen($tag);
@@ -596,9 +792,9 @@ final readonly class StatementClassifier implements CanonicalizationStage
                 continue;
             }
 
-            $literal = $this->matchPrefix($rest, $literals);
+            $literal = ScanAt::firstOf($sql, $i, $literals);
             if ($literal !== null) {
-                $i = $this->scanQuoted($sql, $i, $literal) ?? $length;
+                $i = QuotedSpan::endOfLiteral($sql, $i, $literal, $this->driver->usesBackslashStringEscapes()) ?? $length;
 
                 continue;
             }
@@ -658,7 +854,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
 
         while (true) {
             if ($sql[$j] === $quote) {
-                $close = $this->scanQuoted($sql, $j, $quote);
+                $close = QuotedSpan::endOfQuotedIdentifier($sql, $j, $quote);
                 if ($close === null) {
                     return $length;
                 }
@@ -698,41 +894,5 @@ final readonly class StatementClassifier implements CanonicalizationStage
         }
 
         return $j;
-    }
-
-    /**
-     * @param  list<string>  $candidates
-     */
-    private function matchPrefix(string $haystack, array $candidates): ?string
-    {
-        foreach ($candidates as $candidate) {
-            if ($candidate !== '' && str_starts_with($haystack, $candidate)) {
-                return $candidate;
-            }
-        }
-
-        return null;
-    }
-
-    private function scanQuoted(string $sql, int $start, string $quote): ?int
-    {
-        $length = strlen($sql);
-        $j = $start + 1;
-
-        while ($j < $length) {
-            if ($sql[$j] === $quote) {
-                if ($j + 1 < $length && $sql[$j + 1] === $quote) {
-                    $j += 2;
-
-                    continue;
-                }
-
-                return $j + 1;
-            }
-
-            $j++;
-        }
-
-        return null;
     }
 }

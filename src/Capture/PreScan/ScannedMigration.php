@@ -7,6 +7,13 @@ namespace Pushery\SQLens\Capture\PreScan;
 use PhpParser\Node;
 use PhpParser\Node\Attribute;
 use PhpParser\Node\AttributeGroup;
+use PhpParser\Node\Expr\Array_;
+use PhpParser\Node\Expr\FuncCall;
+use PhpParser\Node\Expr\MethodCall;
+use PhpParser\Node\Expr\StaticCall;
+use PhpParser\Node\Expr\Variable;
+use PhpParser\Node\Identifier;
+use PhpParser\Node\Name;
 use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\ClassMethod;
@@ -26,9 +33,10 @@ use Pushery\SQLens\Subjects\DownMethodState;
 final readonly class ScannedMigration
 {
     /**
-     * The migration methods a pre-scan judges. Code outside them exists in the
-     * file but does not run as part of a migration, and a detector that judged it
-     * would ask users to change something that alters nothing.
+     * The migration methods, where what a capture runs starts. Together with the constructor they
+     * are the roots of {@see self::migrationCalls()}; a method none of them reaches exists in the file
+     * but does not run as part of a migration, and a detector that judged it would ask users to
+     * change something that alters nothing.
      *
      * @var list<string>
      */
@@ -245,17 +253,122 @@ final readonly class ScannedMigration
     }
 
     /**
-     * The calls that run as part of `up()` or `down()`, which is the only code a
-     * capture ever executes. This is what detectors read.
+     * The calls a capture runs, which is what detectors read.
+     *
+     * Loading the file runs its top-level code, instantiating the migration runs its constructor, and
+     * `up()` or `down()` runs every method and function it reaches. So a call counts when it stands
+     * at the top level or in a function-like of {@see self::reachableScopes()}.
      *
      * @return list<array{node: Node, target: CallTarget, line: int, scope: string|null, context: CallContext}>
      */
     public function migrationCalls(): array
     {
+        $reachable = $this->reachableScopes();
+
         return array_values(array_filter(
             $this->calls,
-            static fn (array $call): bool => in_array($call['scope'], self::MIGRATION_METHODS, true),
+            static fn (array $call): bool => $call['scope'] === null || $reachable === null || in_array($call['scope'], $reachable, true),
         ));
+    }
+
+    /**
+     * The named function-likes a capture runs.
+     *
+     * The migration methods and the constructor run by construction. Each of them runs what it calls
+     * of its own class through `$this->m()`, `self::m()` or `static::m()`, the functions of the file
+     * it calls by name, and a method it hands over as `[$this, 'm']`, and those run theirs in turn.
+     * The top-level code of the file is a root as well.
+     *
+     * Null when one of them calls a method of its own class by a name only known at run time: any of
+     * them may run then, so all of them are read.
+     *
+     * @return list<string>|null
+     */
+    private function reachableScopes(): ?array
+    {
+        $reachable = [...self::MIGRATION_METHODS, '__construct', ...$this->callableReferences()];
+
+        for ($grown = true; $grown;) {
+            $grown = false;
+
+            foreach ($this->calls as $call) {
+                if ($call['scope'] !== null && ! in_array($call['scope'], $reachable, true)) {
+                    continue;
+                }
+
+                if ($this->callsOwnMethodDynamically($call['node'])) {
+                    return null;
+                }
+
+                $callee = $this->ownCallee($call['node']);
+
+                if ($callee !== null && ! in_array($callee, $reachable, true)) {
+                    $reachable[] = $callee;
+                    $grown = true;
+                }
+            }
+        }
+
+        return $reachable;
+    }
+
+    /**
+     * The name a call reaches inside this file: a method of the class on `$this`, `self` or
+     * `static`, or a function called by name. Null for anything else.
+     */
+    private function ownCallee(Node $node): ?string
+    {
+        if ($node instanceof MethodCall && $this->isThis($node->var) && $node->name instanceof Identifier) {
+            return $node->name->toString();
+        }
+
+        if ($node instanceof StaticCall && $this->isOwnClass($node->class) && $node->name instanceof Identifier) {
+            return $node->name->toString();
+        }
+
+        return $node instanceof FuncCall && $node->name instanceof Name ? $node->name->getLast() : null;
+    }
+
+    /** Whether a call reaches a method of its own class by a name only known at run time. */
+    private function callsOwnMethodDynamically(Node $node): bool
+    {
+        if ($node instanceof MethodCall && $this->isThis($node->var)) {
+            return ! $node->name instanceof Identifier;
+        }
+
+        return $node instanceof StaticCall && $this->isOwnClass($node->class) && ! $node->name instanceof Identifier;
+    }
+
+    /**
+     * The methods the file hands over as `[$this, 'm']`, to `array_map()`, `call_user_func()` or
+     * `Closure::fromCallable()`. Such a reference is no call node, and the method it names runs all
+     * the same. Read over the whole file rather than per function-like, which can only add a method.
+     *
+     * @return list<string>
+     */
+    private function callableReferences(): array
+    {
+        $names = [];
+
+        foreach (new NodeFinder()->findInstanceOf($this->ast, Array_::class) as $array) {
+            $items = $array->items;
+
+            if (count($items) === 2 && $this->isThis($items[0]->value) && $items[1]->value instanceof String_) {
+                $names[] = $items[1]->value->value;
+            }
+        }
+
+        return $names;
+    }
+
+    private function isThis(Node $node): bool
+    {
+        return $node instanceof Variable && $node->name === 'this';
+    }
+
+    private function isOwnClass(Node $class): bool
+    {
+        return $class instanceof Name && in_array($class->toLowerString(), ['self', 'static'], true);
     }
 
     /**

@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Rules\Lifecycle;
 use Override;
 use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Canonical\StatementTarget;
+use Pushery\SQLens\Canonical\TransactionMode;
 use Pushery\SQLens\Contracts\ProvidesRemediation;
 use Pushery\SQLens\Deploy\Contracts\DeclaresOperationClass;
 use Pushery\SQLens\Findings\DowntimeClass;
@@ -30,12 +31,14 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * the schema in one migration, backfill the data in a separate migration (or a queued
  * job) that runs after the first has committed and released its lock.
  *
- * This is a lifecycle concern, not a PostgreSQL one — mixing a schema change and a data
- * write on the same table in one transaction is risky on every engine — so it lives in
- * the driver-neutral family and reasons only about the neutral classification: a `Dml`
- * statement whose target table is also the target of a schema-changing statement in the
- * same transaction. It is deliberately the companion the level-3 bundled-locks rule
- * (`PG.L3.RISKY_OPS_SINGLE_TX`) names and defers to.
+ * It lives in the driver-neutral family and reasons only about the neutral classification: a
+ * `Dml` statement whose target table is also the target of a schema-changing statement in the
+ * same transaction. "The same transaction" is the RESOLVED transaction mode, so the rule speaks
+ * where the engine lets the migrator's transaction wrap a schema change, which is PostgreSQL,
+ * and stays silent on MySQL, where every DDL statement commits implicitly and there is no lock
+ * to hold across the write. The hazard MySQL has instead, a schema change and a data write that
+ * cannot fail together, is `MY.L3.MIXED_DDL_DML_NOT_ATOMIC`. It is deliberately the companion the
+ * level-3 bundled-locks rule (`PG.L3.RISKY_OPS_SINGLE_TX`) names and defers to.
  *
  * Two deliberate non-findings. A table the SAME migration created is invisible outside
  * the transaction until commit, so creating it and seeding it is not the contended case —
@@ -55,13 +58,10 @@ final class DmlOnSchemaChangedTableRule extends AbstractLifecycleRule implements
      */
     private const array SCHEMA_CHANGE_KINDS = [
         StatementKind::AlterTable,
-        // `ADD COLUMN`, and its absence here was a live defect rather than a precaution.
-        //
-        // MySQL's canonicalization has always classified `ALTER TABLE … ADD COLUMN` as its own kind,
-        // so on MySQL this rule went silent on the pair it exists for — add a column, write to it in
-        // the same transaction — while reporting the symmetric `DROP COLUMN` case beside it.
-        // PostgreSQL only appeared covered because it fell back to `AlterTable`; the moment its
-        // grammar names the statement, the same hole opens there. Measured, both engines.
+        // `ADD COLUMN` is its own kind wherever a canonicalization names it, as MySQL's does, and
+        // it changes an existing table like every kind here. PostgreSQL's falls back to
+        // `AlterTable` today; the moment it names the statement, this entry is what keeps the
+        // add-a-column-and-write-to-it pair covered.
         StatementKind::AddColumn,
         StatementKind::AddConstraint,
         StatementKind::DropConstraint,
@@ -246,9 +246,14 @@ final class DmlOnSchemaChangedTableRule extends AbstractLifecycleRule implements
             // transaction (the flag), and the ones whose context could not be resolved (the
             // undetermined). A statement is in exactly one of them, so the two verdicts can
             // never both fire on the same migration.
+            //
+            // "Definitely" is the RESOLVED mode, not the migration's own `$withinTransaction`. That
+            // flag says the migrator was asked to wrap the migration; whether the engine lets it wrap
+            // the schema change is what the resolver decides, and on MySQL the answer is no: every
+            // DDL statement commits implicitly, so the lock is gone before the data write begins.
             $eligible = $unresolvedContext
                 ? $digest->transactionContextUnknown()
-                : $digest->withinTransaction;
+                : $digest->transactionMode === TransactionMode::ImplicitMigratorTransaction;
 
             if (! $eligible) {
                 continue;

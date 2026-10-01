@@ -4,15 +4,23 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Capture\PreScan;
 
+use Illuminate\Container\Container;
+use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Facade;
 use PhpParser\Node;
+use PhpParser\Node\Arg;
 use PhpParser\Node\Expr;
+use PhpParser\Node\Expr\ClassConstFetch;
+use PhpParser\Node\Expr\Eval_;
 use PhpParser\Node\Expr\FuncCall;
+use PhpParser\Node\Expr\Include_;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\New_;
+use PhpParser\Node\Expr\ShellExec;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
+use PhpParser\Node\Scalar\String_;
 
 /**
  * Turns a call node into the thing it actually calls.
@@ -32,6 +40,20 @@ use PhpParser\Node\Name;
  */
 final readonly class NameResolver
 {
+    /** The helpers that resolve their first argument out of the container. */
+    private const array CONTAINER_HELPERS = ['app', 'resolve'];
+
+    /** The container's own methods that resolve their first argument. */
+    private const array CONTAINER_METHODS = ['make', 'makeWith', 'get'];
+
+    /**
+     * The classes whose `getInstance()` is the container.
+     *
+     * The application by NAME: `Illuminate\Foundation` ships only inside laravel/framework, which
+     * this package does not require, and a name is all a reading of a migration needs.
+     */
+    private const array CONTAINER_CLASSES = [Container::class, 'Illuminate\Foundation\Application'];
+
     /**
      * Laravel's root class aliases, for `\Http::get()` written without an import — read from the
      * INSTALLED framework rather than copied into a list here.
@@ -73,14 +95,144 @@ final readonly class NameResolver
         $this->aliases = $aliases ?? self::frameworkAliases();
     }
 
-    /** Resolve any supported call node; anything else is explicitly dynamic. */
+    /**
+     * Resolve any supported call node; anything else is explicitly dynamic.
+     *
+     * Four forms run code without being a call node, and each resolves to what it runs. Backticks
+     * are `shell_exec()` in another spelling, so they resolve to that function and meet its
+     * catalog entry. `include`, `require` and `eval()` run code this file does not contain, which
+     * no catalog can judge, so they resolve as dynamic. `new Foo` runs Foo's constructor.
+     */
     public function resolve(Node $node): CallTarget
     {
-        return match (true) {
+        $target = match (true) {
             $node instanceof StaticCall => $this->resolveStaticCall($node),
             $node instanceof MethodCall => $this->resolveMethodCall($node),
             $node instanceof FuncCall => $this->resolveFuncCall($node),
+            $node instanceof New_ => $this->resolveNew($node),
+            $node instanceof ShellExec => CallTarget::backticks(),
+            $node instanceof Include_ => CallTarget::dynamic($this->includeForm($node).' of another file'),
+            $node instanceof Eval_ => CallTarget::dynamic('an eval() of code built at run time'),
             default => CallTarget::dynamic('an unsupported call form'),
+        };
+
+        $resolution = $this->containerResolution($node);
+
+        return $resolution === null ? $target : $target->resolvingFromContainer($resolution[0], $resolution[1]);
+    }
+
+    /**
+     * The key a call resolves out of the container, with the call as written, or null.
+     *
+     * A migration reaches the cache as `Cache::forget()`, and just as well as `app('cache')->forget()`.
+     * A catalog that knew only the facade saw the first and ran the second for real under pretend.
+     * Five spellings hand the container a key, and a LITERAL key names what comes back as exactly as
+     * a facade name does:
+     *
+     *  - `app('cache')` and `resolve('cache')`, the helpers;
+     *  - `app()->make('cache')`, `->makeWith(…)` and `->get(…)`, the container's own methods;
+     *  - the same on `Container::getInstance()` or `Application::getInstance()`;
+     *  - `App::make('cache')` and its siblings, through the App facade.
+     *
+     * A key written as `Foo::class` is the class it names. A key computed at run time names nothing
+     * a reading can know, and the call stays exactly what it was.
+     *
+     * @return array{string, string}|null the key, and the call as it reads with it
+     */
+    private function containerResolution(Node $node): ?array
+    {
+        if ($node instanceof FuncCall) {
+            $helper = $node->name instanceof Name ? $this->nameOf($node->name) : null;
+            $key = $helper !== null && in_array($helper, self::CONTAINER_HELPERS, true) ? $this->containerKeyIn($node->args) : null;
+
+            return $key === null ? null : [$key, sprintf("%s('%s')", $helper, $key)];
+        }
+
+        if ($node instanceof MethodCall) {
+            $method = $this->methodName($node->name);
+            $container = $method !== null && in_array($method, self::CONTAINER_METHODS, true) ? $this->containerSpelling($node->var) : null;
+            $key = $container === null ? null : $this->containerKeyIn($node->args);
+
+            return $key === null ? null : [$key, sprintf("%s->%s('%s')", $container, $method, $key)];
+        }
+
+        if ($node instanceof StaticCall && $node->class instanceof Name) {
+            $method = $this->methodName($node->name);
+            $key = $method !== null && in_array($method, self::CONTAINER_METHODS, true) && $this->classFor($node->class) === App::class
+                ? $this->containerKeyIn($node->args)
+                : null;
+
+            return $key === null ? null : [$key, sprintf("App::%s('%s')", $method, $key)];
+        }
+
+        return null;
+    }
+
+    /**
+     * How a receiver reads when it is the container itself — `app()` without an argument, or the
+     * container's `getInstance()` — and null for any other receiver.
+     */
+    private function containerSpelling(Expr $receiver): ?string
+    {
+        if ($receiver instanceof FuncCall && $receiver->name instanceof Name && $receiver->args === [] && $this->nameOf($receiver->name) === 'app') {
+            return 'app()';
+        }
+
+        if ($receiver instanceof StaticCall && $receiver->class instanceof Name && $this->methodName($receiver->name) === 'getInstance') {
+            $class = $this->classFor($receiver->class);
+
+            return in_array($class, self::CONTAINER_CLASSES, true) ? substr((string) strrchr('\\'.$class, '\\'), 1).'::getInstance()' : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * The literal key in a call's first argument: a string, or the class a `Foo::class` names.
+     *
+     * Typed as nodes, because the parser's argument list has grown placeholder kinds across
+     * versions, and only a plain positional `Arg` can carry a key.
+     *
+     * @param  array<Node>  $arguments
+     */
+    private function containerKeyIn(array $arguments): ?string
+    {
+        $first = $arguments[0] ?? null;
+
+        if (! $first instanceof Arg || $first->unpack || $first->name instanceof Identifier) {
+            return null;
+        }
+
+        $value = $first->value;
+
+        if ($value instanceof String_) {
+            return $value->value === '' ? null : ltrim($value->value, '\\');
+        }
+
+        return $value instanceof ClassConstFetch && $value->class instanceof Name && $this->methodName($value->name) === 'class'
+            ? $this->nameOf($value->class)
+            : null;
+    }
+
+    /**
+     * `new Foo(...)` — the constructor of a named class, or of one only known at run time, which is
+     * as unresolvable as a static call on a variable class name.
+     */
+    private function resolveNew(New_ $node): CallTarget
+    {
+        return $node->class instanceof Name
+            ? CallTarget::construction($this->classFor($node->class))
+            : CallTarget::dynamic('an object of a class named at run time');
+    }
+
+    /** The keyword an include was written with, with its article. */
+    private function includeForm(Include_ $node): string
+    {
+        return match ($node->type) {
+            Include_::TYPE_INCLUDE_ONCE => 'an include_once',
+            Include_::TYPE_REQUIRE => 'a require',
+            Include_::TYPE_REQUIRE_ONCE => 'a require_once',
+            default => 'an include',
         };
     }
 

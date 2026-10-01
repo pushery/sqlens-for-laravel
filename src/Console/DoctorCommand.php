@@ -15,6 +15,7 @@ use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Exceptions\InvalidGuardProfile;
 use Pushery\SQLens\Guard\GuardProfile;
 use Pushery\SQLens\PackageVersion;
+use Pushery\SQLens\Reporting\ReportText;
 use Pushery\SQLens\ServerVersion;
 use Pushery\SQLens\ShippedLocale;
 use Pushery\SQLens\Tools\ToolReport;
@@ -149,7 +150,7 @@ final class DoctorCommand extends Command
             // string cannot suppress the whole document, and keep `JSON_THROW_ON_ERROR` for the
             // structural failures that substitution cannot cause. Whatever happens, the run does not
             // answer with silence.
-            $this->line(json_encode(
+            ReportText::document($this->output, json_encode(
                 $this->payload($config, $versions, $tools, $probe, $probeScope, $inspection),
                 JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES,
             ));
@@ -159,13 +160,13 @@ final class DoctorCommand extends Command
 
         // Reproducibility parameters, in a fixed order so two runs on the same state
         // print byte-identically.
-        $this->line('php: '.PHP_VERSION);
-        $this->line('laravel: '.$this->getLaravel()->version());
-        $this->line('sqlens: '.$this->packageVersion());
-        $this->line('os: '.PHP_OS_FAMILY);
+        ReportText::line($this->output, 'php: '.PHP_VERSION);
+        ReportText::line($this->output, 'laravel: '.$this->getLaravel()->version());
+        ReportText::line($this->output, 'sqlens: '.$this->packageVersion());
+        ReportText::line($this->output, 'os: '.PHP_OS_FAMILY);
 
         foreach ($this->configLines($inspection) as $line) {
-            $this->line($line);
+            ReportText::line($this->output, $line);
         }
 
         /** @var array<string, mixed> $connections */
@@ -179,11 +180,11 @@ final class DoctorCommand extends Command
             // `driver=unknown` for a configuration Laravel and `sqlens:lint` both accept — from the
             // command whose whole job is telling an operator what SQLens sees.
             $driver = EffectiveConnectionConfig::driverFor($config->get("database.connections.{$name}")) ?? 'unknown';
-            $this->line(sprintf('connection %s: driver=%s server=%s', $name, $driver, $this->serverVersion($versions, $probe, $probeScope, $name)));
+            ReportText::line($this->output, sprintf('connection %s: driver=%s server=%s', $name, $driver, $this->serverVersion($versions, $probe, $probeScope, $name)));
         }
 
         foreach ($tools->entries() as $tool) {
-            $this->line($tool['available']
+            ReportText::line($this->output, $tool['available']
                 ? sprintf('tool %s: %s (%s)', $tool['name'], $tool['version'] ?? 'version unreported', $tool['resolution'])
                 // The cost, named. "not installed" is a fact; "17 checks nobody is running" is a
                 // decision somebody has to make on purpose.
@@ -241,7 +242,7 @@ final class DoctorCommand extends Command
 
         $unusable = $this->unusableTools($tools);
 
-        $this->line($unusable === []
+        ReportText::line($this->output, $unusable === []
             ? 'strict: every known tool is usable here — a strict-tools run would not fail on this machine'
             : sprintf(
                 'strict: a strict-tools run would FAIL on this machine, on %s. That is the difference between here and the gate.',

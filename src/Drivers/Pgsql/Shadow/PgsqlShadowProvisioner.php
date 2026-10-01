@@ -10,8 +10,10 @@ use DateTimeZone;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Support\Sleep;
+use Pushery\SQLens\Capture\Shadow\ShadowConnectionLatch;
 use Pushery\SQLens\Capture\Shadow\ShadowSession;
 use Pushery\SQLens\Contracts\ShadowProvisioner;
+use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Exceptions\ShadowProvisioningUndetermined;
 use Pushery\SQLens\Exceptions\ShadowTeardownIncomplete;
 use Pushery\SQLens\Findings\UndeterminedReason;
@@ -133,6 +135,8 @@ final readonly class PgsqlShadowProvisioner implements ShadowProvisioner
         // The catch is `Throwable` rather than the two named refusals: `createDatabaseFromTemplate()`
         // can fail for reasons this class does not enumerate — a disk that filled, a connection that
         // died — and a leak is a leak whatever threw.
+        $cloned = false;
+
         try {
             // The template must be idle: PostgreSQL refuses a database with other active
             // connections as a TEMPLATE source. Read it rather than fail the clone.
@@ -148,8 +152,12 @@ final readonly class PgsqlShadowProvisioner implements ShadowProvisioner
             }
 
             $this->gateway->createDatabaseFromTemplate($name, $template->database);
+            $cloned = true;
 
             $this->registerConnection($name);
+
+            // Nothing runs on the clone before the server has said the session is in it.
+            ShadowConnectionLatch::assertReaches($this->db->connection($name), $name);
         } catch (Throwable $failure) {
             // Discarded here and NOT swallowed: the caller still gets its named undetermined, which
             // is what the captor reports. The cleanup is silent about its own errors for the same
@@ -159,6 +167,16 @@ final readonly class PgsqlShadowProvisioner implements ShadowProvisioner
                 $this->templates->discard($template->database);
             } catch (Throwable) {
                 // Nothing to add: the original failure below is the one worth reporting.
+            }
+
+            // The clone as well, once it exists: a refusal after the clone is a clone nothing collects.
+            if ($cloned) {
+                try {
+                    $this->db->purge($name);
+                    $this->gateway->dropDatabase($name);
+                } catch (Throwable) {
+                    // As above.
+                }
             }
 
             throw $failure;
@@ -221,14 +239,12 @@ final readonly class PgsqlShadowProvisioner implements ShadowProvisioner
     /**
      * Register a runtime connection pointing at the throwaway database, under the
      * shadow name, so the runner can migrate and capture against it. The config is
-     * the caller-supplied template with `database` swapped to the clone.
+     * the caller-supplied template with its URL resolved and `database` swapped to
+     * the clone, so the swap is the database the connection reaches.
      */
     private function registerConnection(string $name): void
     {
-        $this->config->set('database.connections.'.$name, [
-            ...$this->shadowConnectionConfig,
-            'database' => $name,
-        ]);
+        $this->config->set('database.connections.'.$name, EffectiveConnectionConfig::onDatabase($this->shadowConnectionConfig, $name));
 
         // Clear any cached resolution under this name so the next resolve builds the
         // connection fresh from the config just written.

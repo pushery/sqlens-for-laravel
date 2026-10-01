@@ -41,17 +41,23 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * own template with its own values, and two copies of a session preamble would drift the day one of
  * them was tuned — with the halves each looking correct on their own.
  *
- * ## Everything is read from the CANONICAL view
+ * ## The build step is the migration's own statement
  *
- * The index name, the table and the key columns come from the classified statement — `soleTarget()`
- * and `keyColumns` — never from the SQL text and never generated. Generating an index name would
- * make two runs over the same migration produce two different payloads, which is the determinism
- * this package holds everywhere else; and a name invented here would not be the name the failed
- * attempt left behind, which is exactly the name step four has to drop.
+ * Step three is the canonical `CREATE INDEX` with `CONCURRENTLY` put where PostgreSQL's grammar puts
+ * it, and nothing else changed. Rebuilding it from the index, the table and the key columns dropped
+ * everything the three do not carry: `UNIQUE`, so a finished-looking statement would have replaced a
+ * unique index with one that accepts duplicates, and `USING`, `INCLUDE`, a partial index's `WHERE`
+ * and an expression, where it could only leave a placeholder.
+ *
+ * The index the sweep drops comes from the classified statement, `soleTarget()`, and is never
+ * generated. Generating one would make two runs over the same migration produce two different
+ * payloads, which is the determinism this package holds everywhere else; and a name invented here
+ * would not be the name the failed attempt left behind, which is exactly the name step four has to
+ * drop.
  *
  * A fact the statement does not carry leaves its placeholder STANDING rather than blank
- * ({@see RemediationStep::filled()}): a `DROP INDEX` names no table, and a template that quietly
- * lost one would read as a complete statement about the wrong object.
+ * ({@see RemediationStep::filled()}): a statement whose index the classification did not resolve
+ * keeps `{{index}}` in the sweep, where a blank would read as a complete statement about nothing.
  *
  * ## It renders; it never runs
  *
@@ -98,7 +104,7 @@ final readonly class ConcurrentlyTemplate
                     order: 3,
                     kind: RemediationStepKind::MigrationStatement,
                     noteKey: self::LANG.'create_index',
-                    sqlTemplate: 'CREATE INDEX CONCURRENTLY {{index}} ON {{table}} ({{columns}})',
+                    sqlTemplate: $this->concurrently($statement->canonical),
                     withinTransaction: false,
                 ),
                 new RemediationStep(
@@ -273,8 +279,8 @@ final readonly class ConcurrentlyTemplate
      * The placeholder values THIS statement carries — and only the ones it carries.
      *
      * A key is absent rather than empty when the statement does not name the fact: an absent key
-     * leaves `{{table}}` visible in the rendered SQL, which reads as a hole somebody must fill,
-     * while an empty string would render `ON ()` and read as a finished statement.
+     * leaves `{{index}}` visible in the rendered SQL, which reads as a hole somebody must fill,
+     * while an empty string would render `DROP INDEX CONCURRENTLY` with nothing to drop.
      *
      * @return array<string, string>
      */
@@ -288,16 +294,15 @@ final readonly class ConcurrentlyTemplate
             $context['index'] = $index->qualifiedName();
         }
 
-        $table = $statement->soleTarget(SchemaObjectType::Table);
-
-        if ($table instanceof StatementTarget) {
-            $context['table'] = $table->qualifiedName();
-        }
-
-        if ($statement->keyColumns !== []) {
-            $context['columns'] = implode(', ', $statement->keyColumns);
-        }
-
         return $context;
+    }
+
+    /**
+     * A `CREATE INDEX` that runs concurrently: the keyword right after `INDEX`, ahead of
+     * `IF NOT EXISTS` and the name, and the rest of the statement as it was.
+     */
+    private function concurrently(string $canonical): string
+    {
+        return preg_replace('/^CREATE (UNIQUE )?INDEX (?!CONCURRENTLY\b)/', 'CREATE $1INDEX CONCURRENTLY ', $canonical, 1) ?? $canonical;
     }
 }

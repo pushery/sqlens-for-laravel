@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Reporting\Agent;
 
 use Pushery\SQLens\Findings\DowntimeClass;
+use Pushery\SQLens\Findings\DowntimeUndetermined;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Severity\GateAxis;
 use Pushery\SQLens\Severity\GateDecision;
@@ -131,11 +132,18 @@ final readonly class BriefingPrioritizer
         return $finding->severity instanceof Severity ? -$finding->severity->rank() : PHP_INT_MAX;
     }
 
-    /** The downtime class as a sort key; a finding without one sorts after every finding with one. */
+    /**
+     * The downtime class as a sort key; a finding without one sorts after every finding with one,
+     * and one whose class could not be determined sorts with `rewrite`, which it may be.
+     */
     private function downtimeRank(Finding $finding): int
     {
         $class = $finding->downtimeClass;
 
-        return $class instanceof DowntimeClass ? self::DOWNTIME_RANK[$class->value] : PHP_INT_MAX;
+        if ($class instanceof DowntimeClass) {
+            return self::DOWNTIME_RANK[$class->value];
+        }
+
+        return $finding->downtimeUndetermined instanceof DowntimeUndetermined ? self::DOWNTIME_RANK[DowntimeClass::Rewrite->value] : PHP_INT_MAX;
     }
 }

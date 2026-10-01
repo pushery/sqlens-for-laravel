@@ -7,8 +7,13 @@ namespace Pushery\SQLens\Catalog;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Database\Connection;
 use Illuminate\Database\DatabaseManager;
+use Pushery\SQLens\Capture\Shadow\ShadowTargetIdentity;
 use Pushery\SQLens\Contracts\SessionDefenses;
+use Pushery\SQLens\Drivers\DriverResolutionFailure;
+use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
+use Pushery\SQLens\Drivers\EngineIdentity;
 use Pushery\SQLens\Rules\ServerVersion;
+use Pushery\SQLens\ServerVersion as ServerBanner;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 use Pushery\SQLens\Subjects\SubjectContext;
 
@@ -73,16 +78,21 @@ final readonly class ReaderConnectionFactory
     }
 
     /**
-     * A sealed reader connection pointed at a shadow database on the source's server.
+     * A sealed reader connection pointed at a shadow database, through the connection that made it.
      *
-     * The shadow carries a GENERATED name on the same instance, so only `database` moves — the host,
-     * port and credentials are the source's, because the shadow was created there. That is the whole
-     * difference from {@see forConnection()}, and it is why this cannot be a flag on that one: the
-     * two differ in what they may overwrite, not merely in what they set.
+     * `$source` is the connection the shadow was provisioned and migrated through, the one its
+     * session names. Its host, port and credentials are kept and only `database` is set, because
+     * that connection is where the shadow exists and an account that may read it. The application's
+     * connection is not: with a shadow connection of its own configured, the shadow lives on another
+     * server or belongs to another account. That is the whole difference from {@see forConnection()},
+     * and it is why this cannot be a flag on that one: the two differ in what they may overwrite, not
+     * merely in what they set.
      *
-     * `read`/`write` are dropped for the same reason as there, and it bites harder here: a reference
-     * catalog read from a replica would be the expectation side of a comparison taken from a server
-     * that never ran the migrations. A drift report built on that would be confidently wrong.
+     * On a read/write split it reads the write side, as {@see forPrimary()} does, and here that is
+     * the only server that has the database at all: provisioning created it and ran the migrations
+     * through the source connection, and the framework sends DDL to the write side. The connection's
+     * base keys alone name no such server, or name `127.0.0.1` where the configuration left Laravel's
+     * default in place.
      *
      * The connection is rebuilt on every call rather than cached, because the shadow database name
      * is different every run — a cached entry under this name would point at a database that has
@@ -90,6 +100,7 @@ final readonly class ReaderConnectionFactory
      * nobody recognizes.
      *
      * @throws UnknownReaderConnection when the source connection is not configured
+     * @throws AmbiguousPrimaryHost when the write side leaves several servers open and `sqlens.host` names none of them
      */
     public function forShadowDatabase(string $source, string $database): Connection
     {
@@ -100,8 +111,11 @@ final readonly class ReaderConnectionFactory
             throw new UnknownReaderConnection($source);
         }
 
-        unset($settings['read'], $settings['write']);
-        $settings = $this->openedForReading($settings);
+        // `primaryOf()` resolves the URL before the swap below: the framework lays a `url`'s
+        // components over the keys, `database` among them, so a swap on the raw keys would name a
+        // database this reader never reaches, and the expected schema would be read from the one the
+        // URL names.
+        $settings = $this->openedForReading($this->primaryOf($source, $settings));
         $settings['database'] = $database;
 
         // Purged before it is set, not after: the manager holds a live handle under this name from
@@ -147,25 +161,83 @@ final readonly class ReaderConnectionFactory
                 throw new UnknownReaderConnection($source);
             }
 
-            // The read/write split is dropped on purpose. A catalog audit is a statement about ONE
-            // instance, and a connection that silently sends reads to a replica would produce a
-            // snapshot of a database nobody asked about — including one whose replication lag makes
-            // it a different schema. Which instance is audited becomes an explicit choice.
-            unset($settings['read'], $settings['write']);
-            $settings = $this->openedForReading($settings);
-
-            // The pinned host replaces whatever the base config named. Dropping the split above is
-            // not enough on its own: a connection configured ONLY through read/write blocks has no
-            // base host at all, and the reader would then connect to whatever the driver defaults
-            // to — a server nobody named, reported as the project's.
-            if ($pinnedHost !== null) {
-                $settings['host'] = $pinnedHost;
-            }
+            // The URL resolved, the read/write split dropped and the pinned host set, in one place
+            // shared with every tool that has to reach the same database. The reasons for each step
+            // are on EffectiveConnectionConfig::forReading().
+            $settings = $this->openedForReading(EffectiveConnectionConfig::forReading($settings, $pinnedHost));
 
             $this->config->set('database.connections.'.$name, $settings);
         }
 
         return $this->database->connection($name);
+    }
+
+    /**
+     * The reader connection for the server the migrations reach: the write side of a read/write
+     * split, and the connection itself otherwise.
+     *
+     * {@see forConnection()} reads for an audit, which reads the read side and takes the host its
+     * instance resolution pinned. The deploy commands ask about the server a migration waits on,
+     * builds on and leaves behind, and that is where `migrate` runs. Dropping the split, as the audit
+     * reader does without a pin, leaves the connection's base keys: on a connection configured the
+     * way Laravel's documentation shows, `127.0.0.1` or no host at all, a server nobody named.
+     *
+     * `sqlens.host` is consulted only where the write side itself leaves a choice. A host the write
+     * side does not offer is the audit's pin on a replica, and a deploy check does not follow it
+     * there.
+     *
+     * The copy is rebuilt whenever the cached one differs from it. The name is shared with the
+     * audit's reader, because {@see self::sourceOf()} reads the source back out of it, so within one
+     * process a copy the audit built for a replica would otherwise answer here for the primary.
+     *
+     * @throws UnknownReaderConnection when the source connection is not configured
+     * @throws AmbiguousPrimaryHost when the write side leaves several servers open and `sqlens.host` names none of them
+     */
+    public function forPrimary(string $source): Connection
+    {
+        $name = $source.self::NAME_SUFFIX;
+        $settings = $this->config->get('database.connections.'.$source);
+
+        if (! is_array($settings)) {
+            throw new UnknownReaderConnection($source);
+        }
+
+        $settings = $this->openedForReading($this->primaryOf($source, $settings));
+
+        if ($this->config->get('database.connections.'.$name) !== $settings) {
+            $this->database->purge($name);
+            $this->config->set('database.connections.'.$name, $settings);
+        }
+
+        return $this->database->connection($name);
+    }
+
+    /**
+     * The configuration of the server a connection's migrations reach.
+     *
+     * @param  array<array-key, mixed>  $settings
+     * @return array<array-key, mixed>
+     *
+     * @throws AmbiguousPrimaryHost when the write side leaves several servers open and `sqlens.host` names none of them
+     */
+    private function primaryOf(string $source, array $settings): array
+    {
+        $pinned = $this->configuredHost();
+        $primary = PrimaryEndpoint::of($settings, $pinned);
+
+        if ($primary->settings === null) {
+            throw new AmbiguousPrimaryHost($source, $primary->hosts, $pinned);
+        }
+
+        return $primary->settings;
+    }
+
+    /** The host `sqlens.host` pins, or null when it pins none. */
+    private function configuredHost(): ?string
+    {
+        $host = $this->config->get('sqlens.host');
+
+        return is_string($host) && $host !== '' ? $host : null;
     }
 
     /**
@@ -228,7 +300,7 @@ final readonly class ReaderConnectionFactory
      * object rather than a longer list: a check needing statistics or live activity would otherwise
      * have to build its own, which needs the connection the console may not hold.
      */
-    public function forPreflight(SessionDefenses $defenses, CatalogReaderFactory $readers, SubjectContext $context, ?string $pinnedHost = null): PreflightResolution
+    public function forPreflight(SessionDefenses $defenses, CatalogReaderFactory $readers, SubjectContext $context, ?string $requested = null): PreflightResolution
     {
         $resolution = PreflightConnection::resolve($this->config);
 
@@ -242,8 +314,44 @@ final readonly class ReaderConnectionFactory
             ));
         }
 
+        // The verdict is reported under the connection that was asked about, and the reading goes
+        // through the preflight connection. That is right only while both reach the same database:
+        // then the preflight connection is a lower-privileged way into the very database the verdict
+        // names. When they reach different databases, reading through the asked-about connection
+        // instead would spend the migration privileges this reading exists to avoid, so the answer
+        // is a refusal naming both.
+        if (! in_array($requested, [null, '', $resolution->name], true)
+            && ! $this->reachesTheSameDatabase($requested, $resolution->name)) {
+            return PreflightResolution::refused(CatalogSkip::for(
+                SchemaObjectType::Database,
+                $requested,
+                SkipReason::NotReadable,
+                sprintf(
+                    'the connection `%s` and the preflight connection `%s` reach different databases, and '
+                    .'this reading goes through `%s`: a verdict reported for `%s` would describe another '
+                    .'database. Point `sqlens.preflight.connection` at a read-only connection to the '
+                    .'database `%s` reaches, or ask about a connection on the database `%s` reads.',
+                    $requested,
+                    $resolution->name,
+                    $resolution->name,
+                    $requested,
+                    $requested,
+                    $resolution->name,
+                ),
+            ));
+        }
+
         try {
-            $connection = $this->forConnection($resolution->name, $pinnedHost);
+            // The primary, because every question a preflight asks is about the server the
+            // migration will run on: its locks, its activity, its disk.
+            $connection = $this->forPrimary($resolution->name);
+        } catch (AmbiguousPrimaryHost $ambiguous) {
+            return PreflightResolution::refused(CatalogSkip::for(
+                SchemaObjectType::Database,
+                $resolution->name,
+                SkipReason::NotReadable,
+                $ambiguous->getMessage(),
+            ));
         } catch (UnknownReaderConnection) {
             // Belt and braces with the resolution's own check, and not redundant: the resolution
             // reads the config, this reaches the manager, and a connection can be removed between
@@ -285,6 +393,25 @@ final readonly class ReaderConnectionFactory
         $built = $readers->for($driver, $connection, $this->budget(), $context);
 
         $identity = $built->identity->read($resolution->name);
+
+        // The engine that answered, asked of the handshake this reading just opened. MariaDB answers
+        // Laravel's `mysql` driver without sharing MySQL 8.4's semantics, so every check a gate runs
+        // after this would judge its locks, settings and grants as MySQL's: confident, specific and
+        // about another product. Refused here, where predeploy and postdeploy both open their
+        // reader, by the same unit that refuses such a server to the lint run. A connection that
+        // never opened carries no banner, and the checks report that absence by its own name.
+        $banner = ServerBanner::bannerOf($connection);
+        $impostor = $banner === null ? null : EngineIdentity::impostor($driver, $banner);
+
+        if ($impostor instanceof DriverResolutionFailure) {
+            return PreflightResolution::refused(CatalogSkip::for(
+                SchemaObjectType::Database,
+                $resolution->name,
+                SkipReason::UnsupportedDriver,
+                $impostor->detail.', and its locks, settings and grants are not MySQL 8.4\'s. Nothing '
+                .'was checked: a gate that judged them as MySQL\'s would answer about the wrong product.',
+            ), $driver);
+        }
 
         // An `if` rather than a ternary, and the reason is the coverage report rather than taste:
         // a bare `: null` arm is EXECUTED and still counted uncovered by the driver, so the line
@@ -394,5 +521,24 @@ final readonly class ReaderConnectionFactory
         }
 
         return is_string($value) ? $value : '';
+    }
+
+    /**
+     * Whether two configured connections reach the same database on the same server.
+     *
+     * Compared as the framework resolves them, so a `url` counts, and through the one identity the
+     * shadow locks already use, so `localhost` and `127.0.0.1` or an omitted default port do not
+     * read as two places. The credentials are not part of it: a read-only role and the migration
+     * role on one database are the case this exists to allow. A connection that is not configured
+     * reaches nothing, and nothing is not the same database as anything.
+     */
+    private function reachesTheSameDatabase(string $one, string $other): bool
+    {
+        $first = EffectiveConnectionConfig::for($this->config->get('database.connections.'.$one));
+
+        return $first !== []
+            && ShadowTargetIdentity::identity($first) === ShadowTargetIdentity::identity(
+                EffectiveConnectionConfig::for($this->config->get('database.connections.'.$other)),
+            );
     }
 }

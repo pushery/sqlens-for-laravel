@@ -27,8 +27,8 @@ final readonly class ConnectionSeparation
         /** The role the runtime connection authenticates as, when it could be resolved. */
         public ?string $runtimeRole = null,
         /**
-         * Who the runtime connection actually is — `user@host/database`, or null when the
-         * configuration does not say.
+         * Who the runtime connection actually is — a digest of its user, host and database, or null
+         * when the configuration does not say. Compared, never printed.
          *
          * Separate from {@see self::$runtime}, which is only the NAME under which a project filed
          * the connection. Two names are not two identities, and the gap between them is where the
@@ -54,11 +54,11 @@ final readonly class ConnectionSeparation
      * account the run authenticated as — unconditionally. So on a run made over the MIGRATION
      * connection, "the runtime role" silently means the migration role.
      *
-     * Today's readers survive that: they compare a catalog row's GRANTEE against `runtimeRole`, find
-     * no row, and stay quiet. False-negative, and nobody acts on silence. A rule that judges the
-     * CONNECTING role itself inverts it — it would report the migration role as the runtime one and
-     * tell somebody to revoke the privilege their deploy depends on. That is the failure
-     * {@see self::isRuntimeGrantee()} already warns about in so many words.
+     * Both kinds of reader fall into that. A rule that judges the CONNECTING role would report the
+     * migration role as the runtime one, and a reader comparing a catalog row's GRANTEE against
+     * `runtimeRole` finds the rows that account holds: the migration role's own grants, reported as
+     * the runtime role's with the advice to revoke what the deploy depends on. So
+     * {@see self::isRuntimeGrantee()} answers only on a run over the runtime connection too.
      *
      * `null` means the question is not answerable: the run named no connection, or the project named
      * no runtime one. Answering `false` there would smuggle in a guess, and answering `true` would
@@ -78,16 +78,18 @@ final readonly class ConnectionSeparation
      *
      * False when the runtime role is unknown — not "maybe": a rule acting on a maybe would attach a
      * finding to whichever role happened to sort first, and name a fix for somebody else's account.
+     * Unknown includes every run that is not looking at the runtime connection, because
+     * `runtimeRole` is then the account that run connected as.
      *
      * @param  list<string>  $reachableFromRuntime  roles the runtime role holds the rights of through membership
      */
     public function isRuntimeGrantee(string $grantee, array $reachableFromRuntime = []): bool
     {
-        // The runtime CONNECTION has to be declared, not just the role resolved. Without it the audit
-        // still knows which account it authenticated as — but that account is not "the runtime role"
-        // until somebody says so, and judging it anyway would be the guess this whole type exists to
-        // avoid: on a run made over the migration connection it would name the wrong role, and the
-        // finding would send somebody to revoke a privilege their deploy depends on.
+        // The runtime CONNECTION has to be declared and has to be the one this run addressed, not
+        // just the role resolved. The audit knows which account it authenticated as, but that account
+        // is "the runtime role" only on a run over the runtime connection: on one over the migration
+        // connection it is the deploy's account, its own grant rows exist, and judging them would
+        // send somebody to revoke a privilege their deploy depends on.
         // MEMBERSHIP COUNTS, and it is not a refinement — the same sentence
         // {@see SecuritySubjects::ownedByConnection()} already makes about RLS ownership, applied to
         // the other half of the same question. `GRANT CREATE ON SCHEMA public TO app_writer` plus
@@ -98,7 +100,7 @@ final readonly class ConnectionSeparation
         //
         // The reachable set is the CLOSURE the role reading already computes, so no second walk of
         // the membership graph happens here and the two cannot come to disagree.
-        return $this->runtime !== null
+        return $this->auditedIsRuntime() === true
             && $this->runtimeRole !== null && $this->runtimeRole !== ''
             && ($grantee === $this->runtimeRole || in_array($grantee, $reachableFromRuntime, true));
     }

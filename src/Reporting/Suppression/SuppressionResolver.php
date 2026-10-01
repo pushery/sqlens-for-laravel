@@ -132,6 +132,27 @@ final readonly class SuppressionResolver
     }
 
     /**
+     * The undetermined reasons a project has explicitly accepted living without, from the value of
+     * `sqlens.suppression.allow_undetermined`. Read leniently — the config validator owns malformed
+     * values, loudly — so an unknown reason never throws mid-run.
+     *
+     * One reader for both suites. The lint suite read the key on its own and the audit never did, so
+     * a reason a project allowed was allowed in one half of `sqlens:security` and not in the other.
+     *
+     * @return list<UndeterminedReason>
+     */
+    public static function allowedUndetermined(mixed $configured): array
+    {
+        if (! is_array($configured)) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            array_map(static fn (mixed $value): ?UndeterminedReason => is_string($value) ? UndeterminedReason::tryFrom($value) : null, $configured),
+        ));
+    }
+
+    /**
      * @param  list<SuppressionCandidate>  $candidates
      * @param  list<string>  $unverifiablePrefixes  rule-id prefixes whose SOURCE did not answer
      *                                              this run, so a baseline entry naming one was
@@ -139,8 +160,11 @@ final readonly class SuppressionResolver
      * @param  list<Finding>  $crossSuiteFindings  what the OTHER half of this same run reported and
      *                                             this pass will not resolve. Exactly one layer
      *                                             reads them, and only their catalog side.
+     * @param  BaselineScope|null  $scope  which baseline entries this run can judge; the rest belong
+     *                                     to the other suite and are neither stale nor unverifiable
+     *                                     here. Null judges every entry.
      */
-    public function resolve(array $candidates, Suite $suite, array $unverifiablePrefixes = [], array $crossSuiteFindings = []): SuppressionOutcome
+    public function resolve(array $candidates, Suite $suite, array $unverifiablePrefixes = [], array $crossSuiteFindings = [], ?BaselineScope $scope = null): SuppressionOutcome
     {
         $visible = [];
         $suppressed = [];
@@ -167,7 +191,8 @@ final readonly class SuppressionResolver
         ]);
 
         foreach ($candidates as $candidate) {
-            $suppression = $this->firstCovering($candidate, $suite, $matchedBaselineKeys, $usedIgnoreIndices, $reportedIds, $catalogIdentities);
+            $contradiction = null;
+            $suppression = $this->firstCovering($candidate, $suite, $matchedBaselineKeys, $usedIgnoreIndices, $reportedIds, $catalogIdentities, $contradiction);
 
             if ($suppression instanceof Suppression) {
                 $suppressed[] = new SuppressedFinding($candidate->finding, $suppression);
@@ -175,7 +200,9 @@ final readonly class SuppressionResolver
                 continue;
             }
 
-            $visible[] = $candidate->finding;
+            // Visible with the reason a baseline entry that matched it did not hide it. Without the
+            // sentence, an accepted finding that comes back reads as a new one.
+            $visible[] = $contradiction === null ? $candidate->finding : $candidate->finding->withBaselineContradiction($contradiction);
         }
 
         [$visible, $suppressed] = $this->restoreOrphanedViews($visible, $suppressed);
@@ -183,9 +210,9 @@ final readonly class SuppressionResolver
         return new SuppressionOutcome(
             visible: $visible,
             suppressed: $suppressed,
-            staleBaselineEntries: $this->baseline->staleEntries($matchedBaselineKeys, $unverifiablePrefixes),
+            staleBaselineEntries: $this->baseline->staleEntries($matchedBaselineKeys, $unverifiablePrefixes, $scope),
             unusedIgnoreRules: $this->config->unusedRules($usedIgnoreIndices),
-            unverifiableBaselineEntries: $this->baseline->unverifiableEntries($matchedBaselineKeys, $unverifiablePrefixes),
+            unverifiableBaselineEntries: $this->baseline->unverifiableEntries($matchedBaselineKeys, $unverifiablePrefixes, $scope),
         );
     }
 
@@ -260,6 +287,7 @@ final readonly class SuppressionResolver
      * @param  list<int>  $usedIgnoreIndices
      * @param  list<string>  $reportedIds
      * @param  list<string>  $catalogIdentities
+     * @param  string|null  $contradiction  set to why a matching baseline entry did not suppress
      */
     private function firstCovering(
         SuppressionCandidate $candidate,
@@ -268,6 +296,7 @@ final readonly class SuppressionResolver
         array &$usedIgnoreIndices,
         array $reportedIds,
         array $catalogIdentities,
+        ?string &$contradiction = null,
     ): ?Suppression {
         $undetermined = $candidate->finding->status->outcome === Outcome::Undetermined;
 
@@ -286,6 +315,12 @@ final readonly class SuppressionResolver
 
         if ($entry instanceof BaselineEntry) {
             $matchedBaselineKeys[] = $entry->key();
+
+            // Matched, so never reported as stale: the finding it names is right here. But an entry
+            // whose rule, category or severity contradicts the finding accepts nothing, because the
+            // reviewer who approved it read those fields and not the fingerprint.
+            $contradiction = $entry->contradictionOf($candidate->finding);
+            $entry = $contradiction === null ? $entry : null;
         }
 
         $ignore = $this->config->suppressionFor($candidate->finding, $suite, $undetermined);

@@ -12,6 +12,7 @@ use Pushery\SQLens\Drivers\Mysql\Rules\AbstractMysqlRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\Support\UniqueKeyIndex;
 use Pushery\SQLens\Engine\ResolvedServerVersion;
 use Pushery\SQLens\Findings\DowntimeClass;
+use Pushery\SQLens\Findings\DowntimeUndetermined;
 use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
@@ -104,7 +105,7 @@ final class ForeignKeyOnNonStandardKeyRule extends AbstractMysqlRule implements 
             'sqlens::messages.remediation.no_safe_sequence.fk_target_non_unique',
             'sqlens::messages.remediation.no_safe_sequence.schema_decision_verification',
             $this->id(),
-            $this->downtimeClassFor($statement),
+            $this->knownDowntimeClass($this->downtimeClassFor($statement)),
         );
     }
 
@@ -125,7 +126,7 @@ final class ForeignKeyOnNonStandardKeyRule extends AbstractMysqlRule implements 
      * it is the likely case — is exactly the hard-coded class the whole derivation exists to
      * prevent, and it would state a cost on a statement MySQL 8.4 is going to reject anyway.
      */
-    public function downtimeClassFor(MigrationStatementView $statement): ?DowntimeClass
+    public function downtimeClassFor(MigrationStatementView $statement): DowntimeClass|DowntimeUndetermined|null
     {
         if (! $this->referencedColumnsOf($statement) instanceof ForeignKeyReference) {
             return null;
@@ -134,7 +135,7 @@ final class ForeignKeyOnNonStandardKeyRule extends AbstractMysqlRule implements 
         return $this->downtimeClasses->forCandidateOperations(
             [self::OPERATION],
             $statement->serverVersion ?? ResolvedServerVersion::unresolvable(),
-        )->downtimeClass;
+        )->derived();
     }
 
     #[Override]

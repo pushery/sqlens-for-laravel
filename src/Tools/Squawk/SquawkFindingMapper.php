@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Tools\Squawk;
 
+use Pushery\SQLens\Canonical\Fingerprint;
 use Pushery\SQLens\Capture\CaptureResult;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Docs\DocumentationSite;
@@ -82,6 +83,29 @@ final readonly class SquawkFindingMapper
         }
 
         return $this->finding($raw, $mapping, $placed, $context);
+    }
+
+    /**
+     * The ids this mapper reports a verdict under, or only those whose level is above `$above`.
+     *
+     * Read from the map rather than from a run, because the question is what the tool could have
+     * said: a run whose level leaves a rule out never hears from it.
+     *
+     * @return list<string>
+     */
+    public function reportedIds(?Level $above = null): array
+    {
+        $ids = [];
+
+        foreach ($this->map->rules() as $rule) {
+            $mapping = $this->map->for($rule);
+
+            if ($mapping?->surfaces() === true && (! $above instanceof Level || ($mapping->level ?? Level::Capturable)->value > $above->value)) {
+                $ids[] = self::ID_PREFIX.$rule;
+            }
+        }
+
+        return $ids;
     }
 
     /**
@@ -180,6 +204,10 @@ final readonly class SquawkFindingMapper
             $context,
             $mapping->severity,
         );
+
+        if ($position->excerpt instanceof Fingerprint) {
+            $finding = $finding->withExcerpt($position->excerpt);
+        }
 
         // Attached only when the map states one. A downtime class is what a deploy gate branches
         // on, so a guessed one is worse than none: the gate would let something through on a

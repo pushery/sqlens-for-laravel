@@ -81,8 +81,8 @@ final readonly class CredentialRedaction
     {
         $masked = str_replace($this->secrets(self::EXACT_FIELDS), self::PLACEHOLDER, $text);
 
-        // The IDENTIFYING values — host, user, database — are masked only where they stand as a
-        // token of their own.
+        // The IDENTIFYING values — host, user, database, socket path — are masked only where they
+        // stand as a token of their own.
         //
         // Measured, and it is not a hypothetical: a project whose database is called `laravel` — the
         // framework's own default — had every documentation URL in its report corrupted, because
@@ -109,7 +109,7 @@ final readonly class CredentialRedaction
      *
      * @var list<string>
      */
-    private const array IDENTIFYING_FIELDS = ['host', 'username', 'database'];
+    private const array IDENTIFYING_FIELDS = ['host', 'username', 'database', 'unix_socket'];
 
     /**
      * Every value this application's database configuration holds that must not travel.

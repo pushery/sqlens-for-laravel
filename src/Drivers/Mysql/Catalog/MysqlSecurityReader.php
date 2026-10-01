@@ -242,7 +242,7 @@ final readonly class MysqlSecurityReader implements SecurityReader
 
     #[RawSql(
         reason: 'reads the grant catalog; information_schema is not a model, and a privilege picture assembled any other way would be a guess about who can do what',
-        interpolation: 'the privilege COLUMN name is assembled from the Y/N column list of the catalog itself; no engine binds a column name',
+        interpolation: 'the privilege COLUMN name is assembled from the Y/N column list of the catalog itself, and the statement target from literal grant-table column names; no engine binds a column name',
     )]
     public function grants(): GrantReading
     {
@@ -277,12 +277,18 @@ final readonly class MysqlSecurityReader implements SecurityReader
                 // `concat_ws` skips NULLs, so one expression yields exactly the privileges the row
                 // carries, over ONE scan. Thirty union arms against `mysql.user` would be thirty
                 // chances to read the same small table in thirty different states.
-                "select 'database' as scope, Db as object_name, User, Host, "
+                //
+                // `target` is what follows ON in a GRANT or REVOKE for the row, written here because
+                // only this statement still has the parts: every name in backticks with a backtick
+                // inside doubled, the way MySQL 8.4 prints them itself in SHOW GRANTS. The pattern
+                // characters of a database-level grant stay as stored, which is how MySQL prints them
+                // too. A column grant has no such target: its column list belongs to the privilege.
+                "select 'database' as scope, Db as object_name, ".self::quotedTarget('Db').' as target, User, Host, '
                 .$static->unpivotExpression(MysqlStaticPrivileges::SCOPE_DATABASE).' as privilege from mysql.db'
                 // The global scope, read from `mysql.user`: `mysql.global_grants` holds only the
                 // dynamic privileges of MySQL 8, so without this arm `SUPER`, `FILE`, `PROCESS` and
                 // `SHUTDOWN` — the whole static administrative family — would arrive nowhere.
-                ." union all select 'global', '*', User, Host, ".$static->unpivotExpression(MysqlStaticPrivileges::SCOPE_GLOBAL).' from mysql.user'
+                ." union all select 'global', '*', '*.*', User, Host, ".$static->unpivotExpression(MysqlStaticPrivileges::SCOPE_GLOBAL).' from mysql.user'
                 // `Grant_priv` — the ability to hand the grant on. Measured on a real 8.4: a grant
                 // made `WITH GRANT OPTION` sets `Grant_priv = 'Y'` here and at the global scope, and
                 // adds the `Grant` member to `tables_priv.Table_priv`. Without these arms the reader
@@ -292,22 +298,22 @@ final readonly class MysqlSecurityReader implements SecurityReader
                 // The marker name is lifted into the flag below and never becomes a privilege: it is
                 // not one, and letting it into the list would put `other` in every message that
                 // prints what a grant carries.
-                ." union all select 'database', Db, User, Host, '".self::GRANT_OPTION_MARKER."' from mysql.db where Grant_priv = 'Y'"
-                ." union all select 'global', '*', User, Host, '".self::GRANT_OPTION_MARKER."' from mysql.user where Grant_priv = 'Y'"
+                ." union all select 'database', Db, ".self::quotedTarget('Db').", User, Host, '".self::GRANT_OPTION_MARKER."' from mysql.db where Grant_priv = 'Y'"
+                ." union all select 'global', '*', '*.*', User, Host, '".self::GRANT_OPTION_MARKER."' from mysql.user where Grant_priv = 'Y'"
                 // `tables_priv.Table_priv` is a SET column, so its members arrive as one comma-joined
                 // string; the split happens in PHP because MySQL has no unnest.
-                ." union all select 'table', concat(Db, '.', Table_name), User, Host, Table_priv from mysql.tables_priv where Table_priv <> ''"
+                ." union all select 'table', concat(Db, '.', Table_name), ".self::quotedTarget('Db', 'Table_name').", User, Host, Table_priv from mysql.tables_priv where Table_priv <> ''"
                 // Column grants: the finest scope MySQL has, and the one an audit misses most easily —
                 // a `SELECT (ssn)` grant is invisible in `tables_priv` and reads as no access at all.
-                ." union all select 'column', concat(Db, '.', Table_name, '.', Column_name), User, Host, Column_priv"
+                ." union all select 'column', concat(Db, '.', Table_name, '.', Column_name), '', User, Host, Column_priv"
                 .' from mysql.columns_priv'
                 // Routine grants. `EXECUTE` on a `SECURITY DEFINER` routine is a privilege escalation
                 // wearing an ordinary name, so the scope has to be readable rather than folded into
                 // the database it lives in.
-                ." union all select 'routine', concat(Db, '.', Routine_name), User, Host, Proc_priv"
+                ." union all select 'routine', concat(Db, '.', Routine_name), concat(Routine_type, ' ', ".self::quotedTarget('Db', 'Routine_name').'), User, Host, Proc_priv'
                 .' from mysql.procs_priv'
                 // The dynamic privileges (8.0+) live in their own table and are plain strings.
-                ." union all select 'global', '*', User, Host, PRIV from mysql.global_grants"
+                ." union all select 'global', '*', '*.*', User, Host, PRIV from mysql.global_grants"
                 .' order by 1, 2, 3, 4, 5'
             ))),
             SchemaObjectType::Grant,
@@ -336,9 +342,16 @@ final readonly class MysqlSecurityReader implements SecurityReader
 
             $user = $this->text($row, 'User');
             $scope = $this->text($row, 'scope');
-            $grantee = sprintf("'%s'@'%s'", $user, $this->text($row, 'Host'));
+            $account = RoleObject::of($user, [], Readability::complete(), host: $this->text($row, 'Host'));
+            $grantee = $account->identity();
             $key = $scope."\0".$this->text($row, 'object_name')."\0".$grantee;
-            $collected[$key] ??= ['privileges' => [], 'grantable' => false, 'user' => $user];
+            $collected[$key] ??= [
+                'privileges' => [],
+                'grantable' => false,
+                'user' => $user,
+                'target' => $this->text($row, 'target'),
+                'statement_grantee' => $account->statementName(),
+            ];
 
             foreach ($names as $name) {
                 // The two spellings of one fact. `Grant` is how the SET column at table, column and
@@ -399,6 +412,8 @@ final readonly class MysqlSecurityReader implements SecurityReader
                 // only have answered `CREATE` here. An account holding ALTER, DROP and INDEX but no
                 // CREATE read as holding nothing structural, on every MySQL server.
                 structuralOtherPrivileges: $ddl->privileges,
+                statementTarget: $parts['target'],
+                statementGrantee: $parts['statement_grantee'],
             );
         }
 
@@ -462,6 +477,42 @@ final readonly class MysqlSecurityReader implements SecurityReader
             $required,
             static fn (MysqlStaticPrivilege $entry): bool => in_array($entry->privilege, $held, true),
         );
+    }
+
+    /**
+     * The SQL that writes a grant row's ON target from its columns, every part in backticks.
+     *
+     * One column is a database-level target, which MySQL writes as `` `db`.* ``; two are a table or
+     * a routine. A backtick inside a part is doubled, so a name holding one cannot close its quote.
+     * The column names are literals of this class, never input.
+     */
+    private static function quotedTarget(string ...$columns): string
+    {
+        $parts = array_map(
+            static fn (string $column): string => "'`', replace(".$column.", '`', '``'), '`'",
+            $columns,
+        );
+
+        return 'concat('.implode(", '.', ", $parts).(count($columns) === 1 ? ", '.*'" : '').')';
+    }
+
+    /**
+     * An account as SHOW GRANTS prints it, `` `u`@`%` ``, in the spelling the role reading uses.
+     *
+     * The same spelling on both sides is what lets a grant be matched to its account. Replacing the
+     * backticks with quotes was that spelling only while no part held a quote or a backtick.
+     */
+    private function readableAccount(string $quoted): string
+    {
+        // SHOW GRANTS writes every account this way: both parts in backticks, a backtick inside doubled.
+        preg_match('/^`((?:[^`]|``)*)`@`((?:[^`]|``)*)`$/', $quoted, $parts);
+
+        return RoleObject::of(
+            str_replace('``', '`', $parts[1] ?? ''),
+            [],
+            Readability::complete(),
+            host: str_replace('``', '`', $parts[2] ?? ''),
+        )->identity();
     }
 
     /**
@@ -579,12 +630,15 @@ final readonly class MysqlSecurityReader implements SecurityReader
             }
 
             $grants[] = GrantObject::of(
-                str_replace('`', "'", $grant->grantee),
+                $this->readableAccount($grant->grantee),
                 str_contains($grant->object, '.*') ? SchemaObjectType::Database : SchemaObjectType::Table,
                 trim(str_replace('`', '', $grant->object)),
                 $mapped,
                 Readability::complete(),
                 grantable: $grant->grantable,
+                // Both exactly as MySQL printed them, which is the form it reads back.
+                statementTarget: $grant->object,
+                statementGrantee: $grant->grantee,
             );
         }
 

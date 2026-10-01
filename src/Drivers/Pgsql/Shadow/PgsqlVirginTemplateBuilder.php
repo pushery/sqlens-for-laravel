@@ -9,7 +9,9 @@ use Illuminate\Contracts\Config\Repository;
 use Illuminate\Database\Connection;
 use Illuminate\Database\DatabaseManager;
 use Pushery\SQLens\Attributes\RawSql;
+use Pushery\SQLens\Capture\Shadow\ShadowConnectionLatch;
 use Pushery\SQLens\Capture\Shadow\VirginTemplate;
+use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Exceptions\NotAVirginTemplate;
 use Pushery\SQLens\Exceptions\ShadowProvisioningUndetermined;
 use Pushery\SQLens\Findings\UndeterminedReason;
@@ -25,7 +27,9 @@ use Throwable;
  *
  *   1. A fresh database from `template0` (PostgreSQL's pristine template, never
  *      `template1`, which a site may have added objects to).
- *   2. The project's `schema:dump` replayed into it — structure, no rows.
+ *   2. The project's `schema:dump` replayed into it — structure, no rows. The file is
+ *      psql's input, so {@see PgsqlSchemaDump} reads it the way psql does and leaves
+ *      the rows of the migrations table out.
  *   3. Every user table PROBED for a row. Not `pg_stat_user_tables`, whose counts
  *      are planner estimates that can read zero for a populated table; an exact
  *      `select 1 … limit 1` per table, which cannot be wrong in the dangerous
@@ -62,6 +66,7 @@ final readonly class PgsqlVirginTemplateBuilder
         private Closure $nameFactory,
         private array $connectionConfig,
         private string $schemaDumpPath,
+        private PgsqlSchemaDump $dump = new PgsqlSchemaDump,
     ) {}
 
     /**
@@ -72,7 +77,9 @@ final readonly class PgsqlVirginTemplateBuilder
     #[RawSql(reason: 'replays the project\'s own schema dump into a freshly created database, the same way the MySQL provisioner does -- one established path rather than a second one. The text is a file of DDL statements, which no builder has a verb for, and a bad statement becomes the throwable this method catches before dropping the half-built database')]
     public function build(): VirginTemplate
     {
-        $sql = $this->readDump();
+        // Read before anything is created: a file that cannot be read as statements builds nothing.
+        $statements = $this->dump->statements($this->readDump())
+            ?? throw new ShadowProvisioningUndetermined(UndeterminedReason::ShadowPgsqlSchemaDumpMissing);
         $name = ($this->nameFactory)();
 
         // Never adopt a database we did not create — the same rule the clone follows.
@@ -85,11 +92,15 @@ final readonly class PgsqlVirginTemplateBuilder
         try {
             $connection = $this->connectionInto($name);
 
-            // Replayed on the PDO handle, the same way the MySQL provisioner replays
-            // its dump — one established path, not a second one. The statement text is
-            // the project's own schema dump, and a bad statement becomes a throwable
-            // this method catches and drops the half-built database for.
-            $connection->getPdo()->exec($sql);
+            // Replayed on the PDO handle one statement at a time, the way the MySQL
+            // provisioner replays its dump. The text is the project's own schema dump
+            // with psql's meta-commands and rows left out, and a bad statement becomes a
+            // throwable this method catches and drops the half-built database for.
+            $pdo = $connection->getPdo();
+
+            foreach ($statements as $statement) {
+                $pdo->exec($statement);
+            }
 
             // The count is the whole guarantee, so it happens on the database that was
             // actually built, immediately before vouching for it.
@@ -229,17 +240,23 @@ final readonly class PgsqlVirginTemplateBuilder
         return $contents;
     }
 
-    /** A runtime connection INTO the template, so the dump can be replayed and the rows counted. */
+    /**
+     * A runtime connection INTO the template, so the dump can be replayed and the rows counted.
+     *
+     * The URL is resolved before the database is swapped, so the swap is the database the
+     * connection reaches, and the server confirms it before the replay's first statement.
+     */
     private function connectionInto(string $name): Connection
     {
-        $this->config->set('database.connections.'.$name, [
-            ...$this->connectionConfig,
-            'database' => $name,
-        ]);
+        $this->config->set('database.connections.'.$name, EffectiveConnectionConfig::onDatabase($this->connectionConfig, $name));
 
         $this->db->purge($name);
 
-        return $this->db->connection($name);
+        $connection = $this->db->connection($name);
+
+        ShadowConnectionLatch::assertReaches($connection, $name);
+
+        return $connection;
     }
 
     /** Double-quote an identifier, doubling any embedded double quote. */

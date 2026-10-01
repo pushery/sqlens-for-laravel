@@ -38,11 +38,11 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ## The ticket asked for `preview`; it ships STABLE, and that is not a slip
  *
- * The preview tier exists so a rule added to a PUBLISHED product cannot start failing somebody's
- * pipeline over code nobody touched. Before the first release there is no such pipeline, so this
- * package's default is `stable` before 1.0 and flips to `preview` after — at ONE named place
- * ({@see RuleMetadataDefaults::DEFAULT_STABILITY}), so the flip is one line
- * rather than a sweep, and a machine guard holds it.
+ * The preview tier exists so a rule added in a release cannot start failing somebody's pipeline
+ * over code nobody touched. Before 1.0 a new rule arrives in a minor, which a `^0.N` constraint
+ * does not install on its own, so this package's default is `stable` before 1.0 and flips to
+ * `preview` after — at ONE named place ({@see RuleMetadataDefaults::DEFAULT_STABILITY}), so the flip
+ * is one line rather than a sweep, and a machine guard holds it.
  *
  * Overriding it here would make this the single rule the guard has to except, and would put a
  * second answer to "what tier does a new rule get" in the codebase. The ticket's reason for asking

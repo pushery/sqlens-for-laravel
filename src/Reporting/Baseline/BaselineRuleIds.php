@@ -8,7 +8,9 @@ use Pushery\SQLens\Config\ConfigViolation;
 use Pushery\SQLens\Config\RuleIdReference;
 use Pushery\SQLens\Config\RuleIdValidator;
 use Pushery\SQLens\Contracts\Rule;
+use Pushery\SQLens\Findings\LocationKind;
 use Pushery\SQLens\Rules\RuleRegistry;
+use Pushery\SQLens\Rules\Suite;
 
 /**
  * Every rule id a baseline names, checked against the rules that exist.
@@ -60,7 +62,7 @@ final readonly class BaselineRuleIds
         // on the second reading would refuse every baseline on earth. So an empty set judges
         // nothing.
         if ($baseline->isEmpty() || $emittable->isEmpty()) {
-            return [];
+            return self::kindsNoRunJudges($baseline, $rules);
         }
 
         $references = array_map(
@@ -82,7 +84,58 @@ final readonly class BaselineRuleIds
 
         // The rules are still passed as the registry, so a near miss on a RULE id gets its "did you
         // mean" suggestion — the shipped set is the wider net, not a replacement for the closer one.
-        return new RuleIdValidator(RuleRegistry::fromRules($rules), $emittable->all(), $openNamespaces)
-            ->unknown($references);
+        return [
+            ...new RuleIdValidator(RuleRegistry::fromRules($rules), $emittable->all(), $openNamespaces)->unknown($references),
+            ...self::kindsNoRunJudges($baseline, $rules),
+        ];
+    }
+
+    /**
+     * The entries whose kind is one their rule's suites never report, so that no run judges them.
+     *
+     * The audit reports catalog objects and the lint suite migrations and call sites, and each run
+     * judges only the entries of its own kinds. An entry for an audit rule that says it was about a
+     * migration is judged by neither: it goes on hiding the finding it matches, and once that finding
+     * is gone nothing reports the line as stale. Refused by name, like an unknown rule id, because the
+     * repair is one word in the file.
+     *
+     * An id no rule carries is left alone here: a tool's ids and the run notices have no suites to
+     * compare with, and the check above answers for them.
+     *
+     * @param  array<string, Rule>  $rules
+     * @return list<ConfigViolation>
+     */
+    private static function kindsNoRunJudges(BaselineFile $baseline, array $rules): array
+    {
+        $byId = [];
+
+        foreach ($rules as $rule) {
+            $byId[$rule->id()] = $rule;
+        }
+
+        $violations = [];
+
+        foreach ($baseline->entries as $entry) {
+            $rule = $byId[$entry->ruleId] ?? null;
+
+            if (! $rule instanceof Rule) {
+                continue;
+            }
+
+            $suite = $entry->kind === LocationKind::Catalog ? Suite::Audit : Suite::Lint;
+
+            if (in_array($suite, $rule->suites(), true)) {
+                continue;
+            }
+
+            $violations[] = ConfigViolation::ruleNotInSuite(
+                RuleIdReference::inBaseline($entry->ruleId, $entry->key())->describe().' (kind '.$entry->kind->value.')',
+                $entry->ruleId,
+                $suite->value,
+                implode(', ', array_map(static fn (Suite $answers): string => $answers->value, $rule->suites())),
+            );
+        }
+
+        return $violations;
     }
 }

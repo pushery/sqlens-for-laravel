@@ -16,6 +16,7 @@ use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDriverNotes;
+use Pushery\SQLens\Subjects\MigrationStatementDigest;
 use Pushery\SQLens\Subjects\MigrationStatementView;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
@@ -28,9 +29,10 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * remedy — nothing about it looks like `ALTER TYPE … ADD VALUE`.
  *
  * The rule fires on the `ADD CONSTRAINT … CHECK (col IN (…))` when the same migration
- * also DROPS a constraint — that drop is what distinguishes a CHANGE (Laravel's
- * enum() change: drop then add) from a first-time enum column (an add alone), which is
- * correctly silent. It is heuristic: recognizing the enum-change shape, and the
+ * also DROPS a constraint on the same table — that drop is what distinguishes a CHANGE
+ * (Laravel's enum() change: drop then add) from a first-time enum column (an add alone),
+ * which is correctly silent. A drop on another table says nothing about this column: a
+ * first enum column on `orders` beside a dropped foreign key on `users` is not a change. It is heuristic: recognizing the enum-change shape, and the
  * compatibility half depending on application code the tool cannot see.
  *
  * Two things the finding names, kept apart from `PG.L2.CONSTRAINT_NOT_VALIDATED` (which
@@ -127,8 +129,8 @@ final class CheckEnumChangeRule extends AbstractPgsqlSafetyRule implements Provi
             return null;
         }
 
-        // No drop in the migration → this is a first-time enum column, not a change.
-        if (! $statement->migration->dropsAConstraint) {
+        // No drop on this table → this is a first-time enum column, not a change.
+        if (! $table instanceof StatementTarget || ! $this->dropsAConstraintOn($statement, $table)) {
             return null;
         }
 
@@ -138,6 +140,16 @@ final class CheckEnumChangeRule extends AbstractPgsqlSafetyRule implements Provi
             .'PG.L2.CONSTRAINT_NOT_VALIDATED). And removing an allowed value breaks any running old '
             .'application version that still writes it: add first, deploy the code, remove later. '
             .'SQLens reads only the SQL, so treat this as a prompt to check.';
+    }
+
+    /** Whether the migration drops a constraint on the table this statement adds its CHECK to. */
+    private function dropsAConstraintOn(MigrationStatementView $statement, StatementTarget $table): bool
+    {
+        return array_any(
+            $statement->migration->statements,
+            static fn (MigrationStatementDigest $other): bool => $other->kind === StatementKind::DropConstraint
+                && $other->soleTarget(SchemaObjectType::Table)?->qualifiedName() === $table->qualifiedName(),
+        );
     }
 
     /**

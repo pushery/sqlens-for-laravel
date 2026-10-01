@@ -95,13 +95,15 @@ final class RlsCheckAlwaysTrueRule extends AbstractSchemaObjectSecurityRule impl
         $quoted = implode(', ', array_map(static fn (string $name): string => '"'.$name.'"', $names));
 
         return [RuleVerdict::flag(sprintf(
-            'the WRITE path of %s is unchecked: %s %s restricts reads correctly, but its WITH CHECK '
-            .'expression is a constant that is always true. A tenant sees only its own rows and can '
-            .'still insert or update a row carrying somebody else\'s id — the write succeeds, the row '
-            .'becomes invisible to whoever created it, and nothing reports an error. Give the check '
-            .'the same condition as the filter, or drop the WITH CHECK clause entirely: PostgreSQL '
-            .'then applies the USING expression to writes as well, which is what almost every correct '
-            .'policy relies on.',
+            'the WRITE path of %s is unchecked: reads are restricted, but %s %s passes every row it is '
+            .'asked to write, because its WITH CHECK, or the USING that stands in for a missing one, is '
+            .'a constant that is always true, and no restrictive policy checks those writes. A tenant '
+            .'sees only its own rows and can still insert or update a row carrying somebody else\'s id '
+            .'— the write succeeds, the row becomes invisible to whoever created it, and nothing '
+            .'reports an error. Give the check the same condition as the filter, or drop the WITH CHECK '
+            .'clause where the filter is the tenant condition: PostgreSQL then applies the USING '
+            .'expression to writes as well, which is what almost every correct policy relies on. Where '
+            .'a restrictive policy is what narrows the reads, it has to cover the writing commands too.',
             $object->qualifiedName,
             count($names) === 1 ? 'policy' : 'policies',
             $quoted,

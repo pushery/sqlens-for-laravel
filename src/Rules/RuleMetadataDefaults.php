@@ -27,10 +27,11 @@ trait RuleMetadataDefaults
     /**
      * The stability a rule carries unless it says otherwise.
      *
-     * Before 1.0 that is `stable`: the preview tier exists so a rule added to a published product
-     * cannot break somebody's pipeline by starting to fire, and before the first release there is no
-     * such pipeline. This flips to `preview` for rules added after 1.0 — HERE, once, so the change
-     * is one line rather than a sweep.
+     * Before 1.0 that is `stable`, and GOVERNANCE.md says so. The preview tier exists so a rule
+     * added in a release cannot break somebody's pipeline by starting to fire. Before 1.0 a new rule
+     * arrives in a minor, which is where 0.x makes its breaking changes and which a `^0.N` constraint
+     * does not install on its own. This flips to `preview` for rules added after 1.0 — HERE, once,
+     * so the change is one line rather than a sweep.
      */
     public const StabilityTier DEFAULT_STABILITY = StabilityTier::Stable;
 

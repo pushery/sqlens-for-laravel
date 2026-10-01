@@ -92,7 +92,8 @@ final readonly class UndeterminedWaiver
     }
 
     /**
-     * The reasons this waiver NAMED on this run, for the line a person reads.
+     * The reasons this waiver NAMED on this run, for the line a person reads, wherever they came
+     * from: an unanswered check, or a finding about a migration that could not be determined.
      *
      * Empty when it waives whatever could not answer. `--allow-undetermined` and `true` are not a
      * list of every case and must not be rendered as one: printing the reasons that happened to
@@ -102,18 +103,18 @@ final readonly class UndeterminedWaiver
      * reasons and meet one; saying all three would claim the run waived more than it did. Sorted,
      * because a deploy log is compared across runs.
      *
-     * @param  list<CheckResult>  $undetermined
+     * @param  list<UndeterminedReason|null>  $reasons
      * @return list<string>
      */
-    public function reasonsItNames(array $undetermined): array
+    public function reasonsItNamesAmong(array $reasons): array
     {
         if ($this->everyReason) {
             return [];
         }
 
         $named = array_values(array_unique(array_filter(array_map(
-            static fn (CheckResult $result): ?string => $result->undeterminedReason?->value,
-            $undetermined,
+            static fn (?UndeterminedReason $reason): ?string => $reason?->value,
+            $reasons,
         ))));
 
         sort($named);
@@ -147,7 +148,21 @@ final readonly class UndeterminedWaiver
      */
     public function opensFor(array $undetermined): bool
     {
-        if ($undetermined === []) {
+        return $this->opensForReasons(array_map(
+            static fn (CheckResult $result): ?UndeterminedReason => $result->undeterminedReason,
+            $undetermined,
+        ));
+    }
+
+    /**
+     * {@see self::opensFor()} over the reasons themselves, wherever they came from. A reason nobody
+     * named, null, is one no list can cover, so only a waiver open for every reason passes it.
+     *
+     * @param  list<UndeterminedReason|null>  $reasons
+     */
+    public function opensForReasons(array $reasons): bool
+    {
+        if ($reasons === []) {
             return false;
         }
 
@@ -155,6 +170,6 @@ final readonly class UndeterminedWaiver
             return true;
         }
 
-        return array_all($undetermined, fn (CheckResult $result): bool => in_array($result->undeterminedReason, $this->reasons, true));
+        return array_all($reasons, fn (?UndeterminedReason $reason): bool => in_array($reason, $this->reasons, true));
     }
 }

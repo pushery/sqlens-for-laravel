@@ -160,19 +160,14 @@ final class PredeployCommand extends Command
             ? UndeterminedWaiver::everyReason()
             : UndeterminedWaiver::fromConfig($config->get('sqlens.deploy.predeploy.allow_undetermined'));
 
-        $waived = $outcome->report->blocks()
-            && $outcome->blockedOnlyByUndetermined()
-            && $waiver->opensFor($outcome->report->undetermined());
+        $verdict = $outcome->verdict($waiver);
 
         // Both halves as ONE result, and both come from the service. Assembling them here as well
         // would be a second merge of one run, free to differ from the one the MCP tool renders —
         // and a consumer would then have to choose which document is "the" verdict.
         $reporter->report(
             $outcome->result,
-            $outcome->context->withUndeterminedWaiver(
-                $waived,
-                $waived ? $waiver->reasonsItNames($outcome->report->undetermined()) : [],
-            ),
+            $outcome->context->withUndeterminedWaiver($verdict->waived(), $verdict->waivedReasons),
             $this->getOutput()->getOutput(),
         );
 
@@ -184,19 +179,10 @@ final class PredeployCommand extends Command
             $this->outputErrorLine($result->checkId.': '.$result->reason);
         }
 
-        if (! $outcome->report->blocks()) {
-            return ExitCode::Clean->value;
-        }
-
-        if ($waived) {
-            return ExitCode::Clean->value;
-        }
-
-        $onlyUndetermined = $outcome->blockedOnlyByUndetermined();
-
-        return $outcome->report->undetermined() !== [] && $onlyUndetermined
-            ? ExitCode::UndeterminedInStrictMode->value
-            : ExitCode::FindingsAboveGate->value;
+        // The verdict over both halves, the same one the protocol tool renders: a failing check or a
+        // finding about a pending migration over the gate stops the deploy, and what could not
+        // answer holds it back unless a waiver covers every such answer.
+        return $verdict->exitCode()->value;
     }
 
     /**

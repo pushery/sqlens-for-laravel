@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Drivers\Mysql\OnlineDdl;
 
 use Pushery\SQLens\Findings\DowntimeClass;
+use Pushery\SQLens\Findings\DowntimeUndetermined;
 use Pushery\SQLens\Findings\UndeterminedReason;
 
 /**
@@ -34,5 +35,15 @@ final readonly class DowntimeClassMapping
     public function isDetermined(): bool
     {
         return $this->downtimeClass instanceof DowntimeClass;
+    }
+
+    /**
+     * What a finding carries: the class, or the undetermined with the reason the resolver gave. A
+     * rule that returned the class alone dropped that reason, and its finding then read as making
+     * no claim about downtime at all.
+     */
+    public function derived(): DowntimeClass|DowntimeUndetermined
+    {
+        return $this->downtimeClass ?? new DowntimeUndetermined($this->reason ?? UndeterminedReason::OnlineDdlConditionUndecidable, $this->detail);
     }
 }

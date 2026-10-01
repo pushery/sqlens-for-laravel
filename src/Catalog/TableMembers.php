@@ -36,7 +36,9 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * false NEGATIVE this package's caution is aimed at. So `comparable_indexes` holds only what
  * {@see IndexComprehension} already judged comparable AND what the server would actually use, and a
  * rule that wants coverage reads that one. Both are present, so a rule can also say "there IS an
- * index here, it just is not one I can reason about" instead of implying none exists.
+ * index here, it just is not one I can reason about" instead of implying none exists. A MySQL
+ * `INVISIBLE` index is used for what it enforces and not for lookups, so it stays in the list and
+ * is named again in `invisible_indexes`, which a rule about lookups reads beside it.
  *
  * ## The encoding
  *
@@ -64,6 +66,10 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *   on `utf8mb4` throughout and still sort by a collation from before MySQL 8.0. Only columns that
  *   HAVE one appear, so a column present in `columns` and absent here holds no characters at all —
  *   an `int`, a `blob` — which a rule must not confuse with one whose encoding went unread.
+ * - `invisible_indexes` — MySQL's `INVISIBLE` indexes, of any kind. The optimizer ignores them, so
+ *   none serves a lookup, and each still enforces what it declares, so a comparable one stays in
+ *   `comparable_indexes` as well: a rule asking about a lookup reads this list, one asking about
+ *   uniqueness does not need to. Empty on PostgreSQL, which has no such indexes.
  * - `payload_indexes` — the indexes carrying an INCLUDE payload beyond their key columns. Without
  *   it `(a) INCLUDE (b)` and `(a)` are indistinguishable, and a redundancy rule would recommend
  *   dropping the more useful of the two. See {@see self::withPayload()}.
@@ -119,6 +125,12 @@ final readonly class TableMembers
      *
      * A missing `valid` attribute is treated as valid, because on MySQL the concept does not exist:
      * an engine with no invalid indexes must not have every index excluded by a flag it never sets.
+     *
+     * VISIBILITY is not a third exclusion, although it sounds like one. A MySQL `INVISIBLE` index
+     * is ignored by the optimizer and still enforces what it declares: an invisible unique index
+     * rejects a duplicate like a visible one, and the key rules reading this list ask about exactly
+     * that. So it stays here and is named in `invisible_indexes` as well, for the rule whose
+     * question is the lookup.
      */
     private static function mayBeReasonedAboutAsCoverage(SchemaObject $index): bool
     {
@@ -148,8 +160,8 @@ final readonly class TableMembers
         $ownedSequences = [];
         $sequenceDefaults = [];
 
-        /** @var array{fk: array<string, list<SchemaObject>>, index: array<string, list<SchemaObject>>, primary: array<string, list<SchemaObject>>, unique: array<string, list<SchemaObject>>, comparable: array<string, list<SchemaObject>>, partial: array<string, list<SchemaObject>>, exotic: array<string, list<SchemaObject>>} $members */
-        $members = ['fk' => [], 'index' => [], 'primary' => [], 'unique' => [], 'comparable' => [], 'partial' => [], 'exotic' => []];
+        /** @var array{fk: array<string, list<SchemaObject>>, index: array<string, list<SchemaObject>>, primary: array<string, list<SchemaObject>>, unique: array<string, list<SchemaObject>>, comparable: array<string, list<SchemaObject>>, invisible: array<string, list<SchemaObject>>, partial: array<string, list<SchemaObject>>, exotic: array<string, list<SchemaObject>>} $members */
+        $members = ['fk' => [], 'index' => [], 'primary' => [], 'unique' => [], 'comparable' => [], 'invisible' => [], 'partial' => [], 'exotic' => []];
 
         /** @var array<string, string> $predicates index qualified name => its normalized predicate */
         $predicates = [];
@@ -276,6 +288,12 @@ final readonly class TableMembers
                     $members['comparable'][$parent][] = $object;
                 }
 
+                // Named whatever else it is, because the optimizer ignores it whatever else it is:
+                // an invisible index serves no lookup, the one question it cannot answer.
+                if ($object->getBool('visible') === false) {
+                    $members['invisible'][$parent][] = $object;
+                }
+
                 // A partial index never joins `comparable` — it does not cover a lookup that the
                 // predicate excludes, and a foreign-key check counting one would report a table as
                 // indexed while every referential action on it still scans. It is collected here
@@ -308,6 +326,7 @@ final readonly class TableMembers
         $primary = self::encodeMembers($members['primary'], $spelling);
         $unique = self::encodeMembers($members['unique'], $spelling);
         $comparable = self::encodeMembers($members['comparable'], $spelling);
+        $invisible = self::encodeMembers($members['invisible'], $spelling);
         $sharedPredicate = self::samePredicate($members['partial'], $predicates);
         $samePredicateIndexes = self::encodeMembers($sharedPredicate['indexes'], $spelling);
         $sharedMethod = self::universesBy($members['exotic'], $accessMethods);
@@ -335,6 +354,7 @@ final readonly class TableMembers
                 'foreign_keys' => self::encode($foreignKeys[$name] ?? []),
                 'indexes' => self::encode($indexes[$name] ?? []),
                 'comparable_indexes' => self::encode($comparable[$name] ?? []),
+                'invisible_indexes' => self::encode($invisible[$name] ?? []),
                 'primary_key' => self::encode($primary[$name] ?? []),
                 'unique_indexes' => self::encode($unique[$name] ?? []),
                 'columns' => self::encode($columns[$name] ?? []),
@@ -591,7 +611,10 @@ final readonly class TableMembers
 
         $trimmed = trim($default);
 
-        if (preg_match('/^([a-z_][a-z0-9_]*)\(\)$/i', $trimmed, $matches) === 1) {
+        // The schema in front of it is the reading's, not the column's: `pg_get_expr` writes it for a
+        // function outside the reading session's search path, so `extensions.uuid_generate_v4()`
+        // and `uuid_generate_v4()` are the same default read two ways. The function is the answer.
+        if (preg_match('/^(?:(?:[a-z_][a-z0-9_]*|"[^"]+")\.)?([a-z_][a-z0-9_]*)\(\)$/i', $trimmed, $matches) === 1) {
             return mb_strtolower($matches[1]);
         }
 

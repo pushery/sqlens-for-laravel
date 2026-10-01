@@ -129,8 +129,12 @@ final class CredentialRedactor
         // the comma would redact the first replica and print the rest. `Connection:` is left alone
         // on purpose — it is the name of a config entry, not an address, and it is the one part of
         // this suffix a reader needs to find the connection they misconfigured.
+        //
+        // A connection configured with `unix_socket` names its socket in place of `Host:` and
+        // `Port:`, from Laravel 13 on: `(Connection: mysql, Socket: /srv/acme/run/mysqld.sock, …)`.
+        // The path is the same address the libpq form above takes out.
         return preg_replace(
-            '/\b(Host|Port|Database|Username|Password):\s*(?:(?!,\s*(?:Host|Port|Database|Username|Password|SQL):)[^)])*/i',
+            '/\b(Host|Port|Socket|Database|Username|Password):\s*(?:(?!,\s*(?:Host|Port|Socket|Database|Username|Password|SQL):)[^)])*/i',
             '$1: '.self::REDACTED,
             $text,
         ) ?? $text;

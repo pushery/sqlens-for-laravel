@@ -48,9 +48,11 @@ use Throwable;
  * and the distinction matters in the direction that costs: a reader who measures the default and
  * finds YES could conclude that silence is trustworthy and simplify the check away.
  *
- * That is why this check consults {@see ActivitySnapshot::silenceIsTrustworthy()} before reporting a
- * clean result. An empty snapshot with a named gap is `undetermined`; an empty snapshot with no gaps
- * is a pass. The distinction is the whole check.
+ * That is why the activity reader asks both switches, `@@performance_schema` and the instrument's row
+ * in `performance_schema.setup_instruments`, and records either one off as a gap, and why this check
+ * consults {@see ActivitySnapshot::silenceIsTrustworthy()} before reporting a clean result. An empty
+ * snapshot with a named gap is `undetermined`; an empty snapshot with no gaps is a pass. The
+ * distinction is the whole check.
  *
  * @see https://dev.mysql.com/doc/refman/8.4/en/performance-schema-metadata-locks-table.html
  * @see https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html

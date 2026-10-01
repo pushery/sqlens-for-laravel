@@ -300,6 +300,9 @@ final readonly class DeployCheckCatalog
             ],
             Attribution::Observed,
             downtimeClassDerived: true,
+            // Each setting reports under `DEPLOY.CONTEXT.SETTING.<NAME>`, nine members across the
+            // two engines, all of them described on this entry's page.
+            coversFamily: true,
         );
     }
 

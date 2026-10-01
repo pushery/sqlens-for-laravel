@@ -67,7 +67,9 @@ final readonly class Today
      */
     public static function of(string $day): self
     {
-        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $day, $parts) !== 1) {
+        // `\z` rather than `$`, which also matches before a trailing newline and would let
+        // "2026-09-01\n" through as a day.
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})\z/', $day, $parts) !== 1) {
             throw InvalidRunDay::malformed($day);
         }
 

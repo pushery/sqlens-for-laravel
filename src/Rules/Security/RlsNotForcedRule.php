@@ -99,12 +99,12 @@ final class RlsNotForcedRule extends AbstractSchemaObjectSecurityRule implements
             'row-level security is enabled on %s and not FORCED, and this audit connected as %s, which '
             .'owns the table: the owner is exempt from every policy on it, so the tenant separation '
             .'you configured is not applied to the very connection your application uses. Nothing in '
-            .'the policies says so — reviewing them comes back correct. ALTER TABLE %s FORCE ROW LEVEL '
-            .'SECURITY makes them apply to the owner as well. Verify the application still returns the '
-            .'rows it should afterwards: on this table it currently returns more.%s',
+            .'the policies says so — reviewing them comes back correct. %s makes them apply to the '
+            .'owner as well. Verify the application still returns the rows it should afterwards: on '
+            .'this table it currently returns more.%s',
             $object->qualifiedName,
             $owner === null || $owner === '' ? 'the table\'s owner' : $owner,
-            $object->qualifiedName,
+            StatementSpan::naming('ALTER TABLE %s FORCE ROW LEVEL SECURITY;', $object->getString('statement_name') ?? ''),
             RlsForceScope::bypassNote($object),
         ))];
     }

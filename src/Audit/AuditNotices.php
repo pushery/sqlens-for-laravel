@@ -158,6 +158,10 @@ final readonly class AuditNotices
             return self::notCompared($skip, $target, $context);
         }
 
+        if ($skip->reason === SkipReason::ExcludedByConfig) {
+            return self::excluded($skip, $target, $context);
+        }
+
         return self::notice(
             // The REGISTERED family, `AUDIT.CATALOG.UNREAD.<reason>`, rather than the bare literal
             // `CAP.L0.CATALOG_SKIPPED` this used to write. That literal appeared in one file, was in
@@ -215,6 +219,37 @@ final readonly class AuditNotices
             Level::Capturable,
             StabilityTier::Stable,
             CatalogNotice::forReason($skip->reason)->documentationUrl(),
+            $context,
+        );
+    }
+
+    /**
+     * An object left out of the reading on purpose, carried into the report.
+     *
+     * It keeps the id of the unread family, because it was not read, and the family page says which
+     * of its members is a decision. What changes is the outcome: `not_applicable`, not undetermined.
+     * An extension's objects are left out by default, and every one of them used to report as an
+     * unanswered question, so under the `ci` profile the audit of any application with `citext` or
+     * `pg_trgm` in its schema ended with exit 3 over a scope the package draws itself.
+     */
+    private static function excluded(CatalogSkip $skip, InstanceTarget $target, SubjectContext $context): Finding
+    {
+        return Finding::notApplicable(
+            CatalogNotice::idFor($skip->reason),
+            self::PREFIX,
+            sprintf(
+                '%s was left out of this reading on purpose (%s)%s. A decision, not a gap: nothing about it '
+                .'is owed, and a strict run does not escalate it.',
+                $skip->reference,
+                $skip->reason->value,
+                $skip->detail === null ? '' : ': '.$skip->detail,
+            ),
+            NotApplicableReason::ExcludedByConfig,
+            Location::inCatalog($target->driver, $target->connection, $skip->reference, $skip->type),
+            Category::Safety,
+            Level::Capturable,
+            StabilityTier::Stable,
+            CatalogNotice::CatalogUnread->documentationUrl(),
             $context,
         );
     }

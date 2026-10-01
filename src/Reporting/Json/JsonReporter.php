@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Reporting\Json;
 
 use Pushery\SQLens\Contracts\Reporter;
 use Pushery\SQLens\Findings\Result;
+use Pushery\SQLens\Reporting\ReportText;
 use Pushery\SQLens\Reporting\RunContext;
 use Symfony\Component\Console\Output\OutputInterface;
 
@@ -30,7 +31,7 @@ final class JsonReporter implements Reporter
         // JSON_THROW_ON_ERROR still catches genuine structural bugs (they cannot come
         // from bad UTF-8 once it is substituted). Unescaped slashes and unicode keep
         // paths and non-ASCII readable; no timestamp, no absolute path in the data.
-        $out->writeln(json_encode(
+        ReportText::document($out, json_encode(
             JsonEnvelope::for($result, $context)->toArray(),
             JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
         ));

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Contracts;
 
 use Pushery\SQLens\Findings\DowntimeClass;
+use Pushery\SQLens\Findings\DowntimeUndetermined;
 use Pushery\SQLens\Subjects\MigrationStatementView;
 
 /**
@@ -22,22 +23,26 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  * is the whole reason this is a marker rather than a method added to the Rule contract — a
  * capability a few rules have should not become a question every rule has to answer.
  *
- * ## What it does NOT license
+ * ## Three answers, and none of them a default
  *
- * Returning null means "this statement's class is not determined here", and the collector then
- * leaves the finding without one. It does **not** mean "fall back to something reasonable" — a rule
- * whose data source could not classify the operation reports that as an `undetermined` verdict in
- * its own words. Deriving a class and hiding the failure behind a default would be the silent green
- * this package refuses, arrived at through a nicer-looking door.
+ * A class is the class. A {@see DowntimeUndetermined} says the class of THIS statement could not
+ * be determined, and why: the collector stamps it on the finding, and the report counts it. Null
+ * says the rule makes no claim about this statement, and the finding carries neither.
+ *
+ * None of them means "fall back to something reasonable". A rule whose data source could not
+ * classify the operation says so with the undetermined and its reason; returning null there, or a
+ * class that sounds harmless, would be the silent green this package refuses, arrived at through a
+ * nicer-looking door.
  */
 interface DerivesDowntimeClass
 {
     /**
-     * The downtime class for this specific statement, or null when it has none to give.
+     * The downtime class for this specific statement, the undetermined when it cannot be named, or
+     * null when the rule makes no claim about this statement.
      *
      * Called by the collector INSTEAD of {@see Rule::downtimeClass()} for a rule that implements
      * this — never in addition, so there is exactly one answer per finding and no question of
      * which of two wins.
      */
-    public function downtimeClassFor(MigrationStatementView $statement): ?DowntimeClass;
+    public function downtimeClassFor(MigrationStatementView $statement): DowntimeClass|DowntimeUndetermined|null;
 }

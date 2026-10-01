@@ -102,6 +102,22 @@ final readonly class SquawkContribution
     }
 
     /**
+     * The `SQUAWK.*` ids a run under this gate does not ask: those above its level, and every one
+     * on a fast path the tool does not run on.
+     *
+     * A baseline entry under one of them cannot be matched in such a run, so the run cannot call it
+     * stale. The two conditions are the ones {@see self::contribute()} applies.
+     *
+     * @return list<string>
+     */
+    public function unaskedIds(Level $gate, bool $fastPath = false): array
+    {
+        return $fastPath && ! $this->onFastPath
+            ? $this->mapper->reportedIds()
+            : $this->mapper->reportedIds(above: $gate);
+    }
+
+    /**
      * The tool's findings the run's LEVEL admits — the same gate a rule finding passes.
      *
      * Without it an installed binary sharpens a gate the user narrowed on purpose, which is the

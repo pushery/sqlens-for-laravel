@@ -11,6 +11,7 @@ use Pushery\SQLens\Contracts\PreflightCheck;
 use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PreflightContext;
+use Pushery\SQLens\Drivers\Pgsql\Catalog\ApplicationSearchPath;
 use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
@@ -134,8 +135,9 @@ final readonly class AutovacuumDisabledCheck implements PreflightCheck
                     continue;
                 }
 
-                // Qualified, because the query joins pg_namespace and a bare name would match every
-                // schema on a server that has more than one.
+                // The name as the migration wrote it, schema-qualified or bare. The query matches a
+                // bare name only against the table an unqualified reference finds, so it cannot pick
+                // up a table of the same name in another schema.
                 $targets[] = $target->qualifiedName();
             }
         }
@@ -168,9 +170,12 @@ final readonly class AutovacuumDisabledCheck implements PreflightCheck
             .' where c.relkind in (\'r\', \'m\', \'p\')'
             .' and o.option_name = \'autovacuum_enabled\''
             .' and pg_catalog.lower(o.option_value) in (\'false\', \'off\', \'0\', \'n\', \'no\', \'f\')'
-            .' and n.nspname || \'.\' || c.relname in ('.$placeholders.')'
+            // A bare target, as `Schema::table('orders', …)` writes it, matches the table an
+            // unqualified reference finds; a qualified one matches by its composed name.
+            .' and (n.nspname || \'.\' || c.relname in ('.$placeholders.')'
+            .' or (c.relname in ('.$placeholders.') and '.ApplicationSearchPath::visible('c').'))'
             .' order by relation',
-            $targets,
+            [...$targets, ...$targets],
         ));
 
         $relations = [];

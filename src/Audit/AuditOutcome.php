@@ -35,6 +35,15 @@ final readonly class AuditOutcome
          * question — and the one nobody called would rot.
          */
         public ?DriverResolutionFailure $unsupported = null,
+        /**
+         * Whether the run read the instance and asked its rules about it.
+         *
+         * The misconfiguration exit does not say the run looked at nothing: under
+         * `sqlens.baseline.stale = error` a run that judged the whole catalog ends on it too. A
+         * caller that reads the exit code as "nothing was checked" asks this first. False unless
+         * the run got that far, so an outcome built anywhere else keeps meaning one that did not.
+         */
+        public bool $examined = false,
     ) {}
 
 }

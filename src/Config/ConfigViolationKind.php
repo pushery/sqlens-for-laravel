@@ -57,6 +57,18 @@ enum ConfigViolationKind: string
      */
     case RetiredKey = 'retired_key';
 
+    /**
+     * A key a guard profile leaves out, in the configuration the application actually runs on.
+     *
+     * A VIOLATION, where an absent key anywhere else is a notice, and the difference is what the
+     * reader of the key does with nothing. Everywhere else the shipped default applies. The guard
+     * falls back to its own default instead, which turns a switch off, so an absent key here is the
+     * silently disabled guardrail the guard's schema exists to prevent. A profile in the published
+     * file never gets here — the keys it leaves out come from the shipped `production` profile — so
+     * one that does reached the application some other way.
+     */
+    case UnsetGuardKey = 'unset_guard_key';
+
     case WrongType = 'wrong_type';
 
     case OutOfRange = 'out_of_range';
@@ -72,6 +84,7 @@ enum ConfigViolationKind: string
             self::MissingKey => 'missing key (a published config section replaces the package default wholesale, so re-add every key of the section)',
             self::DefaultedKey => 'not set, so the shipped default applies (harmless; re-add the key to your published config if you meant to set it)',
             self::RetiredKey => 'retired key (this package no longer reads it, so it is ignored and the run continues; delete it from your published config)',
+            self::UnsetGuardKey => 'not set, so the guard falls back to its own default, which turns a switch off (a profile in your published config takes every key it leaves out from the shipped production profile, so this configuration did not come from that file: rebuild a cached config after an upgrade, or write the key)',
             self::WrongType => 'wrong type',
             self::OutOfRange => 'value out of range',
         };

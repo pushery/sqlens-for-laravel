@@ -20,6 +20,15 @@ namespace Pushery\SQLens\Catalog;
  * requested schema that does not exist on the server is a configuration error naming the schema and
  * listing what is actually there.
  *
+ * ## So is a default that resolves to nothing
+ *
+ * The same no-op has an ordinary cause when nothing is named. PostgreSQL's `current_schemas(false)`
+ * leaves out every schema the reading role has no `USAGE` on: measured on 18.4, a `pg_monitor` role
+ * with the path set to `app` resolves `{}`, and so does a hardened `"$user", public` without usage
+ * on `public`. On MySQL a Laravel connection configured with `'database' => ''` opens, and
+ * `DATABASE()` answers `NULL` (measured on 8.4.10). Either way the reading would cover no schema at
+ * all, so an empty default is refused like a typo, with what the session resolved and what exists.
+ *
  * ## A system schema is refused rather than dropped
  *
  * `pg_catalog` and `information_schema` are the server's own bookkeeping; auditing them would report
@@ -56,7 +65,8 @@ final readonly class SchemaScope
      * @param  list<string>  $existing  every schema the server actually has
      * @return list<string>
      *
-     * @throws UnknownCatalogSchema when a requested schema does not exist, or is the server's own
+     * @throws UnknownCatalogSchema when a requested schema does not exist or is the server's own, or
+     *                              when the default resolves to no schema the server has
      */
     public function apply(array $resolvedDefault, array $existing): array
     {
@@ -64,10 +74,22 @@ final readonly class SchemaScope
             // The default is filtered, not checked: a `search_path` entry for a schema that does not
             // exist is legal and ordinary in PostgreSQL (`"$user"` on a database without one), so
             // treating it as a configuration error would fail runs nobody misconfigured.
-            return array_values(array_filter(
+            $schemas = array_values(array_filter(
                 $resolvedDefault,
                 fn (string $schema): bool => ! $this->isSystem($schema) && in_array($schema, $existing, true),
             ));
+
+            // …but a default that leaves NOTHING is the typo's silent no-op arriving through the
+            // other door: the reading would cover no schema and report a clean run. It happens with
+            // an ordinary setup, which is why it is refused rather than tolerated.
+            if ($schemas === []) {
+                throw UnknownCatalogSchema::defaultResolvedToNothing(
+                    $resolvedDefault,
+                    array_values(array_filter($existing, fn (string $schema): bool => ! $this->isSystem($schema))),
+                );
+            }
+
+            return $schemas;
         }
 
         foreach ($this->requested as $schema) {

@@ -142,10 +142,18 @@ final class UnencryptedColumnRule extends AbstractCatalogRule implements Declare
         return StabilityTier::Preview;
     }
 
-    /** @return non-empty-list<Suite> */
+    /**
+     * The audit, which is where a catalog rule runs, and the security suite, which reports it.
+     *
+     * The security suite selects no rules by suite of its own: it runs the audit and the lint and
+     * reports what they return. A rule that named the security suite alone was selected by neither
+     * and ran nowhere, however the pack and the stability were set.
+     *
+     * @return non-empty-list<Suite>
+     */
     public function suites(): array
     {
-        return [Suite::Security];
+        return [Suite::Audit, Suite::Security];
     }
 
     /**

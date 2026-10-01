@@ -15,6 +15,7 @@ use Pushery\SQLens\Drivers\Mysql\Rules\Support\ColumnRedefinition;
 use Pushery\SQLens\Engine\ResolvedServerVersion;
 use Pushery\SQLens\Findings\Confidence;
 use Pushery\SQLens\Findings\DowntimeClass;
+use Pushery\SQLens\Findings\DowntimeUndetermined;
 use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Subjects\MigrationStatementView;
@@ -121,7 +122,7 @@ final class EnumChangeRule extends AbstractMysqlRule implements DerivesDowntimeC
             $context['table'] = $table->qualifiedName();
         }
 
-        return $this->template->forMemberListChange($context, $this->id(), $this->downtimeClassFor($statement));
+        return $this->template->forMemberListChange($context, $this->id(), $this->knownDowntimeClass($this->downtimeClassFor($statement)));
     }
 
     public function id(): string
@@ -145,7 +146,7 @@ final class EnumChangeRule extends AbstractMysqlRule implements DerivesDowntimeC
     }
 
     /** From the matrix — which declines here, and is right to (see the OPERATION docblock). */
-    public function downtimeClassFor(MigrationStatementView $statement): ?DowntimeClass
+    public function downtimeClassFor(MigrationStatementView $statement): DowntimeClass|DowntimeUndetermined|null
     {
         if (! $this->redefinesAnEnum($statement)) {
             return null;
@@ -154,7 +155,7 @@ final class EnumChangeRule extends AbstractMysqlRule implements DerivesDowntimeC
         return $this->downtimeClasses->forCandidateOperations(
             [self::OPERATION],
             $statement->serverVersion ?? ResolvedServerVersion::unresolvable(),
-        )->downtimeClass;
+        )->derived();
     }
 
     #[Override]
@@ -166,7 +167,7 @@ final class EnumChangeRule extends AbstractMysqlRule implements DerivesDowntimeC
     /** Whether this statement redefines an enumerated column of a table that already holds rows. */
     private function redefinesAnEnum(MigrationStatementView $statement): bool
     {
-        $redefinition = ColumnRedefinition::parse($statement->canonical);
+        $redefinition = ColumnRedefinition::of($statement);
 
         if (! $redefinition instanceof ColumnRedefinition || ! $redefinition->isEnumerated()) {
             return false;

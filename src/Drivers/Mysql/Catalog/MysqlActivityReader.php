@@ -54,6 +54,9 @@ use Throwable;
  */
 final readonly class MysqlActivityReader implements ActivityReader
 {
+    /** The instrument that fills `performance_schema.metadata_locks`, on by default on MySQL 8.4. */
+    private const string METADATA_LOCK_INSTRUMENT = 'wait/lock/metadata/sql/mdl';
+
     /**
      * MySQL's metadata-lock types, mapped to what they BLOCK.
      *
@@ -182,18 +185,26 @@ final readonly class MysqlActivityReader implements ActivityReader
      * queryable with the instrumentation disabled, and they answer with an empty set. A quiet
      * server and a blind one are byte-for-byte identical downstream.
      *
-     * One variable tells them apart, so it is asked rather than guessed. A server that will not
-     * answer even that gets no verdict either — an unreadable switch is not an off switch, and
-     * claiming it was off would be the same invention in the other direction.
+     * Two switches tell them apart, so both are asked rather than guessed, in one query. The first is
+     * `@@performance_schema`. The second is the instrument that fills `metadata_locks`,
+     * `wait/lock/metadata/sql/mdl`, which can be switched off at run time while `performance_schema`
+     * stays on; its row in `setup_instruments` answers for it. A server that will not answer gets no
+     * verdict either — an unreadable switch is not an off switch, and claiming it was off would be the
+     * same invention in the other direction — and an instrument the server does not list is not taken
+     * for an enabled one.
      *
      * @param  list<CatalogSkip>  $skips
      */
-    #[RawSql(reason: 'asks @@performance_schema whether the instrumentation exists at all -- the question that has to be answered before any of the rest means anything')]
+    #[RawSql(reason: 'asks @@performance_schema and the metadata lock instrument whether the lock views are filled at all -- the question that has to be answered before any of the rest means anything')]
     private function requireInstrumentation(ReaderSession $session, array &$skips): void
     {
         $enabled = DatabaseErrorTranslator::attemptBounded(
             fn (): array => array_values($session->read(
-                fn (Connection $db): array => $db->select('select @@performance_schema as enabled'),
+                fn (Connection $db): array => $db->select(
+                    'select @@performance_schema as enabled, '
+                    .'(select ENABLED from performance_schema.setup_instruments where NAME = ?) as mdl',
+                    [self::METADATA_LOCK_INSTRUMENT],
+                ),
             )),
             SchemaObjectType::Setting,
             'performance_schema',
@@ -211,17 +222,44 @@ final readonly class MysqlActivityReader implements ActivityReader
 
         // A switch this reader could not read is NOT an off switch. Returning here rather than
         // reporting one keeps the invention out in both directions.
-        if ($enabledFlag === null || (int) $enabledFlag !== 0) {
+        if ($enabledFlag === null) {
+            return;
+        }
+
+        if ((int) $enabledFlag === 0) {
+            $skips[] = CatalogSkip::for(
+                SchemaObjectType::Setting,
+                'performance_schema',
+                SkipReason::InstrumentationDisabled,
+                'this server runs with performance_schema off, so its lock views answer with an empty '
+                .'set rather than an error. That is the same answer a quiet server gives, which is why '
+                .'no calm was concluded from it. Enabling it needs a server restart, not a grant.',
+            );
+
+            return;
+        }
+
+        $instrument = isset($row->mdl) && is_string($row->mdl) ? strtoupper($row->mdl) : null;
+
+        if ($instrument === 'YES') {
             return;
         }
 
         $skips[] = CatalogSkip::for(
             SchemaObjectType::Setting,
-            'performance_schema',
+            self::METADATA_LOCK_INSTRUMENT,
             SkipReason::InstrumentationDisabled,
-            'this server runs with performance_schema off, so its lock views answer with an empty '
-            .'set rather than an error. That is the same answer a quiet server gives, which is why '
-            .'no calm was concluded from it. Enabling it needs a server restart, not a grant.',
+            $instrument === null
+                ? 'this server lists no `'.self::METADATA_LOCK_INSTRUMENT.'` instrument, so nothing '
+                    .'says performance_schema.metadata_locks is being filled, and an empty answer from '
+                    .'it could not be told from a quiet server.'
+                : 'the metadata lock instrument `'.self::METADATA_LOCK_INSTRUMENT.'` is off while '
+                    .'performance_schema is on, so performance_schema.metadata_locks answers with an '
+                    .'empty set, the same answer a server nobody is locking gives. It can be switched '
+                    .'on at run time, with UPDATE performance_schema.setup_instruments SET ENABLED = '
+                    ."'YES' WHERE NAME = '".self::METADATA_LOCK_INSTRUMENT."', or kept on across "
+                    ."restarts with performance-schema-instrument='".self::METADATA_LOCK_INSTRUMENT."=ON' "
+                    .'in the server configuration.',
         );
     }
 

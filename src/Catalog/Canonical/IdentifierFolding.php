@@ -7,15 +7,19 @@ namespace Pushery\SQLens\Catalog\Canonical;
 /**
  * How one server treats the case of an unquoted identifier — READ from the server, never assumed.
  *
- * The assumption is where this goes wrong. PostgreSQL is simple: unquoted folds to lower. MySQL
- * depends on `lower_case_table_names`, which is a SERVER setting with three values and a platform
- * default that differs — measured on the Herd MySQL 8.4 used to build this, it is **2**, not the 0
- * a Linux-shaped assumption would predict. A canonicalization that guessed would report every table
- * as renamed the first time it ran somewhere else.
+ * The assumption is where this goes wrong. PostgreSQL folds an unquoted name while it parses a
+ * statement and stores the result, so a name read back from its catalog is already final:
+ * {@see self::Preserve}. MySQL depends on `lower_case_table_names`, which is a SERVER setting with
+ * three values and a platform default that differs — measured on the Herd MySQL 8.4 used to build
+ * this, it is **2**, not the 0 a Linux-shaped assumption would predict. A canonicalization that
+ * guessed would report every table as renamed the first time it ran somewhere else.
+ *
+ * The setting covers databases and tables alone. Every other name keeps its spelling, which is why
+ * {@see CatalogCanonicalizer::memberName()} applies no folding at all.
  */
 enum IdentifierFolding: string
 {
-    /** Fold to lower case. PostgreSQL's unquoted rule, and MySQL's `lower_case_table_names = 1`. */
+    /** Fold to lower case. MySQL's `lower_case_table_names = 1`, the Windows default. */
     case Lower = 'lower';
 
     /**
@@ -26,7 +30,10 @@ enum IdentifierFolding: string
      */
     case PreserveCompareInsensitive = 'preserve_compare_insensitive';
 
-    /** Keep the name, and treat two spellings as two objects. MySQL's `0`, the Linux default. */
+    /**
+     * Keep the name, and treat two spellings as two objects. MySQL's `0`, the Linux default, and
+     * every name PostgreSQL's catalog holds.
+     */
     case Preserve = 'preserve';
 
     /**

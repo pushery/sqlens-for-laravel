@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Reporting\Baseline;
 use JsonException;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Exceptions\UnreadableBaseline;
+use Pushery\SQLens\Findings\LocationKind;
 use Pushery\SQLens\Severity\Severity;
 
 /**
@@ -113,9 +114,36 @@ final readonly class BaselineSerializer
             $this->ordinal($raw['ordinal'], $index, $path),
             $this->text($raw['rule_id'], 'rule_id', $index, $path),
             $this->text($raw['subject'], 'subject', $index, $path),
+            $this->kind($raw['kind'], $index, $path),
             $this->category($raw['category'], $index, $path),
             $this->severity($raw['severity'], $index, $path),
         );
+    }
+
+    /**
+     * What the entry was about, refused rather than guessed when it names no location kind.
+     *
+     * The kind decides which suite judges the entry. A guess would hand it to a suite that cannot
+     * match it, and that suite would report it as stale on every run: the line somebody then
+     * deletes is one the other suite still needs.
+     *
+     * @throws UnreadableBaseline
+     */
+    private function kind(mixed $value, int $index, string $path): LocationKind
+    {
+        $kind = is_string($value) ? LocationKind::tryFrom($value) : null;
+
+        if (! $kind instanceof LocationKind) {
+            throw UnreadableBaseline::entryFieldOutOfShape(
+                $path,
+                $index,
+                'kind',
+                'one of: '.implode(', ', array_map(static fn (LocationKind $case): string => $case->value, LocationKind::cases())),
+                get_debug_type($value),
+            );
+        }
+
+        return $kind;
     }
 
     /**

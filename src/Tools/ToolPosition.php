@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Tools;
 
+use Pushery\SQLens\Canonical\Fingerprint;
 use Pushery\SQLens\Canonical\StatementTarget;
 use Pushery\SQLens\Subjects\MigrationDirection;
 
@@ -36,5 +37,10 @@ final readonly class ToolPosition
          */
         public MigrationDirection $direction,
         public ?array $targets,
+        /**
+         * The fingerprint of the statement's canonical form, so a finding placed here is told apart
+         * from one on another statement by what the statement is rather than by its position.
+         */
+        public ?Fingerprint $excerpt = null,
     ) {}
 }

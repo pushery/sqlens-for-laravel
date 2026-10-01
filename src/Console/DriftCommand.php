@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Foundation\Application;
 use Pushery\SQLens\Capture\PendingSkipReason;
+use Pushery\SQLens\Catalog\AmbiguousPrimaryHost;
 use Pushery\SQLens\Catalog\CatalogReaderFactory;
 use Pushery\SQLens\Catalog\CatalogRequest;
 use Pushery\SQLens\Catalog\ReaderConnectionFactory;
@@ -150,6 +151,18 @@ final class DriftCommand extends Command
             return ExitCode::Misconfiguration->value;
         }
 
+        // The live side is read on the server the migrations reach, and which server that is comes
+        // out of the configuration alone. Asked here, before the pending migrations are read or a
+        // shadow is built, so a write side that leaves several servers open costs a sentence rather
+        // than a provision and a replay. The reader it builds is the one the comparison below reads.
+        try {
+            $connections->forPrimary($connectionName);
+        } catch (AmbiguousPrimaryHost $ambiguous) {
+            $this->outputErrorLine('sqlens:drift: '.$ambiguous->getMessage());
+
+            return ExitCode::Misconfiguration->value;
+        }
+
         // Through the CONTRACT, and the container binding is what assembles it. Building it here
         // would mean importing Illuminate\Database into the console layer, which the core-purity
         // guard forbids and rightly: a command that holds a database class has a second way to
@@ -177,7 +190,7 @@ final class DriftCommand extends Command
         );
 
         $excludePath = $this->excludePath($config, $app);
-        $request = $this->request($config);
+        $request = $this->request($config, $connectionName);
         // Named arguments, and the reason is a defect this line shipped with: the positional form
         // read `new SubjectContext($connectionName, …)`, and `SubjectContext`'s first parameter is
         // the DRIVER. Every run therefore asked the catalog factory for a reader named after the
@@ -196,7 +209,7 @@ final class DriftCommand extends Command
         // on MySQL. Without it a `"entries": []` says "nothing differs" when it means "nothing
         // differs among whatever this build happens to look at".
         $catalogReaders = $readers
-            ->for($context->driver, $connections->forConnection($connectionName), $connections->budget(), $context);
+            ->for($context->driver, $connections->forPrimary($connectionName), $connections->budget(), $context);
 
         // Through the SHARED comparison, which `sqlens:postdeploy --expect-shadow` also calls. Two
         // commands answering "does this database match its migrations" from two code paths would be
@@ -206,7 +219,7 @@ final class DriftCommand extends Command
                 $connectionName,
                 $force = $this->option('force') === true,
                 $interactive = $this->input->isInteractive(),
-                $force || ! $interactive ? false : $this->confirm('Run the shadow replay against '.$connectionName.'?'),
+                $force || ! $interactive ? false : $this->confirm(ShadowReplayQuestion::for($config, $connectionName)),
             ),
             $resolution->migrations,
             $request,
@@ -467,13 +480,16 @@ final class DriftCommand extends Command
         return $drivers->defaultConnectionName();
     }
 
-    private function request(Repository $config): CatalogRequest
+    /**
+     * The catalog request the configuration asks for, on the connection being compared.
+     *
+     * The same request for both sides, so a prefix, its scope and the extensions a project owns
+     * shape the live reading and the expected one alike. Built by hand, it read the schema list and
+     * left the other catalog settings at their defaults.
+     */
+    private function request(Repository $config, string $connectionName): CatalogRequest
     {
-        $schemas = $config->get('sqlens.catalog.schemas');
-
-        return new CatalogRequest(
-            schemas: is_array($schemas) ? array_values(array_filter($schemas, is_string(...))) : [],
-        );
+        return CatalogRequest::fromConfig($config, connection: $connectionName);
     }
 
     /**

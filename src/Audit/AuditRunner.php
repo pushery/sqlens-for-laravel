@@ -8,7 +8,6 @@ use Illuminate\Contracts\Config\Repository;
 use Illuminate\Database\Connection as DatabaseConnection;
 use Illuminate\Filesystem\Filesystem;
 use Pushery\SQLens\Canonical\Extensions\CanonicalExtensionRegistry;
-use Pushery\SQLens\Canonical\Fingerprint;
 use Pushery\SQLens\Catalog\CatalogReaderFactory;
 use Pushery\SQLens\Catalog\CatalogRequest;
 use Pushery\SQLens\Catalog\CatalogSkip;
@@ -28,10 +27,12 @@ use Pushery\SQLens\Catalog\SettingCrossFacts;
 use Pushery\SQLens\Catalog\SettingsReading;
 use Pushery\SQLens\Catalog\SettingSubjects;
 use Pushery\SQLens\Catalog\SkipReason;
+use Pushery\SQLens\Catalog\UnsealedReaderSession;
 use Pushery\SQLens\Catalog\Usage\IndexUsageProjection;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Categories\CategoryFilter;
 use Pushery\SQLens\Categories\CategorySelection;
+use Pushery\SQLens\Config\ConfigIgnoreReferences;
 use Pushery\SQLens\Config\ConfigViolation;
 use Pushery\SQLens\Config\RuleIdReference;
 use Pushery\SQLens\Config\RuleIdValidator;
@@ -55,11 +56,13 @@ use Pushery\SQLens\Deploy\PostdeployContext;
 use Pushery\SQLens\Deploy\PostdeployVerifier;
 use Pushery\SQLens\Drivers\DriverRegistry;
 use Pushery\SQLens\Drivers\DriverResolutionFailure;
+use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Drivers\EngineIdentity;
 use Pushery\SQLens\Drivers\ServerVersionFloor;
 use Pushery\SQLens\Exceptions\UnreadableBaseline;
 use Pushery\SQLens\Findings\CompositeCredentialRedactor;
 use Pushery\SQLens\Findings\Finding;
+use Pushery\SQLens\Findings\LocationKind;
 use Pushery\SQLens\Findings\Result;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
@@ -68,6 +71,7 @@ use Pushery\SQLens\PackageVersion;
 use Pushery\SQLens\Reporting\Baseline\BaselineFile;
 use Pushery\SQLens\Reporting\Baseline\BaselineRuleIds;
 use Pushery\SQLens\Reporting\Baseline\ConfiguredBaseline;
+use Pushery\SQLens\Reporting\Baseline\EmittableIds;
 use Pushery\SQLens\Reporting\Baseline\FindingFingerprint;
 use Pushery\SQLens\Reporting\Baseline\StaleBaselinePolicy;
 use Pushery\SQLens\Reporting\CaptureMode as ReportingCaptureMode;
@@ -77,6 +81,7 @@ use Pushery\SQLens\Reporting\ReportedServerVersion;
 use Pushery\SQLens\Reporting\ReportedSkip;
 use Pushery\SQLens\Reporting\RunContext;
 use Pushery\SQLens\Reporting\RunProfile;
+use Pushery\SQLens\Reporting\Suppression\BaselineScope;
 use Pushery\SQLens\Reporting\Suppression\SuppressionCandidate;
 use Pushery\SQLens\Reporting\Suppression\SuppressionResolver;
 use Pushery\SQLens\Reporting\VersionSource;
@@ -222,7 +227,7 @@ final readonly class AuditRunner implements AuditRuns
         // of catalog reading, and it must not surface as a rule that quietly kept firing while the
         // project believed it was off — which is what an unvalidated id does, for months, because
         // a pattern matching nothing looks exactly like a pattern whose findings are gone.
-        $misconfigured = [...$this->ignoreListViolations(), ...$this->baselineViolations($ignoreBaseline)];
+        $misconfigured = [...$this->ignoreListViolations(), ...$this->projectIgnoreViolations(), ...$this->baselineViolations($ignoreBaseline)];
 
         if ($misconfigured !== []) {
             return $this->refusedConfig($misconfigured, $level, $overrides, $activeCategories, $today);
@@ -282,6 +287,16 @@ final readonly class AuditRunner implements AuditRuns
             ?? PoolerReading::undetermined(['this driver has no pooler probe']);
 
         $identity = $readers->identity->read($target->connection);
+
+        // The identity reader degrades a read it could not make, and a seal that did not take is
+        // one. The session keeps that refusal, so the run ends on it here. The readers rebuilt
+        // below get a session of their own, and its first read would probe the server again.
+        $refusal = $readers->session?->refusal();
+
+        if ($refusal instanceof UnsealedReaderSession) {
+            throw $refusal;
+        }
+
         $target = $target->withIdentity($identity)->withPooler($pooler);
 
         // Re-stamped now that the instance has answered. The readers were handed a context BEFORE
@@ -342,7 +357,7 @@ final readonly class AuditRunner implements AuditRuns
             return $this->refusedEngine($engine, $target, $context, $activeLevel, $overrides, $activeCategories, $today);
         }
 
-        $snapshot = $readers->catalog->read($this->request());
+        $snapshot = $readers->catalog->read($this->request($target->connection));
 
         // Read BESIDE the catalog, through the contract's own accessor, and joined onto the tables
         // here. Deliberately not part of the snapshot: usage counters move while the schema stands
@@ -352,7 +367,7 @@ final readonly class AuditRunner implements AuditRuns
         // one about scope, privileges and degradation.
         $snapshot = new CatalogSnapshot(
             $snapshot->context,
-            IndexUsageProjection::attachTo($snapshot->objects, $readers->catalog->indexUsage($this->request())),
+            IndexUsageProjection::attachTo($snapshot->objects, $readers->catalog->indexUsage($this->request($target->connection))),
             $snapshot->skips,
         );
 
@@ -403,7 +418,7 @@ final readonly class AuditRunner implements AuditRuns
                 // rules read it off the subject rather than out of the container, so the awkward states
                 // — nothing configured, both the same, a name that resolves to nothing — are states a
                 // test can put them in.
-                $this->connectionSeparation($roleReading, $connection),
+                $this->connectionSeparation($roleReading, $target->connection),
             )
             : [];
 
@@ -558,6 +573,9 @@ final readonly class AuditRunner implements AuditRuns
             evaluatedRuleIds: $judged->evaluatedRuleIds,
             sealedBy: $sealedBy,
             sessionTimeouts: $sessionTimeouts,
+            askedRules: $answerable,
+            // A scope that admits no rule read the catalog and asked nothing about it.
+            examined: $rules !== [],
         );
     }
 
@@ -679,12 +697,19 @@ final readonly class AuditRunner implements AuditRuns
      * to tell a run that found nothing from one that could not look, and the second is the one
      * that needs a grant fixed. The duplication is the point rather than an oversight.
      *
-     * A `not_comparable` boundary is not one of them. The header lists what a run could not read,
-     * and that object was read completely: its notice reports as `not_applicable`, under
-     * `AUDIT.CATALOG.NOT_COMPARED` rather than the unread family. Carried here, it would make the
-     * header disagree with the findings about how much went unread, and put every schema with an
-     * ordinary partial index in front of a reader as a partial reading, which is the misreading that
-     * id exists to end.
+     * The header lists every skip whose notice is an `undetermined`, which is every reason but two. A
+     * `not_comparable` boundary is not one of them: that object was read completely, and its notice
+     * reports as `not_applicable` under `AUDIT.CATALOG.NOT_COMPARED`. Neither is an object excluded by
+     * the configuration, an extension's by default, whose notice reports as `not_applicable` too.
+     * Carried here, either would make the header disagree with the findings about how much went
+     * unread, and put every schema with an ordinary partial index or an extension in front of a reader
+     * as a partial reading.
+     *
+     * A `not_understood` object stays, although {@see SkipReason::leavesTheReadingIncomplete()} does
+     * not count it: that test asks whether the snapshot is a partial reading, and the object is in
+     * it. This list follows the findings instead, and a part the reading could not understand, such
+     * as a condition it does not recognize, is reported as a gap and fails a strict run. Left out
+     * here, the header would read as complete over a strict run that fails on it.
      *
      * @return list<ReportedSkip>
      */
@@ -692,7 +717,8 @@ final readonly class AuditRunner implements AuditRuns
     {
         $unread = array_values(array_filter(
             $snapshot->skips,
-            static fn (CatalogSkip $skip): bool => $skip->reason !== SkipReason::NotComparable,
+            // The two reasons AuditNotices::skipped() reports as not applicable, and no others.
+            static fn (CatalogSkip $skip): bool => ! in_array($skip->reason, [SkipReason::NotComparable, SkipReason::ExcludedByConfig], true),
         ));
 
         return array_map(
@@ -875,16 +901,24 @@ final readonly class AuditRunner implements AuditRuns
             $migrationName,
             $connected,
             $this->connectionIdentity($runtimeName),
-            $this->connectionIdentity($migrationName),
-            // WHICH connection this run addressed, threaded from the command rather than inferred.
-            // Without it `runtimeRole` is whatever account the run logged in as, and a rule judging
-            // that account would name the migration role as the runtime one.
+            $this->connectionIdentity($migrationName, migrates: true),
+            // WHICH connection this run addressed, as the resolver answered it: the `--connection`
+            // option, or the pinned or only connection when the option was not given. Without it
+            // `runtimeRole` is whatever account the run logged in as, and a rule judging that account
+            // would name the migration role as the runtime one. The option alone would leave every run
+            // without it undetermined, and the runtime rules silent on the most ordinary invocation.
             $audited,
         );
     }
 
     /**
-     * WHO a named connection authenticates as — `user@host/database` — or null when it does not say.
+     * WHO a named connection authenticates as — a digest of its user, host and database — or null
+     * when it does not say.
+     *
+     * A digest because the identity is compared and never shown: two connections are the same
+     * identity exactly when the three values agree, and nothing a rule words into a finding needs
+     * the values themselves. Carried in the clear, they sat one careless sentence away from a CI
+     * log, and one rule did print them.
      *
      * Two entries in config/database.php are two NAMES, and a project that filed a second one
      * believes it has taken the single most effective measure there is. Whether it has depends on
@@ -895,17 +929,25 @@ final readonly class AuditRunner implements AuditRuns
      * empty fingerprints compare EQUAL. A rule handed those would report a separation that is
      * missing on every project whose configuration is environment-driven — the loudest possible
      * false finding. Null instead makes the rule say it could not tell.
+     *
+     * Read from the configuration the framework connects with, never from the raw keys. Laravel's
+     * own `config/database.php` keeps `127.0.0.1`, `laravel` and `root` beside `url`, so on every
+     * URL-configured platform two connections for two different accounts had the same raw keys and
+     * were reported as unseparated. The migration connection is read the way the framework migrates
+     * through it, which on a `direct` block is another account than the one the application uses.
      */
-    private function connectionIdentity(?string $connection): ?string
+    private function connectionIdentity(?string $connection, bool $migrates = false): ?string
     {
         if ($connection === null) {
             return null;
         }
 
+        $raw = $this->config->get('database.connections.'.$connection);
+        $settings = $migrates ? EffectiveConnectionConfig::forMigrations($raw) : EffectiveConnectionConfig::for($raw);
         $parts = [];
 
         foreach (['username', 'host', 'database'] as $key) {
-            $value = $this->config->get('database.connections.'.$connection.'.'.$key);
+            $value = $settings[$key] ?? null;
 
             if (! is_string($value) || $value === '') {
                 return null;
@@ -914,7 +956,8 @@ final readonly class AuditRunner implements AuditRuns
             $parts[] = $value;
         }
 
-        return sprintf('%s@%s/%s', ...$parts);
+        // A separator no part can end with, so `a@b` + `c` and `a` + `b@c` stay two identities.
+        return hash('sha256', implode("\0", $parts));
     }
 
     /**
@@ -1137,11 +1180,17 @@ final readonly class AuditRunner implements AuditRuns
         return $parsed instanceof ServerVersion ? $parsed : null;
     }
 
-    private function request(): CatalogRequest
+    /**
+     * The catalog request this project's configuration asks for, on the connection being audited.
+     *
+     * Built from the whole configuration rather than from the schema list: the table prefix (the
+     * connection's own, or `sqlens.catalog.table_prefix`), its scope, the folding of partitions and
+     * the extensions a project owns are all read there. Built here by hand, the request left each of
+     * them at its default while the config validator called the settings valid.
+     */
+    private function request(string $connection): CatalogRequest
     {
-        $schemas = $this->config->get('sqlens.catalog.schemas');
-
-        return new CatalogRequest(schemas: is_array($schemas) ? array_values(array_filter($schemas, is_string(...))) : []);
+        return CatalogRequest::fromConfig($this->config, connection: $connection);
     }
 
     private function configuredLevel(): int
@@ -1229,6 +1278,25 @@ final readonly class AuditRunner implements AuditRuns
             ExitCode::Misconfiguration,
             is_string($configured = $this->config->get('sqlens.connection')) ? $configured : 'unresolved',
         );
+    }
+
+    /**
+     * The unknown rule ids in the project-wide `sqlens.ignore`, as configuration violations.
+     *
+     * The audit applies that list, so it refuses a typo in it as the lint suite does: through the
+     * shared reader, and against the same net — every driver's rules, the ids this build can emit
+     * and the tools' namespaces. An entry that names a lint rule is no mistake here; it covers
+     * nothing in this run.
+     *
+     * @return list<ConfigViolation>
+     */
+    private function projectIgnoreViolations(): array
+    {
+        return new RuleIdValidator(
+            RuleRegistry::fromRules($this->allRules()),
+            EmittableIds::shipped()->all(),
+            $this->drivers->everyToolPrefix(),
+        )->unknown(ConfigIgnoreReferences::of($this->config->get('sqlens.ignore')));
     }
 
     /**
@@ -1520,6 +1588,10 @@ final readonly class AuditRunner implements AuditRuns
             $findings[] = DebtNotices::objectNotFound($debt, $target->driver, $target->connection, $context);
         }
 
+        foreach ($collected->unanswered() as $debt) {
+            $findings[] = DebtNotices::standingUnknown($debt, $target->driver, $target->connection, $context);
+        }
+
         // Reported whatever the mode is. A debt the catalog shows and the account has never heard of
         // is a definite statement about the file, and a checking run that stayed silent about it
         // would leave the reader believing the account is complete.
@@ -1545,6 +1617,8 @@ final readonly class AuditRunner implements AuditRuns
      * @param  list<ReportedSkip>  $skips  what the reading could not cover, for the header
      * @param  list<string>|null  $evaluatedRuleIds  which rules got a subject; null on a path that never dispatched
      * @param  array<string, int|null>|null  $sessionTimeouts  the bounds the session read back; null where it could not say
+     * @param  list<Rule>  $askedRules  the rules this run applied once its gates had spoken; none on a path that refused before judging
+     * @param  bool  $examined  whether the run read the instance and asked its rules about it
      */
     private function outcome(
         InstanceTarget $target,
@@ -1561,6 +1635,8 @@ final readonly class AuditRunner implements AuditRuns
         ?array $evaluatedRuleIds = null,
         ?SealedBy $sealedBy = null,
         ?array $sessionTimeouts = null,
+        array $askedRules = [],
+        bool $examined = false,
     ): AuditOutcome {
         // Sorted by the pair a reader navigates with — where it is, then which rule said it. The
         // rule id breaks ties inside one object so two runs cannot swap two findings on one table.
@@ -1608,7 +1684,7 @@ final readonly class AuditRunner implements AuditRuns
         // edited for the second, and the edit that gets forgotten is invisible — nothing fails, the
         // tool is simply never asked.
         foreach ($diagnostics as $diagnostic) {
-            $findings = $this->contributions->for($diagnostic->tool)?->contribute($findings, $diagnostic, $target->connection, $subjectContext) ?? $findings;
+            $findings = $this->contributions->for($diagnostic->tool)?->contribute($findings, $diagnostic, $target->connection, $subjectContext, $target->pinnedHost) ?? $findings;
         }
 
         // Under a strict profile a FIXABLE absence is an error rather than a degradation — and
@@ -1619,7 +1695,12 @@ final readonly class AuditRunner implements AuditRuns
 
         $suppression = SuppressionResolver::for(
             $baseline ?? BaselineFile::of([]),
-            null,
+            // The project-wide list and the reasons it may hide, read as the lint suite reads them.
+            // The config calls the list project-wide and lets an entry name the audit in `suites`;
+            // passed as null, it never reached a catalog finding, while `sqlens:agent-rules` told
+            // agents the rules it names were switched off everywhere.
+            $this->config->get('sqlens.ignore'),
+            SuppressionResolver::allowedUndetermined($this->config->get('sqlens.suppression.allow_undetermined')),
             auditIgnore: IgnoreList::fromConfig(
                 $this->config->get('sqlens.audit.ignore'),
                 is_string($prefix = $this->config->get('database.connections.'.$target->connection.'.prefix')) ? $prefix : '',
@@ -1628,7 +1709,16 @@ final readonly class AuditRunner implements AuditRuns
             // ran here, and would have become wrong the moment one did: an accepted finding from a
             // tool that never answered would be reported as stale, and somebody deleting that line
             // gets the finding back on the next machine that has the binary.
-        )->resolve($this->candidates($findings), Suite::Audit, UnverifiableToolPrefixes::from($diagnostics));
+        )->resolve(
+            $this->candidates($findings),
+            Suite::Audit,
+            UnverifiableToolPrefixes::from($diagnostics),
+            // The baseline is shared with the lint suite, so it holds entries about migrations this
+            // run never reads. They are the lint suite's to call stale, not this one's. Nor are the
+            // entries of rules this run's level, categories or stability left out, or that the
+            // server's version or role withheld: nobody asked for their findings.
+            scope: BaselineScope::of(Suite::Audit, $this->allRules(), [LocationKind::Catalog], $askedRules),
+        );
 
         // Stale entries are carried into the Result, not dropped: a baseline line that matches
         // nothing has stopped describing what the project accepts, and a list nobody prunes is its
@@ -1662,7 +1752,7 @@ final readonly class AuditRunner implements AuditRuns
         $staleBreaks = StaleBaselinePolicy::fromConfig($this->config->get('sqlens.baseline.stale'))
             ->breaks($result->staleBaselineEntries);
 
-        return new AuditOutcome($result, $context, $this->exitCodes->resolve($result, $context, $misconfigured || $staleBreaks), $target->connection);
+        return new AuditOutcome($result, $context, $this->exitCodes->resolve($result, $context, $misconfigured || $staleBreaks), $target->connection, examined: $examined);
     }
 
     /**
@@ -1690,7 +1780,7 @@ final readonly class AuditRunner implements AuditRuns
         $candidates = [];
 
         foreach ($findings as $finding) {
-            $fingerprint = FindingFingerprint::of($finding->ruleId, $finding->location, Fingerprint::fromValue(''));
+            $fingerprint = FindingFingerprint::ofFinding($finding);
             $ordinal = $ordinals[$fingerprint->value] ?? 0;
             $ordinals[$fingerprint->value] = $ordinal + 1;
 

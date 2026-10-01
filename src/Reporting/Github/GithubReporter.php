@@ -6,10 +6,12 @@ namespace Pushery\SQLens\Reporting\Github;
 
 use Pushery\SQLens\Contracts\Reporter;
 use Pushery\SQLens\Findings\DowntimeClass;
+use Pushery\SQLens\Findings\DowntimeUndetermined;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\LocationKind;
 use Pushery\SQLens\Findings\Outcome;
 use Pushery\SQLens\Findings\Result;
+use Pushery\SQLens\Reporting\ReportText;
 use Pushery\SQLens\Reporting\RunContext;
 use Pushery\SQLens\Severity\GateAxis;
 use Pushery\SQLens\Severity\Severity;
@@ -83,7 +85,7 @@ final class GithubReporter implements Reporter
         // empty output stays the honest "clean", and the machine-facing JSON report is
         // where the parameters live unconditionally.
         if ($result->findings !== []) {
-            $out->writeln($this->preamble($context));
+            ReportText::line($out, $this->preamble($context));
         }
 
         // First pass: how many findings map to each command, so an overflowing level
@@ -105,7 +107,7 @@ final class GithubReporter implements Reporter
             $budget = $this->emitBudget($counts[$command] ?? 0);
 
             if (($emitted[$command] ?? 0) < $budget) {
-                $out->writeln($this->annotation($command, $finding));
+                ReportText::line($out, $this->annotation($command, $finding));
                 $emitted[$command] = ($emitted[$command] ?? 0) + 1;
 
                 continue;
@@ -115,7 +117,7 @@ final class GithubReporter implements Reporter
         }
 
         foreach ($overflow as $command => $findings) {
-            $out->writeln($this->collectorLine($command, $findings));
+            ReportText::line($out, $this->collectorLine($command, $findings));
         }
     }
 
@@ -263,6 +265,8 @@ final class GithubReporter implements Reporter
 
         if ($finding->downtimeClass instanceof DowntimeClass) {
             $title .= ' ('.$finding->downtimeClass->value.')';
+        } elseif ($finding->downtimeUndetermined instanceof DowntimeUndetermined) {
+            $title .= ' (downtime undetermined)';
         }
 
         return $title;

@@ -41,6 +41,18 @@ use PHPStan\Type\Type;
  * instead, which resolves through Larastan's knowledge, and a generic instantiation still answers
  * as a subtype of the bare class.
  *
+ * ## The subquery methods, which are raw only when they are handed a string
+ *
+ * `fromSub()`, `joinSub()`, `insertUsing()` and the rest of {@see RawSqlSinks::SUBQUERY_SINKS}
+ * take a closure, a builder or a string, and the framework splices a string into the statement
+ * as it stands. They are collected here because that is what they are in the string form: a
+ * fragment of a statement the builder assembles, on the same three receivers.
+ *
+ * The closure and the builder are the ordinary way to call them, and their values travel as
+ * bindings. So the argument's type is asked FIRST: a subquery that cannot be a string produces no
+ * row at all — not even for a receiver nobody can resolve — because there is no raw text at that
+ * call site to be undetermined about.
+ *
  * ## The false-positive fence, and the state it must not swallow
  *
  * A `whereRaw()` on a resolved, foreign class is **not** a call site: a codebase full of
@@ -78,14 +90,9 @@ final readonly class RawSqlFragmentCollector implements Collector
         }
 
         $method = $node->name->toString();
+        $text = FragmentText::of($method, $node->getArgs(), $scope);
 
-        if (! in_array($method, RawSqlSinks::FRAGMENT_SINKS, true)) {
-            return null;
-        }
-
-        $arguments = $node->getArgs();
-
-        if ($arguments === []) {
+        if ($text === null) {
             return null;
         }
 
@@ -100,11 +107,7 @@ final readonly class RawSqlFragmentCollector implements Collector
             return null;
         }
 
-        $verdict = $this->analyzer->classify(
-            $arguments[0]->value,
-            $arguments[1]->value ?? null,
-            $scope,
-        );
+        $verdict = $this->analyzer->classify($text[0], $text[1], $scope);
 
         return [
             'method' => $method,

@@ -25,29 +25,21 @@ final readonly class MigrationContext
 {
     /**
      * @param  list<string>  $createdTables  canonical qualified names of tables this migration creates
-     * @param  list<string>  $columnsWithNotNullCheck  lowercased column names this migration adds a
-     *                                                 `CHECK (col IS NOT NULL)` for — the deliberate
-     *                                                 safe-pattern marker that lets a later
-     *                                                 `SET NOT NULL` on the same column skip its scan
      * @param  list<string>  $createdEnumTypes  lowercased names of enum types this migration creates,
      *                                          so adding a value to one of them is not a rollback
      *                                          concern (the down() drops the whole type)
-     * @param  bool  $dropsAConstraint  whether the migration drops any constraint — the signal that
-     *                                  tells a CHECK-constraint ADD apart as a CHANGE (drop + add,
-     *                                  Laravel's enum() change) rather than a first-time add
      * @param  list<MigrationStatementDigest>  $statements  the migration's statements in capture order —
      *                                                      the ORDER-sensitive material a rule needs when a
      *                                                      single booleaned fact cannot answer its question
      *                                                      ("is a lock timeout set BEFORE the first strong
-     *                                                      lock?"). Empty on a context built outside a
-     *                                                      capture; the distilled facts above cover the rules
-     *                                                      that do not need order.
+     *                                                      lock?", "is a not-null check on THIS table valid
+     *                                                      before this SET NOT NULL?"). Empty on a context
+     *                                                      built outside a capture; the distilled facts above
+     *                                                      cover the rules that need neither order nor table.
      */
     public function __construct(
         public array $createdTables,
-        public array $columnsWithNotNullCheck = [],
         public array $createdEnumTypes = [],
-        public bool $dropsAConstraint = false,
         public array $statements = [],
         /**
          * What this migration's `down()` amounts to, or null when nothing looked.
@@ -122,16 +114,6 @@ final readonly class MigrationContext
     public function createsTable(string $qualifiedName): bool
     {
         return in_array($qualifiedName, $this->createdTables, true);
-    }
-
-    /**
-     * Whether this migration adds a `CHECK (col IS NOT NULL)` for the given column — the
-     * safe pattern that lets a `SET NOT NULL` on it skip the full-table scan. The column
-     * name is compared lowercased, the form it is captured in.
-     */
-    public function hasNotNullCheckFor(string $column): bool
-    {
-        return in_array(strtolower($column), $this->columnsWithNotNullCheck, true);
     }
 
     /**

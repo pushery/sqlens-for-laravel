@@ -269,9 +269,14 @@ final readonly class PgsqlActivityReader implements ActivityReader
      * ACCESS EXCLUSIVE on the target is not WAITING for anything, so it appears in no `not granted`
      * row — and it is the single commonest way a deploy stalls.
      *
+     * Each relation comes with the strongest MODE the session holds on it, because what a held lock
+     * is in the way of depends on it: a transaction that only read the table does not stop a foreign
+     * key from being added, and one that wrote to it does.
+     *
      * @param  list<mixed>  $rows
      * @param  list<string>  $objects  the focus set, so the answer speaks the caller's vocabulary
-     * @return array<string, string> pid => the first focus relation it holds, in a stable order
+     * @return array<string, array<string, LockMode|null>> pid => focus relation => strongest held mode,
+     *                                                     relations in a stable order
      */
     private function heldRelations(array $rows, array $objects = []): array
     {
@@ -295,21 +300,43 @@ final readonly class PgsqlActivityReader implements ActivityReader
                 ? $qualified
                 : (in_array($bare, $objects, true) ? $bare : $qualified);
 
-            // First wins, and the query orders by relation so "first" is the same on every run. A
-            // session sitting on two of the deploy's tables produces one finding naming one of them:
-            // the deploy is blocked either way, and the check's job is to say so, not to enumerate.
-            if ($pid !== '' && $relation !== '' && ! isset($held[$pid])) {
-                $held[$pid] = $relation;
+            if ($pid === '' || $relation === '') {
+                continue;
             }
+
+            // A session holds several locks on one table as a matter of course (a transaction that
+            // read it and then wrote to it holds both), and the one that decides what it is in the
+            // way of is the strongest. A mode this build cannot place counts as the strongest of all.
+            $mode = self::LOCK_MODES[$this->text($row, 'mode')] ?? null;
+
+            $held[$pid][$relation] = array_key_exists($relation, $held[$pid] ?? [])
+                ? $this->stronger($held[$pid][$relation], $mode)
+                : $mode;
         }
 
         return $held;
     }
 
+    /** The mode that stops more of the two, with a mode nobody could place counted as stopping everything. */
+    private function stronger(?LockMode $held, ?LockMode $another): ?LockMode
+    {
+        $rank = static fn (?LockMode $mode): int => match ($mode) {
+            LockMode::Shared => 0,
+            LockMode::SharedWrite => 1,
+            LockMode::MaintenanceExclusive => 2,
+            LockMode::SharedNoWrite => 3,
+            LockMode::Exclusive => 4,
+            null => 5,
+        };
+
+        return $rank($another) > $rank($held) ? $another : $held;
+    }
+
     /**
      * Granted locks on named relations only — the focus set is bound into the WHERE clause rather
      * than filtered afterwards, so an instance with thousands of locks still answers with at most
-     * one row per session per target table.
+     * one row per session, target table and lock mode. A session holding two modes on one table
+     * answers twice, and {@see self::stronger()} keeps the one that decides what it is in the way of.
      *
      * ## Why it matches TWO ways, and why that is not belt-and-braces
      *
@@ -324,17 +351,20 @@ final readonly class PgsqlActivityReader implements ActivityReader
      * never equals the composed name. So nothing has to guess which form it was handed, and a table
      * whose name contains a literal dot stays safe.
      *
-     * `pg_table_is_visible()` is what makes the bare arm honest: it asks the server whether an
-     * UNQUALIFIED reference would find this table, which is `search_path` resolved by the thing that
-     * owns it. `search_path` is a LIST, so appending a guessed `public.` would have been exactly the
-     * assumption this package refuses.
+     * What makes the bare arm honest is asking the server whether an UNQUALIFIED reference would
+     * find this table, over the application's `search_path` recorded before the reading pinned its
+     * own ({@see ApplicationSearchPath::visible()}). `search_path` is a LIST, so appending a guessed
+     * `public.` would have been exactly the assumption this package refuses.
      */
     private function heldRelationQuery(int $objectCount): string
     {
+        $visible = ApplicationSearchPath::visible('c');
+
         return <<<SQL
             select l.pid as pid,
                    n.nspname || '.' || c.relname as relation,
-                   c.relname as bare_relation
+                   c.relname as bare_relation,
+                   l.mode as mode
               from pg_locks l
               join pg_class c on c.oid = l.relation
               join pg_namespace n on n.oid = c.relnamespace
@@ -343,7 +373,7 @@ final readonly class PgsqlActivityReader implements ActivityReader
                and l.pid <> pg_catalog.pg_backend_pid()
                and (
                      n.nspname || '.' || c.relname in ({$this->placeholders($objectCount)})
-                  or (c.relname in ({$this->placeholders($objectCount)}) and pg_catalog.pg_table_is_visible(c.oid))
+                  or (c.relname in ({$this->placeholders($objectCount)}) and {$visible})
                    )
              order by l.pid, relation
             SQL;
@@ -357,7 +387,7 @@ final readonly class PgsqlActivityReader implements ActivityReader
 
     /**
      * @param  list<mixed>  $rows
-     * @param  array<string, string>  $held  pid => the focus relation it is sitting on
+     * @param  array<string, array<string, LockMode|null>>  $held  pid => the focus relations it holds, with their modes
      * @return list<LongRunningSession>
      */
     private function longRunners(array $rows, array $held = []): array
@@ -385,11 +415,15 @@ final readonly class PgsqlActivityReader implements ActivityReader
             // fire: not a safety net, just a line nothing can reach.
             $pid = $this->text($row, 'pid');
 
+            // The relation is the first of those it holds, in the query's stable order: a session
+            // sitting on two of the deploy's tables is reported once, naming one of them, while the
+            // modes stay complete for a check that has to know what each lock is in the way of.
             $sessions[] = new LongRunningSession(
                 'pid='.$pid,
                 (int) $duration,
                 $state,
-                $held[$pid] ?? null,
+                array_key_first($held[$pid] ?? []),
+                $held[$pid] ?? [],
             );
         }
 
@@ -475,6 +509,7 @@ final readonly class PgsqlActivityReader implements ActivityReader
         );
 
         $states = [];
+        $withheld = 0;
 
         foreach ($rows as $row) {
             if (! is_object($row)) {
@@ -503,11 +538,41 @@ final readonly class PgsqlActivityReader implements ActivityReader
             $lagMs = $this->number($row, 'lag_ms');
             $lagBytes = $this->number($row, 'lag_bytes');
 
+            // A replica with a name and no state is one the server WITHHELD. The name comes from
+            // `pg_stat_activity` and is shown to any role; the state, the lag and everything else
+            // come from the wal senders, which a role without `pg_read_all_stats` sees only as null.
+            // A streaming replica never has a null state, so the null is the masking and nothing else.
+            $state = $row->state ?? null;
+
+            if (! is_scalar($state)) {
+                $withheld++;
+            }
+
             $states[] = new ReplicationState(
                 $name,
-                $this->text($row, 'state'),
+                is_scalar($state) ? (string) $state : null,
                 lagBytes: $lagBytes === null ? null : (int) $lagBytes,
                 lagMs: $lagMs === null ? null : (int) $lagMs,
+            );
+        }
+
+        // The masking of `pg_stat_replication`, reported the way `recordMasking()` reports the one of
+        // `pg_stat_activity`: the view does not refuse, it lists the replicas and empties the columns
+        // that say what they are doing. Measured on PostgreSQL 18.4 against a replica that was
+        // streaming: a role holding nothing but LOGIN saw its name, and `state`, `replay_lag` and
+        // `sync_state` null. Taken at face value, every such replica reads as "not streaming".
+        if ($withheld > 0) {
+            $skips[] = CatalogSkip::for(
+                SchemaObjectType::Setting,
+                'pg_stat_replication',
+                SkipReason::InsufficientPrivilege,
+                sprintf(
+                    'the server listed %d replica(s) and withheld the state and lag of each: this role is '
+                    .'not a member of pg_read_all_stats, which pg_monitor grants, so pg_stat_replication '
+                    .'answers with the names present and the wal-sender columns empty. Whether they are '
+                    .'streaming is unknown here, which is not the same as their not streaming.',
+                    $withheld,
+                ),
             );
         }
 

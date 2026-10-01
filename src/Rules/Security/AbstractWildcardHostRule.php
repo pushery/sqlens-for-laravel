@@ -24,13 +24,28 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * What sharpens it is what the account can DO once it arrives, which is why this is a pair.
  *
+ * ## Which patterns are an open host, and which are the narrowing
+ *
+ * `%` and `_` are wildcards in the host half, and they do not all widen alike. So the reading
+ * separates three shapes rather than reporting every wildcard as "any host":
+ *
+ * - `%` alone, or a pattern of nothing but wildcards and dots such as `%.%.%.%`, admits every
+ *   address. This is what the pair judges, split on the account's privileges.
+ * - A pattern over host NAMES, such as `%.example.com`, admits every host whose name fits. That is
+ *   narrower than every address whatever the account holds, so it is the `medium` rule's alone,
+ *   with its own sentence.
+ * - An address pattern, such as `10.0.0.%`, and a `_` without a `%` are not reported. MySQL matches
+ *   an IP wildcard value only against IP addresses, never against a host name, so `10.0.0.%` is an
+ *   address range, the narrowing this family asks for. A lone `_` matches one character, and
+ *   `db_host.internal` is a name with an underscore in it rather than an open host.
+ *
  * ## No driver check here, unlike its no-password neighbor
  *
  * {@see AbstractNoPasswordRule} has to ask which engine it is looking at, because both readers
  * produce the same value from facts that do not mean the same thing. This family does not, and for
  * a better reason than convention: a host pattern is a MySQL concept, PostgreSQL roles carry no
- * host at all, and {@see RoleObject::hasWildcardHost()} answers
- * false for every one of them. The rule is MySQL-only by the FACT rather than by a check, which is
+ * host at all, and {@see RoleObject::acceptsAnyHost()} and {@see RoleObject::hasHostNamePattern()}
+ * answer false for every one of them. The rule is MySQL-only by the FACT rather than by a check, which is
  * the shape the rest of this family prefers — the engine cannot drift out from under it.
  *
  * ## Why the escalation is a second id, and where its input comes from
@@ -78,8 +93,19 @@ abstract class AbstractWildcardHostRule extends AbstractSchemaObjectSecurityRule
     /** Whether this rule judges the accounts that also hold far-reaching privileges. */
     abstract protected function judgesPrivilegedAccounts(): bool;
 
-    /** The finding, once this rule has established the account is one of its own. */
-    abstract protected function message(string $account): string;
+    /**
+     * The finding for an account open to every address, once this rule has established it is one of
+     * its own.
+     *
+     * @param  list<string>  $attributes  the account's own role attributes, by value
+     */
+    abstract protected function message(string $account, array $attributes): string;
+
+    /** The finding for a host that is a pattern over names, or null when the sibling reports it. */
+    protected function namePatternMessage(string $account, string $host): ?string
+    {
+        return null;
+    }
 
     /** @return list<RuleVerdict> */
     final public function judgeSchemaObject(SchemaObject $object): array
@@ -102,15 +128,23 @@ abstract class AbstractWildcardHostRule extends AbstractSchemaObjectSecurityRule
             )];
         }
 
-        if ($object->getBool('wildcard_host') !== true) {
-            return [];
+        if ($object->getBool('wildcard_host') === true) {
+            // The split. Exactly one of the two speaks about an account open to every address.
+            if ($object->getBool('privileged') !== $this->judgesPrivilegedAccounts()) {
+                return [];
+            }
+
+            $attributes = (string) $object->getString('attributes');
+
+            return [RuleVerdict::flag($this->message($object->qualifiedName, $attributes === '' ? [] : explode(',', $attributes)))];
         }
 
-        // The split. Exactly one of the two speaks about any given account.
-        if ($object->getBool('privileged') !== $this->judgesPrivilegedAccounts()) {
-            return [];
+        if ($object->getBool('host_name_pattern') === true) {
+            $message = $this->namePatternMessage($object->qualifiedName, (string) $object->getString('host'));
+
+            return $message === null ? [] : [RuleVerdict::flag($message)];
         }
 
-        return [RuleVerdict::flag($this->message($object->qualifiedName))];
+        return [];
     }
 }

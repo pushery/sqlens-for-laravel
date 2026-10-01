@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Translation\Translator;
 use Pushery\SQLens\Capture\Shadow\GuardDecision;
+use Pushery\SQLens\Capture\Shadow\ShadowProvisioningConnection;
 use Pushery\SQLens\Capture\SingleFileFailure;
 use Pushery\SQLens\Contracts\Reporter;
 use Pushery\SQLens\Drivers\DriverManager;
@@ -260,7 +261,7 @@ final class LintCommand extends Command
         // re-derived, so there is exactly one guard. A blocked decision still runs:
         // the captor turns it into a named undetermined per migration, which is the
         // honest report of a run that was not allowed, never a silent nothing.
-        $guard = $shadow ? $this->guardDecision($clearance, $drivers, $connection) : null;
+        $guard = $shadow ? $this->guardDecision($clearance, $drivers, $config, $connection) : null;
         $assume = $this->option('assume-server-version');
 
         // A baseline that cannot be read stops the run HERE, named, with the misconfiguration exit.
@@ -333,8 +334,13 @@ final class LintCommand extends Command
      * addresses, and the sentence below has to name it to the person being asked. Reading
      * `database.default` here could name a different database in the question than the run would
      * create on — an informed yes that was not informed about the right thing.
+     *
+     * For the same reason the question names a second connection when there is one: with
+     * `capture.shadow.connection` or `capture.shadow.direct_connection` set, the throwaway database is
+     * created and dropped there, not on the connection being linted, and the resolver the provisioner
+     * is built from says which.
      */
-    private function guardDecision(ShadowClearance $clearance, DriverManager $drivers, mixed $connection): GuardDecision
+    private function guardDecision(ShadowClearance $clearance, DriverManager $drivers, Repository $config, mixed $connection): GuardDecision
     {
         $connectionName = is_string($connection) && $connection !== ''
             ? $connection
@@ -351,8 +357,16 @@ final class LintCommand extends Command
             // yes, and a non-interactive run has nobody to ask.
             $force || ! $interactive
                 ? false
-                : $this->confirm($this->translate('sqlens::messages.shadow.confirm', ['connection' => $connectionName])),
+                : $this->confirm($this->shadowQuestion($connectionName, ShadowProvisioningConnection::for($config, $connectionName))),
         );
+    }
+
+    /** The question for a shadow run on $connectionName whose throwaway database is built on $provisioning. */
+    private function shadowQuestion(string $connectionName, string $provisioning): string
+    {
+        return $provisioning === $connectionName
+            ? $this->translate('sqlens::messages.shadow.confirm', ['connection' => $connectionName])
+            : $this->translate('sqlens::messages.shadow.confirm_elsewhere', ['connection' => $connectionName, 'provisioning' => $provisioning]);
     }
 
     /**

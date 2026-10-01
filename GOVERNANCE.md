@@ -21,14 +21,20 @@ anyone remembers the id.
 
 ## How a new rule reaches you
 
-New rules arrive as **`preview`** and are opt-in. They move into a level's defaults
-only in a **major** release.
+From 1.0, new rules arrive as **`preview`** and are opt-in. They move into a level's
+defaults only in a **major** release.
 
 That constraint is not caution for its own sake. A linter that adds a default rule
 in a minor breaks builds on `composer update` — for a change nobody asked for, in a
 release people install precisely because it should be safe. The alternative is
 worse than a slow rollout: teams pin the version, stop updating, and stop getting
 security fixes.
+
+**Before 1.0, a new rule ships `stable`, in a minor release.** A 0.x minor is where
+this package makes its breaking changes, and a `^0.N` constraint does not cross one,
+so `composer update` does not install a new default rule on its own: it reaches a
+pipeline when somebody raises the constraint. At 1.0 the default for new rules
+becomes `preview`, as described above.
 
 **One exception, deliberately.** A **security severity may be raised in a minor**,
 with a callout in the changelog. If a finding turns out to be worse than first
@@ -37,8 +43,10 @@ of the user.
 
 That exception is enforced, not trusted: a release gate diffs the rule contract
 against the last released one and refuses a raised severity whose changelog callout
-is missing — along with any lowered severity, any deleted rule id, and any change it
-cannot classify. See "Rule governance" in [CONTRIBUTING.md](CONTRIBUTING.md).
+is missing — along with any lowered severity, any deleted rule id, a rule promoted
+into the defaults or moved to a lower level, a rule that stops running without being
+deprecated, and any change it cannot classify. See "Rule governance" in
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Stability tiers
 

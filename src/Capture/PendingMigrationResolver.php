@@ -121,7 +121,12 @@ final readonly class PendingMigrationResolver implements PendingResolver
     {
         // The migration repository must exist, or "which ran" is unknowable — a fresh
         // project is distinguished from a broken connection this way.
-        if (! $target->getSchemaBuilder()->hasTable($this->migrationsTable)) {
+        //
+        // Asked inside a transaction, which is how a schema question reaches the WRITE side: the
+        // schema builder has no useWritePdo(), and a connection in a transaction reads on the
+        // session it writes on. On a read/write split the question otherwise goes to a replica,
+        // whose session the guard never bounded, and a lagging one answers NoMigrationTable.
+        if (! $target->transaction(fn (): bool => $target->getSchemaBuilder()->hasTable($this->migrationsTable))) {
             return PendingResolution::skipped(PendingSkipReason::NoMigrationTable);
         }
 
@@ -221,7 +226,7 @@ final readonly class PendingMigrationResolver implements PendingResolver
         // disagree with the capture layer under a Composer `path` repository — the raw path still
         // carries `/vendor/` where the resolved one does not — and the file would then be dropped
         // from the enumeration while the classifier bound it as a migration of yours.
-        return array_filter($files, static fn (string $path): bool => ! VendorPath::contains($path));
+        return array_filter($files, fn (string $path): bool => ! VendorPath::contains($path, $this->projectRoot));
     }
 
     /** The repo-relative path — deterministic across machines, and what a finding shows. */

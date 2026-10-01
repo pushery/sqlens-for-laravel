@@ -74,8 +74,13 @@ abstract class AbstractGrantOptionRule extends AbstractSchemaObjectSecurityRule 
     /** Whether this rule judges the grants that also hand on STRUCTURAL power. */
     abstract protected function judgesStructuralGrants(): bool;
 
-    /** The finding, once this rule has established the grant is one of its own. */
-    abstract protected function message(string $grantee, string $target): string;
+    /**
+     * The finding, once this rule has established the grant is one of its own.
+     *
+     * `$revoke` is the statement that takes the option away, already in its span, or its shape with
+     * `…` where a name could not be written.
+     */
+    abstract protected function message(string $grantee, string $target, string $revoke): string;
 
     /** @return list<RuleVerdict> */
     final public function judgeSchemaObject(SchemaObject $object): array
@@ -111,6 +116,32 @@ abstract class AbstractGrantOptionRule extends AbstractSchemaObjectSecurityRule 
         return [RuleVerdict::flag($this->message(
             $object->getString('grantee') ?? 'the grantee',
             $object->getString('target') ?? $object->qualifiedName,
+            $this->revoke($object),
         ))];
+    }
+
+    /**
+     * The statement that takes the option away and leaves the access, in the engine's own grammar.
+     *
+     * MySQL revokes the option as a privilege of its own, `REVOKE GRANT OPTION ON … FROM …`;
+     * PostgreSQL revokes it per privilege, `REVOKE GRANT OPTION FOR … ON … FROM …`, and a statement
+     * written in one grammar is a syntax error in the other. The names come quoted from the reader.
+     */
+    private function revoke(SchemaObject $object): string
+    {
+        $target = $object->getString('statement_target') ?? '';
+        $grantee = $object->getString('statement_grantee') ?? '';
+
+        if ($object->context()->driver === 'mysql') {
+            return StatementSpan::naming('REVOKE GRANT OPTION ON %s FROM %s;', $target, $grantee);
+        }
+
+        $privileges = strtoupper(str_replace(',', ', ', $object->getString('privileges') ?? ''));
+
+        return StatementSpan::naming(
+            sprintf('REVOKE GRANT OPTION FOR %s ON %%s FROM %%s;', $privileges === '' ? '…' : $privileges),
+            $target,
+            $grantee,
+        );
     }
 }

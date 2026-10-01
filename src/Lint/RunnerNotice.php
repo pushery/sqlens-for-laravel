@@ -191,6 +191,14 @@ enum RunnerNotice: string implements RunNotice
      */
     case SuppressionToolRuleUndescribed = 'LINT.SUPPRESSION_TOOL_RULE_UNDESCRIBED';
 
+    /**
+     * What a shadow run's orphan sweep did on the server: the throwaway databases an earlier,
+     * killed run left behind that this run removed, those it found and could not remove, or that it
+     * could not list them. A pass when it removed everything it found, undetermined otherwise, and
+     * never a failure: the leftovers are not a verdict about the migrations this run judged.
+     */
+    case ShadowOrphans = 'LINT.SHADOW.ORPHANS';
+
     /** The message prefix every runner notice reports under — the runner, not a rule. */
     public const string MESSAGE_PREFIX = 'sqlens.lint';
 

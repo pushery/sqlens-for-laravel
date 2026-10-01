@@ -25,9 +25,11 @@ use Throwable;
  *     it.
  *
  * Dropping is a database-mutating action, so it happens ONLY behind the production
- * guard: a blocked decision still REPORTS the orphans (a leak the user should see)
- * but removes nothing. "No silent green" applies to cleanup too — a found-but-kept
- * orphan is visible in the report, never a quiet no-op.
+ * guard: handed a blocked decision it lists and reports, and removes nothing. The shadow
+ * captor never hands it one, though, because a run the guard stopped does not reach
+ * the server at all, not even to list. "No silent green" applies to cleanup too — a
+ * found-but-kept orphan is visible in the run's report as `LINT.SHADOW.ORPHANS`, never
+ * a quiet no-op.
  *
  * The same rule covers a drop that FAILS. The name stays in `orphansFound` and never
  * reaches `dropped`, so the difference between the two arrays is the set that could
