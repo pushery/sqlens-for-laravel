@@ -50,7 +50,13 @@ final readonly class ServerVersionSkewCheck implements PreflightCheck
 {
     public const string ID = 'DEPLOY.CONTEXT.VERSION_SKEW';
 
-    /** @param list<string> $versionAwareRuleIds rules whose verdict depends on the server major */
+    /**
+     * The pin a run compares comes with its context ({@see PreflightContext::$assumedServerVersion}),
+     * as the run resolved it with its profile. A pin given here stands in where a context carries
+     * none, which is how the check is built on its own.
+     *
+     * @param  list<string>  $versionAwareRuleIds  rules whose verdict depends on the server major
+     */
     public function __construct(
         private ?string $pin = null,
         private array $versionAwareRuleIds = [],
@@ -83,14 +89,16 @@ final readonly class ServerVersionSkewCheck implements PreflightCheck
             );
         }
 
-        if ($this->pin === null || trim($this->pin) === '') {
+        $pin = $context->assumedServerVersion ?? $this->pin;
+
+        if ($pin === null || trim($pin) === '') {
             // A note, not a failure. Running without a pin is a legitimate choice — it just means
             // CI's answers moved with whatever server it met, and the person reading a report has
             // no way to know that unless somebody says so.
             return CheckResult::pass(self::ID, [$this->noPinFinding($context, $real)]);
         }
 
-        $pinned = ServerVersion::parsePin($this->pin, $context->driver);
+        $pinned = ServerVersion::parsePin($pin, $context->driver);
 
         if (! $pinned instanceof ServerVersion) {
             return CheckResult::undetermined(
@@ -100,7 +108,7 @@ final readonly class ServerVersionSkewCheck implements PreflightCheck
                     'the configured `assume_server_version` pin "%s" is not a version this build '
                     .'understands, so nothing was compared. A pin that cannot be read is worse than '
                     .'none: it looks like determinism and provides none.',
-                    $this->pin,
+                    $pin,
                 ),
             );
         }

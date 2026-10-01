@@ -23,12 +23,18 @@ final readonly class ReplicationState
         /** The replica, as the primary names it. */
         public string $replica,
         /**
-         * Its connection state in the server's own vocabulary — `streaming`, `catchup`, and so on.
+         * Its connection state in the server's own vocabulary — `streaming`, `catchup`, and so on —
+         * or null when the server listed the replica and withheld its state from the reading role.
          *
          * The field that keeps a zero lag honest: a disconnected replica is not caught up, it is
          * gone, and both can report the same number.
+         *
+         * Null is its own answer, not an empty state. PostgreSQL shows a role without
+         * `pg_read_all_stats` every replica's name and nulls every column that says what the replica
+         * is doing — measured on 18.4 against a replica that was streaming. Read as a state, that
+         * null would say "not streaming" about a healthy replica.
          */
-        public string $state,
+        public ?string $state,
         /** How far behind in bytes, or null when the server does not report it. */
         public ?int $lagBytes = null,
         /** How far behind in milliseconds, or null when the server does not report it. */
@@ -46,13 +52,24 @@ final readonly class ReplicationState
         return $this->state === 'streaming';
     }
 
+    /**
+     * Whether the server withheld this replica's state from the reading role.
+     *
+     * A question about the READING rather than about the replica: the replica may be perfectly
+     * healthy, and nothing here says otherwise.
+     */
+    public function isWithheld(): bool
+    {
+        return $this->state === null;
+    }
+
     /** The stable sort key. */
     public function sortKey(): string
     {
         return $this->replica;
     }
 
-    /** @return array{replica: string, state: string, lag_bytes: int|null, lag_ms: int|null} */
+    /** @return array{replica: string, state: string|null, lag_bytes: int|null, lag_ms: int|null} */
     public function toArray(): array
     {
         return [

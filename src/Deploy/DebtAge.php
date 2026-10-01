@@ -7,7 +7,6 @@ namespace Pushery\SQLens\Deploy;
 use DateTimeImmutable;
 use DateTimeZone;
 use Pushery\SQLens\Findings\UndeterminedReason;
-use Throwable;
 
 /**
  * How long a debt has been outstanding, in UTC calendar days.
@@ -55,19 +54,14 @@ final readonly class DebtAge
     {
         $utc = new DateTimeZone('UTC');
 
-        try {
-            // `setTimezone()` before `setTime()`, and the order is the whole point: the constructor's
-            // timezone argument is a FALLBACK that PHP drops the moment the string carries an offset
-            // of its own, so without this the midnight below would be midnight THERE rather than on
-            // the UTC calendar day. The reference gets the same treatment on the other end.
-            $from = new DateTimeImmutable($firstSeen, $utc)->setTimezone($utc)->setTime(0, 0);
-        } catch (Throwable $error) {
+        $from = self::firstSeenDay($firstSeen, $utc);
+
+        if (! $from instanceof DateTimeImmutable) {
             return new self(null, UndeterminedReason::DebtAgeUnknown, sprintf(
-                'the debt records `first_seen` as "%s", which is not a date this build can read '
-                .'(%s), so how long it has been outstanding is unknown. It is NOT treated as new: '
-                .'an unreadable date on an old debt would report it as recorded today.',
+                'the debt records `first_seen` as "%s", which is neither a calendar day (`YYYY-MM-DD`) '
+                .'nor a timestamp with its offset, so how long it has been outstanding is unknown. It is '
+                .'NOT treated as new: an unreadable date on an old debt would report it as recorded today.',
                 $firstSeen,
-                $error->getMessage(),
             ));
         }
 
@@ -91,6 +85,17 @@ final readonly class DebtAge
         return new self($days);
     }
 
+    /**
+     * The UTC calendar day a `first_seen` names, or null when it names none.
+     *
+     * The same reading {@see self::between()} makes, for a caller that has to compare dates before
+     * it measures any age, such as a reference date taken from the ledger itself.
+     */
+    public static function calendarDay(string $firstSeen): ?DateTimeImmutable
+    {
+        return self::firstSeenDay($firstSeen, new DateTimeZone('UTC'));
+    }
+
     public function isKnown(): bool
     {
         return $this->days !== null;
@@ -106,5 +111,33 @@ final readonly class DebtAge
     public function days(): ?int
     {
         return $this->days;
+    }
+
+    /**
+     * The UTC calendar day a `first_seen` names, or null when it names none this build reads the way
+     * the person who wrote it meant.
+     *
+     * Two forms: the calendar day the ledger's own writers produce, and a timestamp with its offset,
+     * which a person editing the file by hand writes. Nothing relative and nothing PHP would roll
+     * over. PHP's own parser reads an empty string and `today` as the present moment, `yesterday` as
+     * a day ago and `2025-02-30` as the 2nd of March, and each of those made an old debt look new or
+     * moved it by days without a word.
+     */
+    private static function firstSeenDay(string $firstSeen, DateTimeZone $utc): ?DateTimeImmutable
+    {
+        foreach (['!Y-m-d', '!Y-m-d\\TH:i:sP', '!Y-m-d\\TH:i:s.uP'] as $format) {
+            $parsed = DateTimeImmutable::createFromFormat($format, $firstSeen, $utc);
+
+            // A rolled-over date parses and leaves a warning behind; only a clean parse is a date.
+            if ($parsed !== false && DateTimeImmutable::getLastErrors() === false) {
+                // `setTimezone()` before `setTime()`, and the order is the whole point: a timestamp
+                // keeps the offset it was written with, so without this the midnight below would be
+                // midnight THERE rather than on the UTC calendar day. The reference gets the same
+                // treatment on the other end.
+                return $parsed->setTimezone($utc)->setTime(0, 0);
+            }
+        }
+
+        return null;
     }
 }

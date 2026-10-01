@@ -68,17 +68,17 @@ final class CreateRoleAttributeRule extends AbstractRoleAttributeRule
         return $this->holds($object, 'reachable_attributes') && str_contains($object->getString('reachable_attributes') ?? '', RoleAttribute::Superuser->value);
     }
 
-    protected function heldMessage(string $role): string
+    protected function heldMessage(string $role, string $statementName): string
     {
         return sprintf(
             '%s holds CREATEROLE, so it can create login accounts and administer the ones it creates. '
             .'Since PostgreSQL 16 it can no longer take privileges it does not already hold — altering a '
             .'role it did not create is refused — so this is not the blanket escalation older write-ups '
             .'describe. What it still is: a way to keep access outside your deployment process, with a '
-            .'password nobody rotates. ALTER ROLE %s NOCREATEROLE unless creating accounts is genuinely '
-            .'this role\'s job.',
+            .'password nobody rotates. Take it away with %s unless creating accounts is genuinely this '
+            .'role\'s job.',
             $role,
-            $role,
+            StatementSpan::naming('ALTER ROLE %s NOCREATEROLE;', $statementName),
         );
     }
 

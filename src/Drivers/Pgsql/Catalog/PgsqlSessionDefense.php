@@ -93,6 +93,16 @@ final readonly class PgsqlSessionDefense implements SessionDefense
     {
         return [
             'SET TRANSACTION READ ONLY',
+            // The application's path, recorded while it is still the session's: a bare name a
+            // migration writes resolves there, and the readers ask about it after the pin below.
+            ApplicationSearchPath::recordStatement(),
+            // Before the first catalog question, and only the catalog. Qualifying each function does
+            // not reach operators, and a function or operator in a schema on the role's own path
+            // with a closer-matching signature outranks the catalog's: `name || name` or
+            // `name ~~ name` has no exact catalog match, so a user's wins. With nothing but
+            // `pg_catalog` searched, no name this reading uses can resolve outside it. `pg_temp`
+            // last, because unlisted it is searched first.
+            'SET LOCAL search_path = pg_catalog, pg_temp',
             sprintf("SET LOCAL statement_timeout = '%dms'", $budget->statementTimeoutMs),
             sprintf("SET LOCAL lock_timeout = '%dms'", $budget->lockTimeoutMs),
             sprintf("SET LOCAL idle_in_transaction_session_timeout = '%dms'", $budget->idleInTransactionTimeoutMs),
@@ -118,14 +128,43 @@ final readonly class PgsqlSessionDefense implements SessionDefense
     }
 
     /**
-     * Whether the account simply may not write.
+     * Whether a privilege refused the probe.
      *
      * PostgreSQL answers a denied write with 42501, insufficient_privilege — distinct from the
-     * 25006 a read-only transaction gives, and every bit as conclusive about what cannot happen.
+     * 25006 a read-only transaction gives. It asks the transaction's access mode before the grant,
+     * so a probe refused this way already says the transaction was not read-only: the seal did not
+     * take, and the flag read after it says so.
      */
     public function isPrivilegeRefusal(string $sqlState): bool
     {
         return $sqlState === '42501';
+    }
+
+    /** The current transaction's own setting, qualified because the reading pins `search_path`. */
+    public function readOnlyFlagQuery(): string
+    {
+        return "SELECT pg_catalog.current_setting('transaction_read_only')";
+    }
+
+    public function flagMeansReadOnly(string $value): bool
+    {
+        return $value === 'on';
+    }
+
+    /**
+     * None. Whether a role can write anywhere is not one listing away on PostgreSQL: a
+     * `SECURITY DEFINER` function writes with its owner's rights, and a role inherits what its
+     * memberships hold. So a privilege refusal here is never read as a seal by grant.
+     */
+    public function grantListingQuery(): ?string
+    {
+        return null;
+    }
+
+    /** No listing is read, so none proves anything. */
+    public function grantsForbidWriting(array $lines): bool
+    {
+        return false;
     }
 
     public function isTimeout(string $sqlState, ?int $driverCode): bool

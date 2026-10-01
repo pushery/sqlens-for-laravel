@@ -9,7 +9,8 @@ use Pushery\SQLens\Findings\UndeterminedReason;
 /**
  * What the live catalog says about one recorded debt.
  *
- * Three answers, and the third is the whole reason this type exists.
+ * Three answers, and the third is the whole reason this type exists. Two more say the question
+ * could not be answered at all, and why, so that an open question is never dressed as an absence.
  * {@see DebtReconciliation} compares a ledger against what a RUN FOUND, which can only ever produce
  * two: the debt was reported again, or it was not. That is enough for the repo side, where "not
  * reported" means "the migration no longer leaves it".
@@ -37,15 +38,32 @@ enum DebtStanding: string
      */
     case ObjectNotFound = 'object_not_found';
 
+    /**
+     * No catalog question settles this debt, so none was put.
+     *
+     * An engine this build has no debt reader for, a kind it has no question for, and an expand
+     * whose added column is still there, which says nothing about the column it replaces. NOT an
+     * absence: reporting one would send somebody looking for a table that exists.
+     */
+    case Unaskable = 'unaskable';
+
+    /** The question was put and the catalog could not be read, so the standing is unknown. */
+    case Unreadable = 'unreadable';
+
     /** Whether this standing leaves the question open rather than answering it. */
     public function isUndetermined(): bool
     {
-        return $this === self::ObjectNotFound;
+        return $this->reason() instanceof UndeterminedReason;
     }
 
     /** The named reason an undetermined standing carries, or null when the answer is definite. */
     public function reason(): ?UndeterminedReason
     {
-        return $this === self::ObjectNotFound ? UndeterminedReason::DebtObjectNotFound : null;
+        return match ($this) {
+            self::ObjectNotFound => UndeterminedReason::DebtObjectNotFound,
+            self::Unaskable => UndeterminedReason::DebtStandingNotInCatalog,
+            self::Unreadable => UndeterminedReason::CatalogReadFailed,
+            self::StillOpen, self::Resolved => null,
+        };
     }
 }

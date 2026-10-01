@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Rules\Security;
 
 use Override;
+use Pushery\SQLens\Catalog\Objects\RoleAttribute;
+use Pushery\SQLens\Catalog\Objects\RoleObject;
 use Pushery\SQLens\Severity\Severity;
 
 /**
@@ -32,8 +34,22 @@ final class WildcardHostPrivilegedRule extends AbstractWildcardHostRule
         return true;
     }
 
-    protected function message(string $account): string
+    protected function message(string $account, array $attributes): string
     {
+        // A replication account is privileged for what it can READ, and it holds none of what the
+        // sentence below tells a reader to take away.
+        if ($this->holdsOnlyReplication($attributes)) {
+            return sprintf(
+                '%s may connect from ANY host AND holds REPLICATION SLAVE, which lets it stream the binary '
+                .'log: every change the server records there. Either half alone is ordinary; together, one '
+                .'leaked or guessed credential is a copy of every write, taken from anywhere. A replica '
+                .'connects from addresses somebody can name, so narrow the host to them, e.g. RENAME USER %s '
+                .'TO \'…\'@\'10.0.0.0/24\'.',
+                $account,
+                $account,
+            );
+        }
+
         return sprintf(
             '%s may connect from ANY host AND holds far-reaching privileges. Either half alone is ordinary; '
             .'together they leave nothing between the whole network and an account with nothing above it to '
@@ -45,6 +61,21 @@ final class WildcardHostPrivilegedRule extends AbstractWildcardHostRule
             .'run time.',
             $account,
         );
+    }
+
+    /**
+     * Whether replication is the only far-reaching attribute the account holds.
+     *
+     * @param  list<string>  $attributes
+     */
+    private function holdsOnlyReplication(array $attributes): bool
+    {
+        $held = array_values(array_filter(
+            RoleObject::PRIVILEGED,
+            static fn (RoleAttribute $attribute): bool => in_array($attribute->value, $attributes, true),
+        ));
+
+        return $held === [RoleAttribute::Replication];
     }
 
     /**

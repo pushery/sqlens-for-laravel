@@ -144,7 +144,11 @@ final readonly class SessionGuard
         // And this file is core. A schema name here is engine vocabulary in a layer that is meant
         // to have none; the function name alone is already an exemption the purity register has to
         // carry a reason for. Adding a second term to buy nothing is the wrong trade.
-        $row = $connection->selectOne('select pg_backend_pid() as pid');
+        //
+        // Asked on the WRITE side, where apply() sends its SETs. On a connection with a read/write
+        // split a plain select goes to the replica, and a stable replica says nothing about a
+        // transaction pooler in front of the primary.
+        $row = $connection->selectOne('select pg_backend_pid() as pid', [], false);
 
         return is_object($row) ? (int) ($row->pid ?? 0) : 0;
     }
@@ -195,6 +199,7 @@ final readonly class SessionGuard
             'mysql' => [
                 'max_execution_time' => $this->currentSetting($connection, 'SELECT @@SESSION.max_execution_time AS v'),
                 'innodb_lock_wait_timeout' => $this->currentSetting($connection, 'SELECT @@SESSION.innodb_lock_wait_timeout AS v'),
+                'lock_wait_timeout' => $this->currentSetting($connection, 'SELECT @@SESSION.lock_wait_timeout AS v'),
             ],
             default => [],
         };
@@ -274,8 +279,10 @@ final readonly class SessionGuard
     #[RawSql(reason: 'reads one server setting back; a session variable is not a column, so no builder can name it')]
     private function currentSetting(Connection $connection, string $query): string
     {
+        // The write side, for the reason backendPid() gives: restore() puts this value back there,
+        // so a value read from a replica would set the primary to the replica's bound.
         try {
-            $row = $connection->selectOne($query);
+            $row = $connection->selectOne($query, [], false);
         } catch (Throwable) {
             return '';
         }
@@ -294,6 +301,11 @@ final readonly class SessionGuard
      * second rather than down to zero, because zero there means "fail
      * immediately", a different behavior than the short wait that was asked for.
      *
+     * MySQL splits the lock budget in two, and both halves get it: `innodb_lock_wait_timeout`
+     * bounds a wait on a ROW lock, `lock_wait_timeout` a wait on a METADATA lock, the one a
+     * schema change queues behind. What MySQL cannot bound is the RUN of a schema change:
+     * `max_execution_time` applies to read-only `SELECT` statements and to nothing else.
+     *
      * @return list<string>
      */
     public function statementsFor(string $driver): array
@@ -306,6 +318,10 @@ final readonly class SessionGuard
             'mysql' => [
                 sprintf('SET SESSION max_execution_time = %d', $this->budget['statement_timeout']),
                 sprintf('SET SESSION innodb_lock_wait_timeout = %d', $this->lockSeconds()),
+                // The METADATA lock, which is the one DDL queues behind and the one
+                // `innodb_lock_wait_timeout` does not reach: its default is a year. Same budget,
+                // same seconds.
+                sprintf('SET SESSION lock_wait_timeout = %d', $this->lockSeconds()),
             ],
             default => [],
         };

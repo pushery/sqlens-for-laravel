@@ -105,13 +105,15 @@ final class RlsPolicyAlwaysTrueRule extends AbstractSchemaObjectSecurityRule imp
         // located at the OBJECT, so a second verdict about the same table is dropped by the dedupe
         // without a word — and the policy nobody was told about goes on admitting everything.
         return [RuleVerdict::flag(sprintf(
-            'row-level security is enabled on %s, and the policy %s admits every row: its filter is a '
-            .'constant that is always true, so the table is exactly as exposed as one with no policy '
-            .'at all. Permissive policies are OR-ed, so this holds even if another policy on the same '
-            .'table filters correctly — that one contributes nothing while this one is present. '
-            .'Replace the filter with the tenant condition, for example '
-            .'USING (tenant_id = current_setting(\'app.tenant\')::uuid), or drop the policy if it was '
-            .'a placeholder.',
+            'row-level security is enabled on %s, and the %s admits every row: its filter is a constant '
+            .'that is always true, and no restrictive policy narrows it for the roles and commands it '
+            .'applies to, so the table is as exposed as with row-level security off. Permissive '
+            .'policies are OR-ed, so this holds even if another permissive policy on the same table '
+            .'filters correctly — that one contributes nothing while this one is present. Replace the '
+            .'filter with the tenant condition, for example '
+            .'USING (tenant_id = current_setting(\'app.tenant\')::uuid), add a RESTRICTIVE policy '
+            .'with that condition for the same commands and roles, or drop the policy if it was a '
+            .'placeholder.',
             $object->qualifiedName,
             $this->named($offending),
         ))];

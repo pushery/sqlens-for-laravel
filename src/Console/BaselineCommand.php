@@ -7,13 +7,15 @@ namespace Pushery\SQLens\Console;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Translation\Translator;
-use Pushery\SQLens\Canonical\Fingerprint;
 use Pushery\SQLens\Drivers\DriverResolutionFailure;
 use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Drivers\UnsupportedDriverMessage;
 use Pushery\SQLens\Exceptions\UnreadableBaseline;
+use Pushery\SQLens\Findings\Finding;
+use Pushery\SQLens\Findings\LocationKind;
 use Pushery\SQLens\Findings\Outcome;
 use Pushery\SQLens\Findings\Result;
+use Pushery\SQLens\Lint\LintOutcome;
 use Pushery\SQLens\Lint\LintRunner;
 use Pushery\SQLens\Reporting\Baseline\BaselineEntry;
 use Pushery\SQLens\Reporting\Baseline\BaselineFile;
@@ -45,7 +47,9 @@ use Symfony\Component\Console\Output\OutputInterface;
  * until a fresh write drops it); a bare run writes the current state. `--dry-run`
  * reports what would be written without touching the file. An unreadable existing
  * baseline — a hand-broken JSON, an unknown schema version — is a named
- * misconfiguration, never a silent overwrite.
+ * misconfiguration, never a silent overwrite. Nor does a run that judged no
+ * migration overwrite anything: it has no findings to freeze, so the file is left
+ * as it is and the run's reason is named.
  */
 final class BaselineCommand extends Command
 {
@@ -119,6 +123,23 @@ final class BaselineCommand extends Command
             return $outcome->exitCode->value;
         }
 
+        // Every other run that judged no migration has nothing to baseline either, and freezing it
+        // is not harmless: a write REPLACES the file, so the empty list of a run that read nothing
+        // deletes every finding the project accepted, and the next lint reports them all as new
+        // without a word about why. So nothing is written, in any mode, and the run's own words
+        // say why.
+        $unjudged = $this->unjudged($outcome);
+
+        if ($unjudged instanceof ExitCode) {
+            $this->stderr()->writeln($this->translate('sqlens::messages.commands.baseline_unjudged', ['path' => $path]));
+
+            foreach ($this->reasons($outcome) as $reason) {
+                $this->stderr()->writeln($reason);
+            }
+
+            return $unjudged->value;
+        }
+
         $entries = $this->entriesFrom($outcome->result);
 
         // --update reads the existing file and merges; an unreadable one is named,
@@ -133,6 +154,13 @@ final class BaselineCommand extends Command
             }
 
             $entries = $this->merge($existing->entries, $entries);
+        } elseif (is_file($path)) {
+            // A plain write replaces what this run judged and nothing else. The audit reads this file
+            // too, and its entries, about catalog objects, are ones this command cannot derive. And
+            // the run reads the pending migrations, so on a database where some have already run it
+            // judged only the rest: replacing the file whole deleted every finding the project had
+            // accepted about the others, and the next lint on a fresh database reported them as new.
+            $entries = [...$entries, ...$this->entriesItCannotJudge($path, $serializer, $outcome->unreadMigrations)];
         }
 
         $baseline = BaselineFile::of($entries);
@@ -153,6 +181,96 @@ final class BaselineCommand extends Command
         $this->line($this->translate('sqlens::messages.commands.baseline_written', ['count' => count($baseline->entries), 'path' => $path]));
 
         return ExitCode::Clean->value;
+    }
+
+    /**
+     * The entries of an existing file that this run did not judge and so must not drop: the ones
+     * about catalog objects, which only the audit produces, and the ones about migrations the
+     * project still has and this run did not read. Each keeping is said out loud.
+     *
+     * An entry about a migration the project no longer has is not kept: no run will read that
+     * migration again, and a plain write is how the file sheds it.
+     *
+     * A file that cannot be read keeps nothing, and says so: a plain write replaces it, as it always
+     * did, and entries somebody added by hand for the audit have to be added again.
+     *
+     * @param  list<string>  $unread  the migrations the project has that this run did not read, by name
+     * @return list<BaselineEntry>
+     */
+    private function entriesItCannotJudge(string $path, BaselineSerializer $serializer, array $unread): array
+    {
+        try {
+            $existing = $serializer->deserialize((string) file_get_contents($path), $path);
+        } catch (UnreadableBaseline $failure) {
+            $this->stderr()->writeln($this->translate('sqlens::messages.commands.baseline_replaced_unreadable', ['path' => $path, 'reason' => $failure->getMessage()]));
+
+            return [];
+        }
+
+        $catalog = array_values(array_filter(
+            $existing->entries,
+            static fn (BaselineEntry $entry): bool => $entry->kind === LocationKind::Catalog,
+        ));
+        $unreadEntries = array_values(array_filter(
+            $existing->entries,
+            static fn (BaselineEntry $entry): bool => $entry->kind === LocationKind::Migration && in_array($entry->subject, $unread, true),
+        ));
+
+        if ($catalog !== []) {
+            $this->stderr()->writeln($this->translate('sqlens::messages.commands.baseline_kept_catalog', ['count' => count($catalog), 'path' => $path]));
+        }
+
+        if ($unreadEntries !== []) {
+            $this->stderr()->writeln($this->translate('sqlens::messages.commands.baseline_kept_unread', ['count' => count($unreadEntries), 'path' => $path]));
+        }
+
+        return [...$catalog, ...$unreadEntries];
+    }
+
+    /**
+     * The exit code for a run this command must not freeze, or null for one it may.
+     *
+     * Two shapes, and neither is recognized by its cause. A misconfiguration exit is the run
+     * refusing, as `sqlens:lint` refuses it: a rule id in the ignore list that no rule carries, a
+     * tool strict mode needs. A run whose subject count is unstated or zero judged no migration: it
+     * stopped before the capture, at a server it could not reach or a migration table that is not
+     * there, or it found nothing pending, which is the state of every database after `migrate`. The
+     * count is the runner's own denominator, so a cause nobody has named yet is covered as well.
+     * Such a run's answer is undetermined, and so is the baseline it would write, which is the exit
+     * code it gets.
+     */
+    private function unjudged(LintOutcome $outcome): ?ExitCode
+    {
+        if ($outcome->exitCode === ExitCode::Misconfiguration) {
+            return ExitCode::Misconfiguration;
+        }
+
+        return in_array($outcome->context->subjectCount, [null, 0], true)
+            ? ExitCode::UndeterminedInStrictMode
+            : null;
+    }
+
+    /**
+     * Why a run judged nothing, in its own words, one indented line each: every finding it left in
+     * place of a result, or the meaning of its exit code where it left none.
+     *
+     * Every finding rather than a chosen few, because a run that judged no migration holds no
+     * finding about one. What it holds are its notes about itself — the skip, the refusal, the
+     * empty pending set — and those are the reason.
+     *
+     * @return list<string>
+     */
+    private function reasons(LintOutcome $outcome): array
+    {
+        $reasons = array_map(
+            static fn (Finding $finding): string => $finding->ruleId.': '.$finding->message,
+            $outcome->result->findings,
+        );
+
+        return array_map(
+            static fn (string $reason): string => '  '.$reason,
+            $reasons === [] ? [$outcome->exitCode->description()] : $reasons,
+        );
     }
 
     /**
@@ -217,7 +335,7 @@ final class BaselineCommand extends Command
             }
 
             $protos[] = [
-                'fingerprint' => FindingFingerprint::of($finding->ruleId, $finding->location, Fingerprint::fromValue('')),
+                'fingerprint' => FindingFingerprint::ofFinding($finding),
                 'ruleId' => $finding->ruleId,
                 'subject' => BaselineSubject::label($finding->location),
                 // The axis travels into the file. A baseline is a list of things somebody looked at
@@ -227,6 +345,9 @@ final class BaselineCommand extends Command
                 // a second look — and "everything in here was fine once" is how a baseline rots.
                 'category' => $finding->category,
                 'severity' => $finding->severity,
+                // Which suite's entry this is. The audit reads this file too, and a lint entry
+                // judged there looked stale — gone, delete the line — on every audit run.
+                'kind' => $finding->location->kind,
             ];
         }
 
@@ -238,19 +359,43 @@ final class BaselineCommand extends Command
      * kept, and a new entry is added only when its key is not already recorded, so a
      * repeated run never duplicates a finding already in the baseline.
      *
+     * One existing entry is replaced, and each replacement is named: an entry whose key a current
+     * finding matches but whose rule, category or severity says something else. Such an entry
+     * suppresses nothing on a run, so keeping it would leave the finding visible for good while
+     * the file still claimed to accept it. Rewriting it without a word would turn an acceptance
+     * that misdescribed its finding into a real one that nobody read.
+     *
      * @param  list<BaselineEntry>  $existing
      * @param  list<BaselineEntry>  $fresh
      * @return list<BaselineEntry>
      */
     private function merge(array $existing, array $fresh): array
     {
-        $seen = [];
+        $freshByKey = [];
 
-        foreach ($existing as $entry) {
-            $seen[$entry->key()] = true;
+        foreach ($fresh as $entry) {
+            $freshByKey[$entry->key()] = $entry;
         }
 
-        $merged = $existing;
+        $seen = [];
+        $merged = [];
+
+        foreach ($existing as $entry) {
+            $replacement = $freshByKey[$entry->key()] ?? null;
+
+            if ($replacement instanceof BaselineEntry && $replacement->legible() !== $entry->legible()) {
+                $this->stderr()->writeln($this->translate('sqlens::messages.commands.baseline_rewritten', [
+                    'subject' => $entry->subject,
+                    'recorded' => implode(', ', $entry->legible()),
+                    'actual' => implode(', ', $replacement->legible()),
+                ]));
+
+                $entry = $replacement;
+            }
+
+            $merged[] = $entry;
+            $seen[$entry->key()] = true;
+        }
 
         foreach ($fresh as $entry) {
             if (! isset($seen[$entry->key()])) {

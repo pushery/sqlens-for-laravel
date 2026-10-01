@@ -26,9 +26,10 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * ## Why the fix is one clause and not a redesign
  *
- * A `SET search_path` clause on the routine — an explicit list, the catalog schema, or the empty string
- * — makes it resolve its own names. It is one line on the function, it changes nothing about what the function does, and
- * it closes the whole path.
+ * A `SET search_path` clause on the routine that lists the schemas it needs and ends with `pg_temp`
+ * makes it resolve its own names. It is one line on the function and changes nothing about what the
+ * function does. The `pg_temp` at the end is not decoration: a path that leaves it out still searches
+ * the caller's temporary schema first for tables, which SEC.PRIV.ROUTINE_DEFINER_UNSAFE_PATH reports.
  */
 final class RoutineDefinerMutablePathRule extends AbstractRoutineRule
 {
@@ -57,9 +58,10 @@ final class RoutineDefinerMutablePathRule extends AbstractRoutineRule
             '%s runs with the privileges of %s (SECURITY DEFINER) and does not pin its own search_path, so '
             .'the unqualified names inside it resolve through the CALLER\'s. Anyone who can create a schema '
             .'and holds EXECUTE on this routine can put their own function ahead of the one it means to '
-            .'call — and it will be called as %s. Pin the routine\'s own search path with a SET clause — an '
-            .'explicit schema list, the catalog schema, or the empty string to force every name to be '
-            .'qualified; it changes nothing about what the routine does and closes the path entirely.',
+            .'call — and it will be called as %s. Pin the routine\'s own search path with a SET clause that '
+            .'lists the schemas it needs and ends with pg_temp, SET search_path = <schemas>, pg_temp; it '
+            .'changes nothing about what the routine does. Without the pg_temp at the end, the caller\'s '
+            .'temporary tables are still searched first.',
             $object->qualifiedName,
             $object->getString('owner') ?? 'its owner',
             $object->getString('owner') ?? 'its owner',

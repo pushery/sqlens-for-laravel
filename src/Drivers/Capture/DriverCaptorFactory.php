@@ -12,6 +12,7 @@ use Illuminate\Database\Migrations\Migrator;
 use Pushery\SQLens\Canonical\Extensions\CanonicalExtensionRegistry;
 use Pushery\SQLens\Canonical\Stages\StatementSplitter;
 use Pushery\SQLens\Capture\CanonicalizingCaptorDecorator;
+use Pushery\SQLens\Capture\CaptureConnectionFence;
 use Pushery\SQLens\Capture\MigrationLoader;
 use Pushery\SQLens\Capture\MigrationPaths;
 use Pushery\SQLens\Capture\PreScan\PreScanGate;
@@ -20,9 +21,10 @@ use Pushery\SQLens\Capture\Shadow\GuardDecision;
 use Pushery\SQLens\Capture\Shadow\ShadowCaptor;
 use Pushery\SQLens\Capture\Shadow\ShadowDatabaseName;
 use Pushery\SQLens\Capture\Shadow\ShadowMigrationRunner;
-use Pushery\SQLens\Capture\Shadow\ShadowNoiseFilter;
 use Pushery\SQLens\Capture\Shadow\ShadowOrphanSweeper;
+use Pushery\SQLens\Capture\Shadow\ShadowProvisioningConnection;
 use Pushery\SQLens\Capture\Shadow\ShadowSessionDefense;
+use Pushery\SQLens\Capture\Shadow\ShadowSweepRecorder;
 use Pushery\SQLens\Capture\Shadow\ShadowTargetIdentity;
 use Pushery\SQLens\Catalog\CatalogReaderFactory;
 use Pushery\SQLens\Catalog\ReaderConnectionFactory;
@@ -34,6 +36,7 @@ use Pushery\SQLens\Contracts\ShadowProvisioner;
 use Pushery\SQLens\Deploy\Drift\ShadowReferenceBuilder;
 use Pushery\SQLens\Drivers\DriverManager;
 use Pushery\SQLens\Drivers\DriverResolutionFailure;
+use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Drivers\Mysql\Capture\MysqlBindingFormatter;
 use Pushery\SQLens\Drivers\Mysql\Shadow\ConnectionMysqlMaintenanceGateway;
 use Pushery\SQLens\Drivers\Mysql\Shadow\MysqlReplicaProbe;
@@ -153,13 +156,11 @@ final readonly class DriverCaptorFactory
             $this->provisionerFor($key, $connectionName),
             new ShadowMigrationRunner(
                 $this->database,
-                new ShadowNoiseFilter,
-                $this->migrationsTable(),
                 new ShadowSessionDefense($this->shadowTimeout()),
+                $this->app->make(CaptureConnectionFence::class),
             ),
             $connections,
             $readers,
-            $connectionName,
             $this->databaseName($connectionName),
             $key,
             $this->config->get('sqlens.capture.shadow.keep_on_failure') === true,
@@ -178,7 +179,7 @@ final readonly class DriverCaptorFactory
      * provisioner creates nothing until `provision()` runs and the captor never calls
      * it on a blocked decision. Assembling this object touches no database.
      */
-    public function shadow(string $connectionName, GuardDecision $decision, bool $roundtrip = false): Captor|DriverResolutionFailure
+    public function shadow(string $connectionName, GuardDecision $decision, bool $roundtrip = false, ?ShadowSweepRecorder $sweepRecorder = null): Captor|DriverResolutionFailure
     {
         $driver = $this->drivers->resolve($connectionName);
 
@@ -196,9 +197,8 @@ final readonly class DriverCaptorFactory
 
         $runner = new ShadowMigrationRunner(
             $this->database,
-            new ShadowNoiseFilter,
-            $this->migrationsTable(),
             new ShadowSessionDefense($this->shadowTimeout()),
+            $this->app->make(CaptureConnectionFence::class),
         );
 
         $inner = new ShadowCaptor(
@@ -215,6 +215,7 @@ final readonly class DriverCaptorFactory
             $this->shadowConnectionCollides($connectionName),
             $roundtrip,
             $this->sweeperFor($key, $connectionName),
+            $sweepRecorder,
         );
 
         return $this->gateOver(
@@ -244,7 +245,7 @@ final readonly class DriverCaptorFactory
         MigrationLoader $loader,
     ): Captor {
         return CanonicalizingCaptorDecorator::forDriver(
-            new PretendCaptor($this->database->connection($connectionName), $loader),
+            new PretendCaptor($this->database->connection($connectionName), $loader, $this->database, $this->app->make(CaptureConnectionFence::class)),
             $canonicalization,
             $formatter,
             $this->subjectContextFor($key),
@@ -314,6 +315,7 @@ final readonly class DriverCaptorFactory
             ),
             'mysql' => new MysqlShadowProvisioner(
                 new ConnectionMysqlMaintenanceGateway($this->maintenanceConnection($connectionName, ConnectionMysqlMaintenanceGateway::MAINTENANCE_DATABASE)),
+                new ConnectionMysqlMaintenanceGateway($this->database->connection($connectionName)),
                 new MysqlSchemaDumpReader(new StatementSplitter),
                 $this->config,
                 $this->database,
@@ -345,44 +347,27 @@ final readonly class DriverCaptorFactory
     {
         $name = $connectionName.'__sqlens_maintenance_'.$database;
 
-        $this->config->set('database.connections.'.$name, [
-            ...$this->connectionConfig($connectionName),
-            'database' => $database,
-        ]);
+        $this->config->set('database.connections.'.$name, EffectiveConnectionConfig::onDatabase($this->connectionConfig($connectionName), $database));
         $this->database->purge($name);
 
         return $this->database->connection($name);
     }
 
     /**
-     * The connection config the shadow databases are reached through: the direct
-     * connection when one is configured (template operations break behind a
-     * transaction pooler), else the run's own connection.
+     * The connection config the shadow databases are reached through: the direct connection when
+     * one is configured (template operations break behind a transaction pooler), else the shadow
+     * connection, else the run's own connection.
+     *
+     * Provisioning, the maintenance link and the template connection are built on that role and
+     * server, not on the connection under examination. The order lives in
+     * {@see ShadowProvisioningConnection}, because the clearance asks the production detector about
+     * the same connection and must not arrive at a different one.
      *
      * @return array<string, mixed>
      */
     private function connectionConfig(string $connectionName): array
     {
-        $direct = $this->config->get('sqlens.capture.shadow.direct_connection');
-        $shadow = $this->config->get('sqlens.capture.shadow.connection');
-
-        // `capture.shadow.connection` is read here. The shipped config describes it ("the
-        // connection to clone") and the shadow-mode page tells a project to point shadow mode at a
-        // dedicated CREATEDB role through it — the pattern Prisma calls a `shadowDatabaseUrl`.
-        // Provisioning, the maintenance link and the template connection are built on that role and
-        // server, not on the connection under examination.
-        //
-        // `direct_connection` still wins when both are named, and that order is mechanical rather
-        // than a preference: template operations and CREATE DATABASE break behind a transaction
-        // pooler, so the connection that provably bypasses one has to be the link they run on. A
-        // project that names only `connection` gets it; a project that names both has already said
-        // which of the two must not be pooled.
-        $source = match (true) {
-            is_string($direct) && $direct !== '' => $direct,
-            is_string($shadow) && $shadow !== '' => $shadow,
-            default => $connectionName,
-        };
-        $config = $this->config->get('database.connections.'.$source);
+        $config = $this->config->get('database.connections.'.ShadowProvisioningConnection::for($this->config, $connectionName));
         $keyed = [];
 
         // Keyed explicitly rather than returned wholesale: a connection config is a
@@ -471,8 +456,8 @@ final readonly class DriverCaptorFactory
         }
 
         return ! ShadowTargetIdentity::sameInstance(
-            $this->rawConnectionConfig($direct),
-            $this->rawConnectionConfig($connectionName),
+            $this->effectiveConnectionConfig($direct),
+            $this->effectiveConnectionConfig($connectionName),
         );
     }
 
@@ -497,13 +482,20 @@ final readonly class DriverCaptorFactory
         }
 
         return ShadowTargetIdentity::collide(
-            $this->rawConnectionConfig($shadow),
-            $this->rawConnectionConfig($connectionName),
+            $this->effectiveConnectionConfig($shadow),
+            $this->effectiveConnectionConfig($connectionName),
         );
     }
 
     /**
-     * One connection's configuration as a string-keyed map, or an empty one when it is not there.
+     * One connection's configuration as the framework resolves it, or an empty one when it is not
+     * there.
+     *
+     * Resolved rather than read raw, because the comparisons it feeds are about where a connection
+     * lands. A `url`-configured connection carries its host, port and database only inside the URL,
+     * and two of them read raw are two maps with none of those keys: they compare equal whatever
+     * servers the URLs name. The write side is the one compared, as everywhere a server is judged
+     * ({@see EffectiveConnectionConfig}).
      *
      * A connection name that resolves to nothing yields `[]`, and two empty maps compare EQUAL — so
      * a typo in `direct_connection` reads as "same instance" and passes this gate. That is
@@ -512,23 +504,22 @@ final readonly class DriverCaptorFactory
      *
      * @return array<string, mixed>
      */
-    private function rawConnectionConfig(string $name): array
+    private function effectiveConnectionConfig(string $name): array
     {
-        $config = $this->config->get('database.connections.'.$name);
-        $keyed = [];
-
-        foreach (is_array($config) ? $config : [] as $key => $value) {
-            if (is_string($key)) {
-                $keyed[$key] = $value;
-            }
-        }
-
-        return $keyed;
+        return EffectiveConnectionConfig::for($this->config->get('database.connections.'.$name));
     }
 
+    /**
+     * The database the connection under examination reaches, as the framework resolves it.
+     *
+     * On a `url`-configured connection the `database` key is not the database: the URL's path is.
+     * The name is what the throwaway database's name is rewritten back to, and whose character set
+     * the MySQL clone copies, so the raw key would compare and copy against a database the
+     * connection never reaches.
+     */
     private function databaseName(string $connectionName): string
     {
-        $database = $this->config->get('database.connections.'.$connectionName.'.database');
+        $database = $this->effectiveConnectionConfig($connectionName)['database'] ?? null;
 
         return is_string($database) ? $database : '';
     }
@@ -555,26 +546,6 @@ final readonly class DriverCaptorFactory
         $timeout = $this->config->get('sqlens.capture.shadow.timeout');
 
         return is_int($timeout) && $timeout > 0 ? $timeout : 120;
-    }
-
-    /**
-     * The migrations table, read in BOTH shapes the framework honors.
-     *
-     * `MigrationServiceProvider` does `is_array($migrations) ? ($migrations['table'] ?? null) :
-     * $migrations`, so `'migrations' => 'custom_migrations'` — the shape Laravel used before 11 and
-     * still accepts — names the table just as well as the array form does.
-     *
-     * Reading only `database.migrations.table` made that string invisible: the lookup returned null
-     * and the fallback named `migrations`, a table the application does not use. An app upgraded
-     * from Laravel 10 with a customized name therefore got a misdiagnosed "no migration table" skip,
-     * and a shadow noise filter that filtered nothing.
-     */
-    private function migrationsTable(): string
-    {
-        $migrations = $this->config->get('database.migrations');
-        $table = is_array($migrations) ? ($migrations['table'] ?? null) : $migrations;
-
-        return is_string($table) && $table !== '' ? $table : 'migrations';
     }
 
     /**

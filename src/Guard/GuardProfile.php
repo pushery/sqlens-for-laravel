@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Guard;
 
+use Pushery\SQLens\Config\ConfigSchema;
 use Pushery\SQLens\Exceptions\InvalidGuardProfile;
 
 /**
@@ -99,10 +100,29 @@ final readonly class GuardProfile
      */
     private static function fromDefinition(string $name, array $definition, array $knownConnections, array $knownChannels): self
     {
-        $strict = self::section($definition, 'strict');
-        $slow = self::section($definition, 'slow_query');
-        $runtime = self::section($definition, 'runtime');
-        $logging = self::section($definition, 'logging');
+        // The keys and the level are checked here, at boot, for the reason the channel below is: a
+        // guard is armed at every boot of the application, and the config validator that reports
+        // the same mistakes runs only inside a `sqlens:*` command. A misspelled key is a guardrail
+        // left at its default, which for every switch here is off, and a level PSR-3 does not name
+        // makes the logger throw inside the one `catch` a guardrail has, where the record is lost.
+        // The lists are the validator's own, so the two cannot come to disagree about either.
+        self::refuseUnknownKeys($name, $definition, ConfigSchema::SECTION_KEYS['guard.profiles.*'], '');
+
+        $strict = self::section($name, $definition, 'strict');
+        $slow = self::section($name, $definition, 'slow_query');
+        $runtime = self::section($name, $definition, 'runtime');
+        $logging = self::section($name, $definition, 'logging');
+
+        self::refuseUnknownKeys($name, $strict, ConfigSchema::SECTION_KEYS['guard.profiles.*.strict'], 'strict.');
+        self::refuseUnknownKeys($name, $slow, ConfigSchema::SECTION_KEYS['guard.profiles.*.slow_query'], 'slow_query.');
+        self::refuseUnknownKeys($name, $runtime, ConfigSchema::SECTION_KEYS['guard.profiles.*.runtime'], 'runtime.');
+        self::refuseUnknownKeys($name, $logging, ConfigSchema::SECTION_KEYS['guard.profiles.*.logging'], 'logging.');
+
+        $level = $logging['level'] ?? 'warning';
+
+        if (! is_string($level) || ! in_array($level, ConfigSchema::LOG_LEVELS, true)) {
+            throw InvalidGuardProfile::unknownLevel($name, $level);
+        }
 
         $channel = $logging['channel'] ?? null;
 
@@ -152,7 +172,7 @@ final readonly class GuardProfile
             runtimeDdl: self::flag($runtime, 'runtime_ddl'),
             unboundRawSql: self::flag($runtime, 'unbound_raw_sql'),
             logChannel: is_string($channel) && $channel !== '' ? $channel : null,
-            logLevel: is_string($logging['level'] ?? null) ? $logging['level'] : 'warning',
+            logLevel: $level,
             // FALSE unless asked for. Bindings are row data, and a log is the one place row data
             // reaches somewhere with different access rules than the database it came from.
             includeBindings: self::flag($logging, 'include_bindings'),
@@ -174,19 +194,47 @@ final readonly class GuardProfile
     }
 
     /**
+     * One section of a profile, or nothing when the profile leaves it out.
+     *
+     * A section that is there and is not a map of keys is refused rather than read as empty. Read as
+     * empty it turns every switch in it off, and `'strict' => true` reads like the opposite.
+     *
      * @param  array<string, mixed>  $definition
      * @return array<string, mixed>
+     *
+     * @throws InvalidGuardProfile
      */
-    private static function section(array $definition, string $key): array
+    private static function section(string $profile, array $definition, string $key): array
     {
-        if (! is_array($definition[$key] ?? null)) {
+        $section = $definition[$key] ?? null;
+
+        if ($section === null) {
             return [];
         }
 
-        /** @var array<string, mixed> $section */
-        $section = $definition[$key];
+        if (! is_array($section)) {
+            throw InvalidGuardProfile::notASection($profile, $key, $section);
+        }
 
+        /** @var array<string, mixed> $section */
         return $section;
+    }
+
+    /**
+     * Refuses a key this build does not read.
+     *
+     * @param  array<array-key, mixed>  $values
+     * @param  list<string>  $known
+     *
+     * @throws InvalidGuardProfile
+     */
+    private static function refuseUnknownKeys(string $profile, array $values, array $known, string $prefix): void
+    {
+        foreach (array_keys($values) as $key) {
+            if (! in_array($key, $known, true)) {
+                throw InvalidGuardProfile::unknownKey($profile, $prefix.$key, $known);
+            }
+        }
     }
 
     /**

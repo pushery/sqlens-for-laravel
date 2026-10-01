@@ -69,7 +69,7 @@ final class HbaMd5Rule extends AbstractHbaRule
     {
         return [
             'judges each line on its own, and `pg_hba.conf` is FIRST-MATCH-WINS: a line reported here may sit below one that already matches every connection it would have accepted, in which case nothing ever reaches it. Reading the file as an ordered decision table is a different question',
-            'reads what the server has LOADED, not what is on disk — an edit made and not reloaded is invisible here, and so is one already written that has not taken effect yet',
+            'reads the FILE as it is on disk, through the server\'s own parse of it, which is not necessarily what the server has loaded: an edit that has not been reloaded is judged as if it were in force, and a reload the server refused leaves its previous rules running where this reading cannot see them',
             'the method a line names and the method a connection ends up using are not always the same: a role whose stored verifier is SCRAM does not authenticate with md5 regardless of what this line says, so a project mid-migration may be safer than this reads',
         ];
     }

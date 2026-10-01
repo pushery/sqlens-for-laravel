@@ -170,7 +170,7 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
         }
 
         $rewrites = $change->hasUsingClause()
-            || $this->matrix->classify($change->targetType()) === TypeChangeImpact::Rewrite;
+            || ($this->matrix->classify($change->targetType()) === TypeChangeImpact::Rewrite && ! $change->restatesTheColumn());
 
         if (! $rewrites) {
             return null;
@@ -236,22 +236,37 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
             );
         }
 
-        // `targetType()`, not `rest`. Both call sites in this rule used to pass the whole tail, and
-        // `rest` is documented as the type PLUS a trailing `USING` — which reads as the right choice
-        // for the rewrite question until you notice that `hasUsingClause()` has already answered it,
-        // three lines up and again above, before either call is reached. So the tail bought nothing
-        // and cost the compound case: `ALTER TABLE t ALTER COLUMN c TYPE BIGINT, ALTER COLUMN c SET
-        // NOT NULL, …` is one statement, and the matrix was handed all of it. It classifies nothing
-        // of the sort, so the rule answered `undetermined` — over a bigint widening, which is the
-        // clearest rewrite there is.
+        // `targetType()`, not `rest`. `rest` is the type PLUS everything behind it, and a compound
+        // statement — `ALTER TABLE t ALTER COLUMN c TYPE BIGINT, ALTER COLUMN c SET NOT NULL, …` —
+        // would hand the matrix a string it classifies as nothing. `hasUsingClause()` has already
+        // answered the one part of the tail that matters on its own. The sibling rule
+        // PG.L4.TYPE_NARROWING reads the same projection, so the two rules cannot disagree about
+        // where the type ends.
         //
-        // That shape is not exotic. It is what Laravel's `->change()` compiles to, every time: the
-        // builder restates every modifier, so one column change is one compound statement. The
-        // sibling rule PG.L4.TYPE_NARROWING reads `targetType()` at both of ITS call sites and was
-        // right all along — two rules over one parse, and only one of them used the projection the
-        // parse offers. Exactly the drift `ColumnTypeChange` was written to make impossible, arrived
-        // at from inside it.
-        return match ($this->matrix->classify($change->targetType())) {
+        // That compound shape is what Laravel's `->change()` compiles to on every call, and it names
+        // the column's type whatever changed. Whether the type differs from the column's current one
+        // is then not in the statement, which is what the branch below says.
+        $impact = $this->matrix->classify($change->targetType());
+
+        // Laravel's `->change()` names the type on every call, so a rewrite the target alone would
+        // establish is only a question here: the same statement flips the nullability of a column
+        // that keeps its type, and then PostgreSQL rewrites nothing.
+        if ($impact === TypeChangeImpact::Rewrite && $change->restatesTheColumn()) {
+            return RuleVerdict::undetermined(
+                sprintf(
+                    'This is the form Laravel\'s ->change() compiles to, and it names the column\'s type on '
+                    .'every call, whether the type changes or only the nullability or the default does. If '
+                    .'%s is already %s, PostgreSQL rewrites nothing; from a type it is not binary-coercible '
+                    .'from, it rewrites the whole table under an ACCESS EXCLUSIVE lock. Compare the column\'s '
+                    .'current type before deploying.',
+                    $change->column,
+                    $change->targetType(),
+                ).$this->sessionTimeZoneCaveat($change->targetType()),
+                UndeterminedReason::UnclassifiedTypeChange,
+            );
+        }
+
+        return match ($impact) {
             TypeChangeImpact::Rewrite => RuleVerdict::flag(
                 'ALTER COLUMN … TYPE to this type rewrites the whole table under an ACCESS EXCLUSIVE '
                 .'lock, for a full pass over every row — an outage on a large, live table. If the '

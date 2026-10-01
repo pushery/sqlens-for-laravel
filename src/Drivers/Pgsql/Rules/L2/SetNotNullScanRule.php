@@ -8,6 +8,7 @@ use Pushery\SQLens\Canonical\StatementTarget;
 use Pushery\SQLens\Contracts\ProvidesRemediation;
 use Pushery\SQLens\Drivers\Pgsql\Remediation\NotValidThenValidateTemplate;
 use Pushery\SQLens\Drivers\Pgsql\Rules\AbstractPgsqlSafetyRule;
+use Pushery\SQLens\Drivers\Pgsql\Rules\Support\NotNullCheckProof;
 use Pushery\SQLens\Drivers\Pgsql\Rules\Support\SetNotNullChange;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\RemediationPayload;
@@ -32,12 +33,15 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *    so the scan is free — this is the version trap the rule must not fall into (it is
  *    NOT the same as `ADD COLUMN … NOT NULL DEFAULT`, which is a different statement the
  *    rule never matches).
- *  - **The migration adds a `CHECK (col IS NOT NULL)` for the same column.** A user who
- *    wrote that check is applying the safe pattern deliberately; flagging their
- *    migration would be crying wolf on the exact good behavior the rule recommends.
- *    This is detected within the SAME migration; a check added in an earlier migration
- *    is not visible here (cross-migration state is not carried), a documented limit that
- *    the `#[SqlensIgnore]` annotation covers.
+ *  - **A valid `CHECK (col IS NOT NULL)` on the same column of the same table precedes the
+ *    statement.** A user who wrote that check is applying the safe pattern deliberately;
+ *    flagging their migration would be crying wolf on the exact good behavior the rule
+ *    recommends. The check has to be one PostgreSQL trusts: added without `NOT VALID`, or
+ *    validated by name after it, and before the `SET NOT NULL` ({@see NotNullCheckProof}). A
+ *    check on another table, one never validated, or one that comes after proves nothing, and
+ *    the table is scanned. This is detected within the SAME migration; a check added in an
+ *    earlier migration is not visible here (cross-migration state is not carried), a
+ *    documented limit that the `#[SqlensIgnore]` annotation covers.
  *
  * Detection is on the canonical form — no rewrite claim, because `SET NOT NULL` scans
  * but does NOT rewrite the table — never Laravel's raw grammar.
@@ -108,8 +112,6 @@ final class SetNotNullScanRule extends AbstractPgsqlSafetyRule implements Provid
             return null;
         }
 
-        $column = $change->column;
-
         // A fresh table holds no rows to scan. The altered table is the classified
         // target, not a name re-parsed from the SQL.
         $table = $statement->soleTarget(SchemaObjectType::Table);
@@ -118,8 +120,9 @@ final class SetNotNullScanRule extends AbstractPgsqlSafetyRule implements Provid
             return null;
         }
 
-        // The safe pattern is present for this column — the user is doing it right.
-        if ($statement->migration->hasNotNullCheckFor($column)) {
+        // The safe pattern is in place for this column of this table: a valid CHECK (col IS NOT NULL)
+        // before this statement, which PostgreSQL trusts instead of scanning.
+        if ($table instanceof StatementTarget && NotNullCheckProof::standsBefore($statement, $table, $change->name())) {
             return null;
         }
 

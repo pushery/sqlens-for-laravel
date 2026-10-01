@@ -13,10 +13,12 @@ use Pushery\SQLens\Subjects\SchemaObject;
 /**
  * A line of `pg_hba.conf` that PostgreSQL itself could not parse.
  *
- * The server reports it in `pg_hba_file_rules` with an `error` and no fields. The consequence is
- * quiet and asymmetric: the line does not authenticate anybody, so whatever restriction it was
- * written to impose is not in force — and the NEXT matching line decides who gets in instead. A file
- * whose author believes it contains a narrow rule may be running on the broad one below it.
+ * The server reports it in `pg_hba_file_rules` with an `error` and no fields. That view reads the
+ * file as it is on disk, and a file holding such a line is not loaded at all: a reload is refused as a
+ * whole and the server keeps the rules it loaded before, and a start fails. Measured on 18.4 with a
+ * throwaway cluster, where the log said `pg_hba.conf was not reloaded` and `could not load
+ * pg_hba.conf`. So neither the broken line nor any other edit in the file is in force, and the server
+ * may be running on rules the file no longer shows.
  *
  * ## Why it is a finding rather than a read error
  *
@@ -74,10 +76,11 @@ final class HbaParseErrorRule extends AbstractHbaRule
         }
 
         return [RuleVerdict::flag(sprintf(
-            'PostgreSQL could not parse %s and reported: %s. The line authenticates nobody, so the '
-            .'restriction it was written to impose is not in force and the next matching line decides who '
-            .'connects instead. Fix the line and reload the configuration (SELECT pg_reload_conf()), then '
-            .'re-read pg_hba_file_rules to confirm the error is gone.',
+            'PostgreSQL could not parse %s and reported: %s. A file holding such a line is not loaded at '
+            .'all: a reload is refused and the server keeps the rules it loaded before, and a restart does '
+            .'not start the server. So neither this line nor any other edit in the file is in force. Fix '
+            .'the line and reload the configuration (SELECT pg_reload_conf()), then re-read '
+            .'pg_hba_file_rules to confirm the error is gone.',
             $object->qualifiedName,
             $object->getString('parse_error') ?? 'no reason given',
         ))];
@@ -90,9 +93,11 @@ final class HbaParseErrorRule extends AbstractHbaRule
      * because the state it describes is the same class of problem: the file, as the server understood
      * it, does not say what somebody thinks it says.
      *
-     * `undetermined` rather than a finding, because both explanations are outside what this reading
-     * can distinguish — a server with genuinely no authentication rules would have refused this very
-     * connection, so either the rows were lost on the way here or something stranger is true.
+     * `undetermined` rather than a finding, because the explanations are outside what this reading
+     * can distinguish. A server that had loaded no authentication rules would have refused this very
+     * connection. The view reads the file, though, and a file without entries is refused on reload
+     * while the server keeps the rules it had, measured on 18.4. So either the file holds no entries,
+     * or the rows were lost on the way here.
      *
      * @return list<RuleVerdict>
      */
@@ -100,11 +105,12 @@ final class HbaParseErrorRule extends AbstractHbaRule
     protected function judgeEmptyReading(SchemaObject $object): array
     {
         return [RuleVerdict::undetermined(
-            'pg_hba_file_rules answered without refusing and returned no rules at all, which cannot '
-            .'describe this server: a PostgreSQL with no host-based authentication rules accepts no '
-            .'connections, and this audit arrived over one. Nothing about how this server authenticates '
-            .'has been checked — confirm the file the server is actually reading (SHOW hba_file) before '
-            .'reading this run as clean.',
+            'pg_hba_file_rules answered without refusing and returned no rules at all. A PostgreSQL that '
+            .'had loaded no host-based authentication rules accepts no connections, and this audit arrived '
+            .'over one. The view reads the file on disk, so it may be a file without entries, which the '
+            .'server refuses to load while it keeps the rules it had. Nothing about how this server '
+            .'authenticates has been checked — confirm the file the server is actually reading (SHOW '
+            .'hba_file) before reading this run as clean.',
             UndeterminedReason::CatalogReadingImplausible,
         )];
     }
@@ -116,7 +122,7 @@ final class HbaParseErrorRule extends AbstractHbaRule
     public function limitations(): array
     {
         return [
-            'reads what the server has LOADED, not what is on disk — an edit made and not reloaded is invisible here, and so is one already written that has not taken effect yet',
+            'reads the FILE as it is on disk, through the server\'s own parse of it, which is not necessarily what the server has loaded: an edit that has not been reloaded is judged as if it were in force, and a reload the server refused leaves its previous rules running where this reading cannot see them',
             'cannot say what the broken line INTENDED, and deliberately does not guess. What it does say is the thing that matters either way: whatever restriction was meant is not in force, because the server did not load it',
             'the line is reported, never its content. A malformed line frequently contains the thing somebody was in the middle of writing, and echoing it into a report would publish it further',
         ];

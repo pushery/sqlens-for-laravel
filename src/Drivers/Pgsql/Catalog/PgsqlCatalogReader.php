@@ -104,7 +104,10 @@ final readonly class PgsqlCatalogReader implements CatalogReader
     public function __construct(
         private ReaderSession $session,
         SubjectContext $subjectContext,
-        private CatalogCanonicalizer $canonicalizer = new CatalogCanonicalizer(IdentifierFolding::Lower),
+        // Preserve, because PostgreSQL folds an unquoted name while it parses the statement and
+        // stores the result: `pg_class` holds `orders` for `CREATE TABLE Orders` and `Orders` for
+        // `CREATE TABLE "Orders"`, and those are two tables. Folding what it stored would merge them.
+        private CatalogCanonicalizer $canonicalizer = new CatalogCanonicalizer(IdentifierFolding::Preserve),
         private CatalogPrivileges $privileges = new PgsqlCatalogPrivileges,
     ) {
         $this->subjectContext = $subjectContext->withConnection($session->instance());
@@ -361,8 +364,9 @@ final readonly class PgsqlCatalogReader implements CatalogReader
     }
 
     /**
-     * The schemas a reading covers when the request names none: the session's REAL `search_path`,
-     * resolved rather than assumed to be `public`.
+     * The schemas a reading covers when the request names none: the application's REAL
+     * `search_path`, resolved rather than assumed to be `public`, and read from what the session
+     * recorded before it pinned its own path to `pg_catalog` ({@see ApplicationSearchPath}).
      *
      * That assumption is the one that makes an audit quietly miss a project's own tables — a
      * multi-tenant or module-per-schema application keeps almost nothing in `public`.
@@ -373,7 +377,7 @@ final readonly class PgsqlCatalogReader implements CatalogReader
     {
         $rows = $this->rows(
             $reader,
-            'SELECT nspname FROM pg_namespace WHERE nspname = ANY (pg_catalog.current_schemas(false)) ORDER BY nspname',
+            'SELECT nspname FROM pg_namespace WHERE nspname = ANY ('.ApplicationSearchPath::explicit().') ORDER BY nspname',
             [],
         );
 
@@ -1016,6 +1020,13 @@ final readonly class PgsqlCatalogReader implements CatalogReader
      * for byte, so it would buy the signature — which this reader already assembles from its own
      * columns — and nothing at all for the part that actually needs canonicalizing.
      *
+     * Except for a body written in the SQL standard's form, `BEGIN ATOMIC … END` or `RETURN …`.
+     * PostgreSQL parses that when the function is created, keeps the parse tree in `prosqlbody` and
+     * leaves `prosrc` empty, measured on 18.4. Read from `prosrc`, every such function had the body
+     * `''`, and two different bodies compared as the same one. For those the body is the server's
+     * own rendering of the parse tree, `pg_get_function_sqlbody()`, which is the same text for the
+     * same body on both sides of a comparison.
+     *
      * What that canonicalization may and may not do is argued once, at
      * {@see CatalogCanonicalizer::routineBody()}, because MySQL faces the identical question and two
      * copies of that reasoning would drift apart.
@@ -1035,7 +1046,8 @@ final readonly class PgsqlCatalogReader implements CatalogReader
                    p.provolatile                              AS volatility,
                    p.prosecdef                                AS security_definer,
                    pg_catalog.pg_get_function_result(p.oid)              AS result,
-                   p.prosrc                                   AS body,
+                   CASE WHEN p.prosqlbody IS NULL THEN p.prosrc
+                        ELSE pg_catalog.pg_get_function_sqlbody(p.oid) END  AS body,
                    COALESCE((
                        SELECT e.extname FROM pg_depend d
                        JOIN pg_extension e ON e.oid = d.refobjid

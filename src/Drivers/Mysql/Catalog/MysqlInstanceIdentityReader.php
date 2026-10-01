@@ -73,13 +73,14 @@ final readonly class MysqlInstanceIdentityReader implements InstanceIdentityRead
             database: $database,
             serverVersion: $version,
             readOnly: $readOnly,
-            // Empty, and that is not an oversight. On MySQL every one of these five answers on any
-            // reachable server: `@@hostname` is always set, `database()` is null only for a session
-            // with no default schema — which Laravel cannot produce, because a connection without a
-            // database fails to open at all. So the only way a field goes missing here is the way
-            // they ALL go missing, which the catch above already reports. PostgreSQL is different
-            // and its sister carries a per-field case for exactly that reason: `inet_server_addr()`
-            // really is null on an ordinary local socket.
+            // Empty, and that is not an oversight. On MySQL four of these five answer on any reachable
+            // server, and `@@hostname` is always set. `database()` is null for a session with no
+            // default schema, and a Laravel connection configured with `'database' => ''` is one: it
+            // opens, and `database()` answers null (measured on 8.4.10). The field then comes back
+            // null rather than as a named gap, because such a session reads no schema at all and the
+            // catalog reading refuses it before any finding is made ({@see SchemaScope}). PostgreSQL
+            // is different and its sister carries a per-field case: `inet_server_addr()` really is
+            // null on an ordinary local socket, and a reading there goes on.
             unavailable: [],
         );
     }

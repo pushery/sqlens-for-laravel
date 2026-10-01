@@ -169,9 +169,14 @@ final readonly class InstanceResolver
             return InstanceResolution::unofferedHost($pinnedHost, $topology->hosts);
         }
 
-        $host = $settings['host'] ?? null;
-        $port = $settings['port'] ?? null;
-        $database = $settings['database'] ?? null;
+        // …but what the connection says it reaches comes through the parser, the way the framework
+        // connects: a `url` names the host, port and database, and the keys beside it are the
+        // defaults Laravel's own config/database.php keeps there. Read raw, every URL-configured
+        // connection disagreed with the server it had just reached, and each audit said so.
+        $described = EffectiveConnectionConfig::withoutUrl($settings);
+        $host = $described['host'] ?? null;
+        $port = $described['port'] ?? null;
+        $database = $described['database'] ?? null;
 
         // The host this run is actually pinned to: the operator's, or the single one the
         // configuration leaves. Null when there was nothing to choose — not a default.

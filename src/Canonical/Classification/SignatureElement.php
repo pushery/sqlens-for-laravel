@@ -70,6 +70,12 @@ final readonly class SignatureElement
         return new self(SignatureElementKind::Target, null, $type, $role);
     }
 
+    /** A comma-separated list of targets of one type. See {@see SignatureElementKind::TargetList}. */
+    public static function targetList(SchemaObjectType $type): self
+    {
+        return new self(SignatureElementKind::TargetList, null, $type);
+    }
+
     public static function seekKeyword(string $keyword): self
     {
         return new self(SignatureElementKind::SeekKeyword, mb_strtoupper($keyword), null);

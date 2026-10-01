@@ -13,10 +13,10 @@ namespace Pushery\SQLens\Catalog\Canonical;
  * is what rules compare on, and `raw` is what they fall back to when the question is genuinely
  * engine-specific — which for the level-6 idiom rules it often is.
  *
- * ## Two mappings this deliberately does NOT make
+ * ## Three mappings this deliberately does NOT make
  *
- * Both are tempting, both would be wrong, and both were found by reading what the servers actually
- * return rather than by reasoning about type names:
+ * All three are tempting, all three would be wrong, and all three were found by reading what the
+ * servers actually return rather than by reasoning about type names:
  *
  * - **`tinyint(1)` is not `boolean`.** It is the convention Laravel uses for one, and MySQL 8.4
  *   keeps the width on `tinyint` for exactly that reason while having dropped display widths from
@@ -26,6 +26,9 @@ namespace Pushery\SQLens\Catalog\Canonical;
  *   UTC and converted on the way out); PostgreSQL's is time-zone NAIVE, and its aware type is
  *   `timestamptz`. Mapping the two names together would equate a correct column with the exact
  *   mistake the level-6 rule about `timestamptz` exists to report.
+ * - **MySQL's `mediumint` is not `integer`.** It is three bytes, not four: a `mediumint` key runs
+ *   out at 8,388,607, an `integer` one at 2,147,483,647. Folded together, the level-6 rule about
+ *   narrow keys named a `mediumint` key an `integer` with 256 times the room it has.
  *
  * Where two engines genuinely mean the same thing, they get the same canonical name. Where they do
  * not, they keep different ones, and a rule that cares says which engine it is talking about.
@@ -44,12 +47,12 @@ final readonly class CanonicalType
      */
     private const array ALIASES = [
         // Integers. MySQL 8.4 no longer reports a display width on these, which is why none is
-        // stripped here — measured, not assumed away.
+        // stripped here — measured, not assumed away. `mediumint` is not among them (see the
+        // class docblock).
         'int' => 'integer',
         'int4' => 'integer',
         'int8' => 'bigint',
         'int2' => 'smallint',
-        'mediumint' => 'integer',
         'serial' => 'integer',
         'bigserial' => 'bigint',
         'smallserial' => 'smallint',

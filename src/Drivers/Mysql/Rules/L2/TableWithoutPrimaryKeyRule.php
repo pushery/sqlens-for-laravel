@@ -17,6 +17,7 @@ use Pushery\SQLens\Drivers\Mysql\DowntimeClass\MysqlDowntimeClassSource;
 use Pushery\SQLens\Drivers\Mysql\Rules\AbstractMysqlRule;
 use Pushery\SQLens\Engine\ResolvedServerVersion;
 use Pushery\SQLens\Findings\DowntimeClass;
+use Pushery\SQLens\Findings\DowntimeUndetermined;
 use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
@@ -150,7 +151,7 @@ final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements Decl
      * `rewrite` because the eventual FIX rebuilds the table would tell a release gate that this
      * deploy needs a maintenance window, which is simply not true.
      */
-    public function downtimeClassFor(MigrationStatementView $statement): ?DowntimeClass
+    public function downtimeClassFor(MigrationStatementView $statement): DowntimeClass|DowntimeUndetermined|null
     {
         if (! $this->dropsThePrimaryKey($statement)) {
             return null;
@@ -159,7 +160,7 @@ final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements Decl
         return $this->downtimeClasses->forCandidateOperations(
             [self::DROP_OPERATION],
             $statement->serverVersion ?? ResolvedServerVersion::unresolvable(),
-        )->downtimeClass;
+        )->derived();
     }
 
     /**
@@ -200,7 +201,7 @@ final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements Decl
             },
             'sqlens::messages.remediation.no_safe_sequence.schema_decision_verification',
             $this->id(),
-            $this->downtimeClassFor($statement),
+            $this->knownDowntimeClass($this->downtimeClassFor($statement)),
         );
     }
 

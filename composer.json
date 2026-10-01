@@ -32,6 +32,7 @@
         "ext-json": "*",
         "ext-mbstring": "*",
         "ext-pdo": "*",
+        "ext-tokenizer": "*",
         "illuminate/collections": "^12.0 || ^13.0",
         "illuminate/console": "^12.0 || ^13.0",
         "illuminate/container": "^12.0 || ^13.0",
@@ -47,7 +48,8 @@
         "symfony/process": "^7.0 || ^8.0"
     },
     "suggest": {
-        "laravel/mcp": "Serves the SQLens MCP server over stdio, so an agent can call the read-only tools directly. Without it `sqlens:mcp` reports a named undetermined and prints the install command rather than failing."
+        "laravel/mcp": "Serves the SQLens MCP server over stdio, so an agent can call the read-only tools directly. Without it `sqlens:mcp` reports a named undetermined and prints the install command rather than failing.",
+        "symfony/var-dumper": "While `sqlens:mcp` runs, a forgotten dump goes to standard error instead of into the protocol stream. Used only where an application already has the dumper; without it there is no dump to divert, and nothing needs to be installed."
     },
     "autoload": {
         "psr-4": {

@@ -243,17 +243,18 @@ final class RlsDisabledRule extends AbstractSchemaObjectSecurityRule implements 
     private function message(SchemaObject $object): string
     {
         $table = $object->qualifiedName;
+        // Quoted by the reader, for the two statements below; the name above is the one for reading.
+        $name = $object->getString('statement_name') ?? '';
 
         $message = sprintf(
             'row-level security is not enabled on %s, which this project lists as holding tenant data: '
             .'every row of it is visible to any role with SELECT, so the separation exists in the '
-            .'application and nowhere in the database. ALTER TABLE %s ENABLE ROW LEVEL SECURITY, add a '
-            .'policy that restricts rows to the current tenant, and ALTER TABLE %s FORCE ROW LEVEL '
-            .'SECURITY as well — ENABLE alone does not apply to the table\'s owner, which is the role '
-            .'a Laravel application usually connects as.',
+            .'application and nowhere in the database. Enable it with %s, add a policy that restricts '
+            .'rows to the current tenant, and force it with %s as well — ENABLE alone does not apply to '
+            .'the table\'s owner, which is the role a Laravel application usually connects as.',
             $table,
-            $table,
-            $table,
+            StatementSpan::naming('ALTER TABLE %s ENABLE ROW LEVEL SECURITY;', $name),
+            StatementSpan::naming('ALTER TABLE %s FORCE ROW LEVEL SECURITY;', $name),
         );
 
         $bypassing = $object->getString('rls_bypassing_roles') ?? '';

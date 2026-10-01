@@ -21,8 +21,10 @@ use Pushery\SQLens\Format\SafeFileWriter;
 use Pushery\SQLens\Format\SqlFileScanner;
 use Pushery\SQLens\Format\UnifiedDiff;
 use Pushery\SQLens\PackageVersion;
+use Pushery\SQLens\ProjectPath;
 use Pushery\SQLens\Reporting\Github\GithubReporter;
 use Pushery\SQLens\Reporting\Github\WorkflowCommandEscaping;
+use Pushery\SQLens\Reporting\ReportText;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
 
 /**
@@ -290,7 +292,7 @@ final class FormatCommand extends Command
             }
 
             if ($original === false) {
-                $undetermined[] = ['path' => $file, 'reason' => FormatUndeterminedReason::FileUnreadable->value
+                $undetermined[] = ['path' => $this->shown($file), 'reason' => FormatUndeterminedReason::FileUnreadable->value
                     .' — the file could not be read; check its permissions, and whether it is a link to something that is gone'];
 
                 continue;
@@ -302,25 +304,33 @@ final class FormatCommand extends Command
             if (! $result->isFormatted()) {
                 // NAMED, never skipped. A formatter that passed over what it could not parse would
                 // report a clean tree while leaving the one file somebody needs to look at untouched.
-                $undetermined[] = ['path' => $file, 'reason' => $result->reason?->value.($result->detail === null ? '' : ' — '.$result->detail)];
+                $undetermined[] = ['path' => $this->shown($file), 'reason' => $result->reason?->value.($result->detail === null ? '' : ' — '.$result->detail)];
 
                 continue;
             }
 
             if ($result->sql === $original) {
-                $unchanged[] = $file;
+                $unchanged[] = $this->shown($file);
 
                 continue;
             }
 
-            $changed[] = $file;
+            // Written BEFORE the file counts as changed. The writer answers false when the file could
+            // not be replaced, and a run that listed it as reformatted anyway ended clean over a tree it
+            // had not touched. A false can also mean the file already holds these bytes, which here
+            // only happens when something wrote the same result meanwhile, so the file is read again
+            // before the run calls it unwritable.
+            if ($writes && ! SafeFileWriter::write($file, (string) $result->sql) && @file_get_contents($file) !== $result->sql) {
+                $undetermined[] = ['path' => $this->shown($file), 'reason' => FormatUndeterminedReason::FileUnwritable->value
+                    .' — the formatted file could not be written back; check the permissions of the file and its directory'];
 
-            if ($showDiff) {
-                $this->report(UnifiedDiff::between($original, (string) $result->sql, $file));
+                continue;
             }
 
-            if ($writes) {
-                SafeFileWriter::write($file, (string) $result->sql);
+            $changed[] = $this->shown($file);
+
+            if ($showDiff) {
+                $this->report(UnifiedDiff::between($original, (string) $result->sql, $this->shown($file)));
             }
         }
 
@@ -478,7 +488,7 @@ final class FormatCommand extends Command
         // Here the bytes come from the filesystem -- `files[].path` -- and a non-UTF-8 filename is
         // legal on Linux. Substituting keeps the document valid and readable; `JSON_THROW_ON_ERROR`
         // stays for the structural failures substitution cannot produce.
-        $this->line(json_encode([
+        ReportText::document($this->output, json_encode([
             'run' => $run,
             'files' => $files,
             'summary' => [
@@ -511,7 +521,7 @@ final class FormatCommand extends Command
         // The reproducibility preamble, carrying the same run parameters the console header names.
         // Without it the annotations say which files, and nothing says which backend produced them —
         // and "it is formatted on my machine" is exactly the argument they exist to settle.
-        $this->line('::notice title=SQLens '.WorkflowCommandEscaping::property($run['sqlens']).'::'.WorkflowCommandEscaping::data(sprintf(
+        ReportText::line($this->output, '::notice title=SQLens '.WorkflowCommandEscaping::property($run['sqlens']).'::'.WorkflowCommandEscaping::data(sprintf(
             'sqlens:format %s — %s%s (%s, style %s, strict tools %s): %d file(s) scanned, %d %s, %d undetermined',
             $run['mode'],
             $run['backend'],
@@ -557,7 +567,7 @@ final class FormatCommand extends Command
         $budget = count($entries) > self::ANNOTATION_LIMIT ? self::ANNOTATION_LIMIT - 1 : count($entries);
 
         foreach (array_slice($entries, 0, $budget) as $entry) {
-            $this->line('::'.$weight.' file='.WorkflowCommandEscaping::property($entry['path']).'::'
+            ReportText::line($this->output, '::'.$weight.' file='.WorkflowCommandEscaping::property($entry['path']).'::'
                 .WorkflowCommandEscaping::data($entry['message']));
         }
 
@@ -567,7 +577,7 @@ final class FormatCommand extends Command
             return;
         }
 
-        $this->line('::'.$weight.'::'.WorkflowCommandEscaping::data(sprintf(
+        ReportText::line($this->output, '::'.$weight.'::'.WorkflowCommandEscaping::data(sprintf(
             '%d more file(s) were not annotated (GitHub caps annotations at %d per level); '
             .'--format=json carries the full list. Omitted: %s',
             count($withheld),
@@ -611,11 +621,28 @@ final class FormatCommand extends Command
         // reader believes the reason.
         $selected = [...$positional, ...$named];
 
-        if ($selected !== []) {
-            return $selected;
+        if ($selected === []) {
+            $selected = $discovery->roots === [] ? $paths->all() : $discovery->roots;
         }
 
-        return $discovery->roots === [] ? $paths->all() : $discovery->roots;
+        // Anchored at the project root like every other path this package reads, so a path means
+        // the same file wherever `artisan` was started from.
+        return array_map(
+            fn (string $path): string => ProjectPath::anchored($path, $this->laravel->basePath()),
+            $selected,
+        );
+    }
+
+    /**
+     * A file as a report names it: relative to the project root when it lies inside it, the way a
+     * lint finding names its migration. The report then reads the same on every machine, and a
+     * GitHub annotation lands on the file it is about.
+     */
+    private function shown(string $file): string
+    {
+        $root = rtrim($this->laravel->basePath(), '/\\').DIRECTORY_SEPARATOR;
+
+        return str_starts_with($file, $root) ? substr($file, strlen($root)) : $file;
     }
 
     /**
@@ -634,6 +661,6 @@ final class FormatCommand extends Command
     {
         $output = $this->getOutput()->getOutput();
 
-        ($output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output)->writeln($message);
+        ReportText::line($output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output, $message);
     }
 }

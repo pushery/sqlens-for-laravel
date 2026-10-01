@@ -14,9 +14,9 @@ use Throwable;
  * The destructive opt-in, expressed as a suppression the reporter shows rather than
  * a silent skip inside the rules.
  *
- * A destructive migration operation — DROP TABLE, DROP COLUMN, TRUNCATE, a mass
- * UPDATE/DELETE with no WHERE, or a drop without a deploy window — is a real finding
- * the rules always produce. Consent does not un-produce it; it moves it to the
+ * A destructive migration operation — DROP SCHEMA, DROP TABLE, DROP COLUMN, TRUNCATE, a
+ * mass UPDATE/DELETE with no WHERE, or a drop without a deploy window, on either engine —
+ * is a real finding the rules always produce. Consent does not un-produce it; it moves it to the
  * suppressed list with a NAMED reason, so a run still shows that this migration
  * destroys data. That is the whole point of the opt-in living here and not in the
  * rule: "the migration opted in" and "the rule never looked" are different facts,
@@ -47,19 +47,25 @@ final readonly class DestructiveOptInSuppressionSource
     public const string SOURCE = 'destructive_opt_in';
 
     /**
-     * The rule ids the destructive opt-in consents to — the level-1 data-loss family
-     * (schema drops, truncate, a WHERE-less mass write) and the level-4 deploy-window
-     * rule that reviews the same drop. A finding outside this set is never this source's
-     * to suppress.
+     * The rule ids the destructive opt-in consents to, on both engines — the level-1
+     * data-loss family (schema drops, truncate, a WHERE-less mass write) and the level-4
+     * deploy-window rule that reviews the same drop. Every rule whose finding tells a
+     * reader to consent with #[SqlensAllowDestructive] is in it, and a finding outside it
+     * is never this source's to suppress.
      *
      * @var list<string>
      */
-    private const array FAMILY = [
-        'PG.L1.DROP_TABLE',
+    public const array FAMILY = [
+        'GEN.L1.DML_WITHOUT_WHERE',
+        'MY.L1.DROP_COLUMN',
+        'MY.L1.DROP_TABLE',
+        'MY.L1.TRUNCATE',
+        'MY.L4.DROP_WITHOUT_DEPLOY_WINDOW',
         'PG.L1.DROP_COLUMN',
+        'PG.L1.DROP_SCHEMA',
+        'PG.L1.DROP_TABLE',
         'PG.L1.TRUNCATE',
         'PG.L4.DROP_WITHOUT_DEPLOY_WINDOW',
-        'GEN.L1.DML_WITHOUT_WHERE',
     ];
 
     /** @param  bool  $allowedProjectWide  the resolved `sqlens.allow_destructive` switch */

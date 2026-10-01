@@ -30,9 +30,12 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * ## `pg_temp` is the second way, and it needs no grant at all
  *
- * The caller's own temporary schema belongs at the END of a path or not in it. Anywhere earlier, the
- * caller creates a function there and the routine resolves to it — the same substitution, reached
- * without anyone granting the attacker anything.
+ * The caller's own temporary schema is searched for tables, views and types FIRST unless the path
+ * names it later, and a path that leaves it out does not name it. So only a path that ends in
+ * `pg_temp` is closed: anywhere else, or missing, a caller creates a temporary table with a name the
+ * routine uses unqualified, and the routine reads and writes the caller's table as its owner. Measured
+ * on PostgreSQL 18.4 for `app`, `''`, `pg_catalog` and `pg_temp, app`. It is never searched for
+ * functions, so the substitution is a relation's, not a function's.
  *
  * ## Why `medium` rather than the sibling's `critical`
  *
@@ -86,9 +89,8 @@ final class RoutineDefinerUnsafePathRule extends AbstractRoutineRule
                 '%s runs as %s and pins its search_path, but %s in that path %s somebody other than %s may '
                 .'create objects in. That is the same substitution the unpinned case allows: a role with '
                 .'CREATE there defines a function with the name this routine uses unqualified, and the '
-                .'routine calls it as %s. Point the path at a schema only %s can write to, at the catalog '
-                .'schema, or at the empty string to force every name to be qualified — or revoke CREATE '
-                .'from the schema, whichever fits the application.',
+                .'routine calls it as %s. Point the path at schemas only %s can write to and end it with '
+                .'pg_temp, or revoke CREATE from the schema, whichever fits the application.',
                 $object->qualifiedName,
                 $owner,
                 implode(', ', $writable),
@@ -100,11 +102,12 @@ final class RoutineDefinerUnsafePathRule extends AbstractRoutineRule
         }
 
         return sprintf(
-            '%s runs as %s and pins its search_path, but pg_temp appears in that path before the end. '
-            .'pg_temp is the CALLER\'s own schema: a caller creates a function there and this routine '
-            .'resolves to it before reaching the schema it meant, and runs it as %s — the same '
-            .'substitution, reached without anyone granting the caller anything. Move pg_temp to the end '
-            .'of the path, or leave it out.',
+            '%s runs as %s and pins its search_path, but pg_temp is not its last entry. pg_temp is the '
+            .'CALLER\'s own schema, and PostgreSQL searches it for tables, views and types before the '
+            .'path unless the path names it last, so leaving it out does not keep it out. A caller creates '
+            .'a temporary table with a name this routine uses unqualified, and the routine reads and writes '
+            .'the caller\'s table instead of its own, as %s, without anyone granting the caller anything. '
+            .'End the path with pg_temp: SET search_path = <the schemas it needs>, pg_temp.',
             $object->qualifiedName,
             $owner,
             $owner,

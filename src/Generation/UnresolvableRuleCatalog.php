@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Generation;
 
+use Pushery\SQLens\Config\ConfigSchema;
 use Pushery\SQLens\Severity\Severity;
 use RuntimeException;
 use Throwable;
@@ -115,9 +116,10 @@ final class UnresolvableRuleCatalog extends RuntimeException
     {
         return new self(sprintf(
             'sqlens.security.min_severity is "%s", which is not a severity this package knows, so no '
-            .'catalog can say which rules block. Valid values: %s.',
+            .'catalog can say which rules block. Valid values: %s, or %s to report without blocking.',
             $configured,
             implode(', ', array_map(static fn (Severity $severity): string => $severity->value, Severity::cases())),
+            ConfigSchema::SEVERITY_GATE_OFF,
         ));
     }
 

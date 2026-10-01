@@ -36,11 +36,14 @@ use Pushery\SQLens\Capture\SessionGuard;
  * statement and lock budgets rather than growing a second one, and adds only what
  * the shadow path needs on top:
  *
- *   - PostgreSQL: `idle_in_transaction_session_timeout` (a shadow run holds a
- *     transaction open across a whole migrate, so an idle transaction must not
- *     pin resources), and `application_name = 'sqlens'` so a DBA watching
- *     `pg_stat_activity` can see exactly what SQLens is doing.
- *   - MySQL: nothing extra — its two axes already cover the statement and the lock.
+ *   - PostgreSQL: `idle_in_transaction_session_timeout` (a shadow run holds each
+ *     migration's transaction open while it runs, as Laravel's Migrator does, so an
+ *     idle transaction must not pin resources), and `application_name = 'sqlens'` so
+ *     a DBA watching `pg_stat_activity` can see exactly what SQLens is doing.
+ *   - MySQL: nothing extra. The shared set-path already bounds both of its lock waits, the row
+ *     lock and the metadata lock a migration's `ALTER TABLE` queues behind. The RUN of a schema
+ *     change stays unbounded there, and nothing here ends one early: `max_execution_time`
+ *     applies to read-only `SELECT` statements only, and MySQL offers no other statement bound.
  *
  * All three axes derive from the single `capture.shadow.timeout` (seconds), which
  * the config validator has already refused to let be zero or unbounded, so the

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Deploy;
 
 use Closure;
+use Pushery\SQLens\Catalog\UnsealedReaderSession;
+use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\UndeterminedReason;
 
 /**
@@ -43,9 +45,13 @@ final readonly class CheckSequence
      * @param  Closure(int): bool  $applies  whether the check at that position has anything to say
      * @param  Closure(): bool  $exhausted  whether the budget is spent, asked fresh before each one
      * @param  Closure(int): CheckResult  $execute
+     * @param  Closure(): ?UnsealedReaderSession  $refused  the refusal that ended the reader session, asked
+     *                                                      after each check and before the next one
      */
-    public static function run(array $ids, Closure $applies, Closure $exhausted, Closure $execute): PreflightReport
+    public static function run(array $ids, Closure $applies, Closure $exhausted, Closure $execute, ?Closure $refused = null): PreflightReport
     {
+        $refused ??= static fn (): ?UnsealedReaderSession => null;
+
         $results = [];
         $notApplicable = [];
 
@@ -57,6 +63,17 @@ final readonly class CheckSequence
         foreach ($ids as $position => $id) {
             if (! $applies($position)) {
                 $notApplicable[] = $id;
+
+                continue;
+            }
+
+            // A session that could not prove its seal stays refused, and a check that still asked would
+            // only be refused again. Named here rather than left to each check, which would report the
+            // refusal as an ordinary catalog read failure.
+            $refusal = $refused();
+
+            if ($refusal instanceof UnsealedReaderSession) {
+                $results[] = self::unsealed($id, $refusal);
 
                 continue;
             }
@@ -76,10 +93,29 @@ final readonly class CheckSequence
             }
 
             $startedAt = hrtime(true);
-            $results[] = $execute($position);
+            $result = $execute($position);
             $timings[$id] = (int) round((hrtime(true) - $startedAt) / 1_000_000);
+
+            // The check whose read was refused caught the refusal as a failed read, the way it catches
+            // any. Its answer is the refusal's, with whatever it found before it.
+            $refusal = $refused();
+            $results[] = $refusal instanceof UnsealedReaderSession
+                ? self::unsealed($id, $refusal, $result->findings)
+                : $result;
         }
 
         return new PreflightReport($results, $notApplicable, $timings);
+    }
+
+    /** @param  list<Finding>  $findings */
+    private static function unsealed(string $id, UnsealedReaderSession $refusal, array $findings = []): CheckResult
+    {
+        return CheckResult::undetermined(
+            $id,
+            UndeterminedReason::ReaderSessionUnsealed,
+            'the reader session could not prove it is read-only, so this check did not read, and the '
+            .'session is not probed again: '.$refusal->getMessage(),
+            $findings,
+        );
     }
 }

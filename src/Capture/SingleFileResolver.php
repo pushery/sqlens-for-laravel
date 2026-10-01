@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Capture;
 
 use Illuminate\Database\Migrations\Migrator;
+use Pushery\SQLens\ProjectPath;
 
 /**
  * The `--file` fast-path subject source: it resolves exactly ONE migration file to a
@@ -32,7 +33,7 @@ final readonly class SingleFileResolver
 
     public function resolve(string $file, string $connection): PendingMigration|SingleFileFailure
     {
-        $real = realpath($this->absolutePath($file));
+        $real = realpath(ProjectPath::anchored($file, $this->projectRoot));
 
         if ($real === false || ! is_file($real)) {
             return SingleFileFailure::NotFound;
@@ -56,21 +57,11 @@ final readonly class SingleFileResolver
         );
     }
 
-    /** An absolute path stays; a relative one resolves against the project root. */
-    private function absolutePath(string $file): string
-    {
-        if (str_starts_with($file, '/') || preg_match('#^[A-Za-z]:[\\\\/]#', $file) === 1) {
-            return $file;
-        }
-
-        return rtrim($this->projectRoot, '/').'/'.ltrim($file, '/');
-    }
-
     /** Whether the resolved file lives under a configured migration path. */
     private function withinMigrationPaths(string $real): bool
     {
         foreach ($this->migrationPaths as $path) {
-            $base = realpath($path);
+            $base = realpath(ProjectPath::anchored($path, $this->projectRoot));
 
             if ($base !== false && str_starts_with($real, rtrim($base, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR)) {
                 return true;

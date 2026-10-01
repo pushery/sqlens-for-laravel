@@ -83,6 +83,15 @@ enum DebtNotice: string implements RunNotice
     case ObjectNotFound = 'DEBT.OBJECT_NOT_FOUND';
 
     /**
+     * A recorded debt whose standing the catalog cannot give: no question settles it, or the read
+     * failed.
+     *
+     * Undetermined, like the absence above, and kept apart from it because it is not one: nothing
+     * was found missing. The reason on the finding says which of the two it is.
+     */
+    case StandingUnknown = 'DEBT.STANDING_UNKNOWN';
+
+    /**
      * The account was expected on this machine and is not there.
      *
      * The one place where the recording side and the collecting side answer the same observation

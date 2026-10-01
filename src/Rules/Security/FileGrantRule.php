@@ -28,6 +28,9 @@ use Pushery\SQLens\Subjects\SchemaObject;
  */
 final class FileGrantRule extends AbstractServerReachRule
 {
+    /** The privilege, public because SEC.PRIV.GRANT_SERVER_ADMIN leaves it to this rule. */
+    public const string PRIVILEGE = 'FILE';
+
     public function id(): string
     {
         return 'SEC.PRIV.GRANT_FILE';
@@ -40,7 +43,7 @@ final class FileGrantRule extends AbstractServerReachRule
 
     protected function privilege(): string
     {
-        return 'FILE';
+        return self::PRIVILEGE;
     }
 
     protected function message(SchemaObject $object): string

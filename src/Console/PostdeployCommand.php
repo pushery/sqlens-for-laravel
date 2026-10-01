@@ -192,6 +192,7 @@ final class PostdeployCommand extends Command
             $defenses,
             $readers,
             new SubjectContext(driver: '', profile: $profileName, strictTools: false),
+            requested: $name,
         );
 
         if (! $preflight->session instanceof ReaderSession) {
@@ -422,13 +423,14 @@ final class PostdeployCommand extends Command
             strictTools: false,
         );
 
-        $schemas = $config->get('sqlens.catalog.schemas');
-        $request = new CatalogRequest(
-            schemas: is_array($schemas) ? array_values(array_filter($schemas, is_string(...))) : [],
-        );
+        // The request the configuration asks for, as `sqlens:audit` and `sqlens:drift` build it, so
+        // the prefix, its scope and the extensions a project owns apply here too.
+        $request = CatalogRequest::fromConfig($config, connection: $connectionName);
 
+        // The live side on the server the migrations ran on, which on a read/write split is the write
+        // side: a replica's schema can lag behind the one the deploy just built.
         $catalog = $readers
-            ->for($context->driver, $connections->forConnection($connectionName), $connections->budget(), $context)
+            ->for($context->driver, $connections->forPrimary($connectionName), $connections->budget(), $context)
             ->catalog;
 
         $comparison = new ExpectationComparison($builder)->run(
@@ -436,7 +438,7 @@ final class PostdeployCommand extends Command
                 $connectionName,
                 $force = $this->option('force') === true,
                 $interactive = $this->input->isInteractive(),
-                $force || ! $interactive ? false : $this->confirm('Run the shadow replay against '.$connectionName.'?'),
+                $force || ! $interactive ? false : $this->confirm(ShadowReplayQuestion::for($config, $connectionName)),
             ),
             $resolution->migrations,
             $request,
@@ -588,6 +590,10 @@ final class PostdeployCommand extends Command
 
         foreach ($collected->unresolvable() as $debt) {
             $findings[] = DebtNotices::objectNotFound($debt, $context->driver, $context->connection, $subject);
+        }
+
+        foreach ($collected->unanswered() as $debt) {
+            $findings[] = DebtNotices::standingUnknown($debt, $context->driver, $context->connection, $subject);
         }
 
         return ['findings' => $findings, 'breaches' => $breaches];

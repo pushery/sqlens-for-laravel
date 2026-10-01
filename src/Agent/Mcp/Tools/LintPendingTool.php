@@ -11,10 +11,14 @@ use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Name;
 use Override;
+use Pushery\SQLens\Agent\Mcp\McpConnection;
+use Pushery\SQLens\Agent\Mcp\ProfileRefusal;
 use Pushery\SQLens\Agent\Mcp\ReportPage;
 use Pushery\SQLens\Agent\Mcp\RunRefusal;
+use Pushery\SQLens\Agent\Mcp\RunUnresolved;
 use Pushery\SQLens\Agent\Mcp\ToolAnswer;
 use Pushery\SQLens\Categories\Category;
+use Pushery\SQLens\Config\ProfileApplication;
 use Pushery\SQLens\Lint\LintRuns;
 use Pushery\SQLens\Reporting\Json\JsonEnvelope;
 use Pushery\SQLens\Subjects\CaptureMode;
@@ -56,9 +60,31 @@ final class LintPendingTool extends SqlensTool
     public function handle(Request $request, Repository $config, LintRuns $runs): Response
     {
         $validated = $this->validated($request);
+        $profiles = new ProfileApplication($config);
 
+        // The choice `sqlens:lint` makes, in its order: this parameter where the command reads
+        // `--profile`, then SQLENS_PROFILE, then `sqlens.profile`. A value that names no profile
+        // stops the call as it stops the command, rather than falling back to a laxer one.
+        $profile = $profiles->select(is_string($validated['profile'] ?? null) ? $validated['profile'] : null);
+
+        if (! $profile->isValid()) {
+            return Response::json(ProfileRefusal::forLint((string) $profile->rejectedValue, $profile->source));
+        }
+
+        // Applied for this call and put back afterwards, because the next call is answered in the
+        // same process.
+        return $profiles->during($profile, fn (): Response => $this->answer($validated, $config, $runs));
+    }
+
+    /**
+     * The run and its answer, under the profile the call chose.
+     *
+     * @param  array<string, mixed>  $validated
+     */
+    private function answer(array $validated, Repository $config, LintRuns $runs): Response
+    {
         $outcome = $runs->run(
-            connection: is_string($validated['connection'] ?? null) ? $validated['connection'] : null,
+            connection: new McpConnection($config)->chosen($validated['connection'] ?? null),
             migrationPaths: null,
             // Pretend, hard-coded. Not a default a parameter can move: shadow creates and drops a
             // database, and reaching it from here would put that decision in a caller's argument.
@@ -75,25 +101,15 @@ final class LintPendingTool extends SqlensTool
         $findings = $envelope['findings'];
 
         $page = ReportPage::of($findings, 0, null, $this->ceiling($config));
-
-        // The engine's OWN undetermined reasons, passed through rather than re-derived. Three-
-        // valuedness is not reinvented in the agent layer: what the run could not determine is
-        // counted in the envelope, and this lists the ones that actually occurred.
-        $unresolved = $this->unresolvedReasons($envelope);
+        $summary = trim($this->summary($outcome->connectionName, $page).($outcome->staleBaselineBreaks ? ' '.$outcome->gateMeaning() : ''));
 
         // A run the engine never performed can only be undetermined, whatever the findings list
         // looks like — and an empty list is exactly what it looks like. Checked BEFORE the ordinary
         // answer, because the ordinary answer over a run that did not happen is the silent green.
-        $answer = RunRefusal::in($outcome) ?? ($unresolved === []
-            ? ToolAnswer::of([], $this->summary($outcome->connectionName, $page))
-            : ToolAnswer::undetermined(
-                'the run could not determine everything it looked at: '.implode(', ', $unresolved),
-                [],
-                // The paging sentence survives the undetermined one. A run can be both — some of it
-                // unjudgeable AND its list cut — and a text client that only heard the first would
-                // act on a short list believing it complete.
-                $this->summary($outcome->connectionName, $page),
-            ));
+        // Then a run that happened and could not determine everything, in the engine's own reasons.
+        $answer = RunRefusal::in($outcome)
+            ?? RunUnresolved::in($envelope, $summary)
+            ?? ToolAnswer::of([], $summary);
 
         return Response::json([
             ...$answer->toArray(),
@@ -103,7 +119,7 @@ final class LintPendingTool extends SqlensTool
             'gate' => [
                 'breached' => $outcome->exitCode->value !== 0,
                 'exit_code' => $outcome->exitCode->value,
-                'meaning' => $outcome->exitCode->description(),
+                'meaning' => $outcome->gateMeaning(),
             ],
             // The envelope, whole and unchanged, so nothing about the report is re-derived here. A
             // second rendering of one run is a second thing that can disagree with it.
@@ -130,8 +146,10 @@ final class LintPendingTool extends SqlensTool
             // A NAME from the application's own connections, never a DSN. A free connection string
             // would let a caller point this tool at a database the project never configured — which
             // is the same class of hole as a free path, one layer down.
-            'connection' => ['sometimes', 'string', 'in:'.implode(',', $this->connectionNames($config))],
-            'profile' => ['sometimes', 'string', 'in:'.implode(',', $this->profileNames($config))],
+            'connection' => ['sometimes', 'string', 'in:'.implode(',', new McpConnection($config)->allowed())],
+            // The names `--profile` accepts, whether or not the project configured overrides for
+            // them. A profile without overrides runs on the base configuration on both paths.
+            'profile' => ['sometimes', 'string', 'in:'.implode(',', ProfileApplication::names())],
             // Bounded AND patterned. The pattern refuses a traversal BEFORE anything touches the
             // filesystem, which is worth having on its own — but it is not the containment. That
             // belongs to the engine's own single-file resolver, which resolves the path and refuses
@@ -154,38 +172,10 @@ final class LintPendingTool extends SqlensTool
         return [
             'level' => $schema->integer()->description('Strictness level 0-9. Defaults to the project configuration.'),
             'category' => $schema->string()->description('Scope the run to one category: '.implode(', ', array_column(Category::cases(), 'value')).'.'),
-            'connection' => $schema->string()->description('The name of a connection this application has configured. Never a connection string.'),
-            'profile' => $schema->string()->description('The name of a run profile this project has configured.'),
+            'connection' => $schema->string()->description('The name of a connection this application has configured, and only the one sqlens.agent.mcp.connection names when it is set. Never a connection string.'),
+            'profile' => $schema->string()->description('The run profile to apply, as sqlens:lint --profile does: '.implode(', ', ProfileApplication::names()).'. Leave it out to use SQLENS_PROFILE or sqlens.profile, as the command does.'),
             'file' => $schema->string()->description('A single project-relative migration file, for the sub-second path an editor loop uses.'),
         ];
-    }
-
-    /**
-     * The undetermined reasons this run actually hit, from the envelope's own counts.
-     *
-     * Read rather than recomputed. The engine already decided what it could not determine and why;
-     * a second reading in the agent layer would be a second answer, free to disagree with the
-     * report a person sees for the same run.
-     *
-     * @param  array<string, mixed>  $envelope
-     * @return list<string>
-     */
-    private function unresolvedReasons(array $envelope): array
-    {
-        $summary = $envelope['summary'] ?? null;
-        $counts = is_array($summary) ? ($summary['counts'] ?? null) : null;
-        $reasons = is_array($counts) ? ($counts['undetermined_reason'] ?? null) : null;
-        $hit = [];
-
-        foreach (is_array($reasons) ? $reasons : [] as $reason => $count) {
-            if (is_int($count) && $count > 0) {
-                $hit[] = (string) $reason;
-            }
-        }
-
-        sort($hit);
-
-        return $hit;
     }
 
     /**
@@ -208,36 +198,6 @@ final class LintPendingTool extends SqlensTool
             count($page->rows),
             $page->truncated ? 'The list is CUT: '.$page->reason.'.' : 'Nothing was left out.',
         );
-    }
-
-    /**
-     * The connection names this application has configured.
-     *
-     * @return list<string>
-     */
-    private function connectionNames(Repository $config): array
-    {
-        $connections = $config->get('database.connections');
-
-        return array_values(array_filter(
-            array_map(strval(...), array_keys(is_array($connections) ? $connections : [])),
-            static fn (string $name): bool => $name !== '',
-        ));
-    }
-
-    /**
-     * The run profiles this project has configured.
-     *
-     * @return list<string>
-     */
-    private function profileNames(Repository $config): array
-    {
-        $profiles = $config->get('sqlens.profiles');
-
-        return array_values(array_filter(
-            array_map(strval(...), array_keys(is_array($profiles) ? $profiles : [])),
-            static fn (string $name): bool => $name !== '',
-        ));
     }
 
     private function ceiling(Repository $config): int

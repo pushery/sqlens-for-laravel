@@ -69,7 +69,20 @@ final readonly class EngineIdentity
             return DriverResolutionFailure::unverifiedEngineIdentity($driver->key());
         }
 
-        return self::isMariaDb($banner)
+        return self::impostor($driver->key(), $banner);
+    }
+
+    /**
+     * The failure when the banner shows another product answering under the driver's name, or
+     * null when it does not.
+     *
+     * The half of {@see self::check()} that needs no driver object and no decision about a missing
+     * banner, for a caller that holds only the driver key of a connection it has opened: the deploy
+     * gates, which read through a connection of their own.
+     */
+    public static function impostor(string $driverKey, string $banner): ?DriverResolutionFailure
+    {
+        return $driverKey === 'mysql' && self::isMariaDb($banner)
             ? DriverResolutionFailure::mariaDbBehindMysqlDriver($banner)
             : null;
     }

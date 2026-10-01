@@ -39,9 +39,39 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * A grant the ENGINE ships is out too — every server ships administrative accounts by design, and a
  * rule reporting those fires on a database created a minute ago.
+ *
+ * `FILE` and `PROCESS` are judged on the catalog by SEC.PRIV.GRANT_FILE and SEC.PRIV.GRANT_PROCESS.
+ * They stay in the shared list, because the migration-side rule reads it and nothing else reports a
+ * migration that grants them, so they are filtered here instead. And the account the audit connected
+ * as is not reported for the privileges this package's own setup asks it to hold.
  */
 final class AdminPrivilegeGrantRule extends AbstractSchemaObjectSecurityRule implements DeclaresJudgedObjectTypes
 {
+    /**
+     * What this package's own setup asks its accounts to hold on MySQL: `SHOW_ROUTINE` and `PROCESS`
+     * for the audit account, `PROCESS` and `REPLICATION CLIENT` for the preflight one.
+     *
+     * Not reported on the account the audit connected as, for the reason the server-reach family
+     * gives: a tool that reports the privileges its own documentation asks you to grant is a tool
+     * nobody trusts twice. Measured before this list existed: the recommended audit account got a
+     * `high` finding for `PROCESS, SHOW_ROUTINE`, which `security.min_severity = high` turns into a
+     * red build. Any OTHER administrative privilege on that account is still reported.
+     *
+     * @var list<string>
+     */
+    public const array AUDIT_SETUP_PRIVILEGES = ['PROCESS', 'REPLICATION CLIENT', 'SHOW_ROUTINE'];
+
+    /**
+     * Administrative in the vocabulary and judged on the catalog by rules of their own.
+     *
+     * The migration-side rule still reads them from the shared list, because no other rule looks at
+     * a migration that grants them. On the catalog they are SEC.PRIV.GRANT_FILE and
+     * SEC.PRIV.GRANT_PROCESS, and reporting them here as well gave one grant two findings.
+     *
+     * @var list<string>
+     */
+    private const array JUDGED_BY_THEIR_OWN_RULE = [FileGrantRule::PRIVILEGE, ProcessGrantRule::PRIVILEGE];
+
     /**
      * Grants only. The grant reading is refusable on a managed database, which makes "no subject" an
      * ordinary state here — and one a report must not present as a check that ran.
@@ -95,10 +125,15 @@ final class AdminPrivilegeGrantRule extends AbstractSchemaObjectSecurityRule imp
         // The engine's own names, kept by the reader precisely so a rule can ask this question. The
         // canonical `privileges` list maps a dynamic privilege onto `other`, which is the same value
         // for all of them — asking there would be asking a question the canonicalization erased.
+        $isConnection = $object->getBool('connection_grantee') === true;
+
         $held = array_values(array_filter(array_map(
             trim(...),
             explode(',', $object->getString('other_privileges') ?? ''),
-        ), static fn (string $name): bool => $name !== '' && MysqlAdminPrivileges::isAdministrative($name)));
+        ), static fn (string $name): bool => $name !== ''
+            && MysqlAdminPrivileges::isAdministrative($name)
+            && ! in_array(strtoupper($name), self::JUDGED_BY_THEIR_OWN_RULE, true)
+            && (! $isConnection || ! in_array(strtoupper($name), self::AUDIT_SETUP_PRIVILEGES, true))));
 
         if ($held === []) {
             return [];

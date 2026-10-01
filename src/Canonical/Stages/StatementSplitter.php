@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Canonical\Stages;
 
 use Pushery\SQLens\Canonical\CanonicalizationFailure;
+use Pushery\SQLens\Canonical\ScanAt;
 use Pushery\SQLens\Canonical\StatementPart;
 use Pushery\SQLens\Canonical\StatementPartKind;
 use Pushery\SQLens\Contracts\DriverCanonicalization;
@@ -29,6 +30,13 @@ use Pushery\SQLens\Contracts\DriverCanonicalization;
  * A string literal, quoted identifier and driver delimiter are all single
  * characters here (as PostgreSQL and MySQL declare them).
  *
+ * A stored routine is ONE statement however many semicolons its body holds.
+ * `CREATE TRIGGER … BEGIN …; …; END` reaches the server in one piece, so a `;`
+ * inside a `BEGIN … END` block of a routine definition, a PostgreSQL
+ * `BEGIN ATOMIC` body included, does not end the statement. Only the default
+ * terminator is read this way: after `DELIMITER`, the batch delimits its bodies
+ * itself.
+ *
  * Not every line of a batch is a statement. A hand-written `.sql` file carries
  * CLIENT directives — `\i other.sql`, `\set ON_ERROR_STOP on` — that psql reads
  * itself and the server never sees. They do not end at a semicolon, so a splitter
@@ -38,6 +46,12 @@ use Pushery\SQLens\Contracts\DriverCanonicalization;
  */
 final class StatementSplitter
 {
+    /** The characters a keyword or an unquoted identifier is made of. */
+    private const string WORD_CHARACTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$';
+
+    /** The words after `END` that close a construct whose opening is not counted. */
+    private const array UNCOUNTED_CLOSINGS = ['IF', 'LOOP', 'WHILE', 'REPEAT'];
+
     /**
      * The SQL statements in the batch, in execution order.
      *
@@ -89,15 +103,21 @@ final class StatementSplitter
 
         $parts = [];
         $current = '';
+        // Whether the statement read so far holds anything but comments and blank space. A directive
+        // and a `DELIMITER` line are read only before it does, and a comment in front of either
+        // leaves it false: a comment is not statement content.
+        $hasSql = false;
         $terminator = ';';
         $length = strlen($batch);
         $i = 0;
+        // How many `BEGIN`/`CASE` blocks of a routine body are open at $i. A `;` inside one belongs
+        // to the body.
+        $depth = 0;
 
         while ($i < $length) {
             $char = $batch[$i];
-            $rest = substr($batch, $i);
 
-            if ($this->matchPrefix($rest, $lineComments) !== null) {
+            if (ScanAt::firstOf($batch, $i, $lineComments) !== null) {
                 $newline = strpos($batch, "\n", $i);
                 $end = $newline === false ? $length : $newline;
                 $current .= substr($batch, $i, $end - $i);
@@ -107,8 +127,8 @@ final class StatementSplitter
             }
 
             if ($directivePrefix !== ''
-                && str_starts_with($rest, $directivePrefix)
-                && trim($current) === ''
+                && ! $hasSql
+                && ScanAt::startsWith($batch, $i, $directivePrefix)
                 && $this->atLineStart($batch, $i)
             ) {
                 $newline = strpos($batch, "\n", $i);
@@ -121,7 +141,7 @@ final class StatementSplitter
                 continue;
             }
 
-            if ($hasBlockComment && str_starts_with($rest, '/*')) {
+            if ($hasBlockComment && ScanAt::startsWith($batch, $i, '/*')) {
                 $close = strpos($batch, '*/', $i + 2);
                 if ($close === false) {
                     return CanonicalizationFailure::unterminatedLiteral('block comment', $i);
@@ -133,7 +153,7 @@ final class StatementSplitter
                 continue;
             }
 
-            if ($driver->supportsDollarQuotedStrings() && $char === '$' && preg_match('/\A\$\w*\$/', $rest, $matches) === 1) {
+            if ($driver->supportsDollarQuotedStrings() && $char === '$' && preg_match('/\G\$\w*\$/', $batch, $matches, 0, $i) === 1) {
                 $tag = $matches[0];
                 $close = strpos($batch, $tag, $i + strlen($tag));
                 if ($close === false) {
@@ -142,12 +162,13 @@ final class StatementSplitter
 
                 $end = $close + strlen($tag);
                 $current .= substr($batch, $i, $end - $i);
+                $hasSql = true;
                 $i = $end;
 
                 continue;
             }
 
-            $literal = $this->matchPrefix($rest, $literals);
+            $literal = ScanAt::firstOf($batch, $i, $literals);
             if ($literal !== null) {
                 $end = $this->scanQuoted($batch, $i, $literal, $backslashEscapes);
                 if ($end === null) {
@@ -155,6 +176,7 @@ final class StatementSplitter
                 }
 
                 $current .= substr($batch, $i, $end - $i);
+                $hasSql = true;
                 $i = $end;
 
                 continue;
@@ -167,12 +189,13 @@ final class StatementSplitter
                 }
 
                 $current .= substr($batch, $i, $end - $i);
+                $hasSql = true;
                 $i = $end;
 
                 continue;
             }
 
-            if ($driver->supportsDelimiterRedefinition() && trim($current) === '' && preg_match('/\ADELIMITER\s+/i', $rest) === 1) {
+            if (! $hasSql && $driver->supportsDelimiterRedefinition() && preg_match('/\GDELIMITER\s+/i', $batch, offset: $i) === 1) {
                 [$newTerminator, $consumed] = $this->readDelimiter($batch, $i);
                 if ($newTerminator === '') {
                     return CanonicalizationFailure::unknownDelimiterSituation('a DELIMITER statement declares no new delimiter', $i);
@@ -185,19 +208,39 @@ final class StatementSplitter
                 continue;
             }
 
-            if (str_starts_with($rest, $terminator)) {
+            if ($terminator === ';' && $this->wordStartsAt($batch, $i)) {
+                $word = substr($batch, $i, strspn($batch, self::WORD_CHARACTERS, $i));
+                [$depth, $consumed] = $this->blockStep($batch, $i, $word, $depth, $current);
+
+                $current .= substr($batch, $i, $consumed);
+                $hasSql = true;
+                $i += $consumed;
+
+                continue;
+            }
+
+            if ($depth > 0 && ScanAt::startsWith($batch, $i, $terminator)) {
+                $current .= $terminator;
+                $i += strlen($terminator);
+
+                continue;
+            }
+
+            if (ScanAt::startsWith($batch, $i, $terminator)) {
                 $trimmed = trim($current);
                 if ($trimmed !== '') {
                     $parts[] = new StatementPart($trimmed, StatementPartKind::Sql);
                 }
 
                 $current = '';
+                $hasSql = false;
                 $i += strlen($terminator);
 
                 continue;
             }
 
             $current .= $char;
+            $hasSql = $hasSql || ! ctype_space($char);
             $i++;
         }
 
@@ -207,6 +250,74 @@ final class StatementSplitter
         }
 
         return $parts;
+    }
+
+    /**
+     * Whether a keyword or an unquoted identifier starts at $at: a letter or an underscore that does
+     * not continue a word, so `xbegin` and `1e10` are not read as `begin` or `e10`.
+     */
+    private function wordStartsAt(string $batch, int $at): bool
+    {
+        $char = $batch[$at];
+
+        if (! ctype_alpha($char) && $char !== '_') {
+            return false;
+        }
+
+        return $at === 0 || strspn($batch[$at - 1], self::WORD_CHARACTERS) === 0;
+    }
+
+    /**
+     * The block depth after one word, and how many bytes of the batch the step takes.
+     *
+     * Opening: `BEGIN` in a statement that defines a routine or inside a block already open, where
+     * a transaction's `BEGIN` cannot stand; `CASE` inside a block, because it ends with an `END` of
+     * its own. Closing: `END`, and `END CASE` as one closing. `END IF`, `END LOOP`, `END WHILE` and
+     * `END REPEAT` close constructs whose opening words are not counted, because `IF` is also a
+     * function and part of `IF EXISTS`. An `END` with no block open is left alone: it is a word
+     * that happens to be spelled that way.
+     *
+     * @return array{int, int}
+     */
+    private function blockStep(string $batch, int $at, string $word, int $depth, string $current): array
+    {
+        $length = strlen($word);
+
+        return match (strtoupper($word)) {
+            'BEGIN' => [$depth > 0 || $this->definesARoutine($current) ? $depth + 1 : $depth, $length],
+            'CASE' => [$depth > 0 ? $depth + 1 : $depth, $length],
+            'END' => $depth > 0 ? $this->closing($batch, $at + $length, $depth, $length) : [$depth, $length],
+            default => [$depth, $length],
+        };
+    }
+
+    /**
+     * What an `END` inside a block closes, from the word that follows it.
+     *
+     * @return array{int, int}
+     */
+    private function closing(string $batch, int $after, int $depth, int $length): array
+    {
+        $gap = strspn($batch, " \t\r\n", $after);
+        $next = strtoupper(substr($batch, $after + $gap, strspn($batch, self::WORD_CHARACTERS, $after + $gap)));
+
+        if (in_array($next, self::UNCOUNTED_CLOSINGS, true)) {
+            return [$depth, $length];
+        }
+
+        // `END CASE` is one closing, so its CASE is taken along and cannot open another block.
+        return $next === 'CASE'
+            ? [$depth - 1, $length + $gap + strlen($next)]
+            : [$depth - 1, $length];
+    }
+
+    /**
+     * Whether the statement read so far defines a stored routine: a trigger, a procedure, a function
+     * or an event, the statements whose body may hold a block.
+     */
+    private function definesARoutine(string $current): bool
+    {
+        return preg_match('/\A(?:\s+|--[^\n]*\n|#[^\n]*\n|\/\*.*?\*\/)*CREATE\b.*?\b(?:TRIGGER|PROCEDURE|FUNCTION|EVENT)\b/is', $current) === 1;
     }
 
     /**
@@ -232,22 +343,6 @@ final class StatementSplitter
         }
 
         return true;
-    }
-
-    /**
-     * The first candidate that prefixes the haystack, or null.
-     *
-     * @param  list<string>  $candidates
-     */
-    private function matchPrefix(string $haystack, array $candidates): ?string
-    {
-        foreach ($candidates as $candidate) {
-            if ($candidate !== '' && str_starts_with($haystack, $candidate)) {
-                return $candidate;
-            }
-        }
-
-        return null;
     }
 
     /**

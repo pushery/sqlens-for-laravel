@@ -31,7 +31,7 @@ final class GrantOptionRule extends AbstractGrantOptionRule
         return false;
     }
 
-    protected function message(string $grantee, string $target): string
+    protected function message(string $grantee, string $target, string $revoke): string
     {
         return sprintf(
             '%s may hand its access to %s on to other accounts (WITH GRANT OPTION). Every other limit on '
@@ -39,12 +39,11 @@ final class GrantOptionRule extends AbstractGrantOptionRule
             .'same access, and the second one carries no note about where it came from — so an audit run '
             .'tomorrow sees a plain account and not the path that made it. Administrative accounts hold '
             .'this on purpose and it is not a defect there; what this finding gives you is the list of '
-            .'accounts for which it should have been a decision. Revoke it with '
-            .'REVOKE GRANT OPTION FOR … ON %s FROM %s, which leaves the access itself intact.',
+            .'accounts for which it should have been a decision. Revoking the option leaves the access '
+            .'itself intact: %s',
             $grantee,
             $target,
-            $target,
-            $grantee,
+            $revoke,
         );
     }
 

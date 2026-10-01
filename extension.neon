@@ -86,7 +86,13 @@ parameters:
             exclude_paths: []
             justification_placeholders: []
 
+# THE RESULT FORMAT. `--error-format=sqlens` writes PHPStan's JSON result together with the trace of
+# this extension, and it is the result `sqlens:security` reads: a run whose configuration forgot this
+# file cannot write it, and one that could not analyze every file says so in it. PHPStan finds a
+# format by the service name `errorFormatter.<name>`, so this entry is named rather than listed.
 services:
+    errorFormatter.sqlens:
+        class: Pushery\SQLens\Analyse\SqlensErrorFormatter
     -
         class: Pushery\SQLens\Analyse\AnalyseConfig
         arguments:
@@ -118,6 +124,12 @@ services:
         class: Pushery\SQLens\Analyse\RawSqlFragmentCollector
         tags:
             - phpstan.collector
+    # The same fragments called statically on a model, `Order::whereRaw(…)`, which a model forwards
+    # to a new builder. A static call is a node shape of its own, so it needs a collector of its own.
+    -
+        class: Pushery\SQLens\Analyse\RawSqlModelFragmentCollector
+        tags:
+            - phpstan.collector
     -
         class: Pushery\SQLens\Analyse\RawSqlConnectionCallCollector
         tags:
@@ -131,6 +143,17 @@ services:
             - phpstan.collector
     -
         class: Pushery\SQLens\Analyse\RawSqlExpressionCollector
+        tags:
+            - phpstan.collector
+    # Eloquent's own statement sink, fromQuery(), in both of its spellings: on a builder, a relation
+    # or a model instance, and statically on a model. One collector per node shape, because a
+    # collector sees one.
+    -
+        class: Pushery\SQLens\Analyse\RawSqlEloquentCallCollector
+        tags:
+            - phpstan.collector
+    -
+        class: Pushery\SQLens\Analyse\RawSqlEloquentStaticCallCollector
         tags:
             - phpstan.collector
     -

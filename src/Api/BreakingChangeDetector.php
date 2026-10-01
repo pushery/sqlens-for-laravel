@@ -101,8 +101,10 @@ final readonly class BreakingChangeDetector
             }
 
             // A new rule reports findings a consumer's build did not see before, so it is visible
-            // rather than free — but it breaks nothing, and requiring a major for it would mean the
-            // package could never grow between majors.
+            // rather than free, and a minor may add one. Before 1.0 it ships `stable`: a 0.x minor
+            // is where this package makes its breaking changes, and `^0.N` does not install one on
+            // its own. From 1.0 GOVERNANCE.md asks for `preview`, and a stable newcomer then needs a
+            // major; this comparison does not read the tier yet.
             $changes[] = new SurfaceChange(
                 SurfaceChangeClass::AllowedInMinor,
                 $id,
@@ -132,14 +134,23 @@ final readonly class BreakingChangeDetector
                 continue;
             }
 
-            $changes[] = self::fieldChange($id, $field, $from, $to, $after);
+            $changes[] = self::ruleFieldChange($id, $field, $from, $to, $after);
         }
 
         return $changes;
     }
 
-    /** @param  array<string, mixed>  $after  the candidate's own entry, for fields that read a sibling */
-    private static function fieldChange(string $id, string $field, mixed $from, mixed $to, array $after): SurfaceChange
+    /**
+     * What one field of one rule moving costs.
+     *
+     * Public because it is the one verdict about a rule's contract, and the rule governance gate that
+     * runs in the local and release checks asks it rather than keeping a second opinion. Two
+     * classifiers had already disagreed about the same category change, one passing it and one
+     * refusing it, so which verdict held depended on which command somebody typed.
+     *
+     * @param  array<string, mixed>  $after  the candidate's own entry, for fields that read a sibling
+     */
+    public static function ruleFieldChange(string $id, string $field, mixed $from, mixed $to, array $after): SurfaceChange
     {
         // The prefix is what a consumer greps their CI log for and what their alerting matches on.
         // Changing it is silent on our side and total on theirs.
@@ -185,7 +196,26 @@ final readonly class BreakingChangeDetector
             return self::stabilityChange($id, $from, $to, $after);
         }
 
-        // Level, category and the replacement pointer: visible, not breaking.
+        if ($field === 'level') {
+            return self::levelChange($id, $from, $to, $after);
+        }
+
+        // A category decides which gate measures the rule, and which `--category` scope admits it.
+        // Moving it between the level axis and the risk axis is neither a tightening nor a loosening:
+        // a level-0 run that never saw the rule can now be blocked by it, or a scope a project chose
+        // stops showing it. Somebody decides that deliberately, in a major.
+        if ($field === 'category') {
+            return new SurfaceChange(
+                SurfaceChangeClass::ForbiddenWithoutMajor,
+                $id,
+                $field,
+                sprintf('`%s` moved from the category `%s` to `%s`', $id, self::render($from), self::render($to)),
+                'a category decides which gate measures the rule and which scope admits it. Keep it, '
+                .'or add a rule under the new category and deprecate this one.',
+            );
+        }
+
+        // The replacement pointer: visible, not breaking.
         return new SurfaceChange(
             SurfaceChangeClass::AllowedInMinor,
             $id,
@@ -265,6 +295,57 @@ final readonly class BreakingChangeDetector
             $id,
             'stability',
             sprintf('`%s` changed its stability from `%s` to `%s`', $id, self::render($from), self::render($to)),
+        );
+    }
+
+    /**
+     * A level move, judged by who it reaches.
+     *
+     * A run at level n admits every rule at n or below, so a level is a promise about which projects
+     * see a rule without asking. For a rule in the default tier, a LOWER level turns it on for every
+     * project between the two levels, which is the same event as a promotion; a HIGHER one turns it
+     * off for them, which is the same event as a silent retirement unless the rule is announced as
+     * deprecated. For a rule nobody runs without opting in, both moves reach only those who asked.
+     *
+     * @param  array<string, mixed>  $after  the candidate's own entry, read for its tier and deprecation
+     */
+    private static function levelChange(string $id, mixed $from, mixed $to, array $after): SurfaceChange
+    {
+        $before = is_int($from) ? $from : null;
+        $now = is_int($to) ? $to : null;
+        $description = sprintf('`%s` moved from level `%s` to `%s`', $id, self::render($from), self::render($to));
+
+        if (! self::isDefaultTier($after['stability'] ?? null)) {
+            return new SurfaceChange(SurfaceChangeClass::AllowedInMinor, $id, 'level', $description);
+        }
+
+        if ($before === null || $now === null || $now < $before) {
+            return new SurfaceChange(
+                SurfaceChangeClass::ForbiddenWithoutMajor,
+                $id,
+                'level',
+                $description,
+                'a lower level turns the rule on for every project between the two, on migrations nobody '
+                .'touched. Ship it with a major, or keep the level.',
+            );
+        }
+
+        if (($after['deprecated_since'] ?? null) === null) {
+            return new SurfaceChange(
+                SurfaceChangeClass::ForbiddenWithoutMajor,
+                $id,
+                'level',
+                $description,
+                'a higher level stops the rule for every project between the two, and their gate stays '
+                .'green. Set `deprecated_since` so the retirement announces itself, or keep the level.',
+            );
+        }
+
+        return new SurfaceChange(
+            SurfaceChangeClass::AllowedInMinor,
+            $id,
+            'level',
+            $description.sprintf(', announced as deprecated since %s', self::render($after['deprecated_since'])),
         );
     }
 

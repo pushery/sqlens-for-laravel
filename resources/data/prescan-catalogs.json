@@ -1,6 +1,6 @@
 {
     "schema_version": 1,
-    "about": "The surfaces the static pre-scan looks for in a migration, kept as data so the list is reviewable as a list and a diff shows exactly which target moved. Target grammar: 'Class::method' (that method on that class, static or instance), '*::method' (that method on any receiver), 'function()' (a free function), 'Class' (any call on that class), 'Namespace\\*' (any call under that namespace). Within a catalog the first matching entry wins, so a specific target may sit in front of a broad one.",
+    "about": "The surfaces the static pre-scan looks for in a migration, kept as data so the list is reviewable as a list and a diff shows exactly which target moved. Target grammar: 'Class::method' (that method on that class, static or instance), '*::method' (that method on any receiver), 'function()' (a free function), 'Class' (any call on that class), 'Namespace\\*' (any call under that namespace), 'app('key')' (that key resolved out of the container, whether written app('key'), resolve('key'), app()->make('key'), Container::getInstance()->make('key') or App::make('key')). Within a catalog the first matching entry wins, so a specific target may sit in front of a broad one.",
     "catalogs": {
         "indirect_call_exempt": {
             "description": "Classes an indirect-call hit is deliberately NOT raised for. The indirect-call detector flags a migration that reaches project code the pre-scan cannot follow — but the whole framework, and a handful of pure value surfaces, are neither project code nor side effects, and flagging them would make the rule noise. An application adds its own exemptions through sqlens.capture.prescan.indirect_calls.allowlist rather than editing this list.",
@@ -31,6 +31,11 @@
                     "reason": "constructs a duration value"
                 },
                 {
+                    "target": "DateTimeZone",
+                    "kind": "value",
+                    "reason": "constructs a time zone value"
+                },
+                {
                     "target": "Ramsey\\Uuid\\*",
                     "kind": "value",
                     "reason": "constructs a UUID value"
@@ -39,6 +44,11 @@
                     "target": "Symfony\\Component\\Uid\\*",
                     "kind": "value",
                     "reason": "constructs a UID value"
+                },
+                {
+                    "target": "stdClass",
+                    "kind": "value",
+                    "reason": "an empty object, with no constructor to run"
                 }
             ]
         },
@@ -126,9 +136,54 @@
                     "reason": "performs a real HTTP request to a real host"
                 },
                 {
-                    "target": "Illuminate\\Support\\Facades\\Process",
+                    "target": "app('Illuminate\\Http\\Client\\Factory')",
                     "kind": "network",
+                    "reason": "resolves the HTTP client out of the container, the surface the Http facade reaches, and performs a real HTTP request to a real host"
+                },
+                {
+                    "target": "Illuminate\\Support\\Facades\\Process",
+                    "kind": "process",
                     "reason": "starts a real external process, which can do anything"
+                },
+                {
+                    "target": "app('Illuminate\\Process\\Factory')",
+                    "kind": "process",
+                    "reason": "resolves the process factory out of the container, the surface the Process facade reaches, and starts a real external process, which can do anything"
+                },
+                {
+                    "target": "exec()",
+                    "kind": "process",
+                    "reason": "runs a real shell command on the server, which can do anything"
+                },
+                {
+                    "target": "shell_exec()",
+                    "kind": "process",
+                    "reason": "runs a real shell command on the server, which can do anything"
+                },
+                {
+                    "target": "system()",
+                    "kind": "process",
+                    "reason": "runs a real shell command on the server, which can do anything"
+                },
+                {
+                    "target": "passthru()",
+                    "kind": "process",
+                    "reason": "runs a real shell command on the server, which can do anything"
+                },
+                {
+                    "target": "proc_open()",
+                    "kind": "process",
+                    "reason": "starts a real external process, which can do anything"
+                },
+                {
+                    "target": "popen()",
+                    "kind": "process",
+                    "reason": "starts a real external process, which can do anything"
+                },
+                {
+                    "target": "pcntl_exec()",
+                    "kind": "process",
+                    "reason": "replaces the running process with another program"
                 },
                 {
                     "target": "curl_exec()",
@@ -161,9 +216,29 @@
                     "reason": "reads or writes a real filesystem, local or remote"
                 },
                 {
+                    "target": "app('filesystem')",
+                    "kind": "filesystem",
+                    "reason": "resolves the filesystem out of the container, the surface the Storage facade reaches, and reads or writes a real filesystem, local or remote"
+                },
+                {
+                    "target": "app('filesystem.disk')",
+                    "kind": "filesystem",
+                    "reason": "resolves a filesystem disk out of the container, the surface the Storage facade reaches, and reads or writes a real filesystem, local or remote"
+                },
+                {
+                    "target": "app('filesystem.cloud')",
+                    "kind": "filesystem",
+                    "reason": "resolves the cloud disk out of the container, the surface the Storage facade reaches, and reads or writes a real remote filesystem"
+                },
+                {
                     "target": "Illuminate\\Support\\Facades\\File",
                     "kind": "filesystem",
                     "reason": "reads or writes the local filesystem"
+                },
+                {
+                    "target": "app('files')",
+                    "kind": "filesystem",
+                    "reason": "resolves the local filesystem out of the container, the surface the File facade reaches, and reads or writes the local filesystem"
                 },
                 {
                     "target": "file_put_contents()",
@@ -216,9 +291,34 @@
                     "reason": "sends a real email to a real recipient"
                 },
                 {
+                    "target": "app('mail.manager')",
+                    "kind": "messaging",
+                    "reason": "resolves the mail manager out of the container, the surface the Mail facade reaches, and sends a real email to a real recipient"
+                },
+                {
+                    "target": "app('mailer')",
+                    "kind": "messaging",
+                    "reason": "resolves the mailer out of the container, the surface the Mail facade reaches, and sends a real email to a real recipient"
+                },
+                {
+                    "target": "mail()",
+                    "kind": "messaging",
+                    "reason": "sends a real email through the server's mail transport"
+                },
+                {
+                    "target": "mb_send_mail()",
+                    "kind": "messaging",
+                    "reason": "sends a real email through the server's mail transport"
+                },
+                {
                     "target": "Illuminate\\Support\\Facades\\Notification",
                     "kind": "messaging",
                     "reason": "sends a real notification — the mail, Slack message or push a lint run must never produce"
+                },
+                {
+                    "target": "app('Illuminate\\Notifications\\ChannelManager')",
+                    "kind": "messaging",
+                    "reason": "resolves the notification channels out of the container, the surface the Notification facade reaches, and sends a real notification"
                 },
                 {
                     "target": "*::notify",
@@ -231,14 +331,34 @@
                     "reason": "puts a real job on a real queue, where a worker will run it"
                 },
                 {
+                    "target": "app('queue')",
+                    "kind": "queue",
+                    "reason": "resolves the queue out of the container, the surface the Queue facade reaches, and puts a real job on a real queue, where a worker will run it"
+                },
+                {
+                    "target": "app('queue.connection')",
+                    "kind": "queue",
+                    "reason": "resolves a queue connection out of the container, the surface the Queue facade reaches, and puts a real job on a real queue, where a worker will run it"
+                },
+                {
                     "target": "Illuminate\\Support\\Facades\\Bus",
                     "kind": "queue",
                     "reason": "dispatches a real job or batch"
                 },
                 {
+                    "target": "app('Illuminate\\Contracts\\Bus\\Dispatcher')",
+                    "kind": "queue",
+                    "reason": "resolves the job dispatcher out of the container, the surface the Bus facade reaches, and dispatches a real job or batch"
+                },
+                {
                     "target": "Illuminate\\Support\\Facades\\Event",
                     "kind": "queue",
                     "reason": "fires a real event, and its listeners do whatever they do"
+                },
+                {
+                    "target": "app('events')",
+                    "kind": "queue",
+                    "reason": "resolves the event dispatcher out of the container, the surface the Event facade reaches, and fires a real event, and its listeners do whatever they do"
                 },
                 {
                     "target": "dispatch()",
@@ -276,9 +396,39 @@
                     "reason": "writes shared state the application reads elsewhere"
                 },
                 {
+                    "target": "app('cache')",
+                    "kind": "shared_state",
+                    "reason": "resolves the cache out of the container, the surface the Cache facade reaches, and writes shared state the application reads elsewhere"
+                },
+                {
+                    "target": "app('cache.store')",
+                    "kind": "shared_state",
+                    "reason": "resolves a cache store out of the container, the surface the Cache facade reaches, and writes shared state the application reads elsewhere"
+                },
+                {
+                    "target": "cache()",
+                    "kind": "shared_state",
+                    "reason": "reaches the cache through its helper, the surface the Cache facade reaches, and writes shared state the application reads elsewhere"
+                },
+                {
                     "target": "Illuminate\\Support\\Facades\\Session",
                     "kind": "shared_state",
                     "reason": "writes session state"
+                },
+                {
+                    "target": "app('session')",
+                    "kind": "shared_state",
+                    "reason": "resolves the session out of the container, the surface the Session facade reaches, and writes session state"
+                },
+                {
+                    "target": "app('session.store')",
+                    "kind": "shared_state",
+                    "reason": "resolves the session store out of the container, the surface the Session facade reaches, and writes session state"
+                },
+                {
+                    "target": "session()",
+                    "kind": "shared_state",
+                    "reason": "reaches the session through its helper, the surface the Session facade reaches, and writes session state"
                 },
                 {
                     "target": "Illuminate\\Support\\Facades\\Redis",
@@ -286,7 +436,27 @@
                     "reason": "writes shared state on a real Redis server"
                 },
                 {
+                    "target": "app('redis')",
+                    "kind": "shared_state",
+                    "reason": "resolves Redis out of the container, the surface the Redis facade reaches, and writes shared state on a real Redis server"
+                },
+                {
+                    "target": "app('redis.connection')",
+                    "kind": "shared_state",
+                    "reason": "resolves a Redis connection out of the container, the surface the Redis facade reaches, and writes shared state on a real Redis server"
+                },
+                {
                     "target": "Illuminate\\Support\\Facades\\Broadcast",
+                    "kind": "shared_state",
+                    "reason": "publishes to a real broadcast channel that real clients are listening on"
+                },
+                {
+                    "target": "app('Illuminate\\Contracts\\Broadcasting\\Factory')",
+                    "kind": "shared_state",
+                    "reason": "resolves the broadcaster out of the container, the surface the Broadcast facade reaches, and publishes to a real broadcast channel that real clients are listening on"
+                },
+                {
+                    "target": "broadcast()",
                     "kind": "shared_state",
                     "reason": "publishes to a real broadcast channel that real clients are listening on"
                 },
@@ -294,6 +464,11 @@
                     "target": "Illuminate\\Support\\Facades\\RateLimiter",
                     "kind": "shared_state",
                     "reason": "consumes from a shared rate-limit budget the application depends on"
+                },
+                {
+                    "target": "app('Illuminate\\Cache\\RateLimiter')",
+                    "kind": "shared_state",
+                    "reason": "resolves the rate limiter out of the container, the surface the RateLimiter facade reaches, and consumes from a shared rate-limit budget the application depends on"
                 },
                 {
                     "target": "Illuminate\\Support\\Facades\\Artisan::call",

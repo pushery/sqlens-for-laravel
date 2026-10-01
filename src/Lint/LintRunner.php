@@ -12,7 +12,6 @@ use Illuminate\Database\Migrations\Migrator;
 use Illuminate\Filesystem\Filesystem;
 use LogicException;
 use Pushery\SQLens\Canonical\Extensions\CanonicalExtensionRegistry;
-use Pushery\SQLens\Canonical\Fingerprint;
 use Pushery\SQLens\Capture\CaptureConnectionResolver;
 use Pushery\SQLens\Capture\CaptureFindingCatalog;
 use Pushery\SQLens\Capture\CaptureFindingCollector;
@@ -26,6 +25,7 @@ use Pushery\SQLens\Capture\PendingResolution;
 use Pushery\SQLens\Capture\PendingSkipReason;
 use Pushery\SQLens\Capture\SessionGuard;
 use Pushery\SQLens\Capture\Shadow\GuardDecision;
+use Pushery\SQLens\Capture\Shadow\ShadowSweepRecorder;
 use Pushery\SQLens\Capture\SingleFileFailure;
 use Pushery\SQLens\Capture\SingleFileResolver;
 use Pushery\SQLens\Categories\Category;
@@ -63,10 +63,12 @@ use Pushery\SQLens\Engine\ServerVersionResolver;
 use Pushery\SQLens\Exceptions\UnreadableBaseline;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
+use Pushery\SQLens\Findings\LocationKind;
 use Pushery\SQLens\Findings\Result;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Levels\LevelGate;
+use Pushery\SQLens\ProjectPath;
 use Pushery\SQLens\Reporting\Baseline\BaselineEntry;
 use Pushery\SQLens\Reporting\Baseline\BaselineFile;
 use Pushery\SQLens\Reporting\Baseline\BaselineRuleIds;
@@ -79,6 +81,7 @@ use Pushery\SQLens\Reporting\ConfigRunContextCollector;
 use Pushery\SQLens\Reporting\ReportedServerVersion;
 use Pushery\SQLens\Reporting\RunContext;
 use Pushery\SQLens\Reporting\Suppression\AnnotationSuppressionSource;
+use Pushery\SQLens\Reporting\Suppression\BaselineScope;
 use Pushery\SQLens\Reporting\Suppression\SuppressionCandidate;
 use Pushery\SQLens\Reporting\Suppression\SuppressionResolver;
 use Pushery\SQLens\Reporting\VersionSource;
@@ -199,6 +202,13 @@ final readonly class LintRunner implements LintRuns
         // configured `migration_paths` when a project set them; else the application's
         // registered paths. One precedence, no value threaded twice.
         $migrationPaths ??= $this->configuredMigrationPaths() ?? $this->defaultMigrationPaths();
+
+        // One anchor for all three sources: a relative path is the project root's, as Laravel's own
+        // `migrate --path` reads it, never the directory `artisan` happened to be started from.
+        $migrationPaths = array_map(
+            fn (string $path): string => ProjectPath::anchored($path, $this->projectRoot()),
+            $migrationPaths,
+        );
 
         // Null means "read the config"; a caller that passes a bool has a reason and carries it
         // (PreflightService does). Named paths win over both — see above.
@@ -428,8 +438,12 @@ final readonly class LintRunner implements LintRuns
         // without executing, shadow executes for real against a throwaway database.
         // Everything after this point — canonicalization, rules, gates, suppression,
         // the reporter — is the same code either way.
+        //
+        // A shadow capture reports what its orphan sweep did through this recorder, because the
+        // capture run it returns has passed through decorators that build new runs.
+        $sweepRecorder = new ShadowSweepRecorder;
         $captor = $mode === CaptureMode::Shadow && $guard instanceof GuardDecision
-            ? $this->captors->shadow($connectionName, $guard, $roundtrip)
+            ? $this->captors->shadow($connectionName, $guard, $roundtrip, $sweepRecorder)
             : $this->captors->pretend($connectionName);
 
         // A driver the manager supports but the factory has no capture wiring for
@@ -537,6 +551,17 @@ final readonly class LintRunner implements LintRuns
         // risking a different one. Flattening here would throw that away and force the second
         // parser this ticket's guardrail forbids.
         $pendingStatements = $run->statements();
+        // Complete when every pending migration's `up()` was captured, the only case in which the
+        // statements above are all the deploy will run.
+        $capturedUp = [];
+
+        foreach ($run->results as $captured) {
+            if ($captured->section === CaptureSection::Up && $captured->isPass()) {
+                $capturedUp[$captured->file] = true;
+            }
+        }
+
+        $pendingStatementsComplete = array_all($pendingFiles, static fn (string $file): bool => isset($capturedUp[$file]));
         $findings = $this->collector()->collect($run, $activeRules, $subjectContext, $this->projectRoot());
 
         // A category filter that removed every rule is not a clean run — it checked
@@ -664,6 +689,15 @@ final readonly class LintRunner implements LintRuns
         // nothing in an absent file to accept it with.
         $findings = [...$findings, ...$this->baselineAbsenceNotice($subjectContext)];
 
+        // What the shadow run's orphan sweep did on the server, with the other notices and before
+        // suppression for the same reason: the databases it removed, those it could not remove, or
+        // that it could not look. A lint run that drops databases says so in its own report.
+        $sweepNotice = ShadowSweepNotice::for($sweepRecorder->report(), $connectionName, $subjectContext, $this->projectRoot());
+
+        if ($sweepNotice instanceof Finding) {
+            $findings[] = $sweepNotice;
+        }
+
         // The suppression chain (config · audit ignore · baseline · annotation · destructive opt-in) is
         // applied here, after the rule engine and before the reporter, so a second
         // run after a baseline shows only new findings — and never suppresses one
@@ -673,11 +707,17 @@ final readonly class LintRunner implements LintRuns
         // a reader to delete a line that comes straight back on the next machine that has the tool.
         $unverifiable = UnverifiableToolPrefixes::from($diagnostics);
 
+        // Which migrations this run read and which the project has, by name, asked once: the
+        // baseline scope below and the outcome both need them.
+        $readMigrations = array_map(static fn (PendingMigration $migration): string => $migration->migrationClass, $resolution->migrations);
+        $existingMigrations = $this->existingMigrations($migrationPaths);
+
         $suppression = $this->suppressionResolver($applyBaseline)->resolve(
             $this->candidates($findings, $run, $subjectContext),
             Suite::Lint,
             $unverifiable,
             $crossSuiteFindings,
+            $this->baselineScope($activeRules, $activeLevel, $readMigrations, $existingMigrations, $files !== []),
         );
 
         // …and each one is NAMED, because "kept in the file" without a word is the same silence as
@@ -712,6 +752,10 @@ final readonly class LintRunner implements LintRuns
             $connectionName,
             pendingFiles: $pendingFiles,
             pendingStatements: $pendingStatements,
+            pendingStatementsComplete: $pendingStatementsComplete,
+            examined: true,
+            staleBaselineBreaks: $staleBreaks,
+            unreadMigrations: array_values(array_diff($existingMigrations, $readMigrations)),
         );
     }
 
@@ -1613,11 +1657,50 @@ final readonly class LintRunner implements LintRuns
     }
 
     /**
-     * One suppression candidate per finding: its fingerprint (rule id + location; the
-     * excerpt is empty because a run produces only findings with no canonical
-     * statement today), its ordinal among identical fingerprints, and the migration
-     * it came from as the annotation carrier — so a class-level `#[SqlensIgnore]` can
-     * reach it even when the migration produced no statements.
+     * Which baseline entries this run can judge.
+     *
+     * The baseline also holds the audit suite's catalog entries, which no lint run reads, and the
+     * entries of rules this run's gates left out: `sqlens:security` and a run under `--category`
+     * or `--level` apply a part of the suite, and an entry of the rest matched nothing because
+     * nobody asked for it. Squawk's findings pass the level the same way.
+     *
+     * And a run reads only some of the migrations: the pending ones, which leaves out every
+     * migration that already ran on this database, or the files given to `--file`. An entry about
+     * a migration the project still has and the run did not read is left alone. The project's
+     * migrations are read from the run's paths and the ones the application registers, so a run
+     * over `--path` leaves the others alone as well.
+     *
+     * @param  list<Rule>  $activeRules  the rules the run applied, after every gate
+     * @param  list<string>  $read  the migrations the run read, by name
+     * @param  list<string>  $existing  every migration the project has, by name
+     */
+    private function baselineScope(array $activeRules, int $level, array $read, array $existing, bool $fastPath): BaselineScope
+    {
+        return BaselineScope::of(Suite::Lint, $this->drivers->everyRule(), [LocationKind::Migration, LocationKind::Callsite], $activeRules)
+            ->without($this->squawk->unaskedIds(Level::from($level), $fastPath))
+            ->readingOnly($read, $existing);
+    }
+
+    /**
+     * Every migration the project has, by name: those in the run's paths and in the ones the
+     * application registers.
+     *
+     * @param  list<string>  $migrationPaths
+     * @return list<string>
+     */
+    private function existingMigrations(array $migrationPaths): array
+    {
+        return array_map(
+            strval(...),
+            array_keys($this->migrator->getMigrationFiles(array_values(array_unique([...$migrationPaths, ...$this->defaultMigrationPaths()])))),
+        );
+    }
+
+    /**
+     * One suppression candidate per finding: its fingerprint (rule id, location and the
+     * canonical statement it carries), its ordinal among identical fingerprints, and the
+     * migration it came from as the annotation carrier — so a class-level `#[SqlensIgnore]`
+     * can reach it even when the migration produced no statements.
      *
      * @param  list<Finding>  $findings
      * @return list<SuppressionCandidate>
@@ -1633,7 +1716,7 @@ final readonly class LintRunner implements LintRuns
         $candidates = [];
 
         foreach ($findings as $finding) {
-            $fingerprint = FindingFingerprint::of($finding->ruleId, $finding->location, Fingerprint::fromValue(''));
+            $fingerprint = FindingFingerprint::ofFinding($finding);
             $ordinal = $ordinals[$fingerprint->value] ?? 0;
             $ordinals[$fingerprint->value] = $ordinal + 1;
 
@@ -1685,23 +1768,14 @@ final readonly class LintRunner implements LintRuns
     }
 
     /**
-     * The undetermined reasons a project has explicitly accepted living without, from
-     * `sqlens.suppression.allow_undetermined`. Read leniently — the config validator
-     * owns malformed values, loudly — so an unknown reason never throws mid-run.
+     * The undetermined reasons a project has explicitly accepted living without, through the one
+     * reader both suites share.
      *
      * @return list<UndeterminedReason>
      */
     private function allowedUndetermined(): array
     {
-        $configured = $this->config->get('sqlens.suppression.allow_undetermined');
-
-        if (! is_array($configured)) {
-            return [];
-        }
-
-        return array_values(array_filter(
-            array_map(static fn (mixed $value): ?UndeterminedReason => is_string($value) ? UndeterminedReason::tryFrom($value) : null, $configured),
-        ));
+        return SuppressionResolver::allowedUndetermined($this->config->get('sqlens.suppression.allow_undetermined'));
     }
 
     /**

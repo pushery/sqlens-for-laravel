@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Guard\Guards;
 
+use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Pushery\SQLens\Categories\Category;
@@ -11,6 +12,7 @@ use Pushery\SQLens\Guard\Contracts\RuntimeGuard;
 use Pushery\SQLens\Guard\GuardProfile;
 use Pushery\SQLens\Guard\ViolationLogger;
 use Pushery\SQLens\Guard\Violations\Violation;
+use ReflectionClass;
 
 /**
  * Eloquent's own strictness switches, set from configuration instead of from `AppServiceProvider`.
@@ -36,7 +38,12 @@ use Pushery\SQLens\Guard\Violations\Violation;
  */
 final readonly class StrictModeGuard implements RuntimeGuard
 {
-    public function __construct(private ViolationLogger $logger) {}
+    /**
+     * @param  (Closure(Closure(): void): void)|null  $afterBoot  hands a check to the application to run
+     *                                                            once every provider has booted; without
+     *                                                            one, the check runs at once
+     */
+    public function __construct(private ViolationLogger $logger, private ?Closure $afterBoot = null) {}
 
     public function appliesTo(GuardProfile $profile): bool
     {
@@ -48,29 +55,6 @@ final readonly class StrictModeGuard implements RuntimeGuard
 
     public function activate(GuardProfile $profile): void
     {
-        // The masking case, and it is reported before anything is armed.
-        //
-        // Laravel's automatic eager loading resolves a relation before `preventLazyLoading` can
-        // object, so with both on, the guardrail never fires — and never fires is exactly what a
-        // working guardrail on a clean application looks like. A project would read a silent log as
-        // proof there are no lazy loads, when the truth is that nothing could have detected one.
-        //
-        // Undetermined rather than a refusal: the combination is legitimate, and auto eager loading
-        // is arguably the better answer to the same problem. What is not legitimate is believing
-        // both are working.
-        if ($profile->lazyLoading && Model::isAutomaticallyEagerLoadingRelationships()) {
-            $this->logger->record($profile, Violation::undetermined(
-                type: 'guardrail_masked',
-                category: Category::Safety,
-                message: 'the lazy-loading guardrail cannot prove it checks anything while automatic '
-                    .'eager loading is on. Laravel resolves the relation first, so a violation never '
-                    .'reaches this guardrail and a silent log is not evidence that there are none. '
-                    .'Turn one of the two off.',
-                reason: 'automatic_eager_loading',
-                sql: 'Model::automaticallyEagerLoadRelationships()',
-            ));
-        }
-
         Model::preventLazyLoading($profile->lazyLoading);
         Model::preventSilentlyDiscardingAttributes($profile->discardingAttributes);
         Model::preventAccessingMissingAttributes($profile->missingAttributes);
@@ -80,6 +64,20 @@ final readonly class StrictModeGuard implements RuntimeGuard
             // above it has no reporting variant and needs none: there is no version of running one
             // of those against production that anybody wanted.
             DB::prohibitDestructiveCommands(true);
+        }
+
+        // What the application does to these switches is judged once it has finished booting, and
+        // after they are set here, whichever comes last. Its own providers boot after this
+        // package's, and `AppServiceProvider::boot()` is where automatic eager loading is usually
+        // turned on and a guardrail switched off: judged earlier, both would be missed.
+        $judge = function () use ($profile): void {
+            $this->judgeTheBootedApplication($profile);
+        };
+
+        if ($this->afterBoot instanceof Closure) {
+            ($this->afterBoot)($judge);
+        } else {
+            $judge();
         }
 
         if ($profile->throw) {
@@ -123,5 +121,81 @@ final readonly class StrictModeGuard implements RuntimeGuard
                 context: ['model' => $model::class, 'attribute' => $key],
             ));
         });
+    }
+
+    /**
+     * What the application left of these switches once every provider has booted.
+     *
+     * The masking case: Laravel's automatic eager loading resolves a relation before
+     * `preventLazyLoading` can object, so with both on, the guardrail never fires, and never fires
+     * is exactly what a working guardrail on a clean application looks like. A project would read a
+     * silent log as proof there are no lazy loads, when the truth is that nothing could have
+     * detected one. Undetermined rather than a refusal: the combination is legitimate, and auto
+     * eager loading is arguably the better answer to the same problem. What is not legitimate is
+     * believing both are working.
+     *
+     * The overridden case: a provider that boots after this package can switch a guardrail back
+     * off, with `Model::preventLazyLoading(false)` or `Model::shouldBeStrict(false)`. The profile
+     * then names a guardrail that checks nothing, and a silent log reads as a clean application.
+     */
+    private function judgeTheBootedApplication(GuardProfile $profile): void
+    {
+        if ($profile->lazyLoading && $this->automaticEagerLoadingIsOn()) {
+            $this->logger->record($profile, Violation::undetermined(
+                type: 'guardrail_masked',
+                category: Category::Safety,
+                message: 'the lazy-loading guardrail cannot prove it checks anything while automatic '
+                    .'eager loading is on. Laravel resolves the relation first, so a violation never '
+                    .'reaches this guardrail and a silent log is not evidence that there are none. '
+                    .'Turn one of the two off.',
+                reason: 'automatic_eager_loading',
+                sql: 'Model::automaticallyEagerLoadRelationships()',
+            ));
+        }
+
+        foreach ($this->switchedOff($profile) as $guardrail => $call) {
+            $this->logger->record($profile, Violation::undetermined(
+                type: 'guardrail_overridden',
+                category: Category::Safety,
+                message: sprintf(
+                    'the %s guardrail was switched off by a provider that booted after this package, so it '
+                    .'checks nothing while the profile names it. Remove one of the two.',
+                    $guardrail,
+                ),
+                reason: 'switched_off_after_boot',
+                sql: $call,
+            ));
+        }
+    }
+
+    /**
+     * The guardrails the profile turns on that are off now, each with the call that turns it off.
+     *
+     * @return array<string, string>
+     */
+    private function switchedOff(GuardProfile $profile): array
+    {
+        return array_filter([
+            'lazy-loading' => $profile->lazyLoading && ! Model::preventsLazyLoading()
+                ? 'Model::preventLazyLoading(false)' : null,
+            'discarding-attributes' => $profile->discardingAttributes && ! Model::preventsSilentlyDiscardingAttributes()
+                ? 'Model::preventSilentlyDiscardingAttributes(false)' : null,
+            'missing-attributes' => $profile->missingAttributes && ! Model::preventsAccessingMissingAttributes()
+                ? 'Model::preventAccessingMissingAttributes(false)' : null,
+        ]);
+    }
+
+    /**
+     * Whether automatic eager loading is on.
+     *
+     * Laravel added the switch in 12.8, and this package supports every 12.x. Before that release
+     * the method does not exist, and a static call to a method `Model` does not have goes through
+     * `__callStatic()`, which tries to instantiate the abstract class and ends the boot. Without the
+     * switch nothing can mask the guardrail either, so the answer there is no.
+     */
+    private function automaticEagerLoadingIsOn(): bool
+    {
+        return new ReflectionClass(Model::class)->hasMethod('isAutomaticallyEagerLoadingRelationships')
+            && Model::isAutomaticallyEagerLoadingRelationships();
     }
 }

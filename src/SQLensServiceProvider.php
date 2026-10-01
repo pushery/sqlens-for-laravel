@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens;
 
+use Closure;
 use Illuminate\Container\Container;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Events\Dispatcher;
@@ -17,6 +18,7 @@ use Illuminate\Http\Client\Factory;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Mcp\Server\McpServiceProvider;
 use Override;
+use Pushery\SQLens\Agent\Mcp\McpSdkVersion;
 use Pushery\SQLens\Agent\Mcp\ServesMcp;
 use Pushery\SQLens\Agent\Mcp\StdioServerLoop;
 use Pushery\SQLens\Agent\Mcp\StdoutShield;
@@ -25,6 +27,7 @@ use Pushery\SQLens\Audit\AuditRunner;
 use Pushery\SQLens\Audit\AuditRuns;
 use Pushery\SQLens\Audit\ProjectManifest;
 use Pushery\SQLens\Canonical\Extensions\CanonicalExtensionRegistry;
+use Pushery\SQLens\Capture\CaptureConnectionFence;
 use Pushery\SQLens\Capture\CaptureConnectionResolver;
 use Pushery\SQLens\Capture\MigrationPaths;
 use Pushery\SQLens\Capture\MigrationsTable;
@@ -36,6 +39,7 @@ use Pushery\SQLens\Catalog\CatalogReaderFactory;
 use Pushery\SQLens\Catalog\CatalogReaders;
 use Pushery\SQLens\Catalog\ReaderSession;
 use Pushery\SQLens\Catalog\SessionBudget;
+use Pushery\SQLens\Config\GuardProfileInheritance;
 use Pushery\SQLens\Config\PublishedConfigMerge;
 use Pushery\SQLens\Console\AgentRulesCommand;
 use Pushery\SQLens\Console\AuditCommand;
@@ -181,8 +185,18 @@ final class SQLensServiceProvider extends ServiceProvider
             /** @var array<array-key, mixed> $defaults */
             $defaults = require __DIR__.'/../config/sqlens.php';
 
-            $config->set('sqlens', PublishedConfigMerge::of($defaults, $published));
+            // …and a guard profile the project added, which has no shipped profile of its own name
+            // to be merged over, takes the keys it leaves out from `production`. Without it the
+            // guard read every switch such a profile did not name as off.
+            $config->set('sqlens', GuardProfileInheritance::applyTo(PublishedConfigMerge::of($defaults, $published), $defaults));
         }
+
+        // The migrator by its class name. Laravel binds it that way only from 12.10; below that the
+        // container autowires the class, cannot build the repository interface it asks for, and
+        // every command that reads migrations ends before its first step. `bindIf` leaves the
+        // framework's own binding alone, and otherwise hands out the instance `migrator` names,
+        // the one package migration paths are registered on.
+        $this->app->bindIf(Migrator::class, static fn (Application $app): Migrator => $app->make('migrator'));
 
         // The registry is bound in its OWN right, and that is the whole point of
         // the extension seam: a consuming application registers a third-party driver
@@ -398,6 +412,10 @@ final class SQLensServiceProvider extends ServiceProvider
         // test only one: LintRunner is final readonly, so a caller depending on the class could not
         // be driven without a database.
         $this->app->singleton(LintRuns::class, LintRunner::class);
+
+        // One fence per application. It guards each connection once, and a second fence would guard
+        // them all again without being the one a capture runs under.
+        $this->app->singleton(CaptureConnectionFence::class);
         // The injection half, and it is bound EXPLICITLY rather than left to autowiring — which is
         // the whole reason this binding exists. `SecurityRunner` takes it as `?AnalyseBridge = null`,
         // and the container answers an unresolvable optional dependency with the default instead of
@@ -671,6 +689,7 @@ final class SQLensServiceProvider extends ServiceProvider
             // put a double in its place — the real one takes over this process's STDIN, which no
             // in-process test can hand over and get back.
             $this->app->bind(ServesMcp::class, StdioServerLoop::class);
+            $this->app->bind(McpSdkVersion::class, static fn (): McpSdkVersion => McpSdkVersion::fromComposer());
 
             // One shield per process, and it goes up NOW when this run is the MCP server.
             //
@@ -681,9 +700,17 @@ final class SQLensServiceProvider extends ServiceProvider
             // why the subprocess arm reads the whole stream rather than trusting the mechanism.
             $this->app->singleton(StdoutShield::class);
 
-            $this->app->make(StdoutShield::class)->engageIfWanted(
+            $shield = $this->app->make(StdoutShield::class);
+            $shield->engageIfWanted(
                 array_values(array_filter(is_array($_SERVER['argv'] ?? null) ? $_SERVER['argv'] : [], is_string(...))),
             );
+
+            // A log channel on standard output writes past the shield's buffer, so it is re-pointed
+            // while the server runs. Here, after every provider has registered, and again where the
+            // conversation starts.
+            if ($shield->isEngaged()) {
+                $shield->divertLogStreams($this->app->make(Repository::class), $this->app->bound('log') ? $this->app->make('log') : null);
+            }
 
             // The SDK's own provider, registered explicitly when the package is installed.
             //
@@ -701,11 +728,7 @@ final class SQLensServiceProvider extends ServiceProvider
                 $this->app->register(McpServiceProvider::class);
             }
 
-            $this->app->singleton(PreflightRunner::class, static function (Application $app): PreflightRunner {
-                /** @var Repository $config */
-                $config = $app->make('config');
-                $pin = $config->get('sqlens.assume_server_version');
-
+            $this->app->singleton(PreflightRunner::class,
                 // The order is DECLARED here and nowhere else. Two runs against an unchanged database
                 // must produce byte-identical reports, and a registry the container discovered would
                 // iterate in whatever order it happened to build.
@@ -713,8 +736,10 @@ final class SQLensServiceProvider extends ServiceProvider
                 // Context-truth first, and that is not alphabetical: every later check reasons about a
                 // server, and a run whose version is wrong has already answered every one of them
                 // against the wrong world.
-                return new PreflightRunner([
-                    new ServerVersionSkewCheck(is_string($pin) ? $pin : null),
+                static fn (Application $app): PreflightRunner => new PreflightRunner([
+                    // Without a pin: the runner is built before a command applies its profile, so the
+                    // pin a run compares arrives with its context instead.
+                    new ServerVersionSkewCheck,
                     // Second, and after the version rather than before it for a reason: a run whose
                     // version is wrong has already answered every later question against the wrong
                     // world, so context truth comes first. Within context truth, "can this instance
@@ -801,8 +826,7 @@ final class SQLensServiceProvider extends ServiceProvider
                     // resolve another role's inheritance, MySQL cannot — so that one withholds a
                     // finding where this one emits it.
                     new MysqlGrantCheck,
-                ]);
-            });
+                ]));
 
             // `sqlens:mcp` is registered unconditionally, and that is deliberate rather than an
             // oversight. Its SDK is a `suggest`, so it may genuinely be absent — and a command
@@ -964,16 +988,19 @@ final class SQLensServiceProvider extends ServiceProvider
         // The channel is resolved ONCE, here, where its existence has just been validated. Handing
         // the logger a PSR-3 instance rather than a channel name is what keeps `ViolationLogger`
         // free of Laravel's logging package entirely.
-        $logger = new ViolationLogger($this->app->make('log')->channel($profile->logChannel));
+        $grammars = $this->app->make(CanonicalExtensionRegistry::class);
+        $logger = new ViolationLogger($this->app->make('log')->channel($profile->logChannel), $grammars);
 
         $armed = new GuardManager([
-            new StrictModeGuard($logger),
+            // The application's own providers boot after this one, so what they do to Eloquent's
+            // switches is judged once they all have.
+            new StrictModeGuard($logger, fn (Closure $check) => $this->app->booted($check)),
             // ONE listener for all three query-based guardrails. A listener each would be three
             // closures on the hot path of every query an application runs.
             new QueryWatcher($this->app->make(Dispatcher::class), [
                 new SlowQueryGuard($logger),
                 new RuntimeDdlGuard($logger, $this->app->runningInConsole()),
-                new UnboundRawSqlGuard($logger),
+                new UnboundRawSqlGuard($logger, $grammars),
             ]),
         ])->arm($profile);
 

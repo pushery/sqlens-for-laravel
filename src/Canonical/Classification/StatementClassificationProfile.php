@@ -28,10 +28,16 @@ final readonly class StatementClassificationProfile
      * @param  list<StatementSignature>  $signatures
      * @param  list<string>  $modifiers
      * @param  array<string, StatementKind>  $leadFallback
+     * @param  list<string>  $actionOptions  the keywords that open a table option rather than an
+     *                                       action in an `ALTER TABLE` action list, such as MySQL's
+     *                                       `ALGORITHM` and `LOCK`: they qualify every action of the
+     *                                       statement and do nothing of their own, so they are not
+     *                                       classified as one
      */
     public function __construct(
         public array $signatures,
         public array $modifiers,
         public array $leadFallback,
+        public array $actionOptions = [],
     ) {}
 }

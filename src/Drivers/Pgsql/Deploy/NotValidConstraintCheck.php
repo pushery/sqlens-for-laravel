@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Drivers\Pgsql\Deploy;
 
 use Illuminate\Database\Connection;
 use Pushery\SQLens\Attributes\RawSql;
+use Pushery\SQLens\Canonical\QuotedIdentifier;
 use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\PreflightCheck;
@@ -233,8 +234,8 @@ final readonly class NotValidConstraintCheck implements PreflightCheck
                 $constraint,
                 $qualified,
                 $this->consequence($type),
-                $qualified,
-                $constraint,
+                QuotedIdentifier::of('"', $schema, $table),
+                QuotedIdentifier::of('"', $constraint),
             ),
             location: Location::inCatalog($context->driver, $context->connection, $qualifiedConstraint, SchemaObjectType::Constraint),
             category: Category::Safety,

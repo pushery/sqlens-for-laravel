@@ -65,7 +65,55 @@ final readonly class LintOutcome
          * @var list<CapturedStatement>
          */
         public array $pendingStatements = [],
+        /**
+         * Whether {@see self::$pendingStatements} holds everything the deploy will run.
+         *
+         * True only when every pending migration's `up()` was captured. A migration the capture could
+         * not determine contributes no statements, and a caller asking "does any statement do X"
+         * would read its absence as a no.
+         */
+        public bool $pendingStatementsComplete = false,
+        /**
+         * Whether the run read the migrations it was pointed at and judged them.
+         *
+         * The misconfiguration exit does not say the run looked at nothing: under
+         * `sqlens.baseline.stale = error` a run that judged every migration ends on it too. A
+         * caller that reads the exit code as "nothing was checked" asks this first. False unless
+         * the run got that far, so an outcome built anywhere else keeps meaning one that did not.
+         */
+        public bool $examined = false,
+        /**
+         * Whether it was the baseline that ended this run on a misconfiguration: entries that
+         * matched nothing, under `sqlens.baseline.stale = error`.
+         *
+         * Said on its own rather than inferred from the exit code and {@see self::$examined}, so a
+         * caller that has to name the cause does not guess it.
+         */
+        public bool $staleBaselineBreaks = false,
+        /**
+         * The migrations the project has that this run did not read, by name.
+         *
+         * Every one that already ran on this database, and over `--file` every one it was not
+         * given. The baseline entries about them are not this run's to judge, and a baseline this
+         * run writes has to keep them rather than drop what it never looked at.
+         *
+         * @var list<string>
+         */
+        public array $unreadMigrations = [],
     ) {}
+
+    /**
+     * What the exit code means for this run, in a sentence.
+     *
+     * The misconfiguration exit's own description says nothing was audited. That is the refusal,
+     * and it is false for a run the stale baseline ended after judging every migration it read.
+     */
+    public function gateMeaning(): string
+    {
+        return $this->staleBaselineBreaks
+            ? 'Baseline entries matched nothing and sqlens.baseline.stale is error, so the baseline counts as misconfigured. The migrations were judged, and the stale entries are in the report.'
+            : $this->exitCode->description();
+    }
 
     /** Whether the run stopped because the target engine is not supported. */
     public function isUnsupported(): bool

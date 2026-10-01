@@ -6,7 +6,9 @@ namespace Pushery\SQLens\Drivers;
 
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Database\ConfigurationUrlParser;
+use Illuminate\Database\Connection;
 use Illuminate\Support\Arr;
+use ReflectionClass;
 
 /**
  * The connection config the FRAMEWORK would use — never the raw array.
@@ -47,6 +49,69 @@ final readonly class EffectiveConnectionConfig
      */
     public static function for(mixed $config): array
     {
+        $parsed = self::withoutUrl($config);
+
+        $write = $parsed['write'] ?? null;
+
+        if (is_array($write)) {
+            /** @var array<string, mixed> $parsed */
+            $parsed = Arr::except(array_merge($parsed, $write), ['read', 'write']);
+        }
+
+        return $parsed;
+    }
+
+    /**
+     * The config the framework MIGRATES through, which is not always the one it connects with.
+     *
+     * From Laravel 13.17 a PostgreSQL connection with a non-empty `direct` block runs its migrations
+     * on `<name>::direct`: the block laid over the url-resolved base, the way the connection factory
+     * builds it, so a pooled application account and a direct schema owner can be two different
+     * roles. Without such a block, or on a framework that has no direct connection, migrations run
+     * on the write side, which is {@see self::for()}.
+     *
+     * @return array<string, mixed>
+     */
+    public static function forMigrations(mixed $config): array
+    {
+        $parsed = self::withoutUrl($config);
+        $direct = $parsed['direct'] ?? null;
+
+        if (($parsed['driver'] ?? null) !== 'pgsql' || ! is_array($direct) || $direct === [] || ! self::frameworkMigratesDirect()) {
+            return self::for($config);
+        }
+
+        // A list of direct endpoints is one the factory picks from at random. The first stands for
+        // all of them here, because the question is which role migrates, and a list whose entries
+        // named different roles would have no single answer to give.
+        $block = array_is_list($direct) ? ($direct[0] ?? []) : $direct;
+
+        /** @var array<string, mixed> $merged */
+        $merged = Arr::except(array_merge($parsed, is_array($block) ? $block : []), [
+            'read', 'write', 'direct', 'pooled', 'connect_via_database', 'connect_via_port',
+        ]);
+
+        return $merged;
+    }
+
+    /** Whether the installed framework routes migrations over a direct connection at all. */
+    private static function frameworkMigratesDirect(): bool
+    {
+        return new ReflectionClass(Connection::class)->hasMethod('hasDirectConnection');
+    }
+
+    /**
+     * The config with its `url` resolved into keys, the way the framework resolves it, and the
+     * `read`/`write` split left as it was written.
+     *
+     * The URL's components come back as `driver`, `host`, `port`, `database` and the credentials,
+     * laid over the keys they replace, and the `url` itself is gone. A caller that goes on to change
+     * one of those keys therefore changes what the connection reaches.
+     *
+     * @return array<string, mixed>
+     */
+    public static function withoutUrl(mixed $config): array
+    {
         if (! is_array($config)) {
             return [];
         }
@@ -60,14 +125,53 @@ final readonly class EffectiveConnectionConfig
         /** @var array<string, mixed> $parsed */
         $parsed = new ConfigurationUrlParser()->parseConfiguration($keyed);
 
-        $write = $parsed['write'] ?? null;
+        return $parsed;
+    }
 
-        if (is_array($write)) {
-            /** @var array<string, mixed> $parsed */
-            $parsed = Arr::except(array_merge($parsed, $write), ['read', 'write']);
+    /**
+     * The config a catalog reading connects with: the URL resolved, the read/write split dropped,
+     * and the host the run pinned, when it pinned one.
+     *
+     * The URL first, because the framework lays a `url`'s components over the keys, `host` among
+     * them, so a host pinned beside a `url` would be replaced by the URL's. The split is dropped
+     * because a catalog audit is a statement about ONE instance: a connection that sent reads to a
+     * replica would produce a snapshot of a database nobody asked about. The pin replaces whatever
+     * host remains, because a connection configured only through read/write blocks has no base host
+     * at all, and without the pin it would reach whatever the driver defaults to.
+     *
+     * One place for every caller that has to reach what the audit read. The catalog reader connects
+     * with it, and an external tool that judges the same database must be pointed at the same server,
+     * or its findings sit beside the audit's about a database nobody named.
+     *
+     * @return array<string, mixed>
+     */
+    public static function forReading(mixed $config, ?string $pinnedHost = null): array
+    {
+        $settings = self::withoutUrl($config);
+
+        unset($settings['read'], $settings['write']);
+
+        if ($pinnedHost !== null) {
+            $settings['host'] = $pinnedHost;
         }
 
-        return $parsed;
+        return $settings;
+    }
+
+    /**
+     * The same connection pointed at another database on its server.
+     *
+     * When the framework builds a connection it lays a `url`'s components over the keys, `database`
+     * among them. A `database` written beside a `url` therefore names a database the connection
+     * never reaches: it lands in the one the URL names. Every throwaway database this package creates
+     * is reached through a connection built here, so the URL is resolved first and the database set
+     * last, and the name given is the database the connection reaches.
+     *
+     * @return array<string, mixed>
+     */
+    public static function onDatabase(mixed $config, string $database): array
+    {
+        return [...self::withoutUrl($config), 'database' => $database];
     }
 
     /**

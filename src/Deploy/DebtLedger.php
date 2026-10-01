@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Deploy;
 
 use Illuminate\Filesystem\Filesystem;
+use Pushery\SQLens\Exceptions\InvalidRunDay;
+use Pushery\SQLens\Today;
 
 /**
  * The migration debt account: a versioned repository FILE, never a database table.
@@ -114,9 +116,20 @@ final readonly class DebtLedger
 
         $recorded = [];
 
-        foreach ($entries as $raw) {
+        foreach ($entries as $index => $raw) {
+            // Each of these used to be read as something it is not. A string in the list was
+            // skipped, the plausible smaller account this method refuses everywhere else, and a
+            // `review_at` in another format was compared as text and never came due. An unreadable
+            // `first_seen` is not among them on purpose: the debt is still owed, only its age is
+            // unknown, and `DebtAge` answers exactly that for the one entry.
             if (! is_array($raw)) {
-                continue;
+                return new self([], true, DebtLedgerRefusal::unreadable($path, sprintf('entry %d is %s, not an object', $index, get_debug_type($raw))));
+            }
+
+            $problem = self::problemWith($raw);
+
+            if ($problem !== null) {
+                return new self([], true, DebtLedgerRefusal::unreadable($path, sprintf('entry %d %s', $index, $problem)));
             }
 
             $entry = self::entryFrom($raw);
@@ -235,6 +248,56 @@ final readonly class DebtLedger
             // reads as version 2 with nothing lost and no rewriting step.
             origin: DebtOrigin::tryFrom(self::text($raw, 'origin')),
         );
+    }
+
+    /**
+     * What makes one recorded entry unreadable as written, or null when nothing does.
+     *
+     * The identity is derived from `kind` and `object`, so without them two debts fold into one.
+     * `review_at` is the date an acknowledgment runs out, and one this build cannot read as a day
+     * is an acknowledgment that never expires, the same half-decision as one without a reason.
+     *
+     * @param  array<array-key, mixed>  $raw
+     */
+    private static function problemWith(array $raw): ?string
+    {
+        foreach (['kind', 'object'] as $key) {
+            $value = $raw[$key] ?? null;
+
+            if (! is_string($value) || trim($value) === '') {
+                return sprintf('has no `%s`, and the identity of a debt is derived from it', $key);
+            }
+        }
+
+        $review = $raw['review_at'] ?? null;
+
+        if ($review !== null && $review !== '' && ! self::isDay($review)) {
+            return sprintf(
+                'records `review_at` as %s, which is not a calendar day in `YYYY-MM-DD` form. It is '
+                .'compared with the day a run judges on, and a date in another form never comes due',
+                // Substituted rather than thrown: the value is rendered into a complaint about the
+                // file, and an exception here would replace the complaint it was meant to explain.
+                json_encode($review, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
+            );
+        }
+
+        return null;
+    }
+
+    /** Whether a value is a calendar day in the one form the ledger writes, read by the package's one strict reader. */
+    private static function isDay(mixed $value): bool
+    {
+        if (! is_string($value)) {
+            return false;
+        }
+
+        try {
+            Today::of($value);
+        } catch (InvalidRunDay) {
+            return false;
+        }
+
+        return true;
     }
 
     /** @param  array<array-key, mixed>  $raw */

@@ -6,9 +6,13 @@ namespace Pushery\SQLens\Security;
 
 use Pushery\SQLens\Audit\AuditOutcome;
 use Pushery\SQLens\Audit\AuditRuns;
+use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Console\ExitCode;
 use Pushery\SQLens\Drivers\DriverResolutionFailure;
+use Pushery\SQLens\Drivers\DriverResolutionReason;
+use Pushery\SQLens\Exceptions\UnreadableBaseline;
 use Pushery\SQLens\Findings\Finding;
+use Pushery\SQLens\Findings\Result;
 use Pushery\SQLens\Lint\LintOutcome;
 use Pushery\SQLens\Lint\LintRuns;
 use Pushery\SQLens\Reporting\RunContext;
@@ -54,8 +58,17 @@ use Throwable;
  */
 final readonly class SecurityRunner
 {
-    /** The one category this run is about, set here rather than by every caller. */
-    public const string CATEGORY = 'security';
+    /**
+     * The categories this run is about, set here rather than by every caller: security, and the
+     * privacy rules beside it, which the command reports as one.
+     *
+     * Privacy was left out for as long as this was a single category, so the command that promises
+     * security and privacy findings ran none of the privacy rules. They stay opt-in all the same: the
+     * pack registers them only when a project switches it on.
+     *
+     * @var list<string>
+     */
+    public const array CATEGORIES = [Category::Security->value, Category::Privacy->value];
 
     public function __construct(
         private AuditRuns $audit,
@@ -119,6 +132,12 @@ final readonly class SecurityRunner
             // Its order is the order the halves made them in, and two halves cannot make the same
             // entry — each resolved a disjoint candidate set.
             [...$audit->suppressed, ...$lint->suppressed],
+            // The live halves only. The injection half reads a result somebody else produced, and
+            // a half that is not wired in is a setting rather than a configuration nobody can trust.
+            $audit->misconfigured || $lint->misconfigured,
+            // Concatenated like the suppressions, and for the same reason: each half judged its own
+            // entries against its own findings, and only it knows which matched nothing.
+            [...$audit->stale, ...$lint->stale],
         );
     }
 
@@ -182,12 +201,16 @@ final readonly class SecurityRunner
                 // here would let a project's strictness appetite silently withhold a security rule —
                 // the one thing the two-axis model exists to prevent.
                 null,
-                [self::CATEGORY],
+                self::CATEGORIES,
                 $strictUndetermined,
                 strictTools: $strictTools,
             );
 
             return $this->fromAudit($outcome, $connection);
+        } catch (UnreadableBaseline $exception) {
+            // Before the general catch, because it is not a crash: the baseline is configuration,
+            // and `sqlens:audit` ends on a misconfiguration when it cannot read it.
+            return SecuritySubRun::misconfigured(SecurityRunNotices::subRunCrashed('audit', $exception->getMessage()));
         } catch (Throwable $exception) {
             return SecuritySubRun::failed(SecurityRunNotices::subRunCrashed('audit', $exception->getMessage()));
         }
@@ -209,14 +232,14 @@ final readonly class SecurityRunner
     private function fromAudit(AuditOutcome $outcome, ?string $requested): SecuritySubRun
     {
         if ($outcome->unsupported instanceof DriverResolutionFailure) {
-            return SecuritySubRun::failed(SecurityRunNotices::subRunUnsupported('audit', $this->named($requested, $outcome->connectionName)));
+            return $this->unsupported('audit', $outcome->unsupported, $this->named($requested, $outcome->connectionName));
         }
 
-        if ($outcome->exitCode === ExitCode::Misconfiguration) {
-            return SecuritySubRun::failed(SecurityRunNotices::subRunRefused('audit', $outcome->result->findings));
+        if ($outcome->exitCode === ExitCode::Misconfiguration && ! $outcome->examined) {
+            return SecuritySubRun::misconfigured(SecurityRunNotices::subRunRefused('audit', $outcome->result->findings));
         }
 
-        return SecuritySubRun::reached($outcome->result->findings, $outcome->context, $outcome->result->suppressed);
+        return $this->reached($outcome->result, $outcome->context, $outcome->exitCode);
     }
 
     /**
@@ -231,18 +254,52 @@ final readonly class SecurityRunner
         return $requested !== null && $requested !== '' ? $requested : $resolved;
     }
 
+    /**
+     * A half whose connection could not be resolved to a driver, split by WHY.
+     *
+     * A connection that exists and uses a driver this package does not support examined nothing,
+     * and that is all it is: the ordinary state of a SQLite test database, reported and left to the
+     * project. A connection nothing defines is a misconfiguration, the one `sqlens:audit` and
+     * `sqlens:lint` end on for the same name, and its notice carries the resolver's own sentence,
+     * which names what is configured instead.
+     */
+    private function unsupported(string $half, DriverResolutionFailure $failure, string $connection): SecuritySubRun
+    {
+        return $failure->reason === DriverResolutionReason::ConnectionNotFound
+            ? SecuritySubRun::misconfigured(SecurityRunNotices::subRunCrashed($half, $failure->detail))
+            : SecuritySubRun::failed(SecurityRunNotices::subRunUnsupported($half, $connection));
+    }
+
     /** The same question for the migration half, asked of its own outcome. */
     private function fromLint(LintOutcome $outcome, ?string $requested): SecuritySubRun
     {
         if ($outcome->unsupported instanceof DriverResolutionFailure) {
-            return SecuritySubRun::failed(SecurityRunNotices::subRunUnsupported('lint', $this->named($requested, $outcome->connectionName)));
+            return $this->unsupported('lint', $outcome->unsupported, $this->named($requested, $outcome->connectionName));
         }
 
-        if ($outcome->exitCode === ExitCode::Misconfiguration) {
-            return SecuritySubRun::failed(SecurityRunNotices::subRunRefused('lint', $outcome->result->findings));
+        if ($outcome->exitCode === ExitCode::Misconfiguration && ! $outcome->examined) {
+            return SecuritySubRun::misconfigured(SecurityRunNotices::subRunRefused('lint', $outcome->result->findings));
         }
 
-        return SecuritySubRun::reached($outcome->result->findings, $outcome->context, $outcome->result->suppressed);
+        return $this->reached($outcome->result, $outcome->context, $outcome->exitCode);
+    }
+
+    /**
+     * A half that examined what it was pointed at, with everything its result carries.
+     *
+     * Its exit code can still be the misconfiguration: under `sqlens.baseline.stale = error` a stale
+     * entry ends a run that judged everything on one. That half ran, so it is reported as run, and
+     * the security run still ends on the misconfiguration.
+     */
+    private function reached(Result $result, RunContext $context, ExitCode $exitCode): SecuritySubRun
+    {
+        return SecuritySubRun::reached(
+            $result->findings,
+            $context,
+            $result->suppressed,
+            $result->staleBaselineEntries,
+            $exitCode === ExitCode::Misconfiguration,
+        );
     }
 
     /**
@@ -310,12 +367,15 @@ final readonly class SecurityRunner
                 CaptureMode::Pretend,
                 null,
                 null,
-                [self::CATEGORY],
+                self::CATEGORIES,
                 strictTools: $strictTools,
                 crossSuiteFindings: $auditFindings,
             );
 
             return $this->fromLint($outcome, $connection);
+        } catch (UnreadableBaseline $exception) {
+            // The same baseline as the audit half, and the same answer `sqlens:lint` gives.
+            return SecuritySubRun::misconfigured(SecurityRunNotices::subRunCrashed('lint', $exception->getMessage()));
         } catch (Throwable $exception) {
             return SecuritySubRun::failed(SecurityRunNotices::subRunCrashed('lint', $exception->getMessage()));
         }

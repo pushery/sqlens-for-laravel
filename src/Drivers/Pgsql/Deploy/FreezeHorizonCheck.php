@@ -13,6 +13,8 @@ use Pushery\SQLens\Contracts\PreflightCheck;
 use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PreflightContext;
+use Pushery\SQLens\Drivers\Pgsql\Catalog\ApplicationSearchPath;
+use Pushery\SQLens\Drivers\Pgsql\Catalog\FreezeThreshold;
 use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
@@ -60,10 +62,11 @@ use Throwable;
  * provider may ship its own default. A check holding an age against a hard-coded 200 million would
  * be wrong in both directions on such an instance, quietly. `current_setting()` asks.
  *
- * What it does not read is a per-table `reloptions` override. A table can carry its own
- * `autovacuum_freeze_max_age`, and this check would then compare against the cluster's. The finding
- * says so rather than pretending otherwise: it is the direction that over-reports, which here costs
- * a sentence in a report rather than a deploy standing in a queue nobody can see.
+ * A table can carry its own `autovacuum_freeze_max_age` in `reloptions`, and autovacuum takes the
+ * lower of it and the cluster's: a table's own value can only move the line closer. So the threshold
+ * each table is measured against is that lower one ({@see FreezeThreshold}). Against the cluster's
+ * alone, such a table read further from its horizon than the launcher sees it, which is the
+ * direction that stays silent.
  *
  * ## Why a running vacuum is never "cancel it"
  *
@@ -79,15 +82,18 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
     public const string ID = 'DEPLOY.PREFLIGHT.FREEZE_HORIZON';
 
     /**
-     * The statement kinds that take a lock an anti-wraparound worker will not yield to.
+     * The statement kinds whose lock an anti-wraparound worker's SHARE UPDATE EXCLUSIVE conflicts with.
      *
-     * The same set the lock-blocker check reasons about, and for the same reason: a statement that
-     * takes nothing stronger than `SHARE UPDATE EXCLUSIVE` runs beside a vacuum rather than behind
-     * it, so reporting it here would put a finding in front of a deploy that is not affected.
+     * Wider than the set the lock-blocker check reasons about, because the holder here is a vacuum and
+     * not an application session: SHARE UPDATE EXCLUSIVE conflicts with itself. Measured on 18.4
+     * against a held SHARE UPDATE EXCLUSIVE, `CREATE INDEX`, `CREATE INDEX CONCURRENTLY`, `DROP INDEX`
+     * and `DROP INDEX CONCURRENTLY` each waited, while an `INSERT` and a `SELECT` ran. `VALIDATE
+     * CONSTRAINT`, a SHARE UPDATE EXCLUSIVE `ALTER TABLE`, waits behind the worker as well. A `DROP
+     * INDEX` names only its index, so its table is asked of the catalog ({@see IndexTables}).
      *
      * @var list<StatementKind>
      */
-    private const array EXCLUSIVE_KINDS = [
+    private const array CONFLICTING_KINDS = [
         StatementKind::AlterTable,
         StatementKind::DropTable,
         StatementKind::TruncateTable,
@@ -99,6 +105,7 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
         StatementKind::AddForeignKey,
         StatementKind::DropConstraint,
         StatementKind::Rename,
+        StatementKind::CreateIndex,
     ];
 
     /** Report from here: at the threshold the launcher starts an anti-wraparound worker. */
@@ -129,13 +136,21 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
             return CheckResult::pass(self::ID);
         }
 
-        $targets = $this->exclusiveTargets($context);
+        $targets = $this->lockedTables($context);
+        $droppedIndexes = $this->droppedIndexes($context);
 
-        if ($targets === []) {
+        if ($targets === [] && $droppedIndexes === []) {
             return CheckResult::pass(self::ID);
         }
 
         try {
+            $targets = array_values(array_unique([...$targets, ...IndexTables::of($context->session, $droppedIndexes)]));
+
+            if ($targets === []) {
+                // Only indexes the catalog does not know yet: nothing this run drops exists to be vacuumed.
+                return CheckResult::pass(self::ID);
+            }
+
             $ages = $this->ages($context, $targets);
             $running = $this->runningAntiWraparound($context);
         } catch (Throwable $failure) {
@@ -220,8 +235,8 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
             // and `age()` would measure them against the transaction one. The two are unrelated
             // numbers that both look like plausible ages.
             .' mxid_age(c.relminmxid) as mxid_age,'
-            .' pg_catalog.current_setting(\'autovacuum_freeze_max_age\')::bigint as xid_threshold,'
-            .' pg_catalog.current_setting(\'autovacuum_multixact_freeze_max_age\')::bigint as mxid_threshold'
+            .' '.FreezeThreshold::effective('c', FreezeThreshold::TRANSACTIONS).' as xid_threshold,'
+            .' '.FreezeThreshold::effective('c', FreezeThreshold::MULTIXACTS).' as mxid_threshold'
             .' from pg_class c'
             .' join pg_namespace n on n.oid = c.relnamespace'
             // Ordinary tables, partitioned parents and materialized views. A partitioned PARENT has
@@ -229,9 +244,15 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
             // row comes back with a zero age rather than missing, which is the answer, while
             // dropping it here would make "not near the horizon" and "not examined" identical.
             .' where c.relkind in (\'r\', \'m\', \'p\')'
-            .' and n.nspname || \'.\' || c.relname in ('.$placeholders.')'
+            // A target keeps the qualification its migration wrote, and `Schema::table('orders', …)`
+            // writes none. The bare arm asks the server whether an unqualified reference would find
+            // the table, which is `search_path` resolved by the server itself. A qualified target
+            // never equals a bare `relname` and a bare one never equals the composed name, so every
+            // target is offered to both comparisons.
+            .' and (n.nspname || \'.\' || c.relname in ('.$placeholders.')'
+            .' or (c.relname in ('.$placeholders.') and '.ApplicationSearchPath::visible('c').'))'
             .' order by relation',
-            $targets,
+            [...$targets, ...$targets],
         ));
 
         return array_values(array_map(static fn (mixed $row): object => (object) $row, $rows));
@@ -276,11 +297,19 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
     private function runningAntiWraparound(PreflightContext $context): array
     {
         $rows = $context->session->read(static fn (Connection $db): array => $db->select(
-            'select p.relid::regclass::text as relation, p.phase,'
+            'select n.nspname || \'.\' || c.relname as relation, p.phase,'
             .' p.heap_blks_scanned, p.heap_blks_total'
             .' from pg_stat_progress_vacuum p'
+            // Keyed by schema and name, as the age rows are. A relid cast to regclass is written the
+            // way the search path needs the name, so a table in `public` would come back bare and
+            // never meet its own age row.
+            .' join pg_class c on c.oid = p.relid'
+            .' join pg_namespace n on n.oid = c.relnamespace'
             .' join pg_stat_activity a on a.pid = p.pid'
-            .' where a.query like \'autovacuum:%to prevent wraparound%\'',
+            .' where a.query like \'autovacuum:%to prevent wraparound%\''
+            // The view lists the vacuums of every database, and a relid is only a table of this one
+            // when the vacuum runs here: a database copied from a template carries the same oids.
+            .' and p.datid = (select d.oid from pg_catalog.pg_database d where d.datname = pg_catalog.current_database())',
         ));
 
         $byRelation = [];
@@ -373,12 +402,12 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
         $rewriteNote = $rewrites ? $this->rewriteNote() : '';
 
         return sprintf(
-            'The deploy takes an ACCESS EXCLUSIVE lock on `%s`, and that table is near its freeze '
-            .'horizon. %s %s An ordinary autovacuum yields to a conflicting lock request; one '
-            .'running to prevent wraparound does NOT — it holds its lock to the end, and the ALTER '
-            .'waits behind it, looking from the outside like a lock nobody holds.%s '
-            .'The thresholds above are the cluster\'s; a per-table reloptions override is not read '
-            .'here, so a table that carries its own is reported against the wider setting.',
+            'The deploy locks `%s` in a mode that the SHARE UPDATE EXCLUSIVE of a vacuum conflicts '
+            .'with, and that table is near its freeze horizon. %s %s An ordinary autovacuum yields '
+            .'to a conflicting lock request; one running to prevent wraparound does NOT — it holds '
+            .'its lock to the end, and the statement waits behind it, looking from the outside like '
+            .'a lock nobody holds.%s The threshold is the lower of the table\'s own setting and the '
+            .'cluster\'s, the one autovacuum goes by.',
             $relation,
             $clock,
             $state,
@@ -439,19 +468,19 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
     }
 
     /**
-     * The relations this run will take ACCESS EXCLUSIVE on.
+     * The tables this run's statements lock in a mode a vacuum's SHARE UPDATE EXCLUSIVE conflicts with.
      *
      * Read from the statements' own `targets`, which the capture already resolved — parsing the SQL
      * here would be a second classification free to disagree with the one the report is built on.
      *
      * @return list<string>
      */
-    private function exclusiveTargets(PreflightContext $context): array
+    private function lockedTables(PreflightContext $context): array
     {
         $targets = [];
 
         foreach ($context->pending->statements as $statement) {
-            if (! in_array($statement->statementKind, self::EXCLUSIVE_KINDS, true)) {
+            if (! in_array($statement->statementKind, self::CONFLICTING_KINDS, true)) {
                 continue;
             }
 
@@ -460,13 +489,39 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
                     continue;
                 }
 
-                // The QUALIFIED name: pg_class is joined to pg_namespace here, and a bare name would
-                // match every schema on a server that has several.
+                // The name as the migration wrote it, schema-qualified or bare. The age query matches
+                // a bare name only against the table an unqualified reference finds, so it cannot
+                // pick up a table of the same name in another schema.
                 $targets[] = $target->qualifiedName();
             }
         }
 
         return array_values(array_unique($targets));
+    }
+
+    /**
+     * The indexes this run drops, concurrently or not: both forms lock the index's table in a mode
+     * a vacuum's SHARE UPDATE EXCLUSIVE conflicts with.
+     *
+     * @return list<string>
+     */
+    private function droppedIndexes(PreflightContext $context): array
+    {
+        $indexes = [];
+
+        foreach ($context->pending->statements as $statement) {
+            if ($statement->statementKind !== StatementKind::DropIndex) {
+                continue;
+            }
+
+            foreach ($statement->targets ?? [] as $target) {
+                if ($target->type === SchemaObjectType::Index) {
+                    $indexes[] = $target->qualifiedName();
+                }
+            }
+        }
+
+        return array_values(array_unique($indexes));
     }
 
     /** Whether anything in this run rewrites a table, which lengthens the window rather than shortening it. */

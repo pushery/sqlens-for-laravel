@@ -26,7 +26,7 @@ final readonly class BaselineSchema
      * The baseline format this build reads and writes. Bump it only together with
      * a migration path (or a named rejection) for every version below it.
      */
-    public const int VERSION = 2;
+    public const int VERSION = 3;
 
     /** The mandatory root field carrying the format version. */
     public const string VERSION_KEY = 'schema_version';
@@ -108,10 +108,13 @@ final readonly class BaselineSchema
             throw UnreadableBaseline::writtenByNewerVersion($path, $version, self::VERSION);
         }
 
-        // Version 1 shipped, and there is deliberately no silent migration from it. A v1 entry
-        // carries no category, so reading one would mean GUESSING which axis its author accepted —
-        // and the wrong guess suppresses a critical security finding under a level entry's name.
-        // Regenerating is cheap and the command is named in the message; guessing is not.
+        // Versions 1 and 2 shipped, and there is deliberately no silent migration from either. A v1
+        // entry carries no category, so reading one would mean GUESSING which axis its author
+        // accepted — and the wrong guess suppresses a critical security finding under a level
+        // entry's name. A v2 fingerprint carries no statement, so the findings of one rule in one
+        // migration were told apart by their order alone: matching one would hand its acceptance to
+        // whichever finding now sits in its place. Regenerating is cheap and the command is named in
+        // the message; guessing is not.
         if ($version < self::VERSION) {
             throw UnreadableBaseline::versionNoLongerRead($path, $version, self::VERSION);
         }

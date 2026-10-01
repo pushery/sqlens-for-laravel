@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Tools;
 
+use Pushery\SQLens\Canonical\Fingerprint;
+
 /**
  * Turns a line number an external tool reported back into a statement of a migration.
  *
@@ -76,6 +78,7 @@ final readonly class ToolPositionMapper
             statementIndex: $statement->origin->statementIndex,
             direction: $statement->origin->direction,
             targets: $statement->targets,
+            excerpt: Fingerprint::of($statement),
         ));
     }
 

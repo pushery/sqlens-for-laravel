@@ -130,6 +130,22 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
     }
 
     /**
+     * A verdict that settles a finding the value has already raised, or null to let it stand.
+     *
+     * Asked only once {@see self::violation()} has judged the value wrong, and that is what
+     * separates it from {@see self::precondition()}. A condition about WHERE a value matters says
+     * nothing about a value that is fine everywhere: `log_statement = none` needs no answer about
+     * the environment, and asking anyway turns a harmless value into a pass that describes it as
+     * set, or into an undetermined wherever the environment cannot be placed.
+     *
+     * Like the precondition it may answer with any verdict, `undetermined` included.
+     */
+    protected function findingCondition(SchemaObject $object): ?RuleVerdict
+    {
+        return null;
+    }
+
+    /**
      * Whether this rule judges the value itself, without the matrix having an expectation for it.
      *
      * False by default, so the matrix's abstention is the last word for every rule that reads its
@@ -319,9 +335,10 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
         //
         // That difference is the whole reason it exists. `reasonedPass()` can only say "fine", so a
         // rule whose precondition is unanswerable would have to spell "I could not tell" as "fine",
-        // which is the silent pass this package refuses everywhere else. The privacy rules are the
-        // case: `log_statement = all` is a finding in production, harmless in development, and
-        // genuinely unknown when nothing places the environment — three answers, not two.
+        // which is the silent pass this package refuses everywhere else. A TLS version name this
+        // package has never measured is the case: it has no position to compare, so the value cannot
+        // be judged at all. A question that only matters for a wrong value belongs to
+        // `findingCondition()` below instead.
         //
         // Placed AFTER the readability rungs on purpose: answering a precondition about a value the
         // run could not read would be a statement about a database it never examined.
@@ -344,6 +361,15 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
         $violation = $this->violation($serverValue, $expectation, $object);
 
         if ($violation !== null) {
+            // Where the finding applies is asked of a wrong value only. The production-only rules
+            // answer it: `log_statement = all` is a finding in production, harmless in development,
+            // and genuinely unknown when nothing places the environment — three answers, not two.
+            $condition = $this->findingCondition($object);
+
+            if ($condition instanceof RuleVerdict) {
+                return [$condition];
+            }
+
             // A value that is already wrong stays wrong. The pending change rides along on the
             // finding rather than replacing it: the problem is present-tense either way, and a
             // reader who fixes the running value needs to know the file already says something else.

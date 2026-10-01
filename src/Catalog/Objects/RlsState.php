@@ -44,16 +44,26 @@ final readonly class RlsState
          * against the role the audit connected as.
          */
         public string $owner,
+        /**
+         * The table as a statement names it, every part quoted: `"public"."orders"`. Empty when the
+         * reading could not write it.
+         *
+         * Every RLS finding closes with an `ALTER TABLE` a reader may paste, and {@see self::$table}
+         * is the name for reading, with its parts joined by a dot. The table name is chosen by
+         * whoever may create tables in the schema, so printed raw it could turn that advice into a
+         * second statement, and PostgreSQL folds an unquoted `Orders` to another table.
+         */
+        public string $statementName,
     ) {}
 
     /**
      * @param  list<RlsPolicy>  $policies
      */
-    public static function of(string $table, bool $enabled, bool $forced, array $policies, Readability $readability, string $owner = ''): self
+    public static function of(string $table, bool $enabled, bool $forced, array $policies, Readability $readability, string $owner = '', string $statementName = ''): self
     {
         usort($policies, static fn (RlsPolicy $a, RlsPolicy $b): int => $a->name <=> $b->name);
 
-        return new self(trim($table), $enabled, $forced, $policies, $readability, trim($owner));
+        return new self(trim($table), $enabled, $forced, $policies, $readability, trim($owner), $statementName);
     }
 
     /** RLS is on and NOTHING may pass — the fail-closed accident, which reads as a working setup. */
@@ -90,7 +100,12 @@ final readonly class RlsState
     {
         return array_values(array_map(
             static fn (RlsPolicy $policy): string => $policy->name,
-            array_filter($this->policies, static fn (RlsPolicy $policy): bool => $policy->permissive && $policy->admitsEverything()),
+            array_filter(
+                $this->policies,
+                fn (RlsPolicy $policy): bool => $policy->permissive
+                    && $policy->admitsEverything()
+                    && ! $this->narrowed($policy, onWrite: false),
+            ),
         ));
     }
 
@@ -105,15 +120,46 @@ final readonly class RlsState
      */
     public function alwaysTrueCheckPolicyNames(): array
     {
+        $reportedOnRead = $this->alwaysTruePolicyNames();
+
         return array_values(array_map(
             static fn (RlsPolicy $policy): string => $policy->name,
             array_filter(
                 $this->policies,
-                static fn (RlsPolicy $policy): bool => $policy->permissive
-                    && $policy->checkAdmitsEverything()
-                    && ! $policy->admitsEverything(),
+                fn (RlsPolicy $policy): bool => $policy->permissive
+                    && $policy->effectiveCheckAdmitsEverything()
+                    && ! $this->narrowed($policy, onWrite: true)
+                    && ! in_array($policy->name, $reportedOnRead, true),
             ),
         ));
+    }
+
+    /**
+     * Whether a RESTRICTIVE policy on this table gives the permissive one a real condition.
+     *
+     * A row passes when some permissive policy passes and every restrictive one does, so the
+     * documented pattern of a permissive `USING (true)` base with a restrictive tenant condition is
+     * a filtered table, not an open one. Measured on PostgreSQL 18.4 with a non-owner under FORCE:
+     * the base alone shows a tenant 3 of 3 rows and accepts another tenant's insert; with a
+     * restrictive `FOR ALL` tenant policy it shows 1 of 3 and refuses the insert.
+     */
+    private function narrowed(RlsPolicy $permissive, bool $onWrite): bool
+    {
+        foreach ($this->policies as $restrictive) {
+            if ($restrictive->permissive || ! $restrictive->covers($permissive)) {
+                continue;
+            }
+
+            $filters = $onWrite
+                ? $restrictive->effectiveCheck() !== null && ! $restrictive->effectiveCheckAdmitsEverything()
+                : $restrictive->using !== null && ! $restrictive->admitsEverything();
+
+            if ($filters) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

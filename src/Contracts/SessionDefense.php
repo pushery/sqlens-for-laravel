@@ -66,20 +66,47 @@ interface SessionDefense
     public function isReadOnlyRefusal(string $sqlState): bool;
 
     /**
-     * Whether this SQLSTATE means the account is not ALLOWED to write, rather than the session
-     * being sealed against it.
+     * Whether this SQLSTATE means a privilege refused the probe, rather than the session's seal.
      *
-     * A separate question on purpose. Both answers prove the probe's point — nothing this session
-     * does can write — and an account refused for lack of privilege proves it more durably than a
-     * session flag, which a later statement could clear. But they prove DIFFERENT things: one is
-     * about the session, the other about the grant, and a reader that folded them together could
-     * no longer say which guarantee it is standing on.
+     * A separate question on purpose, and not a proof on its own. The probe needs one privilege,
+     * the right to create a temporary table, and an engine that asks the grant before the
+     * transaction's access mode refuses an account without that right the same way whether or not
+     * the account may write elsewhere and whether or not the seal took. Measured on MySQL 8.4: an
+     * account holding `INSERT`, `UPDATE` and `DELETE` and no temporary-table right is refused with
+     * `42000`, exactly like one holding `SELECT` alone. What such a refusal leaves open is answered
+     * by {@see self::grantsForbidWriting()} and {@see self::readOnlyFlagQuery()}.
      *
      * Without this the least-privileged account the documentation recommends cannot be audited at
      * all: its probe write is denied by privilege, the seal reads that as "refused for the wrong
      * reason", and the entire reading fails. Measured on MySQL 8.4 with `GRANT SELECT ON db.*`.
      */
     public function isPrivilegeRefusal(string $sqlState): bool;
+
+    /**
+     * A query whose one row answers, in its first column, whether the transaction is read-only.
+     *
+     * Read after a privilege refused the probe, because the refusal then says nothing about the
+     * seal: the flag is asked for instead of inferred.
+     */
+    public function readOnlyFlagQuery(): string;
+
+    /** Whether the value {@see self::readOnlyFlagQuery()} answered, as text, means read-only. */
+    public function flagMeansReadOnly(string $value): bool;
+
+    /**
+     * A query listing the connecting account's own grants, one line per row in the first column,
+     * or null where no listing this package reads can show that an account cannot write.
+     */
+    public function grantListingQuery(): ?string;
+
+    /**
+     * Whether these grant lines show that the account cannot write: every privilege they name only
+     * reads, and none of them could widen that. A role membership, a grant option or a line that
+     * does not parse is not read as proof, and neither is an empty listing.
+     *
+     * @param  list<string>  $lines
+     */
+    public function grantsForbidWriting(array $lines): bool;
 
     /**
      * Whether this failure is the session's own time budget firing.

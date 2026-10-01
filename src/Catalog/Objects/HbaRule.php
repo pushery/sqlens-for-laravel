@@ -9,9 +9,10 @@ namespace Pushery\SQLens\Catalog\Objects;
  *
  * ## Why the file is read through a catalog view and never off disk
  *
- * `pg_hba_file_rules` is the server's own parse of its own file. Reading the file instead would mean
- * re-implementing that parser — including the include directives, the quoting rules and the
- * continuation lines — and then being subtly wrong about a file the server has already understood.
+ * `pg_hba_file_rules` is the server's own parse of the file as it is on disk, which is not
+ * necessarily what the server has loaded. Reading the file instead would mean re-implementing that
+ * parser — including the include directives, the quoting rules and the continuation lines — and then
+ * being subtly wrong about a file the server has already understood.
  * It also would not work at all where it matters most: a managed instance does not hand out its
  * filesystem, and the audit connection is a database connection rather than a shell.
  *
@@ -19,10 +20,10 @@ namespace Pushery\SQLens\Catalog\Objects;
  *
  * A line PostgreSQL could not understand carries `error` and is otherwise empty. That is not a
  * problem with the reading — the server is telling us, in its own words, that one of its
- * authentication rules is broken. A broken line does not authenticate anybody, so the rule that
- * follows it decides who gets in; that is a security fact and it belongs in a report rather than in
- * an exception. Hence `error` is a first-class field here, and {@see self::isBroken()} exists so a
- * rule can say so without string-matching.
+ * authentication rules is broken. A file holding such a line is not loaded at all, so the server keeps
+ * running on the rules it loaded before; that is a security fact and it belongs in a report rather
+ * than in an exception. Hence `error` is a first-class field here, and {@see self::isBroken()} exists
+ * so a rule can say so without string-matching.
  *
  * ## What is deliberately NOT normalized
  *

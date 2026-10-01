@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Security;
 
 use Pushery\SQLens\Findings\Finding;
+use Pushery\SQLens\Reporting\Baseline\BaselineEntry;
 use Pushery\SQLens\Reporting\RunContext;
 use Pushery\SQLens\Reporting\Suppression\SuppressedFinding;
 
@@ -32,21 +33,42 @@ final readonly class SecuritySubRun
     /**
      * @param  list<Finding>  $findings
      * @param  list<SuppressedFinding>  $suppressed
+     * @param  list<BaselineEntry>  $stale
      */
     private function __construct(
         public array $findings,
         public ?RunContext $context,
         public bool $reached,
         public array $suppressed = [],
+        /**
+         * Whether the run has to end on a misconfiguration because of this half.
+         *
+         * Beside `reached` rather than folded into it, because the two call for different exits. A
+         * half that met a driver this package does not support examined nothing and says so; that
+         * is the ordinary state of a SQLite test database, and the project decides what it costs.
+         * A half refused over its configuration is what `sqlens:audit` and `sqlens:lint` end on
+         * with a misconfiguration, and the security run has to end on one too. So is a half that
+         * ran and ended on one anyway, as a stale baseline entry under `error` makes it.
+         */
+        public bool $misconfigured = false,
+        /**
+         * The baseline entries this half judged and found nothing for.
+         *
+         * Carried up for the same reason as the suppressions: only the half knows them, and a
+         * report built without them says a file is being kept that has stopped matching.
+         */
+        public array $stale = [],
     ) {}
 
     /**
      * @param  list<Finding>  $findings
      * @param  list<SuppressedFinding>  $suppressed
+     * @param  list<BaselineEntry>  $stale
+     * @param  bool  $misconfigured  whether the half ran and still ended on a misconfiguration
      */
-    public static function reached(array $findings, RunContext $context, array $suppressed = []): self
+    public static function reached(array $findings, RunContext $context, array $suppressed = [], array $stale = [], bool $misconfigured = false): self
     {
-        return new self($findings, $context, true, $suppressed);
+        return new self($findings, $context, true, $suppressed, $misconfigured, $stale);
     }
 
     /**
@@ -61,5 +83,16 @@ final readonly class SecuritySubRun
     public static function failed(Finding $reason): self
     {
         return new self([$reason], null, false);
+    }
+
+    /**
+     * A sub-run that could not happen because its configuration cannot be trusted.
+     *
+     * It carries its notice like any other failure, so the report says which half and why. What it
+     * adds is the misconfiguration the run ends on.
+     */
+    public static function misconfigured(Finding $reason): self
+    {
+        return new self([$reason], null, false, misconfigured: true);
     }
 }

@@ -90,6 +90,16 @@ final readonly class PreflightContext
         public int $longRunningMs = self::DEFAULT_LONG_RUNNING_MS,
         /** The replica lag at which a check reports, in milliseconds. */
         public int $replicationLagMs = self::DEFAULT_REPLICATION_LAG_MS,
+        /**
+         * The `assume_server_version` pin this run resolved with its profile, or null when none is
+         * configured.
+         *
+         * Carried here rather than handed to the check when it is built: the checks are built once,
+         * when a command's dependencies are resolved and before the command applies its profile, so
+         * a pin read then is the base configuration's while the lint half of the same run reads the
+         * profile's.
+         */
+        public ?string $assumedServerVersion = null,
     ) {}
 
     /**

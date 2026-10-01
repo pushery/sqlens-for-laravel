@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Capture;
 
 use Pushery\SQLens\Canonical\ColumnDefinition;
+use Pushery\SQLens\Canonical\Fingerprint;
+use Pushery\SQLens\Canonical\StatementAction;
 use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Canonical\StatementTarget;
 use Pushery\SQLens\Canonical\TransactionContext;
@@ -79,7 +81,72 @@ final readonly class CapturedStatement
          * @var list<ColumnDefinition>|null
          */
         public ?array $columnDefinitions = null,
+        /**
+         * The later actions of an `ALTER TABLE` action list that ask something the first does not,
+         * as the canonicalization classified them, or an empty list. Routing
+         * metadata like the classification above, and kept off the wire form for the same reason.
+         *
+         * @var list<StatementAction>
+         */
+        public array $actions = [],
+        /**
+         * The fingerprint of the statement's full canonical form, once the canonicalization has
+         * produced it, or null before. It is what a finding about this statement is told apart by.
+         */
+        public ?Fingerprint $excerpt = null,
     ) {}
+
+    /**
+     * The same statement at another position in what its migration runs.
+     *
+     * Set by the canonicalizing decorator when one captured entry turns out to hand the server
+     * several statements: each becomes its own, and every later statement moves along, so the
+     * sequence stays the statement's place in execution order.
+     */
+    public function withSequence(int $sequence): self
+    {
+        return new self(
+            rawSql: $this->rawSql,
+            bindings: $this->bindings,
+            sequence: $sequence,
+            direction: $this->direction,
+            withinTransaction: $this->withinTransaction,
+            connectionName: $this->connectionName,
+            driver: $this->driver,
+            substitutedSql: $this->substitutedSql,
+            canonicalSql: $this->canonicalSql,
+            statementKind: $this->statementKind,
+            targets: $this->targets,
+            transactionMode: $this->transactionMode,
+            keyColumns: $this->keyColumns,
+            columnDefinitions: $this->columnDefinitions,
+            actions: $this->actions,
+            excerpt: $this->excerpt,
+        );
+    }
+
+    /** The same statement carrying the fingerprint of its canonical form. */
+    public function withExcerpt(Fingerprint $excerpt): self
+    {
+        return new self(
+            rawSql: $this->rawSql,
+            bindings: $this->bindings,
+            sequence: $this->sequence,
+            direction: $this->direction,
+            withinTransaction: $this->withinTransaction,
+            connectionName: $this->connectionName,
+            driver: $this->driver,
+            substitutedSql: $this->substitutedSql,
+            canonicalSql: $this->canonicalSql,
+            statementKind: $this->statementKind,
+            targets: $this->targets,
+            transactionMode: $this->transactionMode,
+            keyColumns: $this->keyColumns,
+            columnDefinitions: $this->columnDefinitions,
+            actions: $this->actions,
+            excerpt: $excerpt,
+        );
+    }
 
     /**
      * The same statement with its bindings inlined. Returns a new instance —
@@ -101,6 +168,10 @@ final readonly class CapturedStatement
             statementKind: $this->statementKind,
             targets: $this->targets,
             transactionMode: $this->transactionMode,
+            keyColumns: $this->keyColumns,
+            columnDefinitions: $this->columnDefinitions,
+            actions: $this->actions,
+            excerpt: $this->excerpt,
         );
     }
 
@@ -120,6 +191,10 @@ final readonly class CapturedStatement
             statementKind: $this->statementKind,
             targets: $this->targets,
             transactionMode: $this->transactionMode,
+            keyColumns: $this->keyColumns,
+            columnDefinitions: $this->columnDefinitions,
+            actions: $this->actions,
+            excerpt: $this->excerpt,
         );
     }
 
@@ -146,6 +221,10 @@ final readonly class CapturedStatement
             statementKind: $this->statementKind,
             targets: $this->targets,
             transactionMode: $transactionMode,
+            keyColumns: $this->keyColumns,
+            columnDefinitions: $this->columnDefinitions,
+            actions: $this->actions,
+            excerpt: $this->excerpt,
         );
     }
 
@@ -158,8 +237,9 @@ final readonly class CapturedStatement
      * @param  list<StatementTarget>  $targets
      * @param  list<string>  $keyColumns
      * @param  list<ColumnDefinition>|null  $columnDefinitions
+     * @param  list<StatementAction>  $actions
      */
-    public function withClassification(StatementKind $statementKind, array $targets, array $keyColumns = [], ?array $columnDefinitions = null): self
+    public function withClassification(StatementKind $statementKind, array $targets, array $keyColumns = [], ?array $columnDefinitions = null, array $actions = []): self
     {
         return new self(
             rawSql: $this->rawSql,
@@ -176,6 +256,8 @@ final readonly class CapturedStatement
             transactionMode: $this->transactionMode,
             keyColumns: $keyColumns,
             columnDefinitions: $columnDefinitions,
+            actions: $actions,
+            excerpt: $this->excerpt,
         );
     }
 

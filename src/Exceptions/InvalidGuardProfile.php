@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Exceptions;
 
 use InvalidArgumentException;
+use Pushery\SQLens\Config\ConfigSchema;
 
 /**
  * A guard profile that cannot be resolved — refused at boot rather than absorbed.
@@ -66,6 +67,43 @@ final class InvalidGuardProfile extends InvalidArgumentException
             $profile,
             $connection,
             implode(', ', $available),
+        ));
+    }
+
+    /** @param list<string> $known */
+    public static function unknownKey(string $profile, string $key, array $known): self
+    {
+        return new self(sprintf(
+            'The guard profile `%s` sets `%s`, which is not a key this build reads. Known here: %s. '
+            .'Refused at BOOT: a misspelled key leaves the guardrail it meant at its default, which is '
+            .'off, while the configuration still reads as though it is on.',
+            $profile,
+            $key,
+            implode(', ', $known),
+        ));
+    }
+
+    public static function unknownLevel(string $profile, mixed $level): self
+    {
+        return new self(sprintf(
+            'The guard profile `%s` logs at `%s`, which is not a PSR-3 level. Known: %s. Refused at '
+            .'BOOT: a logger handed an unknown level throws when a guardrail finally has something to '
+            .'say, and that record is lost.',
+            $profile,
+            // The value itself for a string a person typed, the type for anything else.
+            is_string($level) ? $level : get_debug_type($level),
+            implode(', ', ConfigSchema::LOG_LEVELS),
+        ));
+    }
+
+    public static function notASection(string $profile, string $key, mixed $value): self
+    {
+        return new self(sprintf(
+            'The guard profile `%s` sets `%s` to %s, and it has to be a map of keys. Read as empty it '
+            .'would turn every switch in it off.',
+            $profile,
+            $key,
+            get_debug_type($value),
         ));
     }
 

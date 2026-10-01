@@ -60,9 +60,9 @@ final readonly class StaleRawSqlReasonRule implements Rule
     /**
      * The collectors whose rows count as "this annotation is still covering raw SQL".
      *
-     * All five, deliberately. The policy rule reports on two of them; an annotation is doing its job
-     * if it covers any raw SQL the suite can see, and narrowing this list to the reporting pair
-     * would call a true reason dead.
+     * All of them, deliberately. The policy rule reports on the statement collectors only; an
+     * annotation is doing its job if it covers any raw SQL the suite can see, and narrowing this
+     * list to the ones that report would call a true reason dead.
      *
      * @var list<class-string>
      */
@@ -70,7 +70,10 @@ final readonly class StaleRawSqlReasonRule implements Rule
         RawSqlCallCollector::class,
         RawSqlConnectionCallCollector::class,
         RawSqlPdoCallCollector::class,
+        RawSqlEloquentCallCollector::class,
+        RawSqlEloquentStaticCallCollector::class,
         RawSqlFragmentCollector::class,
+        RawSqlModelFragmentCollector::class,
         RawSqlExpressionCollector::class,
         DynamicIdentifierCollector::class,
     ];

@@ -124,6 +124,30 @@ final readonly class ReplicationLagCheck implements PreflightCheck
             return CheckResult::pass(self::ID, [$this->noReplicationFinding($context)]);
         }
 
+        // A replica whose state the server withheld is a gap in the READING, and the answer is the
+        // gap. Judged as a state it reads as "not streaming", a High finding that stops every deploy
+        // over a healthy cluster for want of a grant. Asked first, because a reading that could not
+        // see every replica cannot vouch for the ones it could.
+        $withheld = array_values(array_filter(
+            $snapshot->replication,
+            static fn (ReplicationState $replica): bool => $replica->isWithheld(),
+        ));
+
+        if ($withheld !== []) {
+            return CheckResult::undetermined(
+                self::ID,
+                UndeterminedReason::MissingPrivilege,
+                sprintf(
+                    'the server lists %d replica(s) connected to it and withholds their state and lag '
+                    .'from the role this preflight reads as, so whether they are receiving changes is '
+                    .'unknown. That is a missing privilege, not a stalled replica. On PostgreSQL the '
+                    .'state needs membership in pg_read_all_stats, which GRANT pg_monitor gives a '
+                    .'reading account without any access to table data.',
+                    count($withheld),
+                ),
+            );
+        }
+
         $findings = [];
 
         foreach ($snapshot->replication as $replica) {
@@ -179,7 +203,7 @@ final readonly class ReplicationLagCheck implements PreflightCheck
                     .'reconnects, which may be after somebody has already read the old schema '
                     .'through it and filed the result as a bug.',
                     $replica->replica,
-                    $replica->state,
+                    (string) $replica->state,
                 ),
                 Severity::High,
             );

@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Drivers\Mysql\Rules\Support;
 
+use Pushery\SQLens\Canonical\StatementAction;
 use Pushery\SQLens\Canonical\StringLiteralMask;
 use Pushery\SQLens\Drivers\Mysql\Canonical\MysqlCanonicalization;
+use Pushery\SQLens\Subjects\MigrationStatementView;
+use Pushery\SQLens\Subjects\SchemaObjectType;
 
 /**
  * What a canonical `ALTER TABLE … MODIFY` / `… CHANGE` says about the column it redefines —
@@ -58,37 +61,112 @@ final readonly class ColumnRedefinition
     ) {}
 
     /**
+     * The redefinition a statement performs on the column it is about, or null when it performs none.
+     *
+     * One `ALTER TABLE` can redefine several columns, `MODIFY a INT, MODIFY b ENUM('x')`, and each of
+     * its actions reaches a rule as a subject of its own, naming its own column over the statement's
+     * whole text ({@see StatementAction}). So the clause is looked up by that column. Read from the
+     * front instead, every question about `b` would be answered with what the statement does to `a`,
+     * and a redefinition behind an `ADD COLUMN` would not be found at all.
+     */
+    public static function of(MigrationStatementView $statement): ?self
+    {
+        return self::parse($statement->canonical, $statement->soleTarget(SchemaObjectType::Column)?->qualifiedName());
+    }
+
+    /**
      * Read a canonical statement as a column redefinition, or null when it is not one.
+     *
+     * With a column, the redefinition of that column, wherever it stands in the action list; a
+     * `CHANGE` is found by the name it renames. Without one, the first redefinition the list holds.
      *
      * Both spellings are read the same way, deliberately. `MODIFY` is what Laravel's grammar
      * emits for `->change()`; `CHANGE` additionally renames and reaches SQLens only through a raw
      * statement. The rename is not what makes either of them expensive — the redefinition beside
      * it is — so telling them apart here would only invite a second, near-identical treatment.
      */
-    public static function parse(string $canonical): ?self
+    public static function parse(string $canonical, ?string $column = null): ?self
     {
-        // `MODIFY <col> <definition>` and `CHANGE <old> <new> <definition>`: one alternation
-        // rather than two passes, so the two spellings cannot drift into two behaviors. The
-        // leading `ALTER TABLE <table>` is matched but not captured — which table this is
+        // The leading `ALTER TABLE <table>` is matched but not captured — which table this is
         // belongs to the classified targets, not to a text match.
-        $matched = preg_match(
-            '/^ALTER TABLE \S+ (?:MODIFY (?<modified>\S+)|CHANGE \S+ (?<renamed>\S+)) (?<definition>\S.*)$/',
-            $canonical,
-            $matches,
-        );
-
-        if ($matched !== 1) {
+        if (preg_match('/^ALTER TABLE \S+ (?<actions>\S.*)$/', $canonical, $statement) !== 1) {
             return null;
         }
 
-        $column = $matches['modified'] === '' ? $matches['renamed'] : $matches['modified'];
-        $definition = $matches['definition'];
+        // String literals are masked before anything is read. The canonicalization leaves literal
+        // CONTENT untouched by design, since inside quotes a keyword is data, not syntax, so a
+        // member list `ENUM('a, b')` would otherwise end an action at its comma, and a default of
+        // `'FIRST'` would read as a position clause. Nothing read here lives inside a literal: a
+        // name, the head of a type, a position clause.
+        $actions = StringLiteralMask::forDriver(new MysqlCanonicalization)->apply($statement['actions']);
 
-        return new self(
-            column: $column,
-            typeName: self::typeNameOf($definition),
-            positioned: self::hasPositionClause($definition),
-        );
+        foreach (self::actionsIn($actions) as $action) {
+            // `MODIFY [COLUMN] <col> <definition>` and `CHANGE [COLUMN] <old> <new> <definition>`:
+            // one alternation rather than two passes, so the two spellings cannot drift into two
+            // behaviors. `COLUMN` is the manual's optional word, and it cannot be a column's name
+            // here: a column named `column` keeps its quotes in the canonical form.
+            $matched = preg_match(
+                '/^(?:MODIFY (?:COLUMN )?(?<modified>\S+)|CHANGE (?:COLUMN )?(?<old>\S+) (?<renamed>\S+)) (?<definition>\S.*)$/',
+                $action,
+                $matches,
+            );
+
+            if ($matched !== 1) {
+                continue;
+            }
+
+            $named = $matches['modified'] === '' ? $matches['old'] : $matches['modified'];
+
+            if ($column !== null && $named !== $column) {
+                continue;
+            }
+
+            return new self(
+                column: $matches['modified'] === '' ? $matches['renamed'] : $matches['modified'],
+                typeName: self::typeNameOf($matches['definition']),
+                positioned: self::hasPositionClause($matches['definition']),
+            );
+        }
+
+        return null;
+    }
+
+    /**
+     * The actions of a masked action list, cut at the commas on the statement's own level.
+     *
+     * A comma inside parentheses belongs to a type, `DECIMAL(10, 2)`, and one inside backticks to a
+     * name; neither ends an action. Literals arrive masked, so their commas are already gone.
+     *
+     * @return list<string>
+     */
+    private static function actionsIn(string $masked): array
+    {
+        $actions = [];
+        $depth = 0;
+        $quoted = false;
+        $start = 0;
+        $length = strlen($masked);
+
+        for ($offset = 0; $offset < $length; $offset++) {
+            $character = $masked[$offset];
+
+            if ($character === '`') {
+                $quoted = ! $quoted;
+            } elseif ($quoted) {
+                continue;
+            } elseif ($character === '(') {
+                $depth++;
+            } elseif ($character === ')') {
+                $depth = max(0, $depth - 1);
+            } elseif ($character === ',' && $depth === 0) {
+                $actions[] = trim(substr($masked, $start, $offset - $start));
+                $start = $offset + 1;
+            }
+        }
+
+        $actions[] = trim(substr($masked, $start));
+
+        return $actions;
     }
 
     /** Whether the target type is a VARCHAR — the only type MySQL can resize without a rebuild. */
@@ -124,15 +202,12 @@ final readonly class ColumnRedefinition
     /**
      * Whether the definition ends in `AFTER <column>` or `FIRST`.
      *
-     * String literals are masked out first, and that is not caution for its own sake: a column
-     * whose default is `'FIRST'` or `'AFTER x'` would otherwise read as a positioned redefinition,
-     * because the canonicalization leaves literal CONTENT untouched by design — inside quotes a
-     * keyword is data, not syntax. Masking makes the scan look at the syntax only.
+     * The definition is one action's and arrives with its literals masked ({@see self::parse()}),
+     * so a default of `'FIRST'` or `'AFTER x'` cannot read as a positioned redefinition, and the
+     * position clause of the action after it cannot either.
      */
     private static function hasPositionClause(string $definition): bool
     {
-        $withoutLiterals = StringLiteralMask::forDriver(new MysqlCanonicalization)->apply($definition);
-
-        return preg_match('/\s(?:AFTER\s+\S+|FIRST)\s*$/', $withoutLiterals) === 1;
+        return preg_match('/\s(?:AFTER\s+\S+|FIRST)\s*$/', $definition) === 1;
     }
 }

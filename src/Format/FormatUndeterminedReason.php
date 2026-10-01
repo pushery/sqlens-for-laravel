@@ -82,4 +82,14 @@ enum FormatUndeterminedReason: string
      * spends someone's afternoon before it is caught.
      */
     case FileUnreadable = 'format_file_unreadable';
+
+    /**
+     * The formatted file could not be written back: a directory the run may not write into, a
+     * volume mounted read-only, a name too long for the temporary file beside it.
+     *
+     * Its own case because the run did everything else right. The SQL was read and formatted, and
+     * only the write failed, so what a reader has to look at is the file's permissions rather than
+     * the statement. Reported as formatted, the file stayed as it was while the run ended clean.
+     */
+    case FileUnwritable = 'format_file_unwritable';
 }

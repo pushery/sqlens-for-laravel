@@ -111,9 +111,30 @@ final class GetFindingsTool extends SqlensTool
             // baseline accepted stays accepted — an agent that saw them would go and fix things
             // somebody already decided to live with.
             'path' => $path,
-            'suppressed' => is_int($decoded['suppressed'] ?? null) ? $decoded['suppressed'] : 0,
+            'suppressed' => $this->suppressedCount($decoded),
             ...$page->toArray(),
         ], sprintf('%d finding(s) in the last report, %d returned.', $page->total, count($page->rows)))->toResponse();
+    }
+
+    /**
+     * How many findings the run hid, as the report counts them.
+     *
+     * The envelope counts them under `summary.suppressed` and lists them under the top-level
+     * `suppressed`. Reading that list as the count answered 0 for every real report, which is the
+     * one thing the count exists to rule out: a clean run and a run with forty findings hidden
+     * looking alike. Null when the report says neither, rather than a zero nobody measured.
+     *
+     * @param  array<mixed>  $report
+     */
+    private function suppressedCount(array $report): ?int
+    {
+        $summary = $report['summary'] ?? null;
+
+        if (is_array($summary) && is_int($summary['suppressed'] ?? null)) {
+            return $summary['suppressed'];
+        }
+
+        return is_array($report['suppressed'] ?? null) ? count($report['suppressed']) : null;
     }
 
     /** @return array<string, list<string>> */

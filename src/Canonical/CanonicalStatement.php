@@ -51,6 +51,17 @@ final readonly class CanonicalStatement
          * @var list<ColumnDefinition>|null
          */
         public ?array $columnDefinitions = null,
+        /**
+         * The later actions of an `ALTER TABLE` action list that ask something the first does not,
+         * each classified on its own — or an empty list.
+         *
+         * The kind above comes from the first action. An action behind it that does something else,
+         * or the same to another object, is carried here, so a rule can be asked about it; see
+         * {@see StatementAction}.
+         *
+         * @var list<StatementAction>
+         */
+        public array $actions = [],
     ) {}
 
     /** Whether the classification slots are filled — false means the kind/targets are not yet known. */
@@ -66,8 +77,9 @@ final readonly class CanonicalStatement
      * @param  list<StatementTarget>  $targets
      * @param  list<string>  $keyColumns
      * @param  list<ColumnDefinition>|null  $columnDefinitions
+     * @param  list<StatementAction>  $actions
      */
-    public function withClassification(StatementKind $statementKind, array $targets, array $keyColumns = [], ?array $columnDefinitions = null): self
+    public function withClassification(StatementKind $statementKind, array $targets, array $keyColumns = [], ?array $columnDefinitions = null, array $actions = []): self
     {
         return new self(
             $this->canonicalSql,
@@ -78,6 +90,7 @@ final readonly class CanonicalStatement
             $targets,
             $keyColumns,
             $columnDefinitions,
+            $actions,
         );
     }
 }

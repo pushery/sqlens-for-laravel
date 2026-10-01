@@ -35,6 +35,19 @@ final readonly class CatalogCanonicalizer
         return $this->folding->comparisonKey($identifier);
     }
 
+    /**
+     * The name of a column, an index, a constraint, a trigger or an event, as the server stores it.
+     *
+     * A server's folding rule covers databases and tables alone. MySQL's `lower_case_table_names`
+     * lower-cases those and keeps every other name as written, on every setting, so a column created
+     * as `createdAt` is `createdAt` in `information_schema`. Folding it here would name a column that
+     * `SHOW CREATE TABLE` does not show, and hide it from every rule that judges how a name is spelled.
+     */
+    public function memberName(string $identifier): string
+    {
+        return $identifier;
+    }
+
     /** A schema-qualified name, both parts folded the way this server folds them. */
     public function qualified(?string $schema, string $identifier): string
     {
@@ -137,7 +150,7 @@ final readonly class CatalogCanonicalizer
     public function indexColumns(array $columns): string
     {
         return implode(', ', array_map(
-            fn (array $column): string => $this->name($column['name']).' '.(($column['descending'] ?? false) ? 'DESC' : 'ASC'),
+            fn (array $column): string => $this->memberName($column['name']).' '.(($column['descending'] ?? false) ? 'DESC' : 'ASC'),
             $columns,
         ));
     }

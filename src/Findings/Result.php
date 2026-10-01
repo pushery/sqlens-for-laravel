@@ -207,6 +207,13 @@ final readonly class Result
      * Most findings have none at all: the class is a property of a schema OPERATION, and a security
      * or convention finding is not one. Answering `online` would turn "nobody stated a class" into
      * "nothing disrupts", which is the reading this package refuses everywhere else.
+     *
+     * ## Why null when a class could not be determined
+     *
+     * A statement whose class is undetermined could be the most disruptive one in the run, so the
+     * worst class the others name is not the worst of the run. Null is the answer then, unless one
+     * of them names `rewrite`, above which nothing ranks. {@see undeterminedDowntimeCount()} says
+     * how many findings made it so.
      */
     public function worstDowntimeClass(): ?DowntimeClass
     {
@@ -222,7 +229,27 @@ final readonly class Result
             }
         }
 
-        return $worst;
+        return $worst === DowntimeClass::Rewrite || $this->undeterminedDowntimeCount() === 0 ? $worst : null;
+    }
+
+    /**
+     * How many findings carry a statement whose downtime class could not be determined.
+     *
+     * Beside the histogram rather than in it: the classes are a closed, ranked set a deploy script
+     * reads, and an unknown is not a fourth rank. A gate that decides from the histogram adds this
+     * count to what blocks.
+     */
+    public function undeterminedDowntimeCount(): int
+    {
+        $count = 0;
+
+        foreach ($this->findings as $finding) {
+            if ($finding->downtimeUndetermined instanceof DowntimeUndetermined) {
+                $count++;
+            }
+        }
+
+        return $count;
     }
 
     /**

@@ -33,9 +33,13 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * omission, so a schema full of partial indexes is told that they were not compared, instead of
  * being handed a clean report.
  *
- * ## The four things that stop a pair from being redundant
+ * ## The five things that stop a pair from being redundant
  *
  * - **Either index is not comparable.** Covered above; the pair is never formed.
+ * - **The cover is INVISIBLE.** MySQL maintains an `INVISIBLE` index on every write and its
+ *   optimizer ignores it, so it serves no lookup, and reporting a visible index as covered by one
+ *   would advise dropping the index the queries use. An invisible index may still be the one that
+ *   IS covered: it costs the writes and serves nothing, and a visible index does its work.
  * - **The candidate is UNIQUE or the primary key.** Dropping it would change what the schema
  *   ALLOWS, not just what it costs, and that is a different conversation from a performance
  *   finding. A unique index may still be the one that COVERS another — a unique key on `(a, b)`
@@ -72,6 +76,9 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * victim. Picking by name — the later one reported against the earlier — is arbitrary, and it is
  * arbitrary DETERMINISTICALLY, which is the property that matters: the same schema produces the
  * same report on Tuesday as on Monday, and the message names both so a reader picks for themselves.
+ *
+ * When one of the two is invisible there is no tie to break. It cannot cover, so the pair runs one
+ * way, and it is the invisible one that is reported, whatever the names.
  */
 final readonly class RedundantIndex
 {
@@ -83,23 +90,27 @@ final readonly class RedundantIndex
     public static function on(SchemaObject $table): array
     {
         $protected = self::protectedNames($table);
+        // Never a cover, in any universe: the optimizer ignores an invisible index, so the lookups a
+        // candidate serves would scan once the candidate was gone.
+        $invisible = array_map(strval(...), array_keys(ForeignKeyIndexCoverage::parse($table->getString('invisible_indexes') ?? '')));
         $redundant = self::within(
             self::sorted(ForeignKeyIndexCoverage::parse($table->getString('comparable_indexes') ?? '')),
             $protected,
+            $invisible,
         );
 
         // Each group of partial indexes is its own comparison universe, and they are kept apart on
         // purpose: an index from one group can never be reported against one from another, because
         // that would be an implication claim rather than an arithmetic one.
         foreach (self::predicateGroups($table) as $group) {
-            $redundant = [...$redundant, ...self::within($group, $protected)];
+            $redundant = [...$redundant, ...self::within($group, $protected, $invisible)];
         }
 
         // The same universes one attribute along — a group of GIN indexes, of GiST indexes, of
         // FULLTEXT indexes. They are kept in their own loop because what may be CONCLUDED inside
         // one is weaker: only an identical column list, never a prefix. See self::identicalWithin().
         foreach (self::methodGroups($table) as $group) {
-            $redundant = [...$redundant, ...self::identicalWithin($group, $protected)];
+            $redundant = [...$redundant, ...self::identicalWithin($group, $protected, $invisible)];
         }
 
         ksort($redundant);
@@ -121,11 +132,12 @@ final readonly class RedundantIndex
      *
      * @param  array<string, list<string>>  $universe
      * @param  list<string>  $protected
+     * @param  list<string>  $invisible  members that may be covered and may never cover
      * @return array<string, string>
      */
-    private static function within(array $universe, array $protected): array
+    private static function within(array $universe, array $protected, array $invisible): array
     {
-        return self::pairsIn($universe, $protected, self::covers(...));
+        return self::pairsIn($universe, $protected, self::covers(...), $invisible);
     }
 
     /**
@@ -138,11 +150,12 @@ final readonly class RedundantIndex
      *
      * @param  array<string, list<string>>  $universe
      * @param  list<string>  $protected
+     * @param  list<string>  $invisible  members that may be covered and may never cover
      * @return array<string, string>
      */
-    private static function identicalWithin(array $universe, array $protected): array
+    private static function identicalWithin(array $universe, array $protected, array $invisible): array
     {
-        return self::pairsIn($universe, $protected, self::isTheSameIndex(...));
+        return self::pairsIn($universe, $protected, self::isTheSameIndex(...), $invisible);
     }
 
     /**
@@ -154,10 +167,11 @@ final readonly class RedundantIndex
      *
      * @param  array<string, list<string>>  $universe
      * @param  list<string>  $protected
-     * @param  Closure(list<string>, list<string>, string, string): bool  $supersedes
+     * @param  Closure(list<string>, list<string>, string, string, bool): bool  $supersedes  the last argument says whether the two could each cover the other
+     * @param  list<string>  $invisible  members that may be covered and may never cover
      * @return array<string, string>
      */
-    private static function pairsIn(array $universe, array $protected, Closure $supersedes): array
+    private static function pairsIn(array $universe, array $protected, Closure $supersedes, array $invisible): array
     {
         $redundant = [];
 
@@ -172,7 +186,10 @@ final readonly class RedundantIndex
                 if ($cover === $candidate) {
                     continue;
                 }
-                if (! $supersedes($columns, $coverColumns, (string) $candidate, (string) $cover)) {
+                if (in_array($cover, $invisible, true)) {
+                    continue;
+                }
+                if (! $supersedes($columns, $coverColumns, (string) $candidate, (string) $cover, ! in_array($candidate, $invisible, true))) {
                     continue;
                 }
                 $redundant[(string) $candidate] = (string) $cover;
@@ -280,7 +297,7 @@ final readonly class RedundantIndex
      * @param  list<string>  $candidate
      * @param  list<string>  $cover
      */
-    private static function covers(array $candidate, array $cover, string $candidateName, string $coverName): bool
+    private static function covers(array $candidate, array $cover, string $candidateName, string $coverName, bool $mutual): bool
     {
         if (count($candidate) > count($cover)) {
             return false;
@@ -293,8 +310,9 @@ final readonly class RedundantIndex
         }
 
         // Identical lists: report the later NAME against the earlier, so a pair produces one
-        // finding rather than two mutually-accusing ones, and always the same one.
-        return count($candidate) < count($cover) || $candidateName > $coverName;
+        // finding rather than two mutually-accusing ones, and always the same one. A candidate
+        // that cannot cover in return has no such tie, and is reported whatever its name.
+        return count($candidate) < count($cover) || ! $mutual || $candidateName > $coverName;
     }
 
     /**
@@ -308,9 +326,9 @@ final readonly class RedundantIndex
      * @param  list<string>  $candidate
      * @param  list<string>  $cover
      */
-    private static function isTheSameIndex(array $candidate, array $cover, string $candidateName, string $coverName): bool
+    private static function isTheSameIndex(array $candidate, array $cover, string $candidateName, string $coverName, bool $mutual): bool
     {
-        return $candidate === $cover && $candidateName > $coverName;
+        return $candidate === $cover && (! $mutual || $candidateName > $coverName);
     }
 
     /**

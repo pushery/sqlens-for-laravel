@@ -87,11 +87,10 @@ final class RlsOwnerUnrestrictedRule extends AbstractSchemaObjectSecurityRule im
             .'policy on it. This audit did not connect as that role, so the application path is '
             .'restricted as intended — but migrations, maintenance commands and console sessions '
             .'usually run as the owner, and each of those reads and writes across tenants with no '
-            .'policy consulted and nothing reported. ALTER TABLE %s FORCE ROW LEVEL SECURITY applies '
-            .'the policies to the owner as well.%s',
+            .'policy consulted and nothing reported. %s applies the policies to the owner as well.%s',
             $object->qualifiedName,
             $owner === null || $owner === '' ? '' : ' ('.$owner.')',
-            $object->qualifiedName,
+            StatementSpan::naming('ALTER TABLE %s FORCE ROW LEVEL SECURITY;', $object->getString('statement_name') ?? ''),
             RlsForceScope::bypassNote($object),
         ))];
     }

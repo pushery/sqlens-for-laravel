@@ -70,8 +70,14 @@ return [
     | Laravel picks a read host at RANDOM from `read.host`, so on a split
     | connection two runs against the same cluster can read two different servers
     | — and a report that does not know which server it read is not a report.
-    | SQLens therefore refuses to guess: a connection offering several read hosts
-    | and no pin aborts as a misconfiguration, naming every host and this key.
+    | SQLens therefore refuses to guess: an audit of a connection offering several
+    | read hosts and no pin aborts as a misconfiguration, naming every host and
+    | this key.
+    |
+    | The deploy commands (`sqlens:predeploy`, `sqlens:postdeploy`, `sqlens:drift`)
+    | read the server the migrations run on, which is the write side. They consult
+    | this key only when the write side itself offers several hosts, and refuse
+    | the same way when it names none of them.
     |
     | `null` means "decide per run" (`--host=`), which is right for a project whose
     | topology is unambiguous or which pins from CI. A host that the connection
@@ -212,15 +218,15 @@ return [
     | Allow destructive operations
     |--------------------------------------------------------------------------
     |
-    | The project-wide opt-in for the destructive rules — the level-1 family (DROP
-    | TABLE, DROP COLUMN, TRUNCATE, and a mass UPDATE/DELETE with no WHERE) and the
-    | level-4 deploy-window rule. It NEVER hides a destructive operation: when it is
-    | on, the finding still appears in the run, moved to the suppressed list with a
-    | named reason ("allowed project-wide by sqlens.allow_destructive"), so the
-    | report keeps showing that the migration destroys data — the opt-in changes the
-    | presentation, not the fact. Off is the strict, safe default; a single migration
-    | can opt in on its own instead, in code and with its own reason, via
-    | #[SqlensAllowDestructive].
+    | The project-wide opt-in for the destructive rules on both engines — the level-1
+    | family (DROP SCHEMA, DROP TABLE, DROP COLUMN, TRUNCATE, and a mass UPDATE/DELETE
+    | with no WHERE) and the level-4 deploy-window rule. It NEVER hides a destructive
+    | operation: when it is on, the finding still appears in the run, moved to the
+    | suppressed list with a named reason ("allowed project-wide by
+    | sqlens.allow_destructive"), so the report keeps showing that the migration
+    | destroys data — the opt-in changes the presentation, not the fact. Off is the
+    | strict, safe default; a single migration can opt in on its own instead, in code
+    | and with its own reason, via #[SqlensAllowDestructive].
     |
     */
 
@@ -243,6 +249,10 @@ return [
     | not the same result. With it OFF such a check does not run at all, and the
     | deploy gate does not escalate a severity by table size either. Neither is ever
     | a silent pass.
+    |
+    | The deploy gate's disk headroom check reads object sizes either way: how much
+    | space a pending rewrite needs is the question it answers, not a sharper
+    | finding, and `deploy.predeploy.available_disk_bytes` is compared against it.
     |
     */
 
@@ -277,8 +287,11 @@ return [
     |
     | Whenever the capture path opens a connection, it bounds its OWN session
     | before the first query: statement_timeout and lock_timeout on PostgreSQL,
-    | max_execution_time and innodb_lock_wait_timeout on MySQL. Session scope
-    | only — never global, and the tool never takes a lock of its own.
+    | max_execution_time, innodb_lock_wait_timeout and lock_wait_timeout on
+    | MySQL, the last one for the metadata lock a schema change queues behind.
+    | MySQL bounds no schema change's RUN: max_execution_time covers read-only
+    | SELECT statements only. Session scope only — never global, and the tool
+    | never takes a lock of its own.
     |
     | This is the second half of "first, do no harm". A lint run may point at a
     | production connection, and a run without a time budget can hold a query or
@@ -325,12 +338,19 @@ return [
     | its top-level code. If the pre-scan finds a reason the capture cannot be
     | trusted, the migration is reported as undetermined and is NOT executed.
     |
+    | Which reasons it looks for follows `stability` like every other check. Two
+    | of them are `preview` and do not run by default: a call into your own code
+    | (indirect_calls below) and a query result the migration depends on. Without
+    | them, pretend executes such a migration as it is written.
+    |
     | side_effects.additional extends the bundled catalog of surfaces that
     | reach outside the database. Pretend mode intercepts SQL and nothing else,
     | so the PHP around it runs for real: a notification in a migration is
     | actually sent. Add your own surfaces here — a wrapper class, an internal
     | client — written as `Class::method`, `*::method` (any receiver),
-    | `function()`, `Class` (any call on it), or `Namespace\*`:
+    | `function()`, `Class` (any call on it), `Namespace\*`, or `app('key')`
+    | (a service resolved out of the container by that key, however the call
+    | hands the key over: `app('key')`, `resolve('key')`, `app()->make('key')`):
     |
     |     'additional' => ['App\Support\Slack::post', 'App\Integrations\*'],
     |
@@ -355,8 +375,17 @@ return [
             // without the pre-scan reporting it. The pre-scan flags a migration
             // that reaches its effect through your own code — `(new Backfill)->run()`,
             // `app(Importer::class)->handle()` — because pretend runs that code for
-            // real and cannot see what it does. List a class, or a whole namespace
-            // as `App\ValueObjects\*`, that you know is safe:
+            // real and cannot see what it does.
+            //
+            // That check is `preview`: it runs only when `stability` admits
+            // 'preview'. With the shipped `'stability' => []` it does not run, and a
+            // lint run executes such a call for real, whatever the code does. A
+            // run's header names the tiers it admitted: `admitted_stability` reads
+            // ["stable"] when this check did not run. If your migrations call into
+            // your own code, admit 'preview' or capture them in shadow mode.
+            //
+            // List a class, or a whole namespace as `App\ValueObjects\*`, that you
+            // know is safe:
             //
             //     'allowlist' => ['App\Support\Formatting', 'App\ValueObjects\*'],
             //
@@ -387,6 +416,10 @@ return [
             // mechanical rather than a preference: template operations and CREATE
             // DATABASE do not survive a transaction pooler, so the link they run on
             // has to be the connection that provably bypasses one.
+            //
+            // The production guard judges the connection the databases are built on
+            // as well as the one being examined. A name or database here that reads
+            // as production refuses the run, the same way a production target does.
             'connection' => null,
 
             // A direct (non-pooled) connection to provision through. Template and
@@ -420,8 +453,9 @@ return [
             // anywhere else, and the environment check is not overridable by --force.
             'allowed_environments' => ['local', 'testing'],
 
-            // Whether to keep the throwaway database when a run fails, for
-            // debugging. Off by default — a database nobody drops is a leak.
+            // Whether to keep the throwaway database when a run fails or cannot
+            // judge a migration, for debugging. Every kept database is named in
+            // the run's output. Off by default — a database nobody drops is a leak.
             'keep_on_failure' => false,
 
             // How many seconds the whole shadow provisioning and migration may take.
@@ -835,11 +869,11 @@ return [
          *
          * Under 'disposable' the checks whose subject is the SERVER or the CONNECTING ROLE answer
          * `not_applicable` with that reason, naming what went unjudged and pointing at
-         * `sqlens:predeploy` — the command that reads the same facts on the host that will actually
-         * be operated. Which rules those are is declared by the rules themselves, never by a prefix
-         * list here: `SEC.PRIV.ROLE_SUPERUSER` is an attribute of the connecting role and is
-         * withheld, while `SEC.PRIV.GRANT_PUBLIC` is a grant on a table this project's own
-         * migrations created and reports exactly as it would anywhere.
+         * `sqlens:security` and `sqlens:audit`, run against the host that will actually be
+         * operated, where the same facts are real. Which rules those are is declared by the rules
+         * themselves, never by a prefix list here: `SEC.PRIV.ROLE_SUPERUSER` is an attribute of the
+         * connecting role and is withheld, while `SEC.PRIV.GRANT_PUBLIC` is a grant on a table this
+         * project's own migrations created and reports exactly as it would anywhere.
          *
          * It withholds a verdict about the server and about nothing else. Every finding about
          * the schema — the thing the pipeline is there to judge, and the thing that will be
@@ -855,9 +889,10 @@ return [
          * Read from `SQLENS_SERVER_LIFETIME`, because the declaration belongs to the environment
          * rather than to the project: this one file serves the pipeline, where the server is a
          * container, and the host, where it is not. Unset means 'persistent'. An environment that
-         * says 'disposable' on a real host withholds the server checks of `sqlens:audit` there, and
-         * each withheld finding names this key; `sqlens:predeploy` does not read it at all, so the
-         * verdict about the host a deploy walks into cannot be switched off from an environment file.
+         * says 'disposable' on a real host withholds the server checks of `sqlens:audit` and
+         * `sqlens:security` there, and each withheld finding names this key. No deploy command stands
+         * in for them, because none of them judges a server fact: run `sqlens:security` on the host
+         * itself, where this key is unset.
          */
         'server' => [
             'lifetime' => env('SQLENS_SERVER_LIFETIME', 'persistent'),
@@ -870,6 +905,11 @@ return [
          * Laravel runs package migrations — a package registers them with `loadMigrationsFrom()`
          * and they execute against your database like any other. So they are migrations, and this
          * switch is not about what they are but about whether you can act on them.
+         *
+         * A package's migration is one in your dependency tree: the vendor directory Composer
+         * installs into, a configured `vendor-dir` included, or a `vendor` directory below your
+         * project root. A directory called `vendor` above the root, such as a CI workspace, does
+         * not make your own migrations a package's.
          *
          * Off by default, because you usually cannot. A Critical inside `vendor/` is a finding
          * whose only available fix is "open an issue upstream", repeated on every run — and a rule
@@ -977,8 +1017,12 @@ return [
          * `read` takes a result PHPStan has already written. That is the ordinary shape in CI, where
          * PHPStan runs as its own step and both steps share a workspace:
          *
-         *     vendor/bin/phpstan analyse --error-format=json > build/phpstan.json
+         *     vendor/bin/phpstan analyse --error-format=sqlens > build/phpstan.json
          *     php artisan sqlens:security
+         *
+         * `sqlens` rather than `json`, because only that format proves the extension was loaded: a
+         * run that never loaded it writes the same JSON as a codebase with no raw SQL. It also
+         * records whether PHPStan finished analyzing every file.
          *
          * The path is repository-relative like every other path here; an absolute one is accepted
          * too, because a CI step that knows its own workspace should not have to compute a way back
@@ -1058,6 +1102,10 @@ return [
              * every other path this package accepts: an absolute path pins a configuration to
              * one machine, and a config file that only works where it was written is a config
              * file somebody will edit on the next machine.
+             *
+             * Every term has to name a group the file declares with the signal `strong` or
+             * `weak`. A file with a term that does not is refused, naming the term, rather
+             * than read without it.
              */
             'dictionary' => null,
 
@@ -1110,6 +1158,10 @@ return [
     | the budget named — never dropped, because a gate that quietly ran four of
     | its nine checks and reported clean is trusted like a complete one and is
     | worth nothing.
+    |
+    | The clock starts before the pending migrations are linted. That half cannot
+    | be interrupted, so what it spends comes out of what the catalog checks get,
+    | and the run header reports the whole run's cost even when it overran.
     |
     | It is a promise rather than a preference: a gate that visibly delays a
     | deploy gets configured away in the first sprint, and a gate nobody runs has
@@ -1450,11 +1502,15 @@ return [
             'transport' => 'stdio',
 
             /*
-             * The Laravel connection the tools run against. Null uses the application's default.
+             * The Laravel connection the tools run against. Null uses the application's default,
+             * the same connection the CLI would use, and a client may then name any connection
+             * the application has configured.
              *
-             * The same connection the CLI would use, deliberately: a server that could point
-             * somewhere else would be a second answer about a different database, reachable
-             * without anybody noticing which one they asked.
+             * Set, it is also the only one a client may name: a tool asked about another is
+             * refused before it runs. A project that points its server at one connection gets
+             * answers about that one, because a server that could point somewhere else would be
+             * a second answer about a different database, reachable without anybody noticing
+             * which one they asked.
              */
             'connection' => null,
 
@@ -1829,6 +1885,11 @@ return [
          * The names are yours. Everything INSIDE a profile is validated, so a
          * misspelled key is refused rather than quietly ignored — that is the
          * whole reason the guard suite is configuration and not code.
+         *
+         * A profile you ADD takes every key it leaves out from `production`
+         * below, so it can name only what differs and still has every guardrail
+         * `production` has. A shipped profile you publish in part keeps its own
+         * values for the rest.
          */
         'profiles' => [
 

@@ -89,6 +89,23 @@ final readonly class ColumnTypeChange
         return $this->rest;
     }
 
+    /**
+     * Whether the same statement also sets the column's nullability, as Laravel's `->change()` does on
+     * every call, together with its default and its identity.
+     *
+     * Such a statement names the column's type whatever changed, so its TYPE clause does not say that
+     * the type changes. Restating the type a column already has rewrites nothing: measured on 18.4 for
+     * `integer` with `DROP NOT NULL`, `numeric(8,2)`, `timestamp(0)` and `boolean`, against the control
+     * `integer` to `bigint`, which rewrote the table.
+     */
+    public function restatesTheColumn(): bool
+    {
+        return preg_match(
+            '/,\s*ALTER\s+COLUMN\s+"?'.preg_quote($this->column, '/').'"?\s+(?:SET|DROP)\s+NOT\s+NULL\b/i',
+            $this->rest,
+        ) === 1;
+    }
+
     /** Whether the change carries a `USING` expression — which forces a rewrite on its own. */
     public function hasUsingClause(): bool
     {

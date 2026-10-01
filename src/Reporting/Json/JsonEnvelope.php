@@ -55,7 +55,7 @@ final readonly class JsonEnvelope
      * published number would depend on the order they merged in — and every other
      * change's pin test would be red until it rebased. One version, one source.
      */
-    public const int SCHEMA_VERSION = 8;
+    public const int SCHEMA_VERSION = 9;
 
     /**
      * The RUN-level fields version 4 introduces.
@@ -246,9 +246,9 @@ final readonly class JsonEnvelope
     /**
      * The run field version 8 introduces: what the read-only guarantee of the run rests on.
      *
-     * `session` when the session's own read-only flag refused the write probe, `privilege` when the
-     * account's grants did. Both prove the run could not write; the second rests on something a
-     * reviewer can check in the database without trusting this package.
+     * `session` when the session's own read-only flag holds, `privilege` when the account's grants
+     * were read and name nothing but reading. Both prove the run could not write; the second rests
+     * on something a reviewer can check in the database without trusting this package.
      *
      * Null on every producer that opens no catalog session of its own, and on an audit that stopped
      * before its first read. A consumer must not read that null as "unsealed": an unsealed session is
@@ -258,6 +258,34 @@ final readonly class JsonEnvelope
      */
     public const array RUN_FIELDS_ADDED_IN_V8 = [
         'sealed_by',
+    ];
+
+    /**
+     * The per-finding field version 9 introduces: why a finding carries no downtime class although
+     * its rule derives one.
+     *
+     * `{reason, detail}`, present only when the class of the finding's statement could not be
+     * determined, such as a MySQL `DROP COLUMN` whose online-DDL entry depends on the live table.
+     * Its absence keeps meaning what an absent `downtime_class` means: no claim about downtime.
+     *
+     * @var list<string>
+     */
+    public const array FIELDS_ADDED_IN_V9 = [
+        'downtime_undetermined',
+    ];
+
+    /**
+     * The summary field version 9 introduces: how many findings carry such a statement.
+     *
+     * Beside `counts.downtime_class` rather than a key of it, because the classes are a closed set
+     * and an unknown is not a fourth one. A gate that decides from the histogram adds it to what
+     * blocks, and `worst_downtime_class` is null while it is above zero and no finding names
+     * `rewrite`.
+     *
+     * @var list<string>
+     */
+    public const array SUMMARY_FIELDS_ADDED_IN_V9 = [
+        'downtime_undetermined',
     ];
 
     /**
@@ -494,8 +522,12 @@ final readonly class JsonEnvelope
                 //
                 // Null when no finding carries a class at all. That is not `online`: most findings
                 // have no class, because the class is a property of a schema OPERATION and a
-                // security finding is not one.
+                // security finding is not one. Null as well when a finding's class could not be
+                // determined and no other names `rewrite`: that one could be the worst.
                 'worst_downtime_class' => $this->result->worstDowntimeClass()?->value,
+                // How many findings carry a statement whose class could not be determined. Beside
+                // the histogram rather than in it, because an unknown is not a fourth class.
+                'downtime_undetermined' => $this->result->undeterminedDowntimeCount(),
                 // Recorded suppressions that matched nothing this run — a rotting
                 // suppression list is surfaced, never left silent.
                 'stale' => $this->result->staleSuppressionCount(),

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Findings;
 
 use Pushery\SQLens\Agent\Remediation\RemediationValidator;
+use Pushery\SQLens\Canonical\Fingerprint;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Deploy\Contracts\ProducesDebt;
 use Pushery\SQLens\Deploy\DebtContext;
@@ -105,6 +106,26 @@ final readonly class Finding
          * a parameter inserted mid-list is a dozen silent breakages.
          */
         public ?DebtContext $debt = null,
+        /**
+         * Why this finding carries no downtime class although its rule derives one, when the class
+         * of its statement could not be determined.
+         *
+         * Stamped by the collector from the rule's own answer, never set alongside a class: the two
+         * are one question with two kinds of answer. Absent on every finding whose rule named a
+         * class or makes no claim, which is the reading `downtime_class` being absent keeps.
+         *
+         * Last for the reason {@see $debt} is.
+         */
+        public ?DowntimeUndetermined $downtimeUndetermined = null,
+        /**
+         * The canonical form of the statement this finding is about, as a fingerprint, or null for a
+         * finding that is about no single statement.
+         *
+         * It is what tells two findings of one rule in one migration apart for a baseline. Without
+         * it they differ only by their order, and an accepted finding's acceptance moves to whichever
+         * finding takes its place when a statement is inserted above it.
+         */
+        public ?Fingerprint $excerpt = null,
     ) {}
 
     /**
@@ -143,6 +164,8 @@ final readonly class Finding
         ?DebtContext $debt = null,
         bool $clearRemediation = false,
         ?SubjectContext $context = null,
+        ?DowntimeUndetermined $downtimeUndetermined = null,
+        ?Fingerprint $excerpt = null,
     ): self {
         return new self(
             $this->ruleId,
@@ -167,6 +190,8 @@ final readonly class Finding
             $escalation ?? $this->escalation,
             $remediationRefusal ?? $this->remediationRefusal,
             $debt ?? $this->debt,
+            $downtimeUndetermined ?? $this->downtimeUndetermined,
+            $excerpt ?? $this->excerpt,
         );
     }
 
@@ -326,6 +351,24 @@ final readonly class Finding
     }
 
     /**
+     * The same finding, carrying the fingerprint of the canonical statement it is about.
+     *
+     * Stamped where findings are assembled from the statement a rule judged, never inside a rule, for
+     * the same reason the confidence is: a slot each rule had to fill is one that is eventually left
+     * empty, and an empty one here makes the finding's baseline identity depend on its position.
+     */
+    public function withExcerpt(Fingerprint $excerpt): self
+    {
+        return $this->copy(excerpt: $excerpt);
+    }
+
+    /** A new instance saying its statement's downtime class could not be determined, and why. */
+    public function withDowntimeUndetermined(DowntimeUndetermined $undetermined): self
+    {
+        return $this->copy(downtimeUndetermined: $undetermined);
+    }
+
+    /**
      * The maintenance-window advice this finding carries, or null when its class needs none.
      *
      * DERIVED from the downtime class rather than stored beside it. That is the whole guarantee:
@@ -336,6 +379,17 @@ final readonly class Finding
     public function maintenanceWindow(): ?MaintenanceWindow
     {
         return MaintenanceWindow::forDowntimeClass($this->downtimeClass);
+    }
+
+    /**
+     * The finding with the sentence saying why the baseline entry that matches it did not suppress it.
+     *
+     * Appended rather than replacing: the finding still says what it says, and the sentence is about
+     * the file that tried to accept it.
+     */
+    public function withBaselineContradiction(string $sentence): self
+    {
+        return $this->copy(message: $this->message.' '.$sentence);
     }
 
     /**
@@ -447,6 +501,10 @@ final readonly class Finding
             'level' => $this->level->value,
             'severity' => $this->severity?->value,
             'downtime_class' => $this->downtimeClass?->value,
+            // Additive and optional, beside the key it stands in for: present only when the rule
+            // derives a class and could not determine this statement's, so its absence keeps
+            // meaning what an absent `downtime_class` means.
+            'downtime_undetermined' => $this->downtimeUndetermined?->toArray(),
             // Additive and optional: absent for an `online` finding, and omitted rather than
             // serialized as null by the filter below. It never weakens the downtime_class
             // contract because it is derived FROM it.

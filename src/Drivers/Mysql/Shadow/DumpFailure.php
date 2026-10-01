@@ -13,10 +13,10 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  * state (green against half a schema), so a dump that cannot be read or split
  * safely stops the run with a named reason rather than replaying part of it.
  *
- * Two shapes: the artifact is missing or unreadable, and the artifact is present
- * but cannot be split (an unterminated literal, an unknown delimiter). The second
- * carries the 1-based `line` of the failing construct, computed from the offset the
- * splitter reports, so a user can find it.
+ * Three shapes: the artifact is missing or unreadable, the artifact is present
+ * but cannot be split (an unterminated literal, an unknown delimiter), and it holds
+ * a statement the replay refuses. The last two carry the 1-based `line` of the
+ * failing construct where it is known, so a user can find it.
  */
 final readonly class DumpFailure
 {
@@ -32,6 +32,22 @@ final readonly class DumpFailure
             UndeterminedReason::ShadowMysqlSchemaDumpMissing,
             sprintf('the schema dump at "%s" is missing or unreadable; run php artisan schema:dump', $path),
         );
+    }
+
+    /**
+     * A statement the replay refuses, named by its leading words and its line and never by its
+     * text: a refused `CREATE USER … IDENTIFIED BY …` carries a password, and this detail reaches a
+     * log.
+     */
+    public static function refused(string $form, string $why, ?int $line): self
+    {
+        return new self(UndeterminedReason::ShadowMysqlDumpRefused, sprintf('`%s` %s', $form, $why), $line);
+    }
+
+    /** What a person reading the log needs: the detail, and the line when there is one. */
+    public function diagnosis(): string
+    {
+        return $this->line === null ? $this->detail : sprintf('%s (line %d of the dump)', $this->detail, $this->line);
     }
 
     /**

@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Capture\Shadow;
 
+use Illuminate\Container\Container;
+use Illuminate\Database\Connection;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\QueryException;
+use Illuminate\Database\Schema\Grammars\Grammar;
+use Pushery\SQLens\Capture\CaptureConnectionFence;
 use Pushery\SQLens\Capture\CaptureResult;
 use Pushery\SQLens\Capture\CaptureRun;
 use Pushery\SQLens\Capture\CaptureSection;
+use Pushery\SQLens\Capture\MigrationLoader;
 use Pushery\SQLens\Capture\PendingMigration;
 use Pushery\SQLens\Contracts\ShadowRunner;
 use Pushery\SQLens\Findings\UndeterminedReason;
@@ -31,9 +36,11 @@ use Throwable;
  *
  * Attribution is exact by construction, not by counting: each migration's method is
  * run inside its own window, the collector is reset before it and taken after, so a
- * statement belongs to exactly the migration whose window produced it. Repository
- * bookkeeping, session setup, and transaction brackets are dropped by the
- * {@see ShadowNoiseFilter} — the `migrations` table never reaches a rule.
+ * statement belongs to exactly the migration whose window produced it. The runner's own
+ * statements never enter one: the session limits are set before the listener exists, and
+ * the migration method is called directly rather than through the Migrator, so no row is
+ * written to the migrations table while a window is open. Everything the window records
+ * is the migration's, and it reaches the rules whole, exactly as the pretend log does.
  *
  * The default connection is pointed at the shadow for the duration of the run so a
  * migration's `Schema`/`DB` calls land on it, and restored afterwards. The listener
@@ -43,12 +50,18 @@ use Throwable;
  */
 final readonly class ShadowMigrationRunner implements ShadowRunner
 {
+    private CaptureConnectionFence $fence;
+
+    private MigrationLoader $loader;
+
     public function __construct(
         private DatabaseManager $db,
-        private ShadowNoiseFilter $filter,
-        private string $migrationsTable,
         private ?ShadowSessionDefense $defense = null,
-    ) {}
+        ?CaptureConnectionFence $fence = null,
+    ) {
+        $this->fence = $fence ?? Container::getInstance()->make(CaptureConnectionFence::class);
+        $this->loader = new MigrationLoader;
+    }
 
     public function captureFrom(ShadowSession $session, iterable $migrations, CaptureSection $section): CaptureRun
     {
@@ -60,8 +73,6 @@ final readonly class ShadowMigrationRunner implements ShadowRunner
         $this->defense?->apply($connection);
 
         $collector = new ShadowStatementCollector(
-            $this->filter,
-            $this->migrationsTable,
             $connection->getName() ?? '',
             $connection->getDriverName(),
         );
@@ -97,7 +108,7 @@ final readonly class ShadowMigrationRunner implements ShadowRunner
                     continue;
                 }
 
-                $result = $this->captureOne($pending, $section, $collector);
+                $result = $this->captureOne($pending, $section, $collector, $connection);
                 $results[] = $result;
                 // A failure OR a session timeout halts the run: in both cases the
                 // database is in a state the rest of the migrations cannot trust.
@@ -110,9 +121,17 @@ final readonly class ShadowMigrationRunner implements ShadowRunner
         return CaptureRun::of($results, CaptureMode::Shadow);
     }
 
-    private function captureOne(PendingMigration $pending, CaptureSection $section, ShadowStatementCollector $collector): CaptureResult
+    private function captureOne(PendingMigration $pending, CaptureSection $section, ShadowStatementCollector $collector, Connection $shadow): CaptureResult
     {
-        $migration = $this->load($pending->file);
+        // Loading runs the file's top-level code and the migration's constructor. The default
+        // connection is the shadow already, and what they send to any other the fence refuses; a
+        // file that cannot be loaded is a failed migration rather than the end of the run.
+        try {
+            $migration = $this->fence->around($shadow, fn (): Migration => $this->load($pending->file));
+        } catch (Throwable $throwable) {
+            return CaptureResult::failed($pending->file, $pending->migrationClass, [], $section, CaptureMode::Shadow, $this->safeDetail($throwable));
+        }
+
         $method = $section->direction()->value;
 
         // The REAL class of the loaded instance — the carrier of a class-level
@@ -148,7 +167,9 @@ final readonly class ShadowMigrationRunner implements ShadowRunner
         $collector->reset();
 
         try {
-            $migration->{$method}();
+            // The default connection is the shadow, and a migration that names another connection
+            // would reach a real database: the fence refuses its queries before they run.
+            $this->fence->around($shadow, fn () => $this->asTheMigratorRunsIt($shadow, $migration, $method));
         } catch (Throwable $throwable) {
             // A session timeout is the tool's OWN budget firing, not a fault in the
             // migration, so it is undetermined (shadow_session_timeout) — never a
@@ -191,6 +212,48 @@ final readonly class ShadowMigrationRunner implements ShadowRunner
     }
 
     /**
+     * Run a migration method the way Laravel's `Migrator` does: inside one transaction where the
+     * schema grammar supports transactional DDL and the migration has not opted out of it.
+     *
+     * The truth mode exists to find what a real `migrate` does, and on PostgreSQL a real `migrate`
+     * runs each migration in a transaction. Three things only happen there: a caught error aborts
+     * the transaction, so the next statement fails with 25P02; `CREATE INDEX CONCURRENTLY` is
+     * refused inside a transaction block; and a value added to an enum cannot be used before the
+     * transaction commits. Run in autocommit, all three passed here and failed at deploy.
+     *
+     * The condition is Laravel's own, read the same way: the grammar is resolved as the `Migrator`
+     * resolves it, and `withinTransaction` is the migration's own switch. MySQL's grammar reports no
+     * schema transactions, so nothing changes there.
+     */
+    private function asTheMigratorRunsIt(Connection $shadow, Migration $migration, string $method): void
+    {
+        $run = static function () use ($migration, $method): void {
+            $migration->{$method}();
+        };
+
+        if ($migration->withinTransaction && $this->schemaGrammar($shadow)->supportsSchemaTransactions()) {
+            $shadow->transaction($run);
+
+            return;
+        }
+
+        $run();
+    }
+
+    /**
+     * The connection's schema grammar.
+     *
+     * A connection sets it up lazily, and asking for the schema builder is what does so, the same
+     * default the `Migrator` falls back to before it asks the grammar anything.
+     */
+    private function schemaGrammar(Connection $connection): Grammar
+    {
+        $connection->getSchemaBuilder();
+
+        return $connection->getSchemaGrammar();
+    }
+
+    /**
      * The driver message to record for a failed migration. For a query failure the
      * PDOException's OWN message is preferred over Laravel's `QueryException`
      * wrapper: the wrapper appends "(Connection: …, SQL: …)", carrying the connection
@@ -206,15 +269,15 @@ final readonly class ShadowMigrationRunner implements ShadowRunner
     }
 
     /**
-     * Load a migration from its file — a Laravel 13 anonymous class the file
-     * RETURNS. Nothing reaches here until the pre-scan has judged the file safe, so
-     * the `require` that runs its top-level code is not a new risk.
+     * The migration instance for a file, through the loader the pretend path uses: it knows both
+     * shapes Laravel accepts, a returned anonymous class and a declared named one, names a file that
+     * is neither, and never requires a named class twice, which a roundtrip's second leg would.
+     *
+     * Nothing reaches here until the pre-scan has judged the file safe, so the `require` that runs
+     * its top-level code is not a new risk.
      */
     private function load(string $file): Migration
     {
-        /** @var Migration $migration */
-        $migration = require $file;
-
-        return $migration;
+        return $this->loader->load($file);
     }
 }

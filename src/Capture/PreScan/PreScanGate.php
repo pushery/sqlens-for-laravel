@@ -74,10 +74,11 @@ final readonly class PreScanGate implements Captor
             new ResultDependentDetector,
             new SchemaIntrospectionGuardDetector,
             new IndirectCallDetector(allowlist: $indirectCallAllowlist),
+            new DynamicCallDetector,
         ];
 
         // The maturity axis, applied HERE — at the one place the default list exists, rather than a
-        // second time downstream. Two of these four are `preview`, and the gate never saw them: it
+        // second time downstream. Two of these five are `preview`, and the gate never saw them: it
         // was applied to the rule registry only, so the promise the tier makes ("a new check runs
         // only on request, so a minor release cannot start failing a build over code nobody
         // touched") simply did not hold for the pre-scan layer. Both preview detectors fired in the

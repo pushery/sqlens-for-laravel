@@ -15,6 +15,7 @@ use Pushery\SQLens\Contracts\PoolerProbe;
 use Pushery\SQLens\Contracts\ReplicaProbe;
 use Pushery\SQLens\Contracts\ShadowProvisioner;
 use Pushery\SQLens\Contracts\ShadowRunner;
+use Pushery\SQLens\Exceptions\ShadowDatabaseKept;
 use Pushery\SQLens\Exceptions\ShadowProvisioningUndetermined;
 use Pushery\SQLens\Exceptions\ShadowTeardownIncomplete;
 use Pushery\SQLens\Findings\UndeterminedReason;
@@ -41,9 +42,11 @@ use Throwable;
  *   - The **runner** performs the real migrate-and-capture; the captor turns its
  *     run into the final result.
  *
- * Teardown is guaranteed: the shadow database is dropped in a `finally`, so a
+ * Teardown is guaranteed: the shadow database is dropped on every way out, so a
  * failure mid-run still cleans up — unless `keep_on_failure` is set, the one case
- * where a failed run's database is deliberately kept for debugging.
+ * where the database of a run that did not come through clean is deliberately kept
+ * for debugging. A kept database is always named: in the results when the run
+ * returned, in the error when it threw.
  */
 final readonly class ShadowCaptor implements Captor
 {
@@ -60,6 +63,7 @@ final readonly class ShadowCaptor implements Captor
         private bool $shadowConnectionCollides = false,
         private bool $roundtrip = false,
         private ?ShadowOrphanSweeper $sweeper = null,
+        private ?ShadowSweepRecorder $sweepRecorder = null,
     ) {}
 
     public function capture(iterable $migrations, CaptureSection $section): CaptureRun
@@ -136,17 +140,24 @@ final readonly class ShadowCaptor implements Captor
         // any threshold and must never become a candidate for its own sweep.
         //
         // A failure here does not end the run. The sweeper already keeps one obstinate database from
-        // stopping the rest, and what it could not remove stays visible in its report; what is left
-        // to fail at this level is the LISTING, which is a statement about somebody else's leftovers
-        // rather than about the migrations this run was asked to capture. The next run tries again.
+        // stopping the rest, and what it could not remove stays in its report; what is left to fail
+        // at this level is the LISTING, which is a statement about somebody else's leftovers rather
+        // than about the migrations this run was asked to capture. The next run tries again.
+        //
+        // The report goes to the recorder the run handed in, and from there into the run's own
+        // report: what this run removed from the server, what it found and kept, or that it could
+        // not look. It used to be discarded here, so a lint run dropped databases and said nothing.
         if ($this->sweeper instanceof ShadowOrphanSweeper) {
             try {
-                $this->sweeper->sweep($this->decision, new DateTimeImmutable('now', new DateTimeZone('UTC')));
+                $report = $this->sweeper->sweep($this->decision, new DateTimeImmutable('now', new DateTimeZone('UTC')));
             } catch (Throwable) {
                 // Deliberate, and bounded to the sentence above: this run's verdict is about its own
-                // migrations. An orphan nobody could list is still an orphan, and the sweep that
-                // runs before the next capture is where it is tried again.
+                // migrations. An orphan nobody could list is still an orphan, the report says that
+                // nobody could, and the sweep that runs before the next capture tries again.
+                $report = ShadowSweepReport::unlisted();
             }
+
+            $this->sweepRecorder?->record($report);
         }
 
         // The provisioner may stop on an engine-specific precondition — no CREATEDB
@@ -174,20 +185,32 @@ final readonly class ShadowCaptor implements Captor
                 ? $this->captureRoundtrip($session, $pending)
                 : $this->runner->captureFrom($session, $pending, $section);
         } catch (Throwable $throwable) {
+            // keep_on_failure keeps the databases for a person to look inside, and the error that
+            // stopped the run names none of them, so the one that reaches the caller does.
+            if ($this->keepOnFailure) {
+                throw ShadowDatabaseKept::after($throwable, $this->databasesOf($session));
+            }
+
             // A failed run: drop the throwaway database (best effort — the original
             // throwable is the signal to surface, and the orphan sweep is the net for
-            // a drop that also fails), unless keep_on_failure keeps it for debugging.
-            if (! $this->keepOnFailure) {
-                try {
-                    $this->provisioner->destroy($session);
-                } catch (Throwable) {
-                    // Swallowed on purpose here: the run's own throwable must reach the
-                    // caller. A leaked database from this path is removed by the orphan
-                    // sweep, which lists databases carrying our prefix.
-                }
+            // a drop that also fails).
+            try {
+                $this->provisioner->destroy($session);
+            } catch (Throwable) {
+                // Swallowed on purpose here: the run's own throwable must reach the
+                // caller. A leaked database from this path is removed by the orphan
+                // sweep, which lists databases carrying our prefix.
             }
 
             throw $throwable;
+        }
+
+        // The case keep_on_failure exists for, and the one it used to miss. The runner reports a
+        // migration that failed, or one it could not judge, as a RESULT rather than by throwing, so
+        // this run returned normally and went on to the teardown below with the state it stopped in.
+        // The kept databases ride along as results, one each, named, like a teardown that left one.
+        if ($this->keepOnFailure && ! $this->cameThroughClean($run)) {
+            return CaptureRun::of([...$run->results, ...$this->kept($session, $section)], $this->mode());
         }
 
         // A successful run: drop the throwaway database. A drop that FAILS is never
@@ -277,6 +300,45 @@ final readonly class ShadowCaptor implements Captor
                 UndeterminedReason::ShadowTeardownFailed,
             ),
             $leaked,
+        );
+    }
+
+    /** Whether every result of the run is neither a failure nor an answer it could not give. */
+    private function cameThroughClean(CaptureRun $run): bool
+    {
+        return array_all($run->results, static fn (CaptureResult $result): bool => ! $result->isFail() && ! $result->isUndetermined());
+    }
+
+    /**
+     * The databases a run left on the server: the one the migrations ran in, and on PostgreSQL the
+     * template it was cloned from, which carries the project's whole schema as well.
+     *
+     * @return list<string>
+     */
+    private function databasesOf(ShadowSession $session): array
+    {
+        return $session->templateDatabase === null
+            ? [$session->shadowDatabase]
+            : [$session->shadowDatabase, $session->templateDatabase];
+    }
+
+    /**
+     * One result per kept database, named as its "file" the way {@see teardownFailures()} names a
+     * leaked one, so a reader can find it and drop it.
+     *
+     * @return list<CaptureResult>
+     */
+    private function kept(ShadowSession $session, CaptureSection $section): array
+    {
+        return array_map(
+            fn (string $database): CaptureResult => CaptureResult::undetermined(
+                $database,
+                'ShadowTeardown',
+                $section,
+                $this->mode(),
+                UndeterminedReason::ShadowKeptOnFailure,
+            ),
+            $this->databasesOf($session),
         );
     }
 

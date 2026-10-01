@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Subjects;
 
 use Pushery\SQLens\Canonical\ColumnDefinition;
+use Pushery\SQLens\Canonical\Fingerprint;
+use Pushery\SQLens\Canonical\StatementAction;
 use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Canonical\StatementTarget;
 use Pushery\SQLens\Canonical\TransactionMode;
@@ -94,7 +96,58 @@ final readonly class MigrationSql implements Subject
          * catalog row — which is what a secrets rule must read as "no answer available".
          */
         public ValueOrigin $valueOrigin = ValueOrigin::Undeterminable,
+        /**
+         * The later actions of an `ALTER TABLE` action list that ask something the first does not,
+         * or an empty list. A rule is asked about each of them through
+         * {@see self::actionSubjects()}.
+         *
+         * @var list<StatementAction>
+         */
+        public array $actions = [],
+        /**
+         * The fingerprint of this statement's canonical form, or null for a subject built without
+         * one. Every finding a rule raises about this statement carries it.
+         */
+        public ?Fingerprint $excerpt = null,
     ) {}
+
+    /**
+     * This statement once for each of its later actions, classified as that action.
+     *
+     * The same statement in every other respect: the canonical text, the position, the migration
+     * and the transaction are the statement's, because the action runs inside it. What changes is
+     * what a rule is told the statement does and acts on, so a rule keyed on a `DROP COLUMN` sees
+     * the drop behind an `ADD COLUMN` and names the column that is dropped.
+     *
+     * @return list<self>
+     */
+    public function actionSubjects(): array
+    {
+        return array_map(
+            fn (StatementAction $action): self => new self(
+                canonicalStatement: $this->canonicalStatement,
+                migrationClass: $this->migrationClass,
+                sourceFile: $this->sourceFile,
+                statementIndex: $this->statementIndex,
+                direction: $this->direction,
+                withinTransaction: $this->withinTransaction,
+                mode: $this->mode,
+                context: $this->context,
+                annotationClass: $this->annotationClass,
+                statementKind: $action->kind,
+                targets: $action->targets,
+                migration: $this->migration,
+                transactionMode: $this->transactionMode,
+                keyColumns: $action->keyColumns,
+                columnDefinitions: $action->columnDefinitions,
+                valueOrigin: $this->valueOrigin,
+                // The statement's, not the action's: the actions of one statement are told apart by
+                // what they report, and they move together when the statement does.
+                excerpt: $this->excerpt,
+            ),
+            $this->actions,
+        );
+    }
 
     /**
      * The rule-facing projection: the canonical facts a rule may reason about, and

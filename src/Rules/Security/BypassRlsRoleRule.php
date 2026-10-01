@@ -65,16 +65,16 @@ final class BypassRlsRoleRule extends AbstractRoleAttributeRule
             || str_contains($object->getString('reachable_attributes') ?? '', RoleAttribute::Superuser->value);
     }
 
-    protected function heldMessage(string $role): string
+    protected function heldMessage(string $role, string $statementName): string
     {
         return sprintf(
             '%s holds BYPASSRLS, so row-level security does not apply to it: it reads and writes every '
             .'row of every table with a policy, and nothing in the policies themselves says so. If this '
             .'database uses RLS to separate tenants, an audit of the policies comes back correct and is '
-            .'beside the point for this account. ALTER ROLE %s NOBYPASSRLS unless it exists precisely to '
-            .'read across tenants.',
+            .'beside the point for this account. Take it away with %s unless the role exists precisely '
+            .'to read across tenants.',
             $role,
-            $role,
+            StatementSpan::naming('ALTER ROLE %s NOBYPASSRLS;', $statementName),
         );
     }
 

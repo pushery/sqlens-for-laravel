@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Capture;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\Migrations\Migrator;
+use Pushery\SQLens\ProjectPath;
 
 /**
  * Where this project's migrations live — resolved in ONE place, because two places would disagree.
@@ -49,7 +50,12 @@ final readonly class MigrationPaths
      */
     public function all(): array
     {
-        return $this->configured() ?? $this->fromFramework();
+        // Anchored at the project root, so the same configuration names the same directories
+        // wherever `artisan` was started from.
+        return array_map(
+            fn (string $path): string => ProjectPath::anchored($path, $this->app->basePath()),
+            $this->configured() ?? $this->fromFramework(),
+        );
     }
 
     /**

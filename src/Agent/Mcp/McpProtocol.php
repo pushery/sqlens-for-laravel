@@ -15,9 +15,10 @@ namespace Pushery\SQLens\Agent\Mcp;
  * three principles: the same state must produce the same answer on a developer's machine and in
  * CI, whichever agent happens to be driving.
  *
- * A client asking for anything else is refused by NAME, with the supported revision in the
- * refusal, rather than served best-effort. Best-effort here means answering a schema shape the
- * client did not ask for and cannot check, which is the quiet direction.
+ * A client asking for another revision is answered with this one, as the protocol's version
+ * negotiation requires, and decides itself whether to continue. It is never answered in a revision
+ * this build does not implement: that would be a schema shape the client did not ask for and has
+ * no reason to doubt, which is the quiet direction.
  *
  * ## Why this revision
  *

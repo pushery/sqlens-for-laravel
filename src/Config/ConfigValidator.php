@@ -271,6 +271,16 @@ final class ConfigValidator
             $relativePath = $section.'.'.$key;
 
             if (! array_key_exists($key, $value)) {
+                // Inside a guard profile an absent key has no shipped default to fall back on: the
+                // guard reads it as off. A profile that came through the published file has none
+                // absent (GuardProfileInheritance), so one that does is a guardrail disabled without
+                // anybody saying so, and that stops the run rather than being called harmless.
+                if (str_starts_with(ConfigSchema::template($section), 'guard.profiles.*')) {
+                    $violations[] = ConfigViolation::unsetGuardKey('sqlens.'.$relativePath, $this->schema->expectation($relativePath));
+
+                    continue;
+                }
+
                 $this->notices[] = ConfigViolation::defaultedKey('sqlens.'.$relativePath, $this->schema->expectation($relativePath));
 
                 continue;

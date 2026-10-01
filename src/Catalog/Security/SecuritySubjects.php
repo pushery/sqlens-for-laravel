@@ -99,7 +99,7 @@ final readonly class SecuritySubjects
             return true;
         }
 
-        return $role->host !== null && $grantee === sprintf("'%s'@'%s'", $role->name, $role->host);
+        return $role->host !== null && $grantee === $role->identity();
     }
 
     /** The account the audit connected as, or null when the reading did not establish one. */
@@ -202,6 +202,9 @@ final readonly class SecuritySubjects
                 // implementation of the role closure, and the two would disagree the first time one
                 // of them was fixed.
                 'rls_owner' => $state->owner,
+                // The table as the ALTER TABLE these findings close with names it, quoted by the
+                // reader. `qualifiedName` is the name for reading.
+                'statement_name' => $state->statementName,
                 'rls_owner_is_connection' => self::ownedByConnection($state, $connected),
                 'readability' => $state->readability->state->value,
                 'withheld_fields' => implode(',', $state->readability->withheldFields),
@@ -354,8 +357,10 @@ final readonly class SecuritySubjects
             ),
         ));
 
-        // `pg_temp` is the caller's OWN schema. Anywhere but last in the path it is the same
-        // substitution gap, with a schema the attacker does not even have to be granted.
+        // `pg_temp` is the caller's OWN schema, and PostgreSQL searches it for tables, views and types
+        // FIRST unless the path names it later: left out, it is searched before everything the path
+        // lists. Only a path that ends in it keeps a caller's temporary table from standing in for one
+        // the routine means. It is never searched for functions, whatever the path says.
         $temp = array_search('pg_temp', $path, true);
 
         return new SchemaObject(
@@ -376,11 +381,12 @@ final readonly class SecuritySubjects
                 'search_path_configurable' => $routine->pathConfigurable,
                 'settings' => implode(',', $routine->settings),
                 // The two ways a PINNED path can still be unsafe, both as facts rather than verdicts:
-                // the schemas in it somebody else may create in, and whether `pg_temp` sits anywhere
-                // but last. Empty and false are the ordinary answers, and a rule that reads them says
-                // nothing when they are.
+                // the schemas in it somebody else may create in, and whether `pg_temp` is anything but
+                // the last entry, missing included. Only a pinned path on an engine that has one can be
+                // judged: a MySQL routine has no search path, and no `pg_temp` to be missing from it.
                 'path_schemas_others_may_create_in' => implode(',', $writable),
-                'pg_temp_not_last' => $temp !== false && $temp !== count($path) - 1,
+                'pg_temp_not_last' => $routine->pathConfigurable && $routine->pinsSearchPath()
+                    && ($temp === false || $temp !== count($path) - 1),
                 'readability' => $routine->readability->state->value,
             ],
             $context,
@@ -395,6 +401,8 @@ final readonly class SecuritySubjects
             null,
             [
                 'name' => $role->name,
+                // The account as an ALTER ROLE or REVOKE names it, every part quoted.
+                'statement_name' => $role->statementName(),
                 // Null on PostgreSQL, where a role has no host at all — the absence is the answer.
                 'host' => $role->host,
                 // The attribute set as a sorted, comma-joined string: the subject's attribute bag is
@@ -416,10 +424,18 @@ final readonly class SecuritySubjects
                     array_keys($role->reachablePaths),
                     array_values($role->reachablePaths),
                 )),
+                // …and per attribute, the paths that end at a role HOLDING it. The first entry above
+                // need not be one: a harmless role that sorts first would be named as the way to a
+                // superuser, and the finding's advice would be to revoke a membership that grants
+                // nothing.
+                ...self::pathsToHolders($role),
                 'hash_type' => $role->hashType->value,
                 'valid_until' => $role->validUntil,
                 'privileged' => $role->isPrivileged(),
-                'wildcard_host' => $role->hasWildcardHost(),
+                // Two host facts, because they are worth different amounts of alarm: a host that
+                // admits every address, and a pattern over host names that admits every name it fits.
+                'wildcard_host' => $role->acceptsAnyHost(),
+                'host_name_pattern' => $role->hasHostNamePattern(),
                 // The empty user name, as a decided fact rather than a string a rule has to test.
                 // It is the one attribute whose SUBJECT cannot name itself: an anonymous account's
                 // identity renders as `''@'host'`, so a finding about it has to say what that means.
@@ -501,6 +517,11 @@ final readonly class SecuritySubjects
                 'grantor' => $grant->grantor,
                 'target_type' => $grant->objectType->value,
                 'target' => $grant->objectName,
+                // The same two as a GRANT or REVOKE writes them, quoted by the reader that holds the
+                // parts. A rule that closes with a statement prints these and never the two above,
+                // which are names for reading and can carry anything a CREATE could name.
+                'statement_target' => $grant->statementTarget,
+                'statement_grantee' => $grant->statementGrantee,
                 'privileges' => self::joined($grant->privileges),
                 'other_privileges' => implode(',', $grant->otherPrivileges),
                 'grantable' => $grant->grantable,
@@ -539,5 +560,21 @@ final readonly class SecuritySubjects
     private static function joined(array $values): string
     {
         return implode(',', array_map(static fn (RoleAttribute|Privilege $value): string => $value->value, $values));
+    }
+
+    /**
+     * `reachable_paths_to_<attribute>` for every attribute, each the paths joined with ` and `.
+     *
+     * @return array<string, string>
+     */
+    private static function pathsToHolders(RoleObject $role): array
+    {
+        $fields = [];
+
+        foreach (RoleAttribute::cases() as $attribute) {
+            $fields['reachable_paths_to_'.$attribute->value] = implode(' and ', $role->pathsTo($attribute));
+        }
+
+        return $fields;
     }
 }

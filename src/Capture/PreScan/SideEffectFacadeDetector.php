@@ -39,9 +39,12 @@ use Pushery\SQLens\Rules\VersionWindow;
  *
  * **What it cannot carry.** A hand-written list of names only ever catches known
  * mistakes. A side effect reached through the application's own code, or through
- * a call the scanner cannot resolve at all, is invisible here BY CONSTRUCTION —
- * and is covered by the indirect-call detector, which is why this catalog is
- * never extended with project classes.
+ * a call the scanner cannot resolve at all, is invisible here BY CONSTRUCTION,
+ * which is why this catalog is never extended with project classes. A call it
+ * cannot resolve is the dynamic-call detector's, which is stable. A call into the
+ * application's own code is the indirect-call detector's, which is `preview`: a
+ * run that does not admit that tier executes such a call in pretend mode, and the
+ * configuration says so beside its allowlist.
  */
 final readonly class SideEffectFacadeDetector implements PreScanDetector
 {
@@ -121,30 +124,42 @@ final readonly class SideEffectFacadeDetector implements PreScanDetector
 
     public function detect(ScannedMigration $migration): array
     {
-        $hits = [];
-        $seenLines = [];
+        // One hit per line, and the one that names the surface. The calls of a chain arrive
+        // outermost first, and an entry for a method on any receiver (`*::dispatch`) matches the
+        // outer call of `app('events')->dispatch('x')` by its method name alone: read that way, an
+        // event was reported as a job. So a named surface later on the same line replaces a
+        // receiver-agnostic match, and nothing replaces a named one.
+        /** @var array<int, array{entry: array{kind: string, reason: string, broad: bool}, target: CallTarget}> $matched */
+        $matched = [];
 
         foreach ($migration->migrationCalls() as $call) {
             $entry = $this->match($call['target']);
             if ($entry === null) {
                 continue;
             }
-            if (in_array($call['line'], $seenLines, true)) {
+
+            $held = $matched[$call['line']] ?? null;
+            if ($held !== null && (! $held['entry']['broad'] || $entry['broad'])) {
                 continue;
             }
 
+            $matched[$call['line']] = ['entry' => $entry, 'target' => $call['target']];
+        }
+
+        $hits = [];
+
+        foreach ($matched as $line => $match) {
             $hits[] = new PreScanHit(
                 self::RULE_ID,
                 $migration->file,
-                $call['line'],
+                $line,
                 sprintf(
                     'The call at line %d %s. Pretend mode intercepts SQL, not the PHP around it, so this would happen for real during a lint run. The migration is reported instead of being executed; move the effect into a deploy step or a job, or capture in shadow mode, which runs against a throwaway database.',
-                    $call['line'],
-                    $entry['reason'],
+                    $line,
+                    $match['entry']['reason'],
                 ),
-                $call['target']->description,
+                $match['target']->description,
             );
-            $seenLines[] = $call['line'];
         }
 
         return $hits;
@@ -153,14 +168,17 @@ final readonly class SideEffectFacadeDetector implements PreScanDetector
     /**
      * The bundled catalog first, then the application's own additions.
      *
-     * @return array{kind: string, reason: string}|null
+     * `broad` marks an entry for a method on any receiver: it matched by the method's name, not
+     * because the surface is known.
+     *
+     * @return array{kind: string, reason: string, broad: bool}|null
      */
     private function match(CallTarget $target): ?array
     {
         $entry = $this->catalog->match($target);
 
         if ($entry instanceof CatalogEntry) {
-            return ['kind' => $entry->kind, 'reason' => $entry->reason];
+            return ['kind' => $entry->kind, 'reason' => $entry->reason, 'broad' => $entry->target->isReceiverAgnostic()];
         }
 
         foreach ($this->additional as $additional) {
@@ -168,6 +186,7 @@ final readonly class SideEffectFacadeDetector implements PreScanDetector
                 return [
                     'kind' => 'configured',
                     'reason' => sprintf('reaches "%s", which this project declared a side-effect surface in its own configuration', $additional->raw),
+                    'broad' => $additional->isReceiverAgnostic(),
                 ];
             }
         }

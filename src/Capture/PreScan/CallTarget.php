@@ -23,7 +23,25 @@ final readonly class CallTarget
         public ?string $function,
         public bool $isDynamic,
         public string $description,
+        /**
+         * The key this call resolves out of the container, when it is written as a literal:
+         * `app('cache')`, `resolve('cache')`, `app()->make('cache')` and their siblings.
+         *
+         * Held BESIDE the call's own reading rather than instead of it. The call is still a call
+         * to `app()`, to `make` or to `App::make`, and whatever matched that before still does;
+         * the key adds what the call hands back, which is the surface a facade names another way.
+         */
+        public ?string $containerKey = null,
     ) {}
+
+    /**
+     * The same call, known to resolve `$key` out of the container, and named the way it was written
+     * with that key.
+     */
+    public function resolvingFromContainer(string $key, string $description): self
+    {
+        return new self($this->class, $this->method, $this->function, $this->isDynamic, $description, $key);
+    }
 
     /** `Http::get(...)` — a static call whose class resolved to an FQCN. */
     public static function staticCall(string $class, string $method): self
@@ -41,10 +59,28 @@ final readonly class CallTarget
         return new self($class, $method, null, false, ($class ?? '?').'->'.$method);
     }
 
+    /**
+     * `new Foo(...)`, which runs Foo's constructor: a call into Foo like any method, and named the
+     * way the migration spells it.
+     */
+    public static function construction(string $class): self
+    {
+        return new self($class, '__construct', null, false, 'new '.$class);
+    }
+
     /** A free function call — `dispatch(...)`, `event(...)`, a project helper. */
     public static function function(string $function): self
     {
         return new self(null, null, $function, false, $function.'()');
+    }
+
+    /**
+     * A command in backticks, which is `shell_exec()` in another spelling. It matches what that
+     * function matches, and it is named the way the migration wrote it.
+     */
+    public static function backticks(): self
+    {
+        return new self(null, null, 'shell_exec', false, 'a command in backticks');
     }
 
     /**
@@ -73,5 +109,11 @@ final readonly class CallTarget
     public function targetsFunction(string $name): bool
     {
         return $this->function === ltrim($name, '\\');
+    }
+
+    /** Whether this call resolves the given key out of the container. */
+    public function resolvesContainerKey(string $key): bool
+    {
+        return $this->containerKey !== null && $this->containerKey === ltrim($key, '\\');
     }
 }

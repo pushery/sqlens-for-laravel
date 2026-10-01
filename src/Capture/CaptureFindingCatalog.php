@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Capture;
 
+use Pushery\SQLens\Capture\PreScan\DynamicCallDetector;
 use Pushery\SQLens\Capture\PreScan\IndirectCallDetector;
 use Pushery\SQLens\Capture\PreScan\ResultDependentDetector;
 use Pushery\SQLens\Capture\PreScan\SchemaIntrospectionGuardDetector;
@@ -66,6 +67,7 @@ final readonly class CaptureFindingCatalog
     public static function detectors(): array
     {
         $detectors = [
+            new DynamicCallDetector,
             new IndirectCallDetector,
             new ResultDependentDetector,
             new SchemaIntrospectionGuardDetector,

@@ -50,13 +50,16 @@ return [
         'undetermined_allowed' => 'undetermined allowed by config',
     ],
     'shadow' => [
-        // One key. The shadow refusals are built from `UndeterminedReason` and `GuardBlockReason`
+        // Two keys. The shadow refusals are built from `UndeterminedReason` and `GuardBlockReason`
         // descriptions, in English prose, never through the translator, and nothing builds a
-        // `shadow.` key from a value. `confirm` is the one `LintCommand` asks for.
+        // `shadow.` key from a value. `confirm` and `confirm_elsewhere` are the ones `LintCommand`
+        // asks for, the second when the throwaway database is built on a connection other than the
+        // one being linted (`capture.shadow.connection` or `capture.shadow.direct_connection`).
         //
         // A refusal text is therefore changed in the enum, not here. A key in this group that
         // nothing reads would send whoever wants to change that text to the wrong file.
         'confirm' => 'Shadow mode will CREATE and DROP a throwaway database on the :connection connection. It never touches your data, but it does create and drop a database of its own. Proceed?',
+        'confirm_elsewhere' => 'Shadow mode will lint the :connection connection and CREATE and DROP a throwaway database on the :provisioning connection to do it. It never touches your data, but it does create and drop a database of its own. Proceed?',
     ],
     'commands' => [
         'file_not_found' => 'The --file ":file" does not exist or cannot be read.',
@@ -82,7 +85,12 @@ return [
         'baseline_no_path' => 'No baseline path is configured. Set sqlens.baseline.path or pass --path=<file>.',
         'baseline_dry_run' => 'Dry run: would write :count finding(s) to :path.',
         'baseline_written' => 'Wrote :count finding(s) to :path.',
+        'baseline_rewritten' => 'Rewrote the baseline entry for :subject from the finding it matches: it recorded :recorded, the finding is :actual. Read the diff before committing it.',
         'baseline_unwritable' => 'Could not write the baseline file ":path".',
+        'baseline_kept_catalog' => 'Kept :count entry(ies) about catalog objects in :path: the audit reads them, and this command does not write them.',
+        'baseline_kept_unread' => 'Kept :count entry(ies) in :path about migrations this run did not read, such as those that already ran on this database: a run that reads them judges them.',
+        'baseline_replaced_unreadable' => 'The existing :path could not be read, so it is replaced as a whole, and entries added by hand for the audit have to be added again: :reason',
+        'baseline_unjudged' => 'Nothing was frozen, and :path was left as it is: this run judged no migration, so it cannot say which findings exist. It reported:',
         'agent_rules_unknown_target' => 'Unknown --target ":target". Use one of: :known.',
         'agent_rules_output_needs_one_target' => '--output writes one path, so it needs a single --target. One file cannot hold three artifacts.',
         'agent_rules_written' => 'Wrote :path.',
@@ -216,13 +224,13 @@ return [
             ],
         ],
         'algorithm_lock' => [
-            'pin_the_clause' => 'Issue it as a raw statement naming both clauses, and leave a comment saying why. Laravel\'s MySQL grammar cannot emit ALGORITHM= or LOCK=, so raw SQL is a deliberate exception here rather than the normal way to write a migration — and the next reader has to be able to tell those apart. The two values come from the online-DDL matrix entry for this operation; they are not a preference.',
+            'pin_the_clause' => 'Issue it as a raw statement naming both clauses, and leave a comment saying why. The schema builder emits some of these clauses on a recent Laravel, with ->instant(), ->lock() and ->inplace(), but not every pair the matrix names, and on an older framework it ignores those modifiers without a word; a raw statement says exactly what it runs. It is still a deliberate exception rather than the normal way to write a migration — and the next reader has to be able to tell those apart. The two values come from the online-DDL matrix entry for this operation; they are not a preference.',
             'expect_a_refusal' => 'Be clear about what you just bought. The clause does NOT make a copying operation online — it makes the server REFUSE. An operation MySQL can only do by copying now fails with an error instead of quietly copying the table, so the deploy stops before it locks anything rather than in the middle of it. If it does fail, that is the clause working, and the answer is to stage the change, not to remove the clause.',
             'plan_a_window' => 'This operation rewrites the table, and pinning the clause does not change that. Plan the window, or stage the change so the rewrite happens on a table nobody is reading.',
             'no_window_needed' => 'This operation does not rewrite the table, so there is nothing to schedule around it. The clause is here to keep it that way on a server that might have chosen otherwise.',
             'verification' => 'Run sqlens:lint again — the rule must no longer report this statement. What the server actually does with the clause is visible at deploy time: it either runs or it refuses, and both answers are more than the builder gave you.',
             'precondition' => [
-                'raw_sql_is_an_exception' => 'You are comfortable with a raw statement here. It is the only way to express these clauses, and it costs the schema builder\'s portability — which is a fair trade for this statement and a bad habit for every other one.',
+                'raw_sql_is_an_exception' => 'You are comfortable with a raw statement here. It is the one form that names both clauses on every Laravel version, and it costs the schema builder\'s portability — which is a fair trade for this statement and a bad habit for every other one.',
                 'version_matches_the_entry' => 'The server you deploy to matches the version this entry was measured against. The matrix records what an operation does per version, and a value read for one and run on another is the guess this whole arrangement avoids.',
             ],
         ],

@@ -37,6 +37,11 @@ use Pushery\SQLens\Rules\Suite;
  * that made the reason necessary: a consumer read correct, deliberate boundaries as a backlog. So it
  * reports as `AUDIT.CATALOG.NOT_COMPARED`, a single id with its own page, and as not_applicable
  * rather than undetermined.
+ *
+ * `excluded_by_config` is the other reason that is not a gap, and it keeps its place in the family:
+ * the objects it names, by default an extension's, really were not read, so `UNREAD` says what
+ * happened. It reports as not_applicable too, because leaving them out was the decision, and the
+ * family page says so.
  */
 enum CatalogNotice: string implements RunNotice
 {

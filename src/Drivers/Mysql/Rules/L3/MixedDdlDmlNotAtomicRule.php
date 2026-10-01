@@ -175,15 +175,19 @@ final class MixedDdlDmlNotAtomicRule extends AbstractMysqlRule implements Provid
      *
      * Read off the classified KIND rather than the SQL: what a statement does is the classifier's
      * answer, and a rule re-deriving it from text would be a second opinion waiting to disagree.
-     * Everything that is not data manipulation and not unclassified is a schema change here —
-     * inverted deliberately, so a statement kind added later is covered without anyone remembering
-     * to extend a list. An UNCLASSIFIED statement is excluded: it might be either, and "might" is
-     * not the basis for a finding.
+     * Everything that is not data manipulation, not a session setting and not unclassified is a
+     * schema change here — inverted deliberately, so a statement kind added later is covered without
+     * anyone remembering to extend a list. An UNCLASSIFIED statement is excluded: it might be either,
+     * and "might" is not the basis for a finding. A SESSION SETTING is excluded because it is neither:
+     * `SET SESSION lock_wait_timeout` changes no schema and commits nothing, and it is the line
+     * `MY.L3.MISSING_LOCK_WAIT_TIMEOUT` asks a migration to open with, so counting it would report
+     * every data migration written the way this package advises.
      */
     private function isSchemaChange(MigrationStatementDigest $statement): bool
     {
         return $statement->kind instanceof StatementKind
             && $statement->kind !== StatementKind::Dml
+            && $statement->kind !== StatementKind::SessionSetting
             && $statement->kind !== StatementKind::Unknown;
     }
 }

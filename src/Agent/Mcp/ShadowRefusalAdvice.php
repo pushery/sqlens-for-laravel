@@ -47,8 +47,9 @@ final readonly class ShadowRefusalAdvice
     private const array SENTENCES = [
         'disallowed_environment' => 'the shadow mode may only run in an environment this project allows, and this is not one of '
             .'them. That check is not overridable — not by a setting, not by a parameter, not by anything this tool accepts.',
-        'production_connection' => 'the target connection looks like a production instance, and a mode that creates and drops '
-            .'databases never runs against one. Point the run at a development connection instead.',
+        'production_connection' => 'the target connection, or the connection shadow mode creates and drops its throwaway '
+            .'databases on (capture.shadow.connection or capture.shadow.direct_connection), looks like a production instance, '
+            .'and a mode that creates and drops databases never runs against one. Point both at a development connection instead.',
         'not_confirmed' => 'nobody consented to this run. A server has no terminal, so there is no prompt to answer over the '
             .'protocol: set sqlens.agent.mcp.shadow_consent to true in the project configuration, or run '
             .'sqlens:lint --shadow from a terminal, where you can be asked.',

@@ -31,7 +31,7 @@ final class GrantOptionStructuralRule extends AbstractGrantOptionRule
         return true;
     }
 
-    protected function message(string $grantee, string $target): string
+    protected function message(string $grantee, string $target, string $revoke): string
     {
         return sprintf(
             '%s may hand on the power to CHANGE the schema of %s, not merely to read or write what is in it '
@@ -39,12 +39,11 @@ final class GrantOptionStructuralRule extends AbstractGrantOptionRule
             .'account can grant a second account the right to create, alter or drop objects, and objects '
             .'created that way look exactly like the ones anybody else made. A migration account holding '
             .'this is common and often deliberate; an application account holding it is almost never '
-            .'intended. REVOKE GRANT OPTION FOR … ON %s FROM %s keeps the account working and takes away '
-            .'only its ability to widen the server.',
+            .'intended. Revoking the option keeps the account working and takes away only its ability '
+            .'to widen the server: %s',
             $grantee,
             $target,
-            $target,
-            $grantee,
+            $revoke,
         );
     }
 

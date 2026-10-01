@@ -67,16 +67,25 @@ final readonly class BaselineSuppressionSource
      * An entry whose SOURCE could not answer this run is not stale — see
      * {@see self::unverifiableEntries()} for why that distinction is not a nicety.
      *
+     * Nor is an entry this run could not have matched at all: it belongs to the other suite, or to
+     * a run that applies its rule or reads its migration. Both suites read the one baseline, and
+     * calling such an entry stale sent a reader to delete lines another run needs, or, under
+     * `sqlens.baseline.stale = error`, ended the run on a misconfiguration over a database that had
+     * not changed. {@see BaselineScope} says which entries are this run's.
+     *
      * @param  list<string>  $matchedKeys  the keys suppressionFor() returned during the run
      * @param  list<string>  $unverifiablePrefixes  rule-id prefixes whose source did not answer
      * @return list<BaselineEntry> in the file's own order, so the report is stable
      */
-    public function staleEntries(array $matchedKeys, array $unverifiablePrefixes = []): array
+    public function staleEntries(array $matchedKeys, array $unverifiablePrefixes = [], ?BaselineScope $scope = null): array
     {
+        $scope ??= BaselineScope::everything();
+
         return array_values(array_filter(
             $this->baseline->entries,
             fn (BaselineEntry $entry): bool => ! in_array($entry->key(), $matchedKeys, true)
-                && ! $this->isUnverifiable($entry, $unverifiablePrefixes),
+                && ! $this->isUnverifiable($entry, $unverifiablePrefixes)
+                && $scope->judges($entry),
         ));
     }
 
@@ -89,16 +98,22 @@ final readonly class BaselineSuppressionSource
      * that comes straight back on the next machine that has the tool. Reported under its own
      * name and kept in the file.
      *
+     * The entries this run cannot match are not listed here either: nothing failed to answer, this
+     * run simply never asks for them.
+     *
      * @param  list<string>  $matchedKeys
      * @param  list<string>  $unverifiablePrefixes  rule-id prefixes whose source did not answer
      * @return list<BaselineEntry>
      */
-    public function unverifiableEntries(array $matchedKeys, array $unverifiablePrefixes): array
+    public function unverifiableEntries(array $matchedKeys, array $unverifiablePrefixes, ?BaselineScope $scope = null): array
     {
+        $scope ??= BaselineScope::everything();
+
         return array_values(array_filter(
             $this->baseline->entries,
             fn (BaselineEntry $entry): bool => ! in_array($entry->key(), $matchedKeys, true)
-                && $this->isUnverifiable($entry, $unverifiablePrefixes),
+                && $this->isUnverifiable($entry, $unverifiablePrefixes)
+                && $scope->judges($entry),
         ));
     }
 

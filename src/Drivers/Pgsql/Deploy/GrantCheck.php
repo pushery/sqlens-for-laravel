@@ -16,6 +16,7 @@ use Pushery\SQLens\Deploy\PreflightContext;
 use Pushery\SQLens\Deploy\PrivilegeClass;
 use Pushery\SQLens\Deploy\PrivilegeRequirement;
 use Pushery\SQLens\Deploy\RequiredPrivileges;
+use Pushery\SQLens\Drivers\Pgsql\Catalog\ApplicationSearchPath;
 use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
@@ -232,7 +233,9 @@ final readonly class GrantCheck implements PreflightCheck
     private function isAllowed(PreflightContext $context, string $role, PrivilegeRequirement $requirement): bool
     {
         $object = $requirement->object;
-        $schema = str_contains($object, '.') ? explode('.', $object, 2)[0] : 'public';
+        // The schema a CREATE of this name lands in: the one it names, or for a bare name the first
+        // schema on the application's path, which is where the server puts it.
+        $schema = str_contains($object, '.') ? explode('.', $object, 2)[0] : null;
 
         // A SCHEMA is asked about in the schema catalog, and everything below this line would ask
         // the wrong one. `to_regclass` resolves RELATIONS, so it answers null for a schema that
@@ -250,15 +253,15 @@ final readonly class GrantCheck implements PreflightCheck
         // a migration that creates a table names exactly such an object — so the absent case is
         // judged at the schema, which is the right question for a CREATE anyway.
         $exists = $context->session->read(static fn (Connection $db): array => $db->select(
-            'select pg_catalog.to_regclass(?) is not null as present',
-            [$object],
+            'select '.ApplicationSearchPath::regclass().' is not null as present',
+            ApplicationSearchPath::regclassBindings($object),
         ))[0] ?? null;
 
         $present = is_object($exists) && ($exists->present ?? false) === true;
 
         [$sql, $bindings] = match (true) {
             ! $present, $requirement->class === PrivilegeClass::Create => [
-                'select pg_catalog.has_schema_privilege(?, ?, \'CREATE\') as allowed',
+                'select pg_catalog.has_schema_privilege(?, coalesce(?::name, '.ApplicationSearchPath::currentSchema().'), \'CREATE\') as allowed',
                 [$role, $schema],
             ],
             $requirement->class === PrivilegeClass::Ownership => [
@@ -266,16 +269,17 @@ final readonly class GrantCheck implements PreflightCheck
                 // the question is membership in the owning role, which is what PostgreSQL itself
                 // checks before it allows the statement.
                 'select pg_catalog.pg_has_role(?, c.relowner, \'USAGE\') as allowed'
-                .' from pg_class c where c.oid = pg_catalog.to_regclass(?)',
-                [$role, $object],
+                .' from pg_class c where c.oid = '.ApplicationSearchPath::regclass(),
+                [$role, ...ApplicationSearchPath::regclassBindings($object)],
             ],
             $requirement->class === PrivilegeClass::References => [
-                'select pg_catalog.has_table_privilege(?, ?, \'REFERENCES\') as allowed',
-                [$role, $object],
+                'select pg_catalog.has_table_privilege(?, '.ApplicationSearchPath::regclass().', \'REFERENCES\') as allowed',
+                [$role, ...ApplicationSearchPath::regclassBindings($object)],
             ],
             $requirement->class === PrivilegeClass::Write => [
-                'select pg_catalog.has_table_privilege(?, ?, \'INSERT\') and pg_catalog.has_table_privilege(?, ?, \'UPDATE\') as allowed',
-                [$role, $object, $role, $object],
+                'select pg_catalog.has_table_privilege(?, '.ApplicationSearchPath::regclass().', \'INSERT\')'
+                .' and pg_catalog.has_table_privilege(?, '.ApplicationSearchPath::regclass().', \'UPDATE\') as allowed',
+                [$role, ...ApplicationSearchPath::regclassBindings($object), $role, ...ApplicationSearchPath::regclassBindings($object)],
             ],
             // DROP is not grantable on PostgreSQL either, but ownership of the TABLE is not the only
             // thing that permits it — the SCHEMA owner may drop a table inside their schema whoever
@@ -297,8 +301,8 @@ final readonly class GrantCheck implements PreflightCheck
                 'select pg_catalog.pg_has_role(?, c.relowner, \'USAGE\')'
                 .' or pg_catalog.pg_has_role(?, n.nspowner, \'USAGE\') as allowed'
                 .' from pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace'
-                .' where c.oid = pg_catalog.to_regclass(?)',
-                [$role, $role, $object],
+                .' where c.oid = '.ApplicationSearchPath::regclass(),
+                [$role, $role, ...ApplicationSearchPath::regclassBindings($object)],
             ],
         };
 

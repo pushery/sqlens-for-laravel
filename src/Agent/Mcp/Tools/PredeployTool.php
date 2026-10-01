@@ -11,11 +11,16 @@ use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Name;
 use Override;
+use Pushery\SQLens\Agent\Mcp\McpConnection;
+use Pushery\SQLens\Agent\Mcp\ProfileRefusal;
 use Pushery\SQLens\Agent\Mcp\ReportPage;
 use Pushery\SQLens\Agent\Mcp\ToolAnswer;
+use Pushery\SQLens\Config\ProfileApplication;
+use Pushery\SQLens\Deploy\PreflightBlocker;
 use Pushery\SQLens\Deploy\PreflightOutcome;
 use Pushery\SQLens\Deploy\PreflightReport;
 use Pushery\SQLens\Deploy\PreflightRuns;
+use Pushery\SQLens\Deploy\PreflightVerdict;
 use Pushery\SQLens\Deploy\UndeterminedWaiver;
 use Pushery\SQLens\Findings\Result;
 use Pushery\SQLens\Reporting\Json\JsonEnvelope;
@@ -95,11 +100,43 @@ final class PredeployTool extends SqlensTool
         // Whether it was USED is a different question and travels in the run header below.
         $allowUndetermined = $waiver->opensAnything();
 
+        $profiles = new ProfileApplication($config);
+
+        // The profile `sqlens:predeploy` runs under: SQLENS_PROFILE, then `sqlens.profile`, then
+        // its own default `predeploy`, the paranoid one. Not a parameter, and neither is the budget:
+        // a caller that could move either would be deciding how careful this gate is on a per-call
+        // basis, which is the decision the configuration exists to hold.
+        $profile = $profiles->select(null, 'predeploy');
+
+        if (! $profile->isValid()) {
+            return Response::json([
+                ...ProfileRefusal::answer((string) $profile->rejectedValue, $profile->source)->toArray(),
+                // Blocks, as a gate that could not run blocks: nothing about this deploy was
+                // established.
+                'gate' => $this->gate(PreflightVerdict::of(PreflightBlocker::Refused)),
+                'allow_undetermined' => $allowUndetermined,
+            ]);
+        }
+
+        // Applied for this call and put back afterwards, because the next call is answered in the
+        // same process.
+        return $profiles->during($profile, fn (): Response => $this->answer($validated, $config, $preflight, $waiver, $profile->profile));
+    }
+
+    /**
+     * The gate and its answer, under the profile the call chose.
+     *
+     * @param  array<string, mixed>  $validated
+     */
+    private function answer(array $validated, Repository $config, PreflightRuns $preflight, UndeterminedWaiver $waiver, ?string $profile): Response
+    {
+        $allowUndetermined = $waiver->opensAnything();
+
         $outcome = $preflight->run(
-            connection: is_string($validated['connection'] ?? null) ? $validated['connection'] : null,
-            // Not parameters. The profile is `predeploy` — the paranoid one — and the budget is the
-            // project's; a caller that could raise either would be deciding how careful this gate is
-            // on a per-call basis, which is the decision the configuration exists to hold.
+            connection: new McpConnection($config)->chosen($validated['connection'] ?? null),
+            // Handed over as the command hands over its own, so the run's context names the profile
+            // whose settings it ran on.
+            profile: $profile,
         );
 
         if (! $outcome->result instanceof Result || ! $outcome->context instanceof RunContext || ! $outcome->report instanceof PreflightReport) {
@@ -113,7 +150,7 @@ final class PredeployTool extends SqlensTool
                 'connection' => $outcome->connection,
                 // `false`, not the waiver: a gate that could not RUN has no unanswered checks to
                 // waive, and a waiver cannot carry a deploy past a missing gate.
-                'gate' => $this->gate($outcome, false),
+                'gate' => $this->gate($outcome->verdict($waiver)),
                 'allow_undetermined' => $allowUndetermined,
             ]);
         }
@@ -121,30 +158,26 @@ final class PredeployTool extends SqlensTool
         // Word for word the command's join: blocked, blocked by nothing BUT unanswered checks, and
         // every one of them covered. Partial coverage is the one result that must not read as
         // permission.
-        $waived = $outcome->report->blocks()
-            && $outcome->blockedOnlyByUndetermined()
-            && $waiver->opensFor($outcome->report->undetermined());
+        $verdict = $outcome->verdict($waiver);
 
         // Carried on the context rather than assembled here, so `run.undetermined_waiver` says the
         // same thing over the protocol as it does on the command line. Left off, it stayed null —
         // "this producer has no gate at all", which on this path is simply untrue.
         $envelope = JsonEnvelope::for(
             $outcome->result,
-            $outcome->context->withUndeterminedWaiver(
-                $waived,
-                $waived ? $waiver->reasonsItNames($outcome->report->undetermined()) : [],
-            ),
+            $outcome->context->withUndeterminedWaiver($verdict->waived(), $verdict->waivedReasons),
         )->toArray();
         $page = ReportPage::of($envelope['findings'], 0, null, $this->ceiling($config));
-        $unresolved = $outcome->report->undetermined();
+
+        // Both halves. An undetermined finding about a pending migration is a question this run left
+        // open as much as an unanswered check is, and `status` is where an agent reads that — even
+        // where the profile lets the deploy proceed past it, which `gate` says.
+        $unresolved = $outcome->unanswered();
 
         $answer = $unresolved === []
             ? ToolAnswer::of([], $this->summary($outcome, $page))
             : ToolAnswer::undetermined(
-                'checks that could not answer: '.implode(', ', array_map(
-                    static fn (object $result): string => $result->checkId.' ('.$result->reason.')',
-                    $unresolved,
-                )),
+                'what could not be answered: '.implode(', ', $unresolved),
                 [],
                 $this->summary($outcome, $page),
             );
@@ -152,7 +185,7 @@ final class PredeployTool extends SqlensTool
         return Response::json([
             ...$answer->toArray(),
             'connection' => $outcome->connection,
-            'gate' => $this->gate($outcome, $waived),
+            'gate' => $this->gate($verdict),
             // Echoed whether or not it changed anything. An emergency exit that could be used
             // invisibly is not an emergency exit, it is a default nobody agreed to — and the one
             // reading a deploy log afterwards is the person who needs to see it most.
@@ -179,7 +212,7 @@ final class PredeployTool extends SqlensTool
         return [
             // A NAME from the application's own connections, never a DSN. On the one tool that
             // reaches a production database, a free connection string would be the whole game.
-            'connection' => ['sometimes', 'string', 'in:'.implode(',', $this->connectionNames($config))],
+            'connection' => ['sometimes', 'string', 'in:'.implode(',', new McpConnection($config)->allowed())],
             'allow_undetermined' => ['sometimes', 'boolean'],
         ];
     }
@@ -191,7 +224,7 @@ final class PredeployTool extends SqlensTool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'connection' => $schema->string()->description('The name of a connection this application has configured. Never a connection string.'),
+            'connection' => $schema->string()->description('The name of a connection this application has configured, and only the one sqlens.agent.mcp.connection names when it is set. Never a connection string.'),
             'allow_undetermined' => $schema->boolean()->description('Proceed when the ONLY blockers are checks that could not answer. Leave it out to use what the project declared in sqlens.deploy.predeploy.allow_undetermined, which may name individual reasons; passing it decides this run either way, all-or-nothing. A real failure still blocks, and whichever applied is recorded in the answer.'),
         ];
     }
@@ -199,37 +232,27 @@ final class PredeployTool extends SqlensTool
     /**
      * The gate decision as data — the same four-code contract the command turns into an exit status.
      *
-     * Derived from the outcome's own answer about what blocked rather than re-counted here: the
-     * command and this tool must not be able to disagree about whether a deploy proceeds, and two
-     * readings of the same results are two chances to.
+     * Read off the outcome's verdict rather than decided here: the command and this tool must not be
+     * able to disagree about whether a deploy proceeds, and two readings of the same run are two
+     * chances to.
      *
      * @return array{blocks: bool, exit_code: int, meaning: string}
      */
-    private function gate(PreflightOutcome $outcome, bool $waived): array
+    private function gate(PreflightVerdict $verdict): array
     {
-        if (! $outcome->report instanceof PreflightReport) {
-            return [
-                'blocks' => true,
-                'exit_code' => 2,
-                'meaning' => 'The gate could not run, so nothing about this deploy was established. Fail-closed: it blocks.',
-            ];
-        }
-
-        if (! $outcome->report->blocks()) {
-            return ['blocks' => false, 'exit_code' => 0, 'meaning' => 'No check blocked; the deploy may proceed.'];
-        }
-
-        if ($waived) {
-            return [
-                'blocks' => false,
-                'exit_code' => 0,
-                'meaning' => 'The only blockers were checks that could not answer, and a waiver covering every one of them let the deploy proceed. Which reasons it named is in the run header.',
-            ];
-        }
-
-        return $outcome->blockedOnlyByUndetermined()
-            ? ['blocks' => true, 'exit_code' => 3, 'meaning' => 'Every blocker is a check that could not answer, and no waiver covers all of them. Fail-closed: it blocks.']
-            : ['blocks' => true, 'exit_code' => 1, 'meaning' => 'A check found a real problem with this deploy.'];
+        return [
+            'blocks' => $verdict->blocks(),
+            'exit_code' => $verdict->exitCode()->value,
+            'meaning' => match ($verdict->blocker) {
+                PreflightBlocker::Nothing => 'Nothing blocked: no check failed and no finding about the pending migrations crossed the gate. The deploy may proceed.',
+                PreflightBlocker::Waived => 'The only blockers were answers that could not be given, and a waiver covering every one of them let the deploy proceed. Which reasons it named is in the run header.',
+                PreflightBlocker::Unanswered => 'Every blocker is an answer that could not be given, and no waiver covers all of them. Fail-closed: it blocks.',
+                PreflightBlocker::CheckFailed => 'A check found a real problem with this deploy.',
+                PreflightBlocker::MigrationFinding => 'A finding about a pending migration crossed the gate, so the deploy would run what it reports.',
+                PreflightBlocker::Refused => 'The gate could not run, so nothing about this deploy was established. Fail-closed: it blocks.',
+                PreflightBlocker::StaleBaseline => 'Baseline entries matched nothing and sqlens.baseline.stale is error, so the baseline counts as misconfigured and the deploy is held back. The checks and the pending migrations were judged; the stale entries are in the report.',
+            },
+        ];
     }
 
     /** A sentence for a client that shows text rather than structure. */
@@ -246,21 +269,6 @@ final class PredeployTool extends SqlensTool
             count($page->rows),
             $page->truncated ? 'The list is CUT: '.$page->reason.'.' : 'Nothing was left out.',
         );
-    }
-
-    /**
-     * The connection names this application has configured.
-     *
-     * @return list<string>
-     */
-    private function connectionNames(Repository $config): array
-    {
-        $connections = $config->get('database.connections');
-
-        return array_values(array_filter(
-            array_map(strval(...), array_keys(is_array($connections) ? $connections : [])),
-            static fn (string $name): bool => $name !== '',
-        ));
     }
 
     private function ceiling(Repository $config): int

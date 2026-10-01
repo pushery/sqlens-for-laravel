@@ -15,8 +15,9 @@ use Pushery\SQLens\Exceptions\InvalidRuleEvidence;
  * {@see TypeChangeImpact::Unknown} rather than guessed safe.
  *
  * Aliases fold to their canonical PostgreSQL spelling before lookup, and a length or
- * precision specifier is stripped, so `int8`, `integer`, and `NUMERIC(10, 2)` all
- * resolve the way the same change written by hand would.
+ * precision specifier is stripped, so `int8` and `integer` resolve the way the same change
+ * written by hand would. A `numeric` that carries a precision is the exception: its
+ * specifier decides the answer, so it is not classified by the type alone.
  *
  * A malformed matrix is an error, not an empty result — read leniently, a typo would
  * turn every rewrite into an "unknown" and quietly weaken the rule. It reuses
@@ -86,6 +87,16 @@ final readonly class PgTypeChangeMatrix
     public function classify(string $rawTargetType): TypeChangeImpact
     {
         $type = $this->canonicalize($rawTargetType);
+
+        // A `numeric` target carries its precision and scale, and they decide the answer on their
+        // own: raising the precision at the same scale keeps every stored value and rewrites nothing,
+        // changing the scale rewrites the table, and the column's current pair is not in the
+        // statement. Measured on 18.4: `numeric(8,2)` to `numeric(12,2)` kept the heap, and
+        // `numeric(14,2)` to `numeric(14,4)` rewrote it. A bare `numeric` stays keyed on its
+        // dominant case, a change from another type.
+        if ($type === 'numeric' && str_contains($rawTargetType, '(')) {
+            return TypeChangeImpact::Unknown;
+        }
 
         if (in_array($type, $this->rewrite, true)) {
             return TypeChangeImpact::Rewrite;

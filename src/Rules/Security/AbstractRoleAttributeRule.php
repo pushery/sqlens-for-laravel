@@ -68,8 +68,13 @@ abstract class AbstractRoleAttributeRule extends AbstractSchemaObjectSecurityRul
     /** The attribute this rule is about. */
     abstract protected function attribute(): RoleAttribute;
 
-    /** What holding it means, as the finding's opening sentence. */
-    abstract protected function heldMessage(string $role): string;
+    /**
+     * What holding it means, as the finding's opening sentence.
+     *
+     * `$statementName` is the account as an `ALTER ROLE` names it, quoted by the subject, or empty
+     * when it could not be written. `$role` is the name for reading.
+     */
+    abstract protected function heldMessage(string $role, string $statementName): string;
 
     /** What being able to assume it means — the `SET ROLE` case, with the path that leads there. */
     abstract protected function reachableMessage(string $role, string $path): string;
@@ -127,7 +132,7 @@ abstract class AbstractRoleAttributeRule extends AbstractSchemaObjectSecurityRul
         }
 
         if ($this->holds($object, 'attributes')) {
-            return [RuleVerdict::flag($this->heldMessage($object->qualifiedName))];
+            return [RuleVerdict::flag($this->heldMessage($object->qualifiedName, $object->getString('statement_name') ?? ''))];
         }
 
         if ($this->holds($object, 'reachable_attributes')) {
@@ -146,19 +151,19 @@ abstract class AbstractRoleAttributeRule extends AbstractSchemaObjectSecurityRul
     }
 
     /**
-     * The membership chain that leads to the attribute, or a stated absence.
+     * The membership chains that end at a role holding the attribute, or a stated absence.
+     *
+     * Only chains to a HOLDER. The account's other memberships are on the subject too, and naming
+     * one of those would send the reader to revoke a grant that leads nowhere dangerous while the
+     * route to the attribute stays open. Every holder is named, because each is a separate route.
      *
      * The absence is spelled out rather than left blank: a path this reading could not establish is
      * a fact about the reading, and an empty string in the middle of a sentence reads like a bug.
      */
     private function pathIn(SchemaObject $object): string
     {
-        foreach (explode(';', $object->getString('reachable_paths') ?? '') as $entry) {
-            if (str_contains($entry, '=')) {
-                return explode('=', $entry, 2)[1];
-            }
-        }
+        $paths = $object->getString('reachable_paths_to_'.$this->attribute()->value) ?? '';
 
-        return 'the membership chain could not be established';
+        return $paths === '' ? 'the membership chain could not be established' : $paths;
     }
 }

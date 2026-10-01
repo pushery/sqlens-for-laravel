@@ -137,12 +137,16 @@ final class PublicGrantRule extends AbstractSchemaObjectSecurityRule implements 
             .'membership of every role in this database, including every role created from now on, so '
             .'this privilege cannot be reviewed by looking at who has access and it appears in no role '
             .'listing. PostgreSQL\'s own default grants are excluded here, so this one was granted by '
-            .'somebody: check whether it still needs to be, and REVOKE %s ON %s FROM PUBLIC if not.',
+            .'somebody: check whether it still needs to be, and revoke it if not: %s',
             str_replace(',', ', ', $privileges),
             $object->getString('target_type') ?? 'object',
             $object->getString('target') ?? '?',
-            strtoupper(str_replace(',', ', ', $privileges)),
-            $object->getString('target') ?? '?',
+            // The ON target names its kind, because PostgreSQL reads a bare name there as a table and
+            // refuses `REVOKE USAGE ON app` for a schema; the reader quoted every name in it.
+            StatementSpan::naming(
+                sprintf('REVOKE %s ON %%s FROM PUBLIC;', strtoupper(str_replace(',', ', ', $privileges))),
+                $object->getString('statement_target') ?? '',
+            ),
         );
     }
 

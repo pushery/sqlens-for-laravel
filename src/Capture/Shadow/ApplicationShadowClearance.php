@@ -28,6 +28,13 @@ use Pushery\SQLens\Lint\ShadowClearance;
  * provisioner creates on the other one. Asking the resolver rather than re-implementing it is the
  * only version of this that cannot drift.
  *
+ * It asks about a second connection too: the one the throwaway databases are created and dropped
+ * on. With `capture.shadow.connection` or `capture.shadow.direct_connection` set, that is not the
+ * connection under examination, and it is the one a database-creating mode writes to. A guard that
+ * judged only the examined connection would let a run create, replay into and drop databases on a
+ * server it never looked at, the same mistake as judging the default one level down. The name comes
+ * from {@see ShadowProvisioningConnection}, the resolver the provisioner is built from.
+ *
  * Nothing here decides. {@see ProductionGuard} decides, and it is the only thing that does; this
  * class knows where the inputs live.
  */
@@ -47,6 +54,7 @@ final readonly class ApplicationShadowClearance implements ShadowClearance
             : $this->drivers->defaultConnectionName();
 
         $allowed = $this->config->get('sqlens.capture.shadow.allowed_environments');
+        $detector = new ProductionConnectionDetector($this->config);
 
         return $this->guard->evaluate(
             (string) $this->app->environment(),
@@ -54,7 +62,11 @@ final readonly class ApplicationShadowClearance implements ShadowClearance
             // non-string entry silently matching nothing would widen the check in the direction that
             // costs a database.
             is_array($allowed) ? array_values(array_filter($allowed, is_string(...))) : [],
-            new ProductionConnectionDetector($this->config)->isProduction($name),
+            // Both connections the run reaches: the one it examines, and the one it creates and
+            // drops its throwaway databases on. Without a shadow or direct connection configured
+            // they are the same, and the second question repeats the first.
+            $detector->isProduction($name)
+                || $detector->isProduction(ShadowProvisioningConnection::for($this->config, $name)),
             $force,
             $interactive,
             $confirmed,

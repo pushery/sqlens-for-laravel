@@ -1161,7 +1161,7 @@
                 "type": "doc",
                 "url": "https://www.postgresql.org/docs/18/view-pg-hba-file-rules.html",
                 "applies_to": "PostgreSQL 18",
-                "note": "The pg_hba_file_rules view is what this whole family reads, and its documentation states that a line the server could not parse is reported with an error message and is NOT applied. That is the finding: the file loads, the server runs, and the restriction the line was written to impose is silently absent."
+                "note": "The pg_hba_file_rules view is what this whole family reads. Its documentation states that it reports the current contents of the file rather than what the server last loaded, and that a line the server could not parse carries an error message. Measured on PostgreSQL 18.4, a file holding such a line is not loaded at all: a reload is refused with the previous rules still in force, and a start fails. That is the finding: the file does not say what the server is doing."
             },
             {
                 "type": "doc",
@@ -1307,7 +1307,7 @@
                 "type": "doc",
                 "url": "https://dev.mysql.com/doc/refman/8.4/en/account-names.html",
                 "applies_to": "MySQL 8.4",
-                "note": "An account is user PLUS host, and the manual documents the host part as a pattern in which `%` and `_` are wildcards matching any sequence and any single character. That is the basis for reading `10.0.0._` as a pattern rather than an address, and for treating the host half as an access control rather than a note about where the account usually connects from."
+                "note": "An account is user PLUS host, and the manual documents the host part as a pattern in which `%` and `_` are wildcards with the meaning they have in LIKE, and states that an IP wildcard value can match only IP addresses, not host names. That is the basis for treating the host half as an access control rather than a note about where the account usually connects from, for reading `10.0.0.%` as an address range rather than an open host, and for reading `%.example.com` as a pattern over names. The same page lists `%` and `_` in a host value as deprecated and accepts CIDR notation for an IPv4 host, which is the form the examples use."
             },
             {
                 "type": "doc",
@@ -1321,7 +1321,7 @@
                 "type": "doc",
                 "url": "https://dev.mysql.com/doc/refman/8.4/en/account-names.html",
                 "applies_to": "MySQL 8.4",
-                "note": "An account is user PLUS host, and the manual documents the host part as a pattern in which `%` and `_` are wildcards matching any sequence and any single character. That is the basis for reading `10.0.0._` as a pattern rather than an address, and for treating the host half as an access control rather than a note about where the account usually connects from."
+                "note": "An account is user PLUS host, and the manual documents the host part as a pattern in which `%` and `_` are wildcards with the meaning they have in LIKE, and states that an IP wildcard value can match only IP addresses, not host names. That is the basis for treating the host half as an access control rather than a note about where the account usually connects from, for reading `10.0.0.%` as an address range rather than an open host, and for reading `%.example.com` as a pattern over names. The same page lists `%` and `_` in a host value as deprecated and accepts CIDR notation for an IPv4 host, which is the form the examples use."
             },
             {
                 "type": "doc",
@@ -1655,7 +1655,7 @@
                 "type": "doc",
                 "url": "https://dev.mysql.com/doc/refman/8.4/en/grant.html",
                 "applies_to": "MySQL 8.4",
-                "note": "The GRANT reference documents WITH GRANT OPTION as the clause that lets an account give its privileges to others, and REVOKE GRANT OPTION FOR as the way to take that back without touching the privileges themselves. Cited for the remedy as much as for the mechanism: the distinction between the two is what makes this finding cheap to act on."
+                "note": "The GRANT reference documents WITH GRANT OPTION as the clause that lets an account give its privileges to others, and REVOKE GRANT OPTION ON as the way to take that back without touching the privileges themselves; MySQL 8.4 refuses the PostgreSQL form REVOKE GRANT OPTION FOR with a syntax error. Cited for the remedy as much as for the mechanism: the distinction between the two is what makes this finding cheap to act on."
             },
             {
                 "type": "doc",
@@ -1669,7 +1669,7 @@
                 "type": "doc",
                 "url": "https://dev.mysql.com/doc/refman/8.4/en/grant.html",
                 "applies_to": "MySQL 8.4",
-                "note": "The GRANT reference documents WITH GRANT OPTION as the clause that lets an account give its privileges to others, and REVOKE GRANT OPTION FOR as the way to take that back without touching the privileges themselves. Cited for the remedy as much as for the mechanism: the distinction between the two is what makes this finding cheap to act on."
+                "note": "The GRANT reference documents WITH GRANT OPTION as the clause that lets an account give its privileges to others, and REVOKE GRANT OPTION ON as the way to take that back without touching the privileges themselves; MySQL 8.4 refuses the PostgreSQL form REVOKE GRANT OPTION FOR with a syntax error. Cited for the remedy as much as for the mechanism: the distinction between the two is what makes this finding cheap to act on."
             },
             {
                 "type": "doc",

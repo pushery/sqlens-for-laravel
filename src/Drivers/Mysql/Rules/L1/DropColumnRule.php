@@ -13,6 +13,7 @@ use Pushery\SQLens\Drivers\Mysql\DowntimeClass\MysqlDowntimeClassSource;
 use Pushery\SQLens\Drivers\Mysql\Rules\AbstractMysqlRule;
 use Pushery\SQLens\Engine\ResolvedServerVersion;
 use Pushery\SQLens\Findings\DowntimeClass;
+use Pushery\SQLens\Findings\DowntimeUndetermined;
 use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Remediation\DeployWindowDropTemplate;
@@ -73,7 +74,7 @@ final class DropColumnRule extends AbstractMysqlRule implements DerivesDowntimeC
     }
 
     /** From the matrix, for the one operation this rule is about — never named in this file. */
-    public function downtimeClassFor(MigrationStatementView $statement): ?DowntimeClass
+    public function downtimeClassFor(MigrationStatementView $statement): DowntimeClass|DowntimeUndetermined|null
     {
         if ($this->judge($statement) === null) {
             return null;
@@ -82,7 +83,7 @@ final class DropColumnRule extends AbstractMysqlRule implements DerivesDowntimeC
         return $this->downtimeClasses->forCandidateOperations(
             [self::OPERATION],
             $statement->serverVersion ?? ResolvedServerVersion::unresolvable(),
-        )->downtimeClass;
+        )->derived();
     }
 
     public function remediationFor(MigrationStatementView $statement): ?RemediationPayload
@@ -97,7 +98,7 @@ final class DropColumnRule extends AbstractMysqlRule implements DerivesDowntimeC
         return $this->template->forColumn(
             $this->columnContext($statement),
             $this->id(),
-            $this->downtimeClassFor($statement),
+            $this->knownDowntimeClass($this->downtimeClassFor($statement)),
         );
     }
 

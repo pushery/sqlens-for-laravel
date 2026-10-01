@@ -109,6 +109,17 @@ final readonly class DebtCollector
         return $this->withStanding(DebtStanding::ObjectNotFound);
     }
 
+    /**
+     * The debts whose standing the catalog could not give: no question settles them, or the read
+     * failed. Open as well, and kept apart from the absences above, because nothing was found missing.
+     *
+     * @return list<CollectedDebt>
+     */
+    public function unanswered(): array
+    {
+        return [...$this->withStanding(DebtStanding::Unaskable), ...$this->withStanding(DebtStanding::Unreadable)];
+    }
+
     /** @return list<CollectedDebt> */
     private function withStanding(DebtStanding $standing): array
     {

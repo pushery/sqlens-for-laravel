@@ -99,6 +99,15 @@ final readonly class DeployCheckMetadata
          * {@see Attribution} carries the criterion and what each answer obliges.
          */
         public Attribution $attribution,
+        /**
+         * Whether the id stands for a family of ids the check builds per finding.
+         *
+         * `DEPLOY.CONTEXT.SETTING` reports each setting under its own id, `DEPLOY.CONTEXT.SETTING.<NAME>`,
+         * so a baseline can accept one setting and keep the others. Registered as a family, every
+         * member is known to a baseline, an ignore list and `explain_rule`, and links the family's
+         * page, which describes each of them.
+         */
+        public bool $coversFamily = false,
     ) {}
 
     /**
@@ -139,8 +148,9 @@ final readonly class DeployCheckMetadata
         bool $downtimeClassDerived = false,
         Category $category = Category::Safety,
         Level $level = Level::Capturable,
+        bool $coversFamily = false,
     ): self {
-        return new self($id, $category, $level, null, true, $downtimeClass, $downtimeClassDerived, StabilityTier::Stable, DeployCheckCatalog::MESSAGE_PREFIX, $suites, $limitations, $attribution);
+        return new self($id, $category, $level, null, true, $downtimeClass, $downtimeClassDerived, StabilityTier::Stable, DeployCheckCatalog::MESSAGE_PREFIX, $suites, $limitations, $attribution, $coversFamily);
     }
 
     /**

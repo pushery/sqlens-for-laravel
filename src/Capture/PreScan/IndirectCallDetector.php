@@ -60,8 +60,9 @@ use Pushery\SQLens\Rules\VersionWindow;
  *   database work at all.
  * - Anything on the project's own allowlist (`sqlens.capture.prescan
  *   .indirect_calls.allowlist`), where a team has stated a class is safe.
- * - Pure value construction with no call (`new X(...)` as an argument,
- *   `Status::Active`, a constant) never reaches here — it is not a call node.
+ * - An object built to be thrown, and a value that runs no code: `Status::Active`,
+ *   a constant. `new X(...)` is not in this list, as an argument or anywhere else:
+ *   it runs X's constructor, and a constructor can send what a method can.
  */
 final readonly class IndirectCallDetector implements PreScanDetector
 {
@@ -105,7 +106,10 @@ final readonly class IndirectCallDetector implements PreScanDetector
             // Preview, not stable: unlike the framework-surface catalogs, this
             // flags a whole class of project calls without looking inside them,
             // so its false-positive rate is real and has to be measured against a
-            // corpus before it is promoted.
+            // corpus before it is promoted. Until then a run that does not admit
+            // preview does not hold these calls back, and pretend executes them.
+            // That is stated where a user reads it, beside the allowlist in the
+            // configuration and on the rule's page, rather than promised away.
             stability: StabilityTier::Preview,
             deprecation: null,
             versionWindow: VersionWindow::unbounded(),
@@ -177,9 +181,10 @@ final readonly class IndirectCallDetector implements PreScanDetector
      * The external class a call reaches, or null when it reaches none the
      * detector is concerned with.
      *
-     * Three shapes resolve to a class: a static call (`Foo::bar()`), an instance
-     * call on a freshly constructed receiver (`(new Foo)->bar()`), and a call on
-     * a container-resolved receiver (`app(Foo::class)->bar()`). A call on `$this`
+     * Four shapes resolve to a class: a static call (`Foo::bar()`), a construction
+     * (`new Foo`), an instance call on a freshly constructed receiver
+     * (`(new Foo)->bar()`), and a call on a container-resolved receiver
+     * (`app(Foo::class)->bar()`). A call on `$this`
      * or on a variable of unknown type resolves to no class and is left alone.
      *
      * @param  array{node: Node, target: CallTarget, line: int, scope: string|null, context: CallContext}  $call

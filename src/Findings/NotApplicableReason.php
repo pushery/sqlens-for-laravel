@@ -85,9 +85,9 @@ enum NotApplicableReason: string
      *
      * **It withholds a verdict about the server and nothing else.** Every schema finding reports
      * unchanged, because the schema is what gets deployed onto a real host and the declaration says
-     * nothing about it. And the withheld checks are not dropped: they are what `sqlens:predeploy`
-     * runs against the target host, where the same facts are real — so the finding names that
-     * command rather than merely going quiet.
+     * nothing about it. And the withheld checks are not dropped: `sqlens:security` and `sqlens:audit`
+     * judge them when run against the host that is operated, where the same facts are real — so the
+     * finding names those commands rather than merely going quiet.
      *
      * Not {@see DeclinedByProject}, though both come from configuration, and the difference is worth
      * the second case: that one says "this construct is not how we solve the problem", an answer
@@ -113,6 +113,17 @@ enum NotApplicableReason: string
      */
     case NotComparable = 'not_comparable';
 
+    /**
+     * The object was left out of the reading on purpose: by the project's configuration, or by a
+     * documented default, the objects an extension installs, which nobody in the project wrote.
+     *
+     * Not {@see UndeterminedReason::StructurallyNotApplicable}, where these notices used to land, and
+     * not {@see self::NotComparable}, which says the object WAS read. This one was not, and that was
+     * the decision: nothing about it is owed, so `--strict` has nothing to escalate. Escalated, it
+     * ended the audit of every application with `citext` or `pg_trgm` in its schema with exit 3.
+     */
+    case ExcludedByConfig = 'excluded_by_config';
+
     /** What a reader is told, in the report, about what was not checked here. */
     public function description(): string
     {
@@ -122,7 +133,8 @@ enum NotApplicableReason: string
             self::NothingPending => 'No migration is pending in this run, so there is no change for this to be judged against; the setting and its value are reported, and the verdict is not — the same run would judge it the moment something is actually about to run.',
             self::DeclinedByProject => 'The project declared in its configuration that this construct is not how it solves the problem, so there is nothing here to judge; reported rather than left silent, because a question that was answered should read differently from one that was never asked.',
             self::NotComparable => 'The object was read completely and understood; the comparison a rule would make with it is one this package deliberately does not make, and the rule\'s page names that boundary. Reported so the scope is visible, and not as undetermined, because nothing here was left unanswered.',
-            self::ServerIsDisposable => 'The project declared that this server does not outlive the run, so its own configuration describes a fixture rather than a deployment; the schema is judged exactly as it would be anywhere, and the server facts this withholds are the ones sqlens:predeploy reads on the host that will actually be operated.',
+            self::ExcludedByConfig => 'The object was left out of the reading on purpose, by the configuration or by a documented default such as leaving out what an extension installs; nobody in the project wrote it. Reported so the scope is visible, and not as undetermined, because a decision leaves nothing unanswered.',
+            self::ServerIsDisposable => 'The project declared that this server does not outlive the run, so its own configuration describes a fixture rather than a deployment; the schema is judged exactly as it would be anywhere, and the server facts this withholds are judged by sqlens:security or sqlens:audit, run against the host that will actually be operated.',
         };
     }
 }

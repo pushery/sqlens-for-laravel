@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Agent\Mcp;
 
+use Illuminate\Container\Container;
+use Illuminate\Contracts\Config\Repository;
 use Laravel\Mcp\Server;
 use Laravel\Mcp\Server\Contracts\Transport;
 use Laravel\Mcp\Server\Tool;
+use Override;
 use Pushery\SQLens\Agent\Mcp\Methods\CallDeclaredTool;
 use Pushery\SQLens\Agent\Mcp\Methods\InitializeOnThePinnedRevision;
+use Pushery\SQLens\Agent\Mcp\Methods\WithholdingToolInvoker;
 use Pushery\SQLens\Agent\Mcp\Tools\SqlensTool;
 use Pushery\SQLens\PackageVersion;
 use stdClass;
@@ -101,5 +105,20 @@ final class SqlensMcpServer extends Server
         // one place a client learns which build it is talking to — a wrong answer there sends a
         // bug report to the wrong version.
         $this->version = PackageVersion::current();
+    }
+
+    /**
+     * The host application's `app.debug`, turned off for the process this server runs in.
+     *
+     * The SDK reads it in two places. A tool that fails is answered with its exception's message
+     * when it is on, and {@see WithholdingToolInvoker} already declines that. A request that fails
+     * outside any tool is RETHROWN when it is on, and on a stdio server that ends the session over one
+     * malformed frame. The server is the only thing this process runs, and it speaks only stdio, so
+     * the setting that decides both is turned off where the server starts.
+     */
+    #[Override]
+    protected function boot(): void
+    {
+        Container::getInstance()->make(Repository::class)->set('app.debug', false);
     }
 }

@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Drivers\Pgsql\Rules\L2;
 
+use Pushery\SQLens\Canonical\StatementKind;
+use Pushery\SQLens\Canonical\StatementTarget;
 use Pushery\SQLens\Contracts\ProvidesRemediation;
 use Pushery\SQLens\Deploy\Contracts\DeclaresOperationClass;
 use Pushery\SQLens\Drivers\Pgsql\Remediation\NotValidThenValidateTemplate;
 use Pushery\SQLens\Drivers\Pgsql\Rules\AbstractPgsqlSafetyRule;
+use Pushery\SQLens\Drivers\Pgsql\Rules\L4\ConstraintValidationPendingRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L5\ForeignKeyWithoutIndexRule;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\RemediationPayload;
@@ -16,7 +19,9 @@ use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDriverNotes;
 use Pushery\SQLens\Rules\RuleVerdict;
 use Pushery\SQLens\Rules\TouchedTables;
+use Pushery\SQLens\Subjects\MigrationStatementDigest;
 use Pushery\SQLens\Subjects\MigrationStatementView;
+use Pushery\SQLens\Subjects\SchemaObjectType;
 
 /**
  * `ALTER TABLE … ADD CONSTRAINT` validates the whole table under a lock before it
@@ -78,6 +83,19 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  * rather than the SQL text, through {@see TouchedTables}, the one reading of them,
  * which {@see ForeignKeyWithoutIndexRule} shares for a different reason.
  *
+ * **The safe form fails in one arrangement, and this rule reports that too.** Laravel runs a
+ * PostgreSQL migration in one transaction, and a lock is held until its transaction ends. With
+ * `NOT VALID` and `VALIDATE CONSTRAINT` in the same migration, the validation therefore scans
+ * under the lock the add took. Measured on PostgreSQL 18.4, the session holds after the VALIDATE:
+ *
+ *   CHECK, NOT NULL   AccessExclusiveLock, ShareUpdateExclusiveLock on the table
+ *   FOREIGN KEY       ShareRowExclusiveLock on the table and on the referenced one
+ *
+ * In a transaction of its own the same VALIDATE holds ShareUpdateExclusiveLock alone. The pair in
+ * one transaction is this rule's statement taken in two steps, the same scan under the same kind
+ * of lock, so the finding sits on the VALIDATE and comes from this rule. The material it carries
+ * is the second half alone, because the add was already right.
+ *
  * **The classification lives in {@see ConstraintShape}, not here.** Which of the two
  * remediations applies decides both the WORDING of this finding and the SEQUENCE the
  * template hands over, and two readings of one fact is two chances to disagree — with
@@ -138,18 +156,34 @@ final class ConstraintNotValidatedRule extends AbstractPgsqlSafetyRule implement
      * material can never recommend `NOT VALID` for the constraint the message correctly told
      * somebody to promote from an index instead.
      *
-     * Null is unreachable in practice — the collector only asks about a statement this rule
-     * flagged, and a flagged statement has a shape — but it is the honest answer for the case where
-     * it would not, and inventing a sequence for an unclassified statement is exactly what a fix
-     * template must never do.
+     * A `VALIDATE CONSTRAINT` flagged for running under its add's lock has no shape: it adds
+     * nothing. Its material is the second half alone, in a migration of its own, named from the
+     * statement's own targets.
+     *
+     * Null is otherwise unreachable in practice — the collector only asks about a statement this
+     * rule flagged — but it is the honest answer for the case where it would not, and inventing a
+     * sequence for an unclassified statement is exactly what a fix template must never do.
      */
     public function remediationFor(MigrationStatementView $statement): ?RemediationPayload
     {
         $shape = ConstraintShape::of($statement);
 
-        return $shape instanceof ConstraintShape
-            ? $this->template->forConstraint($statement, $shape, $this->id(), $this->downtimeClass())
-            : null;
+        if ($shape instanceof ConstraintShape) {
+            return $this->template->forConstraint($statement, $shape, $this->id(), $this->downtimeClass());
+        }
+
+        if (! $this->notValidAddBefore($statement) instanceof MigrationStatementDigest) {
+            return null;
+        }
+
+        return $this->template->forPendingValidation(
+            array_filter([
+                'table' => $statement->soleSubjectTarget(SchemaObjectType::Table)?->qualifiedName(),
+                'constraint' => $statement->soleTarget(SchemaObjectType::Constraint)?->qualifiedName(),
+            ], is_string(...)),
+            $this->id(),
+            $this->downtimeClass(),
+        );
     }
 
     /**
@@ -179,7 +213,112 @@ final class ConstraintNotValidatedRule extends AbstractPgsqlSafetyRule implement
             );
         }
 
+        $add = $this->notValidAddBefore($statement);
+
+        if ($add instanceof MigrationStatementDigest) {
+            return $this->validationUnderTheAddsLock($statement, $add);
+        }
+
         return parent::verdict($statement);
+    }
+
+    /**
+     * The verdict on a `VALIDATE CONSTRAINT` whose `NOT VALID` add runs earlier in the same migration.
+     *
+     * Silent where the pair costs nothing, and each exit is a fact about locks:
+     *
+     *  - a migration that opts out of the transaction commits each statement on its own, so the
+     *    add's lock is released before the validation starts;
+     *  - a table this migration created and has not written into gives the scan nothing to read;
+     *  - an add whose every table is new locks nothing anyone else can see, because a table created
+     *    in an open transaction is invisible outside it.
+     *
+     * The last two are the carve-outs {@see ConstraintShape} grants the plain form, asked here of
+     * the statement pair: the lock that matters is the add's, and for a foreign key the add names a
+     * table the VALIDATE never does.
+     *
+     * An unresolved transaction context is an undetermined, never a pass. The whole verdict turns on
+     * that one fact, and silence would read as a considered answer.
+     */
+    private function validationUnderTheAddsLock(MigrationStatementView $statement, MigrationStatementDigest $add): ?RuleVerdict
+    {
+        if ($statement->transactionContextUnknown()) {
+            return RuleVerdict::undetermined(
+                'This validates a constraint the same migration added NOT VALID, and whether the two '
+                .'share a transaction could not be resolved. If they do, the validating scan runs under '
+                .'the lock the add took and blocks for its whole length; in a transaction of its own it '
+                .'takes only SHARE UPDATE EXCLUSIVE. Moving the VALIDATE into a migration of its own '
+                .'settles it either way.',
+                UndeterminedReason::TransactionContextUnknown,
+            );
+        }
+
+        if (! $statement->withinTransaction || TouchedTables::subjectBornEmptyHere($statement) || $this->locksNothingLive($statement, $add)) {
+            return null;
+        }
+
+        $lock = str_contains($add->canonical, 'FOREIGN KEY')
+            ? 'SHARE ROW EXCLUSIVE on this table and on the table the key references, so writes to both wait'
+            : 'ACCESS EXCLUSIVE on this table, so every read and write waits';
+
+        return RuleVerdict::flag(sprintf(
+            'VALIDATE CONSTRAINT runs in the same transaction as the ADD CONSTRAINT … NOT VALID before '
+            .'it, because Laravel wraps a PostgreSQL migration in one. The add\'s lock is held until '
+            .'that transaction commits, so the validating scan runs under it: %s for the whole scan, '
+            .'which is the blocking NOT VALID exists to avoid. Move the VALIDATE into a migration of '
+            .'its own, where it takes only SHARE UPDATE EXCLUSIVE, which does not block reads and '
+            .'writes.',
+            $lock,
+        ));
+    }
+
+    /**
+     * The `ADD CONSTRAINT … NOT VALID` a `VALIDATE CONSTRAINT` settles, when the same migration runs
+     * it earlier, or null for every other statement.
+     *
+     * The validate shape is read structurally, as {@see ConstraintValidationPendingRule} reads it:
+     * an `AlterTable` that names a constraint is the one signature producing that pair. The add is
+     * matched on its constraint and on the table it sits on, both as the classifier wrote them,
+     * because a constraint is named within its table. `NOT VALID` is read off the canonical form,
+     * as {@see ConstraintShape} reads it.
+     */
+    private function notValidAddBefore(MigrationStatementView $statement): ?MigrationStatementDigest
+    {
+        $constraint = $statement->soleTarget(SchemaObjectType::Constraint);
+        $table = $statement->soleSubjectTarget(SchemaObjectType::Table);
+
+        if (! $statement->is(StatementKind::AlterTable) || ! $constraint instanceof StatementTarget || ! $table instanceof StatementTarget) {
+            return null;
+        }
+
+        return array_find(
+            $statement->migration->statements,
+            static fn (MigrationStatementDigest $earlier): bool => $earlier->index < $statement->statementIndex
+                && $earlier->kind === StatementKind::AddConstraint
+                && str_contains($earlier->canonical, 'NOT VALID')
+                && $earlier->soleTarget(SchemaObjectType::Constraint)?->qualifiedName() === $constraint->qualifiedName()
+                && $earlier->soleSubjectTarget(SchemaObjectType::Table)?->qualifiedName() === $table->qualifiedName(),
+        );
+    }
+
+    /**
+     * Whether every table the add names was created in this migration.
+     *
+     * A statement naming no table answers false, as {@see TouchedTables::allCreatedHere()} does and
+     * for its reason: an empty set would make "all of them" true for exactly the statements nobody
+     * could place.
+     */
+    private function locksNothingLive(MigrationStatementView $statement, MigrationStatementDigest $add): bool
+    {
+        $tables = array_filter(
+            $add->targets,
+            static fn (StatementTarget $target): bool => $target->type === SchemaObjectType::Table,
+        );
+
+        return $tables !== [] && array_all(
+            $tables,
+            static fn (StatementTarget $table): bool => $statement->migration->createsTable($table->qualifiedName()),
+        );
     }
 
     protected function judge(MigrationStatementView $statement): ?string

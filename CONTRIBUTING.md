@@ -327,9 +327,9 @@ false-positive assessment, and a proposed level, category, severity, and downtim
 class — plus a bad/good example you wrote yourself.
 
 Before you do, read [GOVERNANCE.md](GOVERNANCE.md). It is the contract behind the
-rules: what a proposal needs, why a new rule arrives as `preview` rather than
-straight into a level's defaults, when it graduates, and what counts as public API
-from 1.0 on (rule ids, message prefixes, exit codes, the baseline format).
+rules: what a proposal needs, why from 1.0 a new rule arrives as `preview` rather
+than straight into a level's defaults, when it graduates, and what counts as public
+API from 1.0 on (rule ids, message prefixes, exit codes, the baseline format).
 
 ## Rule governance
 
@@ -345,6 +345,14 @@ against the contract of the last release and classifies every difference:
 | **added** | a rule id the last release did not have | allowed, and reported so it is never invisible |
 | **removed** | a rule id the last release had | red — rules are deprecated, never deleted |
 | **unclassified** | a change with no class, currently a category change | red — the gate refuses to invent a verdict |
+| **major_only** | a stability or level move that turns a default rule on for projects that never asked, or off for projects that relied on it without a deprecation | red, with the remedy the API classifier gives |
+| **moved** | a stability or level move that reaches only projects that opted in, or a retirement announced with `deprecated_since` | allowed, and reported |
+
+The verdict on a stability or level move is not written in the gate. It asks
+`BreakingChangeDetector::ruleFieldChange()`, the classifier behind the API
+snapshot command's `--against`, so the two cannot give different answers. The
+snapshot records five fields per rule for that: category, severity, level,
+stability and `deprecated_since`.
 
 The two sides of the diff are:
 
@@ -388,7 +396,9 @@ SQLENS_WRITE_GOVERNANCE_SNAPSHOT=1.2.0 php .github/governance/check-rule-governa
 ```
 
 Commit the result with the release. From then on it is what the next diff measures
-against.
+against. A test holds the snapshot's version to the newest `## [x.y.z]` heading in
+`CHANGELOG.md`, so a release that skips this step turns the next `develop` gate red
+instead of leaving the gate to compare against an older release.
 
 ## Fixture pairs
 

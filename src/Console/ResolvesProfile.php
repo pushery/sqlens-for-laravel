@@ -6,10 +6,13 @@ namespace Pushery\SQLens\Console;
 
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Translation\Translator;
-use Pushery\SQLens\Config\ProfileResolver;
+use Pushery\SQLens\Config\ProfileApplication;
+use Pushery\SQLens\Config\ProfileKeys;
 use Pushery\SQLens\Config\ProfileSelection;
 use Pushery\SQLens\Config\ProfileSelector;
 use Pushery\SQLens\ShippedLocale;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * Shared `--profile` resolution for every suite command. A command applies the
@@ -17,14 +20,34 @@ use Pushery\SQLens\ShippedLocale;
  * result, writes the chosen name back onto the single `sqlens.profile` config key
  * so everything downstream (the run header, the profile overrides) sees exactly the
  * profile the user selected. There is no second selection path: the commands differ
- * in what they DO with a run, not in how they pick a profile.
+ * in what they DO with a run, not in how they pick a profile, and the MCP tools choose
+ * through the same {@see ProfileApplication}.
  *
- * The env var is read HERE, at the command boundary, so the resolver itself stays a
- * pure value operation over three explicit strings — testable without touching the
- * process environment.
+ * Those writes last as long as the run. The keys are read before the first one and put back
+ * when the command returns, however it returns, so the next command in the same process starts
+ * from the configuration the application set rather than from this command's profile.
  */
 trait ResolvesProfile
 {
+    /** The profile keys as they stood before this run wrote any of them, while the run lasts. */
+    private ?ProfileKeys $keysBeforeProfile = null;
+
+    /**
+     * Run the command, and put the profile keys back once it returns or throws.
+     *
+     * Here rather than in `handle()`, because every way into a command passes through it:
+     * `php artisan`, `Artisan::call()`, and `$this->call()` from an application command.
+     */
+    public function run(InputInterface $input, OutputInterface $output): int
+    {
+        try {
+            return parent::run($input, $output);
+        } finally {
+            $this->keysBeforeProfile?->restore();
+            $this->keysBeforeProfile = null;
+        }
+    }
+
     /**
      * Resolve and apply the active profile. Returns the selection so the caller can
      * turn an invalid one into a misconfiguration; a valid one has already been
@@ -33,47 +56,24 @@ trait ResolvesProfile
     private function resolveProfile(Repository $config, ?string $commandDefault = null): ProfileSelection
     {
         $flag = $this->option('profile');
-        $env = getenv('SQLENS_PROFILE');
-        $configured = $config->get('sqlens.profile');
+        $profiles = new ProfileApplication($config);
 
-        $selection = ProfileSelector::forKnownProfiles()->select(
-            is_string($flag) ? $flag : null,
-            $env === false ? null : $env,
-            is_string($configured) ? $configured : null,
-            // Below the three user-set sources, and only a command that exists for one place
-            // passes one -- see the selector.
-            $commandDefault,
-        );
+        // The default sits below the three user-set sources, and only a command that exists for
+        // one place passes one -- see the selector.
+        $selection = $profiles->select(is_string($flag) ? $flag : null, $commandDefault);
 
         if ($selection->isValid()) {
-            // One source of truth: the resolved profile becomes the value every
-            // reader already consults, rather than a parameter threaded in parallel.
-            $config->set('sqlens.profile', $selection->profile);
-            $this->applyProfileOverrides($config);
+            // Read before the first write, so what `run()` puts back is what the application
+            // set. `--min-severity` is written after this, onto a key read here too.
+            $this->keysBeforeProfile ??= ProfileKeys::of($config);
+
+            // One source of truth: the resolved profile becomes the value every reader already
+            // consults, rather than a parameter threaded in parallel. A direct service call (a
+            // test, an internal caller) is unaffected unless it applies one too.
+            $profiles->apply($selection);
         }
 
         return $selection;
-    }
-
-    /**
-     * Bake the active profile's overrides onto the base config, so the run reads its
-     * effective (base → profile) value for each overridable setting without any reader
-     * having to learn about profiles. The command-line flags stay ABOVE this: the
-     * runner layers `--level` / `--strict-tools` / `--assume-server-version` over the
-     * config it reads here, so the full precedence base → profile → flag holds with no
-     * value threaded twice — the overrides written here carry no flag layer (the
-     * resolver is asked with no CLI values).
-     *
-     * This is the single seam that turns the profile config from values on a shelf
-     * into a run that actually gates differently. It runs at the command boundary, so
-     * a direct LintRunner call (a test, an internal caller) is unaffected unless it
-     * opts in — the command is where a user's profile choice enters.
-     */
-    private function applyProfileOverrides(Repository $config): void
-    {
-        foreach (new ProfileResolver($config)->values() as $path => $value) {
-            $config->set('sqlens.'.$path, $value);
-        }
     }
 
     /** The translated misconfiguration line for a rejected profile — naming it and the legal set. */

@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Drivers\Pgsql\Deploy;
 
 use Illuminate\Database\Connection;
 use Pushery\SQLens\Attributes\RawSql;
+use Pushery\SQLens\Canonical\QuotedIdentifier;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\PostdeployCheck;
 use Pushery\SQLens\Deploy\CheckResult;
@@ -173,7 +174,8 @@ final readonly class OrphanTransitionObjectCheck implements PostdeployCheck
                 $this->objectWord($kind),
                 $qualified,
                 strtoupper($this->objectWord($kind)),
-                $qualified,
+                // Quoted: the suffix this check matches says nothing about what stands before it.
+                QuotedIdentifier::of('"', $schema, $name),
             ),
             reason: UndeterminedReason::NameSuggestsTransitionObject,
             location: Location::inCatalog($context->driver, $context->connection, $qualified, $type),

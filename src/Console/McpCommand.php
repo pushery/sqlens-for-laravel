@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Console;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Config\Repository;
 use Pushery\SQLens\Agent\Mcp\McpProtocol;
+use Pushery\SQLens\Agent\Mcp\McpSdkVersion;
 use Pushery\SQLens\Agent\Mcp\McpToolPolicy;
 use Pushery\SQLens\Agent\Mcp\ServesMcp;
 use Pushery\SQLens\Agent\Mcp\ToolRegistry;
@@ -61,7 +62,7 @@ final class McpCommand extends Command
 
     protected $description = 'Start the SQLens MCP server on stdio, for an AI agent to call.';
 
-    public function handle(Repository $config, ServesMcp $server): int
+    public function handle(Repository $config, ServesMcp $server, McpSdkVersion $sdk): int
     {
         // FIRST, before the reporter, before the profile, before anything opens a connection. A
         // misconfiguration that surfaces after twenty seconds of catalog reading is one people
@@ -79,6 +80,24 @@ final class McpCommand extends Command
                 .'dependency rather than a required one, because it brings an HTTP stack that a '
                 .'run without the server never uses. Install it with: composer require --dev laravel/mcp'
             );
+
+            return ExitCode::Misconfiguration->value;
+        }
+
+        $installed = $sdk->unsupported();
+
+        if ($installed !== null) {
+            // Refused here, before anything of the SDK is loaded. Served, the client's first
+            // `initialize` would load a handshake class whose signature names SDK classes this
+            // release does not have, and the process would end in a fatal the client reports only
+            // as a disconnect.
+            $this->outputErrorLine(sprintf(
+                'The MCP server needs laravel/mcp %1$d.x, and %2$s is installed. Its handshake is '
+                .'written against %1$d.x, and under another release the first handshake can end the '
+                .'process. Install a matching release with: composer require --dev laravel/mcp:^%1$d.0',
+                McpSdkVersion::SPOKEN_MAJOR,
+                $installed,
+            ));
 
             return ExitCode::Misconfiguration->value;
         }

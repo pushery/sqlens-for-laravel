@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Drivers\Mysql\Deploy;
 
 use Illuminate\Database\Connection;
 use Pushery\SQLens\Attributes\RawSql;
+use Pushery\SQLens\Canonical\QuotedIdentifier;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\PostdeployCheck;
 use Pushery\SQLens\Deploy\CheckResult;
@@ -149,12 +150,14 @@ final readonly class OrphanTransitionObjectCheck implements PostdeployCheck
                 .'backup time paid for indefinitely. If a run is STILL IN FLIGHT it is doing its '
                 .'job, and the two look identical from here, which is why this is reported and not '
                 .'decided. Confirm nothing is running, then remove it in a change of its own — '
-                .'`DROP TABLE %s;` — as a proposal rather than an instruction: a drop cannot be '
+                .'`` DROP TABLE %s; `` — as a proposal rather than an instruction: a drop cannot be '
                 .'undone and SQLens never runs one. A `#sql-` table in particular may be one InnoDB '
                 .'is using right now.',
                 $qualified,
                 $tool,
-                $qualified,
+                // Quoted: the pattern that selected it says nothing about the rest of the name. The
+                // span around it is doubled, so the backticks of the name do not end it.
+                QuotedIdentifier::of('`', $schema, $name),
             ),
             reason: UndeterminedReason::NameSuggestsTransitionObject,
             location: Location::inCatalog($context->driver, $context->connection, $qualified, SchemaObjectType::Table),
@@ -179,12 +182,12 @@ final readonly class OrphanTransitionObjectCheck implements PostdeployCheck
                 .'in step. Left behind, it is not dead weight — it fires on every INSERT, UPDATE and '
                 .'DELETE on `%s` for as long as it exists, writing into a table nothing reads. Of '
                 .'everything this check reports, it is the one to look at today. Confirm no run is '
-                .'in flight, then `DROP TRIGGER %s;` — a proposal, not an instruction, and SQLens '
+                .'in flight, then `` DROP TRIGGER %s; `` — a proposal, not an instruction, and SQLens '
                 .'never runs one.',
                 $qualified,
                 $onTable === '' ? 'its table' : $onTable,
                 $onTable === '' ? 'that table' : $onTable,
-                $qualified,
+                QuotedIdentifier::of('`', $schema, $name),
             ),
             reason: UndeterminedReason::NameSuggestsTransitionObject,
             location: Location::inCatalog($context->driver, $context->connection, $qualified, SchemaObjectType::Trigger),

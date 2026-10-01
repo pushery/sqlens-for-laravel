@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Console;
 
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Config\Repository;
+use Pushery\SQLens\Capture\PendingSkipReason;
 use Pushery\SQLens\Catalog\RuleRegistryExport;
 use Pushery\SQLens\Corpus\CorpusCollection;
 use Pushery\SQLens\Corpus\CorpusLoader;
@@ -13,6 +14,8 @@ use Pushery\SQLens\Corpus\CorpusLoadFailure;
 use Pushery\SQLens\Corpus\CorpusMetrics;
 use Pushery\SQLens\Corpus\CorpusReport;
 use Pushery\SQLens\Corpus\CorpusRun;
+use Pushery\SQLens\Drivers\DriverResolutionFailure;
+use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Lint\LintOutcome;
 use Pushery\SQLens\Lint\LintRunner;
 use Pushery\SQLens\Reporting\ReportedServerVersion;
@@ -103,6 +106,26 @@ final class CorpusMeasureCommand extends Command
 
             $outcome = $this->measure($repositoryRoot, $collection, $connection);
 
+            $unjudged = $this->unjudged($collection, $outcome);
+
+            if ($unjudged !== []) {
+                // Named and fatal, like the refusals above. The expectations on a migration the run
+                // never judged are still in the ground truth, and the classifier would read the
+                // silence over them as verdicts: every expected failure missed, every expected pass
+                // correct, all of it counted as measured.
+                $this->components->error(sprintf(
+                    'The run over the collection at `%s` on connection `%s` judged %d of its %d migration(s), so no report was written: '
+                    .'it would count every expectation on the others as a verdict no rule reached. %s',
+                    $collection->path,
+                    $connection,
+                    count($collection->migrations) - count($unjudged),
+                    count($collection->migrations),
+                    $this->whyUnjudged($outcome, $unjudged),
+                ));
+
+                return self::FAILURE;
+            }
+
             // Recorded per collection, because the same collection measures differently on two
             // server versions: a rate without the version it was taken on is a rate about an
             // unnamed engine.
@@ -172,13 +195,69 @@ final class CorpusMeasureCommand extends Command
     }
 
     /**
+     * The collection's migrations the run did not judge, by file name.
+     *
+     * Read from the files the runner resolved as pending rather than from the findings: a migration
+     * no rule spoke about was still judged, and one the run never reached leaves no trace in the
+     * findings at all.
+     *
+     * @return list<string>
+     */
+    private function unjudged(CorpusCollection $collection, LintOutcome $outcome): array
+    {
+        $judged = array_map(basename(...), $outcome->pendingFiles);
+
+        return array_values(array_filter(
+            array_map(basename(...), $collection->migrations),
+            static fn (string $file): bool => ! in_array($file, $judged, true),
+        ));
+    }
+
+    /**
+     * Why the run left migrations unjudged, in the runner's own words where it has any.
+     *
+     * A run that stops before its capture says why in its outcome: an engine the rule pack does not
+     * support, or the findings it leaves in place of a result. A run that went through the capture
+     * judged its whole pending set, so what it left out was not pending: a file whose name is not a
+     * migration name, or a migration the connection's migration table lists as already run.
+     *
+     * @param  list<string>  $unjudged
+     */
+    private function whyUnjudged(LintOutcome $outcome, array $unjudged): string
+    {
+        if ($outcome->unsupported instanceof DriverResolutionFailure) {
+            return sprintf('The run stopped at the engine: %s.', $outcome->unsupported->detail);
+        }
+
+        if ($outcome->context->subjectCount === null) {
+            $ruleIds = array_map(static fn (Finding $finding): string => $finding->ruleId, $outcome->result->findings);
+
+            return sprintf(
+                'The run stopped before the capture: %s%s',
+                implode(' ', array_map(
+                    static fn (Finding $finding): string => sprintf('%s: %s', $finding->ruleId, $finding->message),
+                    $outcome->result->findings,
+                )),
+                in_array(PendingSkipReason::NoMigrationTable->ruleId(), $ruleIds, true)
+                    ? ' Install the table before measuring, for example with `vendor/bin/testbench migrate:install` under the same environment.'
+                    : '',
+            );
+        }
+
+        return sprintf(
+            'The pending set the run resolved does not hold %s. A migration is pending when its file name matches `*_*.php` '
+            .'and the migration table on that connection does not list it as already run.',
+            implode(', ', array_map(static fn (string $file): string => '`'.$file.'`', $unjudged)),
+        );
+    }
+
+    /**
      * The version of the server this collection was measured against, as the run met it.
      *
-     * A run reports one entry per addressed connection and says so even when no server answered:
-     * the version then reads `unknown (no server version could be determined)`, measured over a
-     * refused connection and over an engine the rule pack does not support. So the absent case is
-     * the runner's own wording rather than a gap this method invents, and the null tail is for a
-     * context that carries no entry at all — which nothing in this command produces.
+     * Asked only of a run that judged the whole collection, so of a connection that answered. A
+     * server that still gave no version is reported in the runner's own wording, `unknown (no server
+     * version could be determined)`, rather than as a gap this method invents, and the null tail is
+     * for a context that carries no entry at all, which nothing in this command produces.
      *
      * @return array{version: string, source: string}|null
      */

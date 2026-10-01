@@ -6,7 +6,9 @@ namespace Pushery\SQLens\Canonical\Stages;
 
 use Pushery\SQLens\Canonical\CanonicalizationFailure;
 use Pushery\SQLens\Canonical\Identifier;
+use Pushery\SQLens\Canonical\QuotedSpan;
 use Pushery\SQLens\Canonical\RawStatement;
+use Pushery\SQLens\Canonical\ScanAt;
 use Pushery\SQLens\Contracts\CanonicalizationStage;
 use Pushery\SQLens\Contracts\DriverCanonicalization;
 use Pushery\SQLens\Subjects\SubjectContext;
@@ -67,9 +69,8 @@ final readonly class IdentifierNormalizer implements CanonicalizationStage
 
         while ($i < $length) {
             $char = $sql[$i];
-            $rest = substr($sql, $i);
 
-            if ($this->matchPrefix($rest, $lineComments) !== null) {
+            if (ScanAt::firstOf($sql, $i, $lineComments) !== null) {
                 $newline = strpos($sql, "\n", $i);
                 $end = $newline === false ? $length : $newline;
                 $out .= substr($sql, $i, $end - $i);
@@ -78,7 +79,7 @@ final readonly class IdentifierNormalizer implements CanonicalizationStage
                 continue;
             }
 
-            if ($hasBlockComment && str_starts_with($rest, '/*')) {
+            if ($hasBlockComment && ScanAt::startsWith($sql, $i, '/*')) {
                 $close = strpos($sql, '*/', $i + 2);
                 $end = $close === false ? $length : $close + 2;
                 $out .= substr($sql, $i, $end - $i);
@@ -87,7 +88,7 @@ final readonly class IdentifierNormalizer implements CanonicalizationStage
                 continue;
             }
 
-            if ($this->driver->supportsDollarQuotedStrings() && $char === '$' && preg_match('/\A\$\w*\$/', $rest, $matches) === 1) {
+            if ($this->driver->supportsDollarQuotedStrings() && $char === '$' && preg_match('/\G\$\w*\$/', $sql, $matches, 0, $i) === 1) {
                 $tag = $matches[0];
                 $close = strpos($sql, $tag, $i + strlen($tag));
                 $end = $close === false ? $length : $close + strlen($tag);
@@ -97,9 +98,9 @@ final readonly class IdentifierNormalizer implements CanonicalizationStage
                 continue;
             }
 
-            $literal = $this->matchPrefix($rest, $literals);
+            $literal = ScanAt::firstOf($sql, $i, $literals);
             if ($literal !== null) {
-                $end = $this->scanQuoted($sql, $i, $literal) ?? $length;
+                $end = QuotedSpan::endOfLiteral($sql, $i, $literal, $this->driver->usesBackslashStringEscapes()) ?? $length;
                 $out .= substr($sql, $i, $end - $i);
                 $i = $end;
 
@@ -161,7 +162,7 @@ final readonly class IdentifierNormalizer implements CanonicalizationStage
 
         while (true) {
             if ($sql[$j] === $quote) {
-                $close = $this->scanQuoted($sql, $j, $quote);
+                $close = QuotedSpan::endOfQuotedIdentifier($sql, $j, $quote);
                 if ($close === null) {
                     return $length; // unterminated — Identifier::parse names the failure
                 }
@@ -201,41 +202,5 @@ final readonly class IdentifierNormalizer implements CanonicalizationStage
         }
 
         return $j;
-    }
-
-    /**
-     * @param  list<string>  $candidates
-     */
-    private function matchPrefix(string $haystack, array $candidates): ?string
-    {
-        foreach ($candidates as $candidate) {
-            if ($candidate !== '' && str_starts_with($haystack, $candidate)) {
-                return $candidate;
-            }
-        }
-
-        return null;
-    }
-
-    private function scanQuoted(string $sql, int $start, string $quote): ?int
-    {
-        $length = strlen($sql);
-        $j = $start + 1;
-
-        while ($j < $length) {
-            if ($sql[$j] === $quote) {
-                if ($j + 1 < $length && $sql[$j + 1] === $quote) {
-                    $j += 2;
-
-                    continue;
-                }
-
-                return $j + 1;
-            }
-
-            $j++;
-        }
-
-        return null;
     }
 }

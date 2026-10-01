@@ -245,10 +245,13 @@ final class PgsqlCanonicalization implements DriverCanonicalization
                     SignatureElement::keyword('DROP'), SignatureElement::keyword('INDEX'),
                     SignatureElement::optionalModifiers(), SignatureElement::target($index),
                 ]),
-                // DROP TABLE [IF EXISTS] <t>
+                // DROP TABLE [IF EXISTS] <t> [, <t> …]
+                //
+                // Every name in the list is a target. Read as one, `DROP TABLE a, b` was a drop of
+                // `a` alone, and `b` fell out of every rule that asks what a statement destroys.
                 new StatementSignature(StatementKind::DropTable, [
                     SignatureElement::keyword('DROP'), SignatureElement::keyword('TABLE'),
-                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::optionalModifiers(), SignatureElement::targetList($table),
                 ]),
                 // DROP SCHEMA [IF EXISTS] <s> [CASCADE | RESTRICT]
                 //
@@ -260,13 +263,13 @@ final class PgsqlCanonicalization implements DriverCanonicalization
                     SignatureElement::keyword('DROP'), SignatureElement::keyword('SCHEMA'),
                     SignatureElement::optionalModifiers(), SignatureElement::target($schema),
                 ]),
-                // TRUNCATE TABLE <t>  /  TRUNCATE <t>
+                // TRUNCATE TABLE <t> [, <t> …]  /  TRUNCATE <t> [, <t> …]
                 new StatementSignature(StatementKind::TruncateTable, [
                     SignatureElement::keyword('TRUNCATE'), SignatureElement::keyword('TABLE'),
-                    SignatureElement::target($table),
+                    SignatureElement::targetList($table),
                 ]),
                 new StatementSignature(StatementKind::TruncateTable, [
-                    SignatureElement::keyword('TRUNCATE'), SignatureElement::target($table),
+                    SignatureElement::keyword('TRUNCATE'), SignatureElement::targetList($table),
                 ]),
                 // ALTER TABLE [ONLY] <t> ADD CONSTRAINT <k> FOREIGN KEY (<c>, …) REFERENCES <t2>
                 //

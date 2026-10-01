@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Security\Privacy;
 
 use FilesystemIterator;
 use Illuminate\Database\Eloquent\Model;
+use PhpToken;
 use Pushery\SQLens\Capture\MigrationLoader;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -32,17 +33,25 @@ use Throwable;
  *
  * ## The convention is Laravel's, not one invented here
  *
- * `model:prune` answers the same question by looking in `app/Models` and falling back to `app/`.
- * That is where a Laravel developer puts models and where they expect a tool to look, so this
- * follows it rather than inventing a config key nobody would know to set.
+ * `make:model` puts a new model in `app/Models` when that directory exists and directly in `app/`
+ * when it does not (`GeneratorCommand::qualifyModel()`). That is where a Laravel developer's models
+ * are, so this looks in the same two places rather than inventing a config key nobody would know to
+ * set.
  *
- * ## Derived, then CHECKED
+ * ## Derived, then CHECKED, and nothing is loaded that does not declare the class
  *
  * A class name is derived from the path — the application namespace plus the directories below the
  * scanned root — and then verified by reflection: the class must exist, be a concrete `Model`, and
  * be DECLARED IN THE FILE the name came from. The same discipline {@see MigrationLoader}
  * applies, and for the same reason: a project whose autoloader maps a different file to that name
  * would otherwise have an unrelated class constructed as one of its models.
+ *
+ * Asking `class_exists()` about a name the autoloader has not seen makes it include the file the
+ * name maps to, and under `app/` that can be a file that declares no class at all: a script, or a
+ * helper file that Composer's `files` entry has already included. Including a helper file a second
+ * time declares its functions a second time, and that is a fatal error no `catch` reaches. So the
+ * file's tokens are read first, which loads nothing, and the name goes to the autoloader only when
+ * the file declares exactly that class.
  *
  * ## An empty answer is a reason, not a pass — and one failure is deliberately loud
  *
@@ -141,7 +150,7 @@ final readonly class ModelDiscovery
         $files = [];
 
         foreach ($iterator as $file) {
-            if ($file instanceof SplFileInfo && $file->isFile() && $file->getExtension() === 'php') {
+            if ($file instanceof SplFileInfo && $file->isFile() && $file->isReadable() && $file->getExtension() === 'php') {
                 $files[] = $file;
             }
         }
@@ -166,6 +175,10 @@ final readonly class ModelDiscovery
 
         $class = $this->namespace.(str_ends_with($directory, DIRECTORY_SEPARATOR.'Models') ? 'Models\\' : '').$suffix;
 
+        if (! $this->declares($file, $class)) {
+            return null;
+        }
+
         try {
             if (! class_exists($class) || ! is_subclass_of($class, Model::class)) {
                 return null;
@@ -185,5 +198,37 @@ final readonly class ModelDiscovery
         // The check the derivation cannot make on its own: a project whose autoloader maps this name
         // somewhere else would otherwise have an unrelated class treated as one of its models.
         return $reflection->getFileName() === (realpath($path) ?: $path) ? $class : null;
+    }
+
+    /**
+     * Whether $file declares $class, read from its tokens without loading anything.
+     *
+     * A `class` keyword declares a class only when a name follows it: `Model::class` and
+     * `new class` are followed by something else. The namespace is the one the file declared last
+     * before the class, as PHP reads it.
+     */
+    private function declares(SplFileInfo $file, string $class): bool
+    {
+        $tokens = array_values(array_filter(
+            PhpToken::tokenize(file_get_contents($file->getPathname()) ?: ''),
+            static fn (PhpToken $token): bool => ! $token->isIgnorable(),
+        ));
+        $namespace = '';
+
+        foreach ($tokens as $at => $token) {
+            $next = $tokens[$at + 1] ?? null;
+
+            if ($token->is(T_NAMESPACE)) {
+                $namespace = $next instanceof PhpToken && $next->is([T_STRING, T_NAME_QUALIFIED]) ? $next->text.'\\' : '';
+
+                continue;
+            }
+
+            if ($token->is(T_CLASS) && $next instanceof PhpToken && $next->is(T_STRING) && $namespace.$next->text === $class) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

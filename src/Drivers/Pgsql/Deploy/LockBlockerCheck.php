@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Drivers\Pgsql\Deploy;
 
 use Pushery\SQLens\Canonical\StatementKind;
+use Pushery\SQLens\Capture\CapturedStatement;
 use Pushery\SQLens\Catalog\Activity\ActivityRequest;
+use Pushery\SQLens\Catalog\Activity\LockMode;
 use Pushery\SQLens\Catalog\Activity\LongRunningSession;
 use Pushery\SQLens\Catalog\CatalogSkip;
 use Pushery\SQLens\Categories\Category;
@@ -14,6 +16,7 @@ use Pushery\SQLens\Contracts\PreflightCheck;
 use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PreflightContext;
+use Pushery\SQLens\Drivers\Pgsql\Rules\Support\ShareUpdateExclusiveAlter;
 use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
@@ -34,6 +37,13 @@ use Throwable;
  * minutes turns the request into a QUEUE — and because PostgreSQL queues lock requests in order,
  * every read arriving behind the waiting ALTER waits too. The table stops answering while nothing
  * anywhere reports an error.
+ *
+ * Not every statement asks for that lock, and the report says what the statement really takes.
+ * Adding a foreign key takes SHARE ROW EXCLUSIVE, which a transaction that only READ the table does
+ * not delay, while one that wrote to it does; validating a constraint, like changing a maintenance
+ * storage parameter such as `fillfactor`, takes SHARE UPDATE EXCLUSIVE, which no read and no write
+ * delays. A `DROP INDEX` names only its index and takes ACCESS EXCLUSIVE
+ * on the index's TABLE, which the catalog is asked for.
  *
  * `CREATE INDEX CONCURRENTLY` is the other shape and needs its own branch: it waits for ALL older
  * transactions to finish, not only the ones on its own table. A long analytics query on an unrelated
@@ -74,7 +84,9 @@ final readonly class LockBlockerCheck implements PreflightCheck
     public const string CONCURRENTLY_ID = 'DEPLOY.PREFLIGHT.CONCURRENT_INDEX_BLOCKER';
 
     /**
-     * The statement kinds that take ACCESS EXCLUSIVE on their target.
+     * The statement kinds that lock their target table, ACCESS EXCLUSIVE unless the statement itself
+     * says otherwise: adding a foreign key takes SHARE ROW EXCLUSIVE, and validating a constraint or
+     * changing a maintenance storage parameter SHARE UPDATE EXCLUSIVE ({@see self::lockTargets()}).
      *
      * Listed rather than derived from `downtime_class`: that axis answers what an operation costs,
      * and two operations with the same cost can take different locks. This is a claim about LOCKS.
@@ -122,14 +134,23 @@ final readonly class LockBlockerCheck implements PreflightCheck
             );
         }
 
-        $targets = $this->exclusiveTargets($context);
+        try {
+            $targets = $this->lockTargets($context);
+        } catch (Throwable $failure) {
+            return CheckResult::undetermined(
+                self::ID,
+                UndeterminedReason::ActivityUnreadable,
+                'the catalog could not say which table a dropped index belongs to, so what is holding '
+                .'locks on that table is unknown: '.new CredentialRedactor()->redact($failure->getMessage()),
+            );
+        }
 
         try {
             // The targets go IN, and that is what makes the branch below reachable. `relation` on a
             // long runner is filled only for relations the caller named — `pg_stat_activity` does not
             // carry one, so a reading asked without a focus comes back with every relation null and
             // the match below can never succeed however blocked the instance is.
-            $snapshot = $context->activity->read(new ActivityRequest($targets, $context->longRunningMs));
+            $snapshot = $context->activity->read(new ActivityRequest(array_map(strval(...), array_keys($targets)), $context->longRunningMs));
         } catch (Throwable $failure) {
             return CheckResult::undetermined(
                 self::ID,
@@ -142,8 +163,10 @@ final readonly class LockBlockerCheck implements PreflightCheck
         $findings = [];
 
         foreach ($snapshot->longRunningSessions as $session) {
-            if ($session->relation !== null && in_array($session->relation, $targets, true)) {
-                $findings[] = $this->blocker($context, $session);
+            $blocked = $this->blockedTarget($session, $targets);
+
+            if ($blocked !== null) {
+                $findings[] = $this->blocker($context, $session, $blocked, $targets[$blocked]);
             }
         }
 
@@ -183,21 +206,46 @@ final readonly class LockBlockerCheck implements PreflightCheck
     }
 
     /**
-     * The relations the pending migration will take ACCESS EXCLUSIVE on.
+     * The relations the pending migration will lock, each with whether that lock stops readers too.
      *
      * Read from the statements' own `targets`, which the capture already resolved. Parsing the SQL
      * here would be a second classification that can disagree with the one the report is built on.
+     * The one exception is a `DROP INDEX`: it names only its index, so its table is asked of the
+     * catalog ({@see IndexTables}).
      *
-     * @return list<string>
+     * @return array<string, bool> relation => whether the lock taken there stops reads as well as writes
      */
-    private function exclusiveTargets(PreflightContext $context): array
+    private function lockTargets(PreflightContext $context): array
     {
         $targets = [];
+        $droppedIndexes = [];
 
         foreach ($context->pending->statements as $statement) {
+            if ($statement->statementKind === StatementKind::DropIndex) {
+                // `DROP INDEX CONCURRENTLY` takes no lock that blocks the table, so only the plain
+                // form counts.
+                if (stripos($statement->canonicalSql ?? $statement->rawSql, 'concurrently') === false) {
+                    foreach ($statement->targets ?? [] as $target) {
+                        if ($target->type === SchemaObjectType::Index) {
+                            $droppedIndexes[] = $target->qualifiedName();
+                        }
+                    }
+                }
+
+                continue;
+            }
+
             if (! in_array($statement->statementKind, self::EXCLUSIVE_KINDS, true)) {
                 continue;
             }
+
+            // Validating a constraint or changing a maintenance storage parameter takes SHARE UPDATE
+            // EXCLUSIVE, which a session holding a read or a write does not delay, so it is no target.
+            if (ShareUpdateExclusiveAlter::only($statement->statementKind, $statement->canonicalSql ?? '')) {
+                continue;
+            }
+
+            $stopsReaders = ! $this->addsOnlyAForeignKey($statement);
 
             foreach ($statement->targets ?? [] as $target) {
                 // TABLES the statement ACTS ON, and both halves of that are load-bearing.
@@ -205,8 +253,8 @@ final readonly class LockBlockerCheck implements PreflightCheck
                 // A constraint is not a relation the activity views can report, so its name only
                 // ever traveled here as dead weight. And a foreign key names a second table it
                 // merely points at: PostgreSQL locks it SHARE ROW EXCLUSIVE, MySQL takes a shared
-                // metadata lock on it — neither is what this check's own finding claims, and the finding says this deploy is about to take an ACCESS EXCLUSIVE lock on the relation it names.
-                // Naming it here would put a false sentence in front of a reader.
+                // metadata lock on it, and neither is the lock this check reports on the table the
+                // statement alters.
                 //
                 // The cost is named rather than hidden: a long transaction on the REFERENCED table
                 // can still delay the statement, and this check does not look for that. Reporting
@@ -220,11 +268,59 @@ final readonly class LockBlockerCheck implements PreflightCheck
                 // The QUALIFIED name, because that is what the activity views report a relation as.
                 // A bare table name would match nothing on a schema-qualified server and everything
                 // on none — both silently.
-                $targets[] = $target->qualifiedName();
+                $name = $target->qualifiedName();
+                $targets[$name] = ($targets[$name] ?? false) || $stopsReaders;
             }
         }
 
-        return array_values(array_unique($targets));
+        foreach (IndexTables::of($context->session, $droppedIndexes) as $table) {
+            $targets[$table] = true;
+        }
+
+        return $targets;
+    }
+
+    /**
+     * Whether the statement adds a foreign key and nothing else — the one `ALTER TABLE` form here that
+     * takes SHARE ROW EXCLUSIVE rather than ACCESS EXCLUSIVE, and so lets readers through.
+     *
+     * A second action in the same statement takes its own lock, and the statement takes the stronger.
+     */
+    private function addsOnlyAForeignKey(CapturedStatement $statement): bool
+    {
+        return in_array($statement->statementKind, [StatementKind::AddConstraint, StatementKind::AddForeignKey], true)
+            && $statement->actions === []
+            && preg_match('/\bFOREIGN\s+KEY\b/i', $statement->canonicalSql ?? '') === 1;
+    }
+
+    /**
+     * The first target this session holds a lock on that the migration's lock there has to wait for.
+     *
+     * ACCESS EXCLUSIVE waits for every held lock. SHARE ROW EXCLUSIVE waits for every one except a
+     * reader's. A reading that tells no modes apart names one relation and nothing about the mode, so
+     * that lock is taken to be in the way of everything, as it was before the modes were read.
+     *
+     * @param  array<string, bool>  $targets  relation => whether the lock taken there stops reads too
+     */
+    private function blockedTarget(LongRunningSession $session, array $targets): ?string
+    {
+        $held = $session->heldModes !== []
+            ? $session->heldModes
+            : ($session->relation === null ? [] : [$session->relation => null]);
+
+        foreach ($held as $relation => $mode) {
+            $relation = (string) $relation;
+
+            if (! array_key_exists($relation, $targets)) {
+                continue;
+            }
+
+            if ($targets[$relation] || $mode !== LockMode::Shared) {
+                return $relation;
+            }
+        }
+
+        return null;
     }
 
     /** Whether anything in the pending set builds an index concurrently. */
@@ -246,23 +342,30 @@ final readonly class LockBlockerCheck implements PreflightCheck
         return false;
     }
 
-    private function blocker(PreflightContext $context, LongRunningSession $session): Finding
+    private function blocker(PreflightContext $context, LongRunningSession $session, string $relation, bool $stopsReaders): Finding
     {
+        $collision = match ($stopsReaders) {
+            true => 'this deploy is about to take an ACCESS EXCLUSIVE lock on that table. The statement will '
+                .'not fail — it will QUEUE, and because PostgreSQL grants lock requests in order, every '
+                .'read arriving behind it queues too. The table stops answering while nothing reports '
+                .'an error.',
+            false => 'this deploy is about to add a foreign key, which takes a SHARE ROW EXCLUSIVE lock on that '
+                .'table. The statement will not fail — it will QUEUE, and every write arriving behind it '
+                .'queues too, while reads carry on. Saves stop while nothing reports an error.',
+        };
+
         return $this->finding(
             $context,
             self::ID,
-            (string) $session->relation,
+            $relation,
             sprintf(
-                'Session %s has been %s on `%s` for %.1F s, and this deploy is about to take an '
-                .'ACCESS EXCLUSIVE lock on that table. The ALTER will not fail — it will QUEUE, and '
-                .'because PostgreSQL grants lock requests in order, every read arriving behind it '
-                .'queues too. The table stops answering while nothing reports an error. Nothing '
-                .'here says that session is wrong to be running; it says the migration is about to '
-                .'collide with it.',
+                'Session %s has been %s on `%s` for %.1F s, and %s Nothing here says that session is '
+                .'wrong to be running; it says the migration is about to collide with it.',
                 $session->session,
                 $session->state,
-                (string) $session->relation,
+                $relation,
                 $session->runningForMs / 1000,
+                $collision,
             ),
             Severity::High,
         );

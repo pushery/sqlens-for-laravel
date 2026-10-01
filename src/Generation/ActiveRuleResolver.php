@@ -9,6 +9,7 @@ use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Categories\CategoryFilter;
 use Pushery\SQLens\Categories\CategorySelection;
 use Pushery\SQLens\Config\ConfigIgnoreReferences;
+use Pushery\SQLens\Config\ConfigSchema;
 use Pushery\SQLens\Config\ConfigViolation;
 use Pushery\SQLens\Config\RuleIdValidator;
 use Pushery\SQLens\Contracts\Driver;
@@ -309,21 +310,23 @@ final readonly class ActiveRuleResolver
     }
 
     /**
-     * The configured security floor, or null when the axis is genuinely off.
+     * The configured security floor, or null when the axis is off.
      *
-     * A value that cannot be read is a refusal, not a null — the same answer the unreadable pin
-     * gets, for the same reason and with more at stake. Falling back to "no floor" is the LOOSE
+     * Off is spelled two ways, and both mean it: no value, and `none`, the value the configuration
+     * documents for a project that reports security findings without blocking on them. The config
+     * validator and `--min-severity` read `none` the same way.
+     *
+     * Any other value that cannot be read is a refusal, not a null — the same answer the unreadable
+     * pin gets, for the same reason and with more at stake. Falling back to "no floor" is the LOOSE
      * direction: with the severity axis off, every security rule is advisory, so a typo would
      * quietly turn a catalog that says "these block your deploy" into one that says "these are
-     * worth reading". The config validator refuses the value before a run starts, which makes this
-     * unreachable on a validated configuration — a defense being unreachable in practice is what a
-     * defense looks like when everything else works.
+     * worth reading". The config validator refuses such a value before a run starts.
      */
     private function configuredMinSeverity(): ?string
     {
         $configured = $this->stringConfig('sqlens.security.min_severity');
 
-        if ($configured === null) {
+        if ($configured === null || $configured === ConfigSchema::SEVERITY_GATE_OFF) {
             return null;
         }
 

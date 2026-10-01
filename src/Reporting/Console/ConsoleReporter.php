@@ -10,6 +10,7 @@ use Pushery\SQLens\Contracts\Reporter;
 use Pushery\SQLens\Deploy\DebtContext;
 use Pushery\SQLens\Deploy\Escalation;
 use Pushery\SQLens\Findings\DowntimeClass;
+use Pushery\SQLens\Findings\DowntimeUndetermined;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
 use Pushery\SQLens\Findings\Outcome;
@@ -21,6 +22,7 @@ use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Reporting\Agent\RemediationRenderer;
 use Pushery\SQLens\Reporting\EstimateNarrator;
 use Pushery\SQLens\Reporting\ReportedInstance;
+use Pushery\SQLens\Reporting\ReportText;
 use Pushery\SQLens\Reporting\RunContext;
 use Pushery\SQLens\Reporting\Summary\AxisSummary;
 use Pushery\SQLens\Reporting\Suppression\AuditIgnoreSuppressionSource;
@@ -144,7 +146,7 @@ final readonly class ConsoleReporter implements Reporter
 
         $this->suppressedSection($result, $out);
 
-        $out->writeln('');
+        ReportText::line($out, '');
         $this->summary($result, $context, $out);
     }
 
@@ -173,8 +175,8 @@ final readonly class ConsoleReporter implements Reporter
             return;
         }
 
-        $out->writeln('');
-        $out->writeln($this->label($axis === GateAxis::Severity ? 'security_findings' : 'level_findings'));
+        ReportText::line($out, '');
+        ReportText::line($out, $this->label($axis === GateAxis::Severity ? 'security_findings' : 'level_findings'));
 
         $group = null;
 
@@ -182,18 +184,18 @@ final readonly class ConsoleReporter implements Reporter
             $label = $this->groupLabel($finding->location);
 
             if ($label !== $group) {
-                $out->writeln('');
-                $out->writeln($label);
+                ReportText::line($out, '');
+                ReportText::line($out, $label);
                 $group = $label;
             }
 
-            $out->writeln($this->line($finding, $axis));
+            ReportText::line($out, $this->line($finding, $axis));
 
             // Beneath the finding, never inside its line. The finding line is one row a reader scans
             // down a column; a strategy name spliced into it would push the location off the right
             // edge on the findings that have the most to say.
             foreach (new RemediationRenderer($this->translator)->consoleLines($finding, $this->showRemediationSteps) as $remediation) {
-                $out->writeln($remediation);
+                ReportText::line($out, $remediation);
             }
         }
 
@@ -231,8 +233,8 @@ final readonly class ConsoleReporter implements Reporter
         $names = array_keys($tiers);
         sort($names, SORT_STRING);
 
-        $out->writeln('');
-        $out->writeln('  ['.implode('] / [', $names).'] marks the RULE, not the finding: the rule may still'
+        ReportText::line($out, '');
+        ReportText::line($out, '  ['.implode('] / [', $names).'] marks the RULE, not the finding: the rule may still'
             .' change or be withdrawn, and this project opted into that tier. The finding itself is as'
             .' firm as any other.');
     }
@@ -249,8 +251,8 @@ final readonly class ConsoleReporter implements Reporter
             return;
         }
 
-        $out->writeln('');
-        $out->writeln($this->label('suppressed_heading'));
+        ReportText::line($out, '');
+        ReportText::line($out, $this->label('suppressed_heading'));
 
         foreach ($result->suppressed as $hidden) {
             $parts = [
@@ -270,27 +272,27 @@ final readonly class ConsoleReporter implements Reporter
                 $parts[] = '('.$this->label('undetermined_allowed').')';
             }
 
-            $out->writeln(implode('  ', $parts));
+            ReportText::line($out, implode('  ', $parts));
         }
     }
 
     private function header(Result $result, RunContext $context, OutputInterface $out): void
     {
-        $out->writeln('sqlens '.$context->sqlensVersion.' — mode='.$context->mode->value.' profile='.$context->profile->value.' strict-tools='.$this->onOff($context->strictTools).' strict-undetermined='.$this->onOff($context->strictUndetermined));
+        ReportText::line($out, 'sqlens '.$context->sqlensVersion.' — mode='.$context->mode->value.' profile='.$context->profile->value.' strict-tools='.$this->onOff($context->strictTools).' strict-undetermined='.$this->onOff($context->strictUndetermined));
 
         // The level gate's effect: the active level, and how many rules it admitted
         // versus hid — a hidden rule is a counted, visible choice, never a silent pass.
-        $out->writeln('  level<='.$context->level.' active-rules='.$this->ruleCount($context->activeRuleCount).' hidden-rules='.$this->ruleCount($context->hiddenRuleCount).' evaluated-rules='.$this->evaluatedRules($context));
+        ReportText::line($out, '  level<='.$context->level.' active-rules='.$this->ruleCount($context->activeRuleCount).' hidden-rules='.$this->ruleCount($context->hiddenRuleCount).' evaluated-rules='.$this->evaluatedRules($context));
 
         // The severity axis, on its OWN line — the two gates (level = strictness
         // appetite, severity = risk) are orthogonal, so the header keeps them visibly
         // apart, never merged into one figure. "off" when the severity gate is not set.
-        $out->writeln('  min-severity='.($context->minSeverity instanceof Severity ? $context->minSeverity->value : 'off'));
+        ReportText::line($out, '  min-severity='.($context->minSeverity instanceof Severity ? $context->minSeverity->value : 'off'));
 
         // Whether the run replayed up → down → up. Stated even when off, and that is
         // the point: without it a reader cannot tell a report that CHECKED down() from
         // one that never asked, and silence would be read as "down() is fine".
-        $out->writeln('  roundtrip='.$this->onOff($context->roundtrip));
+        ReportText::line($out, '  roundtrip='.$this->onOff($context->roundtrip));
 
         // The escape hatch, and the ONE header line that is conditional.
         //
@@ -312,19 +314,19 @@ final readonly class ConsoleReporter implements Reporter
                 ? $this->onOff($context->undeterminedWaiver)
                 : implode(',', $context->undeterminedWaiverReasons);
 
-            $out->writeln('  undetermined-waiver='.$waiver);
+            ReportText::line($out, '  undetermined-waiver='.$waiver);
         }
 
         // The remediation contract, once and unconditionally. A run with no payload at all is
         // exactly the run where a reader most needs to know the tier exists — otherwise its absence
         // reads as "this build has no remediation" rather than "this run found nothing to
         // remediate", and those are different facts.
-        $out->writeln('  remediation='.RemediationPayload::STABILITY->value
+        ReportText::line($out, '  remediation='.RemediationPayload::STABILITY->value
             .' (schema '.RemediationPayload::SCHEMA_VERSION.')');
 
         // The category axis: the categories this run was scoped to, or "all" when it
         // was not narrowed — a scoped run says so rather than looking like a full one.
-        $out->writeln('  categories='.($context->activeCategories === [] ? 'all' : implode(',', $context->activeCategories)));
+        ReportText::line($out, '  categories='.($context->activeCategories === [] ? 'all' : implode(',', $context->activeCategories)));
 
         // The maturity axis, unconditionally and even when it is only `stable`. A missing line
         // would read as "this build has no stability axis"; `stability=stable` is a statement.
@@ -333,39 +335,39 @@ final readonly class ConsoleReporter implements Reporter
         // own finding, so it is already visible; the one that stays silent is not, and two runs over
         // one unchanged tree — one admitting preview, one not — otherwise print identical headers
         // over different coverage.
-        $out->writeln('  stability='.($context->admittedStability === [] ? 'none' : implode(',', $context->admittedStability)));
+        ReportText::line($out, '  stability='.($context->admittedStability === [] ? 'none' : implode(',', $context->admittedStability)));
 
         // The external tools whose versions this run reasoned with — part of the
         // reproducibility surface, because the same migration can lint differently
         // against a different tool version. "none" when no tool was discovered.
         $tools = $context->toArray()['tool_versions'];
-        $out->writeln('  tools='.($tools === [] ? 'none' : implode(', ', array_map(
+        ReportText::line($out, '  tools='.($tools === [] ? 'none' : implode(', ', array_map(
             static fn (string $name, string $version): string => $name.' '.$version,
             array_keys($tools),
             $tools,
         ))));
 
         foreach ($context->toArray()['server_versions'] as $server) {
-            $out->writeln('  connection '.$server['connection'].': '.$server['version'].' ('.$server['source'].')');
+            ReportText::line($out, '  connection '.$server['connection'].': '.$server['version'].' ('.$server['source'].')');
         }
 
         // WHICH instance the report is about, printed only when one was addressed — a lint run
         // over files has none, and an "instance: unknown" line there would invent a subject.
         if ($context->instance instanceof ReportedInstance) {
-            $out->writeln('  instance '.$context->instance->describe());
+            ReportText::line($out, '  instance '.$context->instance->describe());
         }
 
         // What the reader session proved about itself, printed only by a run that read through one:
         // a lint run over files has no session, and a line saying so would invent a subject.
         if ($context->sealedBy instanceof SealedBy) {
-            $out->writeln('  sealed-by='.$context->sealedBy->value);
+            ReportText::line($out, '  sealed-by='.$context->sealedBy->value);
         }
 
         // The bounds the session READ BACK, never the ones it asked for. `off` is a bound the server
         // reports as zero, which means none on both engines; `unreadable` is a bound it did not
         // answer with at all. Those are different states, and only the first is a defect in the run.
         if ($context->sessionTimeouts !== null) {
-            $out->writeln('  session-timeouts='.$this->timeouts($context->sessionTimeouts));
+            ReportText::line($out, '  session-timeouts='.$this->timeouts($context->sessionTimeouts));
         }
 
         // What could not be read, each with its reason, at the TOP. A run that skipped half the
@@ -374,7 +376,7 @@ final readonly class ConsoleReporter implements Reporter
         foreach ($context->sortedSkips() as $skip) {
             // The skip renders itself. Formatting it a second time here would put the same three
             // fields together in two places, and the two would drift the first time a field moved.
-            $out->writeln('  skipped '.$skip->describe());
+            ReportText::line($out, '  skipped '.$skip->describe());
         }
 
         // Stated even at zero. "0 hidden" and a header that never mentions hiding read the same to
@@ -387,10 +389,10 @@ final readonly class ConsoleReporter implements Reporter
         // The scope of the claim, when there is one. A finding read without it is read as applying
         // to the whole system, and on a tenant database that is exactly the wrong conclusion.
         if ($context->tenant !== null) {
-            $out->writeln('  tenant='.$context->tenant.' (this report describes that tenant only)');
+            ReportText::line($out, '  tenant='.$context->tenant.' (this report describes that tenant only)');
         }
 
-        $out->writeln('  suppressed='.count($result->suppressed).$this->ignoreBreakdown($result));
+        ReportText::line($out, '  suppressed='.count($result->suppressed).$this->ignoreBreakdown($result));
     }
 
     /**
@@ -527,6 +529,8 @@ final readonly class ConsoleReporter implements Reporter
 
         if ($finding->downtimeClass instanceof DowntimeClass) {
             $parts[] = 'downtime='.$finding->downtimeClass->value;
+        } elseif ($finding->downtimeUndetermined instanceof DowntimeUndetermined) {
+            $parts[] = 'downtime=undetermined('.$finding->downtimeUndetermined->reason->value.')';
         }
 
         if ($finding->status->reason instanceof UndeterminedReason) {
@@ -669,21 +673,21 @@ final readonly class ConsoleReporter implements Reporter
         // decision somebody made. not-applicable sits BESIDE it rather than inside
         // it — "7 undetermined" and "7 undetermined, 4 not applicable" are two
         // different sentences about the same database.
-        $out->writeln($this->label('summary').': '.$counts[Outcome::Fail->value].' '.$this->label('fail').', '.$undetermined.' '.$this->label('undetermined').$reasonSuffix.$notApplicableSuffix.', '.count($result->suppressed).' '.$this->label('suppressed').$this->denominator($context));
+        ReportText::line($out, $this->label('summary').': '.$counts[Outcome::Fail->value].' '.$this->label('fail').', '.$undetermined.' '.$this->label('undetermined').$reasonSuffix.$notApplicableSuffix.', '.count($result->suppressed).' '.$this->label('suppressed').$this->denominator($context));
 
         if ($result->suppressed !== []) {
-            $out->writeln($this->label('by_suppression_source').': '.$this->counts($result->countsBySuppressionSource()));
+            ReportText::line($out, $this->label('by_suppression_source').': '.$this->counts($result->countsBySuppressionSource()));
             // Per AXIS on its own line, beside per source. They answer different questions — who hid
             // it, and WHAT was hidden — and only the second notices a critical security finding
             // disappearing into a collective total: "12 suppressed by config" reads the same whether
             // the twelve are naming conventions or password literals.
-            $out->writeln($this->label('by_suppressed_axis').': '.$this->counts($result->countsBySuppressedAxis()));
+            ReportText::line($out, $this->label('by_suppressed_axis').': '.$this->counts($result->countsBySuppressedAxis()));
         }
 
         // A recorded suppression that matched nothing is its own silent green — the
         // list has stopped describing what the project accepts. Surfaced when present.
         if ($result->staleSuppressionCount() > 0) {
-            $out->writeln($this->label('stale').': '.$result->staleSuppressionCount());
+            ReportText::line($out, $this->label('stale').': '.$result->staleSuppressionCount());
         }
 
         // The two gates are shown on SEPARATE lines with their thresholds, never a
@@ -692,24 +696,28 @@ final readonly class ConsoleReporter implements Reporter
         $axes = AxisSummary::for($result, $context);
         // The severity VALUE stays an API token; only the "gate is off" word is prose.
         $floor = $context->minSeverity instanceof Severity ? $context->minSeverity->value : $this->label('gate_off');
-        $out->writeln($this->label('level_gate').' (<= '.$context->level.'): '.$axes->levelBreaches.' '.$this->label('breaching'));
+        ReportText::line($out, $this->label('level_gate').' (<= '.$context->level.'): '.$axes->levelBreaches.' '.$this->label('breaching'));
         // The third number, beside the breach count and never folded into it: a breach is something
         // the run FOUND, an undetermined is something it could not look at. On a managed database
         // the second is often the larger, and a line showing only breaches would say "0 breaching"
         // about a run that answered almost nothing.
-        $out->writeln(
+        ReportText::line($out,
             $this->label('severity_gate').' (>= '.$floor.'): '
             .$axes->severityBreaches.' '.$this->label('breaching')
             .', '.$axes->severityUndetermined.' '.$this->label('undetermined'),
         );
 
-        $out->writeln($this->label('by_level').': '.$this->counts($result->countsByLevel()));
-        $out->writeln($this->label('by_severity').': '.$this->counts($result->countsBySeverity()));
+        ReportText::line($out, $this->label('by_level').': '.$this->counts($result->countsByLevel()));
+        ReportText::line($out, $this->label('by_severity').': '.$this->counts($result->countsBySeverity()));
         // The third axis on its own line, next to the other two and never folded into
         // them: level is how strict the run was, severity is how risky a finding is,
         // and this is what deploying it does. The class NAMES stay English API tokens
         // in every locale — only the label in front of them is prose.
-        $out->writeln($this->label('by_downtime').': '.$this->counts($result->countsByDowntimeClass()));
+        //
+        // A class that could not be determined is named after the three, and only when there is
+        // one: it is not a fourth class, and a zero would sit in every run beside nothing.
+        $undetermined = $result->undeterminedDowntimeCount();
+        ReportText::line($out, $this->label('by_downtime').': '.$this->counts($result->countsByDowntimeClass()).($undetermined > 0 ? ' undetermined='.$undetermined : ''));
     }
 
     /** A stable, subject-scoped group label, derived from the location kind. */

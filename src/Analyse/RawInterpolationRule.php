@@ -74,11 +74,13 @@ final class RawInterpolationRule implements Rule
     {
         $errors = [];
 
-        // All four collectors, because the same defect reaches the database through all four
-        // shapes: the facade, a builder fragment, a connection instance, and `DB::raw()`. The third
-        // was added after measuring that `$connection->statement("… {$value} …")` produced no
-        // finding at all; the fourth after measuring the same of `DB::raw("… '{$value}'")`, which
-        // sat in none of the vocabulary's three lists and so was collected by nobody.
+        // Every collector of a raw-SQL call site, because the same defect reaches the database
+        // through each shape: the facade, a builder fragment or string subquery, the same called
+        // statically on a model, a connection instance, a bare PDO handle, `DB::raw()`, and
+        // Eloquent's `fromQuery()` on an object or statically on a model. Several were added only
+        // after a shape was measured producing no finding at all — `$connection->statement("…
+        // {$value} …")`, `DB::raw("… '{$value}'")`, `Order::fromQuery("… {$value}")`,
+        // `Order::whereRaw("… {$value}")` — because no collector saw it.
         //
         // The expression collector is deliberately NOT read by the policy rule beside this one —
         // see its class docblock. Requiring a written justification for every `DB::raw('count(*)')`
@@ -97,7 +99,7 @@ final class RawInterpolationRule implements Rule
         // An annotation is at the call site, carries the sentence, and covers what it sits on.
         $justified = JustificationCoverage::interpolation($node);
 
-        foreach ([RawSqlCallCollector::class, RawSqlFragmentCollector::class, RawSqlConnectionCallCollector::class, RawSqlPdoCallCollector::class, RawSqlExpressionCollector::class] as $collector) {
+        foreach ([RawSqlCallCollector::class, RawSqlFragmentCollector::class, RawSqlConnectionCallCollector::class, RawSqlPdoCallCollector::class, RawSqlExpressionCollector::class, RawSqlEloquentCallCollector::class, RawSqlEloquentStaticCallCollector::class, RawSqlModelFragmentCollector::class] as $collector) {
             foreach ($node->get($collector) as $file => $calls) {
                 foreach ($calls as $call) {
                     if ($call['signal'] !== ParametrizationSignal::Interpolated->value) {
@@ -148,6 +150,19 @@ final class RawInterpolationRule implements Rule
                 .'a value carrying a dot reaches across schemas. Constrain it to a set you wrote '
                 .'(an enum, a match, a constant map) rather than passing it through; no engine binds '
                 .'an identifier, so a list is the only place that decision can live.';
+        }
+
+        if (array_key_exists($method, RawSqlSinks::SUBQUERY_SINKS)) {
+            // A string subquery takes no bindings, and the argument after it is an alias or a join
+            // column — the placeholder shape at the bottom would put the value in the alias. The
+            // parameterized form of these calls is the builder itself, which each of them accepts
+            // in place of the string.
+            return sprintf(
+                '%s() takes a string subquery as written, with no bindings for it. Pass a closure or '
+                .'a query builder instead — the builder carries the value as a binding '
+                .'(->where(\'…\', $value)) and the subquery keeps its place in the statement.',
+                $method,
+            );
         }
 
         if (in_array($method, RawSqlSinks::SINKS_WITHOUT_BINDINGS, true)) {
