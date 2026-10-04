@@ -313,22 +313,25 @@ final class ConstraintValidationPendingRule extends AbstractPgsqlSafetyRule impl
      */
     private function validatedInThisRun(string $name, array $runStatements): bool
     {
-        foreach ($runStatements as $digest) {
-            if ($digest->kind !== StatementKind::AlterTable) {
-                continue;
-            }
-
-            foreach ($digest->targets as $target) {
-                if ($target->type !== SchemaObjectType::Constraint) {
+        foreach ($runStatements as $statement) {
+            // Every action: a VALIDATE behind an ADD COLUMN in one statement validates as one alone does.
+            foreach ($statement->andItsActions() as $digest) {
+                if ($digest->kind !== StatementKind::AlterTable) {
                     continue;
                 }
 
-                // Qualified the SAME way as the constraint being judged, from that statement's own
-                // table. Comparing a qualified name against a bare one would silence nothing and
-                // report every correctly split pair — the exact false positive this method exists
-                // to prevent.
-                if ($this->qualifiedThroughTable($target, $this->tableTargetOf($digest)) === $name) {
-                    return true;
+                foreach ($digest->targets as $target) {
+                    if ($target->type !== SchemaObjectType::Constraint) {
+                        continue;
+                    }
+
+                    // Qualified the SAME way as the constraint being judged, from that statement's own
+                    // table. Comparing a qualified name against a bare one would silence nothing and
+                    // report every correctly split pair — the exact false positive this method exists
+                    // to prevent.
+                    if ($this->qualifiedThroughTable($target, $this->tableTargetOf($digest)) === $name) {
+                        return true;
+                    }
                 }
             }
         }

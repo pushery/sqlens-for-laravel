@@ -290,13 +290,17 @@ final class ExpandWithoutContractRule extends AbstractMysqlRule implements Produ
      *
      * ANY column, not the replaced one — which this rule never learns. A drop on the same table in
      * the same run is the contract step by construction: nothing else drops a column there while a
-     * new one is being back-filled.
+     * new one is being back-filled. Every action of a statement counts, so a drop behind an
+     * `ADD COLUMN` in one `ALTER TABLE` is the same step as a drop on its own.
      *
      * @param  list<MigrationStatementDigest>  $runStatements
      */
     private function contractedInThisRun(string $table, array $runStatements): bool
     {
-        return array_any($runStatements, fn (MigrationStatementDigest $digest): bool => $digest->kind === StatementKind::DropColumn && $this->addressesTable($digest, $table));
+        return array_any($runStatements, fn (MigrationStatementDigest $digest): bool => array_any(
+            $digest->andItsActions(),
+            fn (MigrationStatementDigest $action): bool => $action->kind === StatementKind::DropColumn && $this->addressesTable($action, $table),
+        ));
     }
 
     /** Whether a captured statement's table target is the one named. */

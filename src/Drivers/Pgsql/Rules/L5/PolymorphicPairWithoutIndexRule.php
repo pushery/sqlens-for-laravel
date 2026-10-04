@@ -89,7 +89,7 @@ final class PolymorphicPairWithoutIndexRule extends AbstractCatalogRule implemen
 
         $assessment = PolymorphicPair::assess($object);
 
-        if ($assessment['missing'] === [] && $assessment['reversed'] === []) {
+        if ($assessment['missing'] === [] && $assessment['reversed'] === [] && $assessment['invisible'] === []) {
             return [];
         }
 

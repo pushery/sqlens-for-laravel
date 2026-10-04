@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Canonical;
 
+use Pushery\SQLens\Contracts\DriverCanonicalization;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
 /**
@@ -43,5 +44,16 @@ final readonly class StatementTarget
     public function qualifiedName(): string
     {
         return $this->identifier->canonical();
+    }
+
+    /**
+     * The name as the catalog holds it, for SQL that compares it with catalog names.
+     *
+     * Not interchangeable with {@see self::qualifiedName()}: `"Orders"` and `Orders` name one table,
+     * and only the second equals its `relname`.
+     */
+    public function catalogName(DriverCanonicalization $driver): string
+    {
+        return $this->identifier->catalogName($driver);
     }
 }

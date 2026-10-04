@@ -45,6 +45,22 @@ final readonly class Identifier
             : $this->name->canonical;
     }
 
+    /**
+     * The name as the catalog holds it: each part without the quotes the canonical form adds.
+     *
+     * The canonical form quotes a name that would not survive unquoted, so `"Orders"` is the table
+     * the catalog calls `Orders`. SQL that compares a name with `relname` needs this form; handed the
+     * canonical one, it never meets a name that needed quoting.
+     */
+    public function catalogName(DriverCanonicalization $driver): string
+    {
+        $quote = $driver->quotingCharacter();
+
+        return $this->schema instanceof IdentifierComponent
+            ? $this->unrender($this->schema->canonical, $quote).'.'.$this->unrender($this->name->canonical, $quote)
+            : $this->unrender($this->name->canonical, $quote);
+    }
+
     /** The original rendering, exactly as written in the source. */
     public function original(): string
     {
@@ -179,6 +195,19 @@ final readonly class Identifier
         return $bareSafe
             ? $name
             : $quote.str_replace($quote, $quote.$quote, $name).$quote;
+    }
+
+    /**
+     * The effective name a canonical spelling stands for, the inverse of {@see self::render()}.
+     *
+     * Exact, because render() writes a name either bare, and a bare-safe name holds no quote, or
+     * wrapped in the quote with every quote inside it doubled.
+     */
+    private function unrender(string $canonical, string $quote): string
+    {
+        return $quote !== '' && strlen($canonical) >= 2 && str_starts_with($canonical, $quote) && str_ends_with($canonical, $quote)
+            ? str_replace($quote.$quote, $quote, substr($canonical, 1, -1))
+            : $canonical;
     }
 
     private static function isBareIdentifier(string $name): bool

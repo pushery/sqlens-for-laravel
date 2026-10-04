@@ -129,31 +129,43 @@ final readonly class PolymorphicPair
     }
 
     /**
-     * Sort every pair on this table into the two findings and the silence.
+     * Sort every pair on this table into the three findings and the silence.
      *
-     * Two lists rather than one, because they send a reader to different edits: a pair with NO
-     * index needs one written, a pair whose index leads with the ID needs that index REPLACED.
-     * Reported as one finding, somebody adds a second index over the same two columns and `L7`
-     * then reports it as redundant to the one they already had.
+     * Three lists rather than one, because they send a reader to different edits: a pair with NO
+     * index needs one written, a pair whose index leads with the ID needs that index REPLACED, and a
+     * pair whose only index is invisible needs that index made visible again. Told merely that no
+     * index exists, somebody adds a second index over the same two columns and `L7` then reports
+     * one of the two as redundant.
      *
-     * A pair that is covered appears in neither, and so does a table that carries no pair at all —
-     * this rule says nothing about a schema that is not polymorphic.
+     * An index the wrong way round is replaced whether the optimizer may use it or not, so the
+     * reversed check reads the invisible ones too: the edit is the same index written the right
+     * way round, and the old one goes either way.
      *
-     * @return array{missing: list<self>, reversed: list<self>}
+     * A pair that is covered appears in none, and so does a table that carries no pair at all — this
+     * rule says nothing about a schema that is not polymorphic.
+     *
+     * @return array{missing: list<self>, reversed: list<self>, invisible: list<self>}
      */
     public static function assess(SchemaObject $table): array
     {
-        $indexes = self::comparableIndexesOf($table);
+        ['visible' => $indexes, 'invisible' => $hidden] = self::comparableIndexesOf($table);
         $missing = [];
         $reversed = [];
+        $invisible = [];
 
         foreach (self::of($table) as $pair) {
             if (ForeignKeyIndexCoverage::isCovered($pair->columns(), $indexes)) {
                 continue;
             }
 
-            if (ForeignKeyIndexCoverage::isCovered($pair->reversed(), $indexes)) {
+            if (ForeignKeyIndexCoverage::isCovered($pair->reversed(), [...$indexes, ...$hidden])) {
                 $reversed[] = $pair;
+
+                continue;
+            }
+
+            if (ForeignKeyIndexCoverage::isCovered($pair->columns(), $hidden)) {
+                $invisible[] = $pair;
 
                 continue;
             }
@@ -161,21 +173,33 @@ final readonly class PolymorphicPair
             $missing[] = $pair;
         }
 
-        return ['missing' => $missing, 'reversed' => $reversed];
+        return ['missing' => $missing, 'reversed' => $reversed, 'invisible' => $invisible];
     }
 
     /**
-     * The indexes a rule may reason about as coverage, as bare column lists.
+     * The indexes a rule may reason about as coverage, as bare column lists, split by whether the
+     * optimizer may use them.
      *
      * `comparable_indexes` rather than `indexes`, for the reason the projection separates them: a
      * partial, expression or non-default-operator-class index is a real index that serves no such
      * lookup, and counting one would leave the rule silent about a table that really does scan.
      *
-     * @return list<list<string>>
+     * A MySQL `INVISIBLE` index stays in that list, because it still enforces what it declares, and
+     * is named again in `invisible_indexes`. The optimizer does not use it, so a read through the
+     * relation scans as if it were not there, and counted as coverage it kept the rule silent about
+     * exactly such a table. Always empty on PostgreSQL, which has no invisible indexes.
+     *
+     * @return array{visible: list<list<string>>, invisible: list<list<string>>}
      */
     public static function comparableIndexesOf(SchemaObject $table): array
     {
-        return array_values(ForeignKeyIndexCoverage::parse($table->getString('comparable_indexes') ?? ''));
+        $comparable = ForeignKeyIndexCoverage::parse($table->getString('comparable_indexes') ?? '');
+        $invisible = ForeignKeyIndexCoverage::parse($table->getString('invisible_indexes') ?? '');
+
+        return [
+            'visible' => array_values(array_diff_key($comparable, $invisible)),
+            'invisible' => array_values(array_intersect_key($comparable, $invisible)),
+        ];
     }
 
     /**
@@ -186,7 +210,7 @@ final readonly class PolymorphicPair
      * OBJECT, and a second verdict here would be dropped without a word. A table with two bare
      * polymorphic pairs would have reported one, and the other would have gone on scanning.
      *
-     * @param  array{missing: list<self>, reversed: list<self>}  $assessment
+     * @param  array{missing: list<self>, reversed: list<self>, invisible: list<self>}  $assessment
      */
     public static function sentence(string $table, array $assessment): string
     {
@@ -206,6 +230,16 @@ final readonly class PolymorphicPair
                 .'nothing performs: the id is unique only within one type. REPLACE that index with one on '
                 .'(`%s`, `%s`) rather than adding a second over the same two columns.',
                 $pair->typeColumn, $pair->idColumn, $pair->typeColumn, $pair->idColumn,
+            );
+        }
+
+        foreach ($assessment['invisible'] as $pair) {
+            $parts[] = sprintf(
+                '`%s` and `%s` are a polymorphic pair whose only index is INVISIBLE, which the optimizer does '
+                .'not use, so every read through that relation scans %s. Make that index VISIBLE again rather '
+                .'than adding a second over the same two columns; if it was hidden to try out dropping it, '
+                .'this scan is what the drop would cost.',
+                $pair->typeColumn, $pair->idColumn, $table,
             );
         }
 

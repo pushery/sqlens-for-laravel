@@ -84,7 +84,34 @@ final readonly class MigrationStatementDigest
          * @var list<ColumnDefinition>|null
          */
         public ?array $columnDefinitions = null,
+        /**
+         * The later actions of an `ALTER TABLE` action list, each as a digest of its own: the
+         * statement's position, text and transaction, with the action's kind, targets and columns.
+         *
+         * The fields above describe the FIRST action, because a statement is classified from its
+         * start. A question about the whole migration or run asked of them alone missed a
+         * `DROP COLUMN` behind an `ADD COLUMN`, and a rule then reported a contract step as missing
+         * while it stood in the same statement. Kept apart rather than listed beside the statement,
+         * so a reader that counts statements or reads their positions still sees one per statement.
+         *
+         * @var list<self>
+         */
+        public array $actions = [],
     ) {}
+
+    /**
+     * This statement once for each thing it does: as its first action, then as each later one.
+     *
+     * A question about the run, such as whether anything in it drops a column from a table, is
+     * answered by every action. A reader that counts statements or reads their positions keeps
+     * reading the statement itself.
+     *
+     * @return non-empty-list<self>
+     */
+    public function andItsActions(): array
+    {
+        return [$this, ...$this->actions];
+    }
 
     /** Whether this statement's transaction context could not be resolved. */
     public function transactionContextUnknown(): bool

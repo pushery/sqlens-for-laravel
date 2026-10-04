@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Drivers\Pgsql\Deploy;
 
 use Illuminate\Database\Connection;
 use Pushery\SQLens\Attributes\RawSql;
+use Pushery\SQLens\Canonical\QuotedIdentifier;
 use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\PreflightCheck;
@@ -138,7 +139,7 @@ final readonly class GrantCheck implements PreflightCheck
             }
 
             try {
-                $allowed = $this->isAllowed($context, $role, $requirement);
+                $answer = $this->isAllowed($context, $role, $requirement);
             } catch (Throwable $failure) {
                 $unanswered[] = $requirement->object.': the server refused the privilege question ('
                     .new CredentialRedactor()->redact($failure->getMessage()).')';
@@ -146,8 +147,8 @@ final readonly class GrantCheck implements PreflightCheck
                 continue;
             }
 
-            if ($allowed === false) {
-                $findings[] = $this->finding($context, $role, $requirement, $requirement->class);
+            if ($answer['allowed'] === false) {
+                $findings[] = $this->finding($context, $role, $requirement, $requirement->class, $answer);
             }
         }
 
@@ -228,9 +229,19 @@ final readonly class GrantCheck implements PreflightCheck
         )) !== [];
     }
 
-    /** Whether the role may do this, asked of the server rather than reasoned about here. */
+    /**
+     * Whether the role may do this, asked of the server rather than reasoned about here, and where
+     * the question went.
+     *
+     * A suggestion has to name what was asked: `CREATE` is granted on the schema a name lands in,
+     * never on the name, and an object that does not exist yet is judged at that schema whatever
+     * its class. `schema` is the schema the server resolved for that question, and null when the
+     * application's search path names none that exists.
+     *
+     * @return array{allowed: bool, atSchema: bool, schema: string|null}
+     */
     #[RawSql(reason: 'asks pg_catalog.has_table_privilege() and friends -- server functions that answer the exact question a preflight has, without the reader having to reimplement ACL resolution')]
-    private function isAllowed(PreflightContext $context, string $role, PrivilegeRequirement $requirement): bool
+    private function isAllowed(PreflightContext $context, string $role, PrivilegeRequirement $requirement): array
     {
         $object = $requirement->object;
         // The schema a CREATE of this name lands in: the one it names, or for a bare name the first
@@ -246,7 +257,7 @@ final readonly class GrantCheck implements PreflightCheck
         // Ownership is the right question here for the same reason it is for `ALTER TABLE`:
         // `DROP SCHEMA` cannot be granted on PostgreSQL. It needs membership in the owning role.
         if ($requirement->objectType === SchemaObjectType::Schema) {
-            return $this->ownsSchema($context, $role, $object);
+            return ['allowed' => $this->ownsSchema($context, $role, $object), 'atSchema' => false, 'schema' => null];
         }
 
         // Existence first. `has_table_privilege` RAISES for an object the catalog does not have, and
@@ -259,12 +270,15 @@ final readonly class GrantCheck implements PreflightCheck
 
         $present = is_object($exists) && ($exists->present ?? false) === true;
 
+        $atSchema = ! $present || $requirement->class === PrivilegeClass::Create;
+
         [$sql, $bindings] = match (true) {
-            ! $present, $requirement->class === PrivilegeClass::Create => [
-                'select pg_catalog.has_schema_privilege(?, coalesce(?::name, '.ApplicationSearchPath::currentSchema().'), \'CREATE\') as allowed',
-                [$role, $schema],
+            $atSchema => [
+                'select pg_catalog.has_schema_privilege(?, coalesce(?::name, '.ApplicationSearchPath::currentSchema().'), \'CREATE\') as allowed,'
+                .' coalesce(?::name, '.ApplicationSearchPath::currentSchema().')::text as schema',
+                [$role, $schema, $schema],
             ],
-            $requirement->class === PrivilegeClass::Ownership => [
+            $requirement->class === PrivilegeClass::Ownership, $requirement->class === PrivilegeClass::Index => [
                 // Not a privilege. `ALTER TABLE` requires OWNERSHIP, and no GRANT produces it — so
                 // the question is membership in the owning role, which is what PostgreSQL itself
                 // checks before it allows the statement.
@@ -330,7 +344,13 @@ final readonly class GrantCheck implements PreflightCheck
             );
         }
 
-        return ($row->allowed ?? false) === true;
+        $resolved = $row->schema ?? null;
+
+        return [
+            'allowed' => ($row->allowed ?? false) === true,
+            'atSchema' => $atSchema,
+            'schema' => is_string($resolved) ? $resolved : null,
+        ];
     }
 
     /**
@@ -339,14 +359,20 @@ final readonly class GrantCheck implements PreflightCheck
      *                                 `instanceof` repeated here would carry an arm nothing can
      *                                 enter — untestable, unable to go red, and load-bearing for
      *                                 exactly the message a reader acts on
+     * @param  array{allowed: bool, atSchema: bool, schema: string|null}  $answer  where the question went
      */
-    private function finding(PreflightContext $context, string $role, PrivilegeRequirement $requirement, PrivilegeClass $class): Finding
+    private function finding(PreflightContext $context, string $role, PrivilegeRequirement $requirement, PrivilegeClass $class, array $answer): Finding
     {
         // Ownership and a missing grant are different findings, and telling them apart is the
         // expensive distinction: a role can hold EVERY grant on a table and still not be able to
         // ALTER it. One id for both would let somebody read "missing privilege", run the GRANT it
         // names, and watch the next deploy fail identically.
-        $ownership = $class === PrivilegeClass::Ownership || $class === PrivilegeClass::Drop;
+        $ownership = in_array($class, [PrivilegeClass::Ownership, PrivilegeClass::Drop, PrivilegeClass::Index], true);
+
+        // The role as a statement names it. It comes from the configuration, and unquoted a name
+        // like `app-migrator` does not parse while `AppMigrator` folds to `appmigrator`, another role
+        // or none. Quoted, the suggestion can only reach the role the check asked about.
+        $grantee = QuotedIdentifier::of('"', $role);
 
         // The two ownership cases need different sentences. `DROP TABLE` accepts the schema owner
         // as well as the table owner — measured on 18.0 — so telling a schema owner they "must own
@@ -354,13 +380,34 @@ final readonly class GrantCheck implements PreflightCheck
         // `ALTER TABLE` really does need the table, and the same measurement shows it: the schema
         // owner is refused with "must be owner of table".
         $needs = match (true) {
+            // A schema is handed over by naming it as one: `ALTER TABLE` on a schema name finds no
+            // relation, measured on 18 as `relation "app_ns" does not exist`.
+            $requirement->objectType === SchemaObjectType::Schema => sprintf(
+                'must own the schema `%s`, and ownership cannot be granted — no `GRANT` produces it. '
+                .'Either `ALTER SCHEMA %s OWNER TO %s`, or make %s a member of the role that owns it',
+                $requirement->object,
+                $requirement->object,
+                $grantee,
+                $role,
+            ),
+            // `CREATE INDEX` needs the TABLE's owner. Measured on 18: a role with every grant on the
+            // table and CREATE in its schema is refused with `must be owner of table`.
+            $class === PrivilegeClass::Index => sprintf(
+                'must own `%s` to build an index on it — `CREATE INDEX` requires the table\'s owner, '
+                .'and no `GRANT` produces it. Either `ALTER TABLE %s OWNER TO %s`, or make %s a member '
+                .'of the role that owns it',
+                $requirement->object,
+                $requirement->object,
+                $grantee,
+                $role,
+            ),
             $class === PrivilegeClass::Drop => sprintf(
                 'must own `%s` or the schema it lives in — `DROP TABLE` accepts either, and no `GRANT` '
                 .'produces it. Either `ALTER TABLE %s OWNER TO %s`, make %s the owner of the schema, or '
                 .'make %s a member of a role that is one of the two',
                 $requirement->object,
                 $requirement->object,
-                $role,
+                $grantee,
                 $role,
                 $role,
             ),
@@ -370,8 +417,31 @@ final readonly class GrantCheck implements PreflightCheck
                 .'`ALTER TABLE %s OWNER TO %s`, or make %s a member of the role that owns it',
                 $requirement->object,
                 $requirement->object,
+                $grantee,
                 $role,
-                $role,
+            ),
+            // Asked at the schema, so granted there. `GRANT CREATE ON <table>` names a relation,
+            // and for a table the migration is about to create there is none.
+            $answer['atSchema'] && $answer['schema'] !== null => sprintf(
+                'needs CREATE on the schema `%s` that `%s` is created in — `GRANT CREATE ON SCHEMA %s TO %s`',
+                $answer['schema'],
+                $requirement->object,
+                QuotedIdentifier::of('"', $answer['schema']),
+                $grantee,
+            ),
+            // The server answered the CREATE question about no schema at all, because none on the
+            // application's search path exists. A grant cannot fix that, so none is suggested.
+            $answer['atSchema'] => sprintf(
+                'needs CREATE on the schema `%s` is created in, and the search path of the connection '
+                .'names no schema that exists — set its `search_path`, or qualify the name',
+                $requirement->object,
+            ),
+            // The two privileges the check asked about. PostgreSQL has no privilege called WRITE.
+            $class === PrivilegeClass::Write => sprintf(
+                'needs INSERT and UPDATE on `%s` — `GRANT INSERT, UPDATE ON %s TO %s`',
+                $requirement->object,
+                $requirement->object,
+                $grantee,
             ),
             default => sprintf(
                 'needs %s on `%s` — `GRANT %s ON %s TO %s`',
@@ -379,7 +449,7 @@ final readonly class GrantCheck implements PreflightCheck
                 $requirement->object,
                 strtoupper($class->value),
                 $requirement->object,
-                $role,
+                $grantee,
             ),
         };
 

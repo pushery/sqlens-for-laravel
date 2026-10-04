@@ -2,6 +2,48 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.1] - 2026-10-04
+
+### Fixed
+
+- **`DEPLOY.PREFLIGHT.FREEZE_HORIZON` says when the run it guards rewrites a table.** The note that a rewrite makes the window longer rather than shorter asked for a statement kind PostgreSQL never assigns, so it never appeared. It is decided the way `PG.L2.TYPE_CHANGE_REWRITE` decides a rewrite now: a `USING` clause, or a target the type matrix calls a rewrite, also behind another action of the statement, and not for a type Laravel's `->change()` only restates.
+
+- **`PG.L2.TYPE_CHANGE_REWRITE` no longer reports a precision change of a time type as a table rewrite.** A larger precision of the same type, `timestamp(3)` to `timestamp(6)`, keeps the table as it is, and a smaller one rewrites it, while the statement names only the target. A `timestamp`, `timestamptz` or `time` target with a precision is `undetermined` now, as a `numeric` one already was, and for `timestamp` and `timestamptz` the finding still asks for the session's `TimeZone`. Laravel's `timestamp(0) without time zone`, written by every `->change()`, gets that question too; the spelling was unknown to the type matrix before, so it never did.
+
+- **`DEPLOY.PREFLIGHT.DISK_HEADROOM` asks for room for a rewrite that stands behind another action of an `ALTER TABLE`.** A type change behind a `DROP CONSTRAINT`, or a `MODIFY` behind a `DROP INDEX`, rebuilds the table as it does alone, and the check left that table out because it read only the statement's first action. Every action counts now.
+
+- **The deploy preflight asks for the rights a foreign key needs when it stands behind another action of an `ALTER TABLE`.** `ALTER TABLE orders ADD COLUMN user_id …, ADD CONSTRAINT … FOREIGN KEY (user_id) REFERENCES users (id)` was read as the `ADD COLUMN` alone, so `REFERENCES` on `users` was never asked for: a migration role without it passed the preflight and the migration then failed on the server. Every action of a statement is asked for its rights now.
+
+- **Five rules no longer report a fix as missing when it stands behind another action of an `ALTER TABLE`.** `MY.L2.NO_PRIMARY_KEY` takes a primary key restored behind an `ADD COLUMN` or under a `CONSTRAINT` symbol, `PG.L4.CONSTRAINT_VALIDATION_PENDING` a `VALIDATE CONSTRAINT`, `PG.L2.SET_NOT_NULL_SCAN` a `CHECK (… IS NOT NULL)` and `PG.L5.FK_NO_INDEX` a `UNIQUE` that covers the key, wherever in its statement each one stands. `GEN.L1.DOWN_MORE_DESTRUCTIVE` counts a table that `up()` names only in a later action, such as the parent of a foreign key, as touched.
+
+- **Three rules report what stands behind another action of an `ALTER TABLE`.** `PG.L2.CONSTRAINT_NOT_VALIDATED` pairs a `NOT VALID` add behind an `ADD COLUMN` with its `VALIDATE` in the same transaction, `PG.L4.CHECK_ENUM_CHANGE` reads a new `CHECK` with the drop of the old one behind it as the enum change it is, and `GEN.L1.DOWN_MORE_DESTRUCTIVE` reports a column a rollback drops behind another action.
+
+- **`MY.L4.EXPAND_WITHOUT_CONTRACT` and `PG.L4.EXPAND_WITHOUT_CONTRACT` find the contract step behind another action of the same `ALTER TABLE`.** A migration that back-fills a new column and drops the old one in `ALTER TABLE users ADD COLUMN note INT, DROP COLUMN email` was told nothing in the run drops the column it replaces, because only the first action of each statement was looked at. Every action of a statement counts now.
+
+- **A MySQL key or unique index added under a written `CONSTRAINT` symbol is read as the object the server creates.** `ADD CONSTRAINT pk PRIMARY KEY` and `ADD CONSTRAINT c UNIQUE …` read as a generic constraint called by the symbol, so no rule about a primary key or an index saw them, and `ADD CONSTRAINT fk FOREIGN KEY idx (…)` lost its columns. They are read as a primary key, as the unique index the server names (its own name when it has one, the symbol when it has none), and as a foreign key with its columns. `ADD CONSTRAINT FOREIGN KEY idx (…)`, without a symbol, no longer leaves its migration undetermined.
+
+- **Four more of the MySQL manual's spellings of a key are read instead of leaving their migration undetermined.** `ADD CONSTRAINT PRIMARY KEY`, `ADD CONSTRAINT UNIQUE`, `ADD CONSTRAINT FOREIGN KEY` without a constraint name, and `ADD FOREIGN KEY fk_name (…)` with the optional index name each stopped the whole migration as unreadable. Each is now read as the server treats it: the first three as the same statement without `CONSTRAINT`, and the name after `FOREIGN KEY` as the name of the index the key gets, which is where the server puts it.
+
+- **A MySQL `ALTER TABLE` that adds several columns in parentheses reaches the rules for every column.** `ADD (a INT, b INT)` and `ADD COLUMN (a INT, b INT)`, the manual's form for adding several columns at once, were read as one column named after the first member, with no type, and the other members reached no rule. Such a statement is read as the action list it means now, `ADD a INT, ADD b INT`, so each column arrives with its own name and type. On PostgreSQL, which refuses the form, nothing changes.
+
+- **`MY.L5.MORPHS_NO_INDEX` reports a polymorphic pair whose only index is invisible.** The rule counted a MySQL `INVISIBLE` index over the pair as its index, and the optimizer does not use one, so every read through the relation scanned while the rule stayed silent. Such a pair is reported now, with a sentence of its own that asks for the index to be made visible again rather than for a second one over the same columns. An invisible index the wrong way round is still reported as one to replace.
+
+- **The deploy preflight asks for the right an index needs on its table.** It asked for `CREATE` on the indexed table, so on PostgreSQL a role that may create in the schema but does not own the table passed, and the migration then stopped at `must be owner of table`; on MySQL, where Laravel adds an index with `ALTER TABLE … ADD INDEX`, a user with `ALTER` was refused and one with `CREATE` alone passed. It asks for the table's owner on PostgreSQL now, and on MySQL for `ALTER`, or `INDEX` for a `CREATE INDEX`. The index's own name still needs `CREATE` on its schema on PostgreSQL, and nothing on MySQL.
+
+- **The deploy preflight's grant suggestions name the migration role so it reaches that role.** `DEPLOY.PREFLIGHT.MISSING_PRIVILEGE` and `DEPLOY.CONTEXT.GRANT.OWNERSHIP_MISSING` wrote the `username` of the migration connection into `GRANT … TO` and `ALTER TABLE … OWNER TO` as it stood, so on PostgreSQL a role named `app-migrator` got a statement that does not parse, and `AppMigrator` one that went to the role `appmigrator`. PostgreSQL suggestions quote the role now, and MySQL suggestions name the user as a quoted identifier instead of a string, which reads the same under every `sql_mode`.
+
+- **On PostgreSQL the grant suggestion names a privilege the server takes.** For a migration that writes rows `DEPLOY.PREFLIGHT.MISSING_PRIVILEGE` suggested `GRANT WRITE ON …`, and PostgreSQL has no `WRITE` privilege; for a table the migration creates it suggested `GRANT CREATE ON` that table, which does not exist yet. It suggests `GRANT INSERT, UPDATE ON …` and `GRANT CREATE ON SCHEMA …` now, the privileges the check asked about, and `DEPLOY.CONTEXT.GRANT.OWNERSHIP_MISSING` hands a schema over with `ALTER SCHEMA … OWNER TO` instead of `ALTER TABLE`. When the connection's search path names no schema that exists, the finding says so and suggests no grant.
+
+- **The deploy preflight matches a leftover index and a validated constraint by a name that needs quoting.** `DEPLOY.LEGACY.INVALID_INDEX_NAME_COLLISION` held the name PostgreSQL's catalog gives against the one a migration writes, and `MixedIdx` never met its quoted form `"MixedIdx"`, so a deploy that stops at that `CREATE INDEX` was reported as the quieter `DEPLOY.LEGACY.INVALID_INDEX`. `DEPLOY.LEGACY.CONSTRAINT_NOT_VALIDATED` made the same comparison and reported a constraint the deploy itself validates as an open debt. Both compare the canonical form now.
+
+- **A JSON or SARIF report reaches an agent byte for byte when `laravel/pao` is installed.** pao replaces the output style of a command an agent runs and cleans every message for it, raw output included, so the spaces inside an SQL string collapsed, an arrow was dropped and `...` became `..`. The document stayed valid JSON and was no longer the one the run produced. Machine documents are written below the console style now; text reports still pass through it.
+
+### Documentation
+
+- **`CONTRIBUTING.md` says where a release cut that skipped the governance snapshot is caught.** `composer governance:check` now refuses a snapshot whose version is not the newest release the changelog names, so the missing step shows before the release gate runs.
+
+- **The Boost skill names the deploy suite.** `sqlens:predeploy`, `sqlens:postdeploy` and `sqlens:drift` were the three commands an assistant in a consuming application never read about. The skill describes each of them now, from the application's side.
+
 ## [0.28.0] - 2026-10-04
 
 ### Added

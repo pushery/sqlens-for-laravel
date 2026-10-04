@@ -145,10 +145,14 @@ final class CheckEnumChangeRule extends AbstractPgsqlSafetyRule implements Provi
     /** Whether the migration drops a constraint on the table this statement adds its CHECK to. */
     private function dropsAConstraintOn(MigrationStatementView $statement, StatementTarget $table): bool
     {
+        // Every action: the drop may stand behind the new CHECK in the same statement.
         return array_any(
             $statement->migration->statements,
-            static fn (MigrationStatementDigest $other): bool => $other->kind === StatementKind::DropConstraint
-                && $other->soleTarget(SchemaObjectType::Table)?->qualifiedName() === $table->qualifiedName(),
+            static fn (MigrationStatementDigest $other): bool => array_any(
+                $other->andItsActions(),
+                static fn (MigrationStatementDigest $action): bool => $action->kind === StatementKind::DropConstraint
+                    && $action->soleTarget(SchemaObjectType::Table)?->qualifiedName() === $table->qualifiedName(),
+            ),
         );
     }
 

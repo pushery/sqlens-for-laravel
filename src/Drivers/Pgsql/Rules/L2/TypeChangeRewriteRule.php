@@ -277,7 +277,8 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
             TypeChangeImpact::Unknown => RuleVerdict::undetermined(
                 'ALTER COLUMN … TYPE targets a type SQLens cannot classify from the migration alone — '
                 .'the source type is not in the statement — so whether it rewrites the table is unknown. '
-                .'Verify against the target column\'s current type before deploying.',
+                .'Verify against the target column\'s current type before deploying.'
+                .$this->sessionTimeZoneCaveat($change->targetType()),
                 UndeterminedReason::UnclassifiedTypeChange,
             ),
         };

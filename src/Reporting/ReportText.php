@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Reporting;
 
+use Illuminate\Console\OutputStyle;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
@@ -32,10 +33,18 @@ final class ReportText
         $out->writeln(self::visible($text), OutputInterface::OUTPUT_RAW);
     }
 
-    /** A machine document, whose own encoding already escapes every control character. */
+    /**
+     * A machine document, whose own encoding already escapes every control character.
+     *
+     * Written below Laravel's console style when one is in front. A style can rewrite what passes
+     * through it, raw or not, and an agent's console often has one that does: laravel/pao cleans
+     * every message for the agent reading it, which collapses the spaces inside an SQL string,
+     * drops an arrow and shortens `...`. The document stays valid JSON and stops being the one the
+     * run produced.
+     */
     public static function document(OutputInterface $out, string $document): void
     {
-        $out->writeln($document, OutputInterface::OUTPUT_RAW);
+        ($out instanceof OutputStyle ? $out->getOutput() : $out)->writeln($document, OutputInterface::OUTPUT_RAW);
     }
 
     /** The text with every control character except tab and newline written as a visible escape. */

@@ -76,6 +76,12 @@ final readonly class SignatureElement
         return new self(SignatureElementKind::TargetList, null, $type);
     }
 
+    /** One name read past without a target. See {@see SignatureElementKind::SkippedName}. */
+    public static function skippedName(): self
+    {
+        return new self(SignatureElementKind::SkippedName, null, null);
+    }
+
     public static function seekKeyword(string $keyword): self
     {
         return new self(SignatureElementKind::SeekKeyword, mb_strtoupper($keyword), null);

@@ -119,7 +119,19 @@ final readonly class ColumnTypeChange
             return null;
         }
 
-        if (preg_match('/\bALTER COLUMN\s+(\S+)\s+TYPE\s+(.+)$/', $statement->canonical, $matches) !== 1) {
+        return self::inCanonical($statement->canonical);
+    }
+
+    /**
+     * The retyping a canonical statement text performs, or null when it performs none.
+     *
+     * For a reader that holds the text rather than a view: the deploy preflight reads pending
+     * statements, and there a retyping can stand behind another action of the statement, whose own
+     * kind is then that other action's.
+     */
+    public static function inCanonical(string $canonical): ?self
+    {
+        if (preg_match('/\bALTER COLUMN\s+(\S+)\s+TYPE\s+(.+)$/', $canonical, $matches) !== 1) {
             return null;
         }
 

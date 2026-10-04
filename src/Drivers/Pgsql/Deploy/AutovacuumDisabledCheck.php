@@ -11,6 +11,7 @@ use Pushery\SQLens\Contracts\PreflightCheck;
 use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PreflightContext;
+use Pushery\SQLens\Drivers\Pgsql\Canonical\PgsqlCanonicalization;
 use Pushery\SQLens\Drivers\Pgsql\Catalog\ApplicationSearchPath;
 use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\Finding;
@@ -138,7 +139,8 @@ final readonly class AutovacuumDisabledCheck implements PreflightCheck
                 // The name as the migration wrote it, schema-qualified or bare. The query matches a
                 // bare name only against the table an unqualified reference finds, so it cannot pick
                 // up a table of the same name in another schema.
-                $targets[] = $target->qualifiedName();
+                // As the catalog holds it, because the query below compares it with `relname`.
+                $targets[] = $target->catalogName(new PgsqlCanonicalization);
             }
         }
 

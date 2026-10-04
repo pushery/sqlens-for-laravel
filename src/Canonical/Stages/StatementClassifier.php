@@ -94,6 +94,11 @@ final readonly class StatementClassifier implements CanonicalizationStage
         }
 
         $tokens = $this->tokenize($sql);
+
+        if ($profile->parenthesizedAddColumns) {
+            $tokens = $this->spreadParenthesizedAdds($tokens, $profile);
+        }
+
         $classification = $this->classifyTokens($tokens, $profile);
 
         if ($classification instanceof CanonicalizationFailure) {
@@ -289,6 +294,83 @@ final readonly class StatementClassifier implements CanonicalizationStage
         }
 
         return $segments;
+    }
+
+    /**
+     * MySQL's `ADD [COLUMN] (a INT, b INT)` read as the action list it means:
+     * `ADD COLUMN a INT, ADD COLUMN b INT`.
+     *
+     * The manual gives the parenthesized form one meaning, each member a column definition added as
+     * if by its own `ADD`. Read as written, the signatures took the first name inside the parentheses
+     * for the column, with no type, because a type is read at the statement's own level, and every
+     * later member reached no rule. Spread out first, each member is classified as the same column
+     * is in an action list: a target and a type of its own, and a rule asked about it through the
+     * action it becomes.
+     *
+     * Only the classification reads the spread tokens; the canonical text stays as it was written.
+     *
+     * @param  list<StatementToken>  $tokens
+     * @return list<StatementToken>
+     */
+    private function spreadParenthesizedAdds(array $tokens, StatementClassificationProfile $profile): array
+    {
+        $header = $this->alterTableHeader($tokens, $profile);
+
+        if ($header === null) {
+            return $tokens;
+        }
+
+        $spread = $header;
+
+        foreach ($this->actionSegments(array_slice($tokens, count($header))) as $segment) {
+            array_push($spread, ...($this->spreadAdd($segment) ?? $segment));
+        }
+
+        return $spread;
+    }
+
+    /**
+     * One action as one `ADD COLUMN` per member of its parentheses, or null when it is not the
+     * parenthesized form.
+     *
+     * The parentheses have to hold everything after `ADD [COLUMN]`. MySQL refuses the form with
+     * anything behind them, `FIRST` and `AFTER` included, so a token at the statement's own level
+     * there is a shape this does not know, and the signatures get it as written.
+     *
+     * A member begins at the first token inside the parentheses and at every comma on their own
+     * level; the comma inside `DECIMAL(10, 2)` sits one level deeper and stays in its member.
+     *
+     * @param  non-empty-list<StatementToken>  $segment
+     * @return list<StatementToken>|null
+     */
+    private function spreadAdd(array $segment): ?array
+    {
+        $add = $segment[0];
+        $first = isset($segment[1]) && $segment[1]->type === TokenType::Keyword && $segment[1]->text === 'COLUMN' ? 2 : 1;
+        $members = array_slice($segment, $first);
+
+        if ($add->type !== TokenType::Keyword || $add->text !== 'ADD' || $members === [] || $members[0]->precededBy !== '(') {
+            return null;
+        }
+
+        $spread = [];
+
+        foreach ($members as $token) {
+            if ($token->depth === 0) {
+                return null;
+            }
+
+            $opensAMember = $spread === [] || ($token->depth === 1 && $token->precededBy === ',');
+
+            if ($opensAMember) {
+                $spread[] = new StatementToken(TokenType::Keyword, 'ADD', $spread === [] ? $add->precededBy : ',', 0);
+                $spread[] = new StatementToken(TokenType::Keyword, 'COLUMN', null, 0);
+            }
+
+            $spread[] = new StatementToken($token->type, $token->text, $opensAMember ? null : $token->precededBy, $token->depth - 1);
+        }
+
+        return $spread;
     }
 
     /**
@@ -528,6 +610,14 @@ final readonly class StatementClassifier implements CanonicalizationStage
                     if ($index < $count) {
                         return null;
                     }
+                    break;
+
+                case SignatureElementKind::SkippedName:
+                    if ($index >= $count || $this->nameIn($tokens[$index], $profile->unreservedNames) === null) {
+                        return null;
+                    }
+
+                    $index++;
                     break;
 
                 case SignatureElementKind::Target:

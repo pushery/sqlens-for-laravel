@@ -355,23 +355,14 @@ final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements Decl
      * `ALTER TABLE t DROP PRIMARY KEY, ADD PRIMARY KEY (id)`, and
      * that form is better than the two-statement one on both counts: the table is rebuilt once
      * instead of twice, and there is no moment when it has no primary key — which is the state this
-     * rule warns about. The statement scan below cannot see it, because there is no later
-     * statement: measured, the canonical model classifies the whole multi-action `ALTER` as one
-     * statement of kind `drop_constraint`, and the add is not reflected in the kind at all.
+     * rule warns about. The add is a later action of that statement, so every action of every
+     * statement from this one on is asked, and a restore written `ADD CONSTRAINT pk PRIMARY KEY`
+     * or behind an `ADD COLUMN` counts as the plain form does.
      *
-     * Without this check the rule would report the form it should approve of. Reading the
-     * canonical text is the same move {@see dropsThePrimaryKey()}
-     * already makes one method up, and for the same reason: the kind is too coarse to tell these
-     * apart, and the text is where the information actually is.
+     * Without that the rule would report the form it should approve of.
      */
     private function keyIsRestored(MigrationStatementView $statement): bool
     {
-        // The same statement, first. A multi-action ALTER carries its own restore, and asking the
-        // stream about it would be asking the wrong question.
-        if (preg_match('/\bADD PRIMARY KEY\b/', $statement->canonical) === 1) {
-            return true;
-        }
-
         $table = $statement->soleTarget(SchemaObjectType::Table);
 
         if (! $table instanceof StatementTarget) {
@@ -379,16 +370,20 @@ final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements Decl
         }
 
         foreach ($statement->migration->statements as $other) {
-            if ($other->index <= $statement->statementIndex) {
+            if ($other->index < $statement->statementIndex) {
                 continue;
             }
-            if ($other->kind !== StatementKind::AddPrimaryKey) {
-                continue;
-            }
-            $otherTable = $other->soleTarget(SchemaObjectType::Table);
 
-            if ($otherTable instanceof StatementTarget && $otherTable->qualifiedName() === $table->qualifiedName()) {
-                return true;
+            foreach ($other->andItsActions() as $action) {
+                if ($action->kind !== StatementKind::AddPrimaryKey) {
+                    continue;
+                }
+
+                $otherTable = $action->soleTarget(SchemaObjectType::Table);
+
+                if ($otherTable instanceof StatementTarget && $otherTable->qualifiedName() === $table->qualifiedName()) {
+                    return true;
+                }
             }
         }
 
