@@ -306,7 +306,10 @@ final class ForeignKeyWithoutIndexRule extends AbstractCatalogRule implements De
     {
         $indexes = [];
 
-        foreach ($statements as $digest) {
+        // Every action: a UNIQUE added behind an ADD COLUMN is an index like one added alone.
+        $actions = array_merge(...array_map(static fn (MigrationStatementDigest $statement): array => $statement->andItsActions(), $statements));
+
+        foreach ($actions as $digest) {
             if ($digest->soleTarget(SchemaObjectType::Table)?->qualifiedName() !== $table) {
                 continue;
             }

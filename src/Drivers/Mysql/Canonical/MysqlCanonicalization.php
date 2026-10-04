@@ -429,6 +429,119 @@ final class MysqlCanonicalization implements DriverCanonicalization
                     SignatureElement::keyword('ADD'), SignatureElement::keyword('CONSTRAINT'),
                     SignatureElement::keyword('CHECK'),
                 ]),
+                // ALTER TABLE <t> ADD CONSTRAINT PRIMARY KEY …  /  ADD CONSTRAINT UNIQUE [INDEX|KEY] <i> …
+                // /  ADD CONSTRAINT FOREIGN KEY (<c>, …) REFERENCES <t2>  — the manual's
+                // `ADD [CONSTRAINT [symbol]]` with the symbol left out. Each is read as the same
+                // statement without `CONSTRAINT`, because the server makes the same object of it: the
+                // primary key is `PRIMARY`, the unique index takes the name written after `UNIQUE`, and
+                // the foreign key is named `<t>_ibfk_<n>`. Like the CHECK pair above, they sit before
+                // every `ADD CONSTRAINT <k>` shape, whose target would meet the keyword and fail.
+                new StatementSignature(StatementKind::AddPrimaryKey, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('CONSTRAINT'),
+                    SignatureElement::keyword('PRIMARY'), SignatureElement::keyword('KEY'),
+                ]),
+                new StatementSignature(StatementKind::CreateIndex, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('CONSTRAINT'),
+                    SignatureElement::keyword('UNIQUE'), SignatureElement::keyword('INDEX'),
+                    SignatureElement::target($index),
+                ]),
+                new StatementSignature(StatementKind::CreateIndex, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('CONSTRAINT'),
+                    SignatureElement::keyword('UNIQUE'), SignatureElement::keyword('KEY'),
+                    SignatureElement::target($index),
+                ]),
+                new StatementSignature(StatementKind::CreateIndex, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('CONSTRAINT'),
+                    SignatureElement::keyword('UNIQUE'), SignatureElement::target($index),
+                ]),
+                new StatementSignature(StatementKind::AddForeignKey, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('CONSTRAINT'),
+                    SignatureElement::keyword('FOREIGN'), SignatureElement::keyword('KEY'),
+                    SignatureElement::columnList(),
+                    SignatureElement::seekKeyword('REFERENCES'), SignatureElement::target($table, TargetRole::Referenced),
+                ]),
+                // …and the same with the index name after `FOREIGN KEY`: the server keeps it for the
+                // index and still names the constraint `<t>_ibfk_<n>`, as for `ADD FOREIGN KEY <i>`.
+                new StatementSignature(StatementKind::AddForeignKey, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('CONSTRAINT'),
+                    SignatureElement::keyword('FOREIGN'), SignatureElement::keyword('KEY'),
+                    SignatureElement::target($index), SignatureElement::columnList(),
+                    SignatureElement::seekKeyword('REFERENCES'), SignatureElement::target($table, TargetRole::Referenced),
+                ]),
+                // ALTER TABLE <t> ADD CONSTRAINT <k> PRIMARY KEY …  /  ADD CONSTRAINT <k> UNIQUE [INDEX|KEY] …
+                // — the same with the symbol written, read for what the server keeps of it. A primary
+                // key is `PRIMARY` whatever its symbol. A `UNIQUE` that names its index is that index,
+                // and the symbol is dropped; one that names none takes the symbol as the index's name,
+                // so there the symbol IS the index target. Without these shapes they fell to the
+                // generic `ADD CONSTRAINT <k>` below, and no rule about a key or an index saw them.
+                new StatementSignature(StatementKind::AddPrimaryKey, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('CONSTRAINT'),
+                    SignatureElement::skippedName(),
+                    SignatureElement::keyword('PRIMARY'), SignatureElement::keyword('KEY'),
+                ]),
+                // The index without a name of its own comes first: its column list follows the
+                // keyword directly, and the named shapes below would read the first column as the
+                // index's name.
+                new StatementSignature(StatementKind::CreateIndex, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('CONSTRAINT'),
+                    SignatureElement::target($index),
+                    SignatureElement::keyword('UNIQUE'), SignatureElement::keyword('INDEX'),
+                    SignatureElement::columnList(),
+                ]),
+                new StatementSignature(StatementKind::CreateIndex, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('CONSTRAINT'),
+                    SignatureElement::target($index),
+                    SignatureElement::keyword('UNIQUE'), SignatureElement::keyword('KEY'),
+                    SignatureElement::columnList(),
+                ]),
+                new StatementSignature(StatementKind::CreateIndex, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('CONSTRAINT'),
+                    SignatureElement::target($index),
+                    SignatureElement::keyword('UNIQUE'), SignatureElement::columnList(),
+                ]),
+                new StatementSignature(StatementKind::CreateIndex, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('CONSTRAINT'),
+                    SignatureElement::skippedName(),
+                    SignatureElement::keyword('UNIQUE'), SignatureElement::keyword('INDEX'),
+                    SignatureElement::target($index),
+                ]),
+                new StatementSignature(StatementKind::CreateIndex, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('CONSTRAINT'),
+                    SignatureElement::skippedName(),
+                    SignatureElement::keyword('UNIQUE'), SignatureElement::keyword('KEY'),
+                    SignatureElement::target($index),
+                ]),
+                new StatementSignature(StatementKind::CreateIndex, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('CONSTRAINT'),
+                    SignatureElement::skippedName(),
+                    SignatureElement::keyword('UNIQUE'), SignatureElement::target($index),
+                ]),
                 // ALTER TABLE <t> ADD CONSTRAINT <k> FOREIGN KEY (<c>, …) REFERENCES <t2>
                 //
                 // The columns travel, and they have to be read BEFORE the shape below, which is the
@@ -446,6 +559,20 @@ final class MysqlCanonicalization implements DriverCanonicalization
                     SignatureElement::keyword('ADD'), SignatureElement::keyword('CONSTRAINT'),
                     SignatureElement::target($constraint),
                     SignatureElement::seekKeyword('KEY'), SignatureElement::columnList(),
+                    SignatureElement::seekKeyword('REFERENCES'), SignatureElement::target($table, TargetRole::Referenced),
+                ]),
+                // …and the same with the manual's optional index name after `FOREIGN KEY`. With a
+                // symbol written, the server names the key's index after the symbol and drops this
+                // name, so it is read past rather than taken as an index target. Without the shape the
+                // column list above met the name, and the key arrived through the shape below with no
+                // columns.
+                new StatementSignature(StatementKind::AddForeignKey, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('CONSTRAINT'),
+                    SignatureElement::target($constraint),
+                    SignatureElement::keyword('FOREIGN'), SignatureElement::keyword('KEY'),
+                    SignatureElement::skippedName(), SignatureElement::columnList(),
                     SignatureElement::seekKeyword('REFERENCES'), SignatureElement::target($table, TargetRole::Referenced),
                 ]),
                 // ALTER TABLE <t> ADD CONSTRAINT <k> … REFERENCES <t2> — the REFERENCES clause is
@@ -466,6 +593,18 @@ final class MysqlCanonicalization implements DriverCanonicalization
                     SignatureElement::optionalModifiers(), SignatureElement::target($table),
                     SignatureElement::keyword('ADD'), SignatureElement::keyword('FOREIGN'),
                     SignatureElement::keyword('KEY'), SignatureElement::columnList(),
+                    SignatureElement::seekKeyword('REFERENCES'), SignatureElement::target($table, TargetRole::Referenced),
+                ]),
+                // ALTER TABLE <t> ADD FOREIGN KEY <i> (<c>, …) REFERENCES <t2>  — the same with the
+                // manual's optional `index_name`. The server gives that name to the index the key
+                // needs and still names the constraint `<t>_ibfk_<n>`, so the name is an index target,
+                // and the statement carries no constraint target, as above.
+                new StatementSignature(StatementKind::AddForeignKey, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('FOREIGN'),
+                    SignatureElement::keyword('KEY'), SignatureElement::target($index),
+                    SignatureElement::columnList(),
                     SignatureElement::seekKeyword('REFERENCES'), SignatureElement::target($table, TargetRole::Referenced),
                 ]),
                 // ALTER TABLE <t> ADD CONSTRAINT <k>
@@ -687,6 +826,9 @@ final class MysqlCanonicalization implements DriverCanonicalization
             // the index is built and are not actions of their own.
             actionOptions: ['ALGORITHM', 'LOCK'],
             unreservedNames: self::UNRESERVED_NAMES,
+            // `ALTER TABLE t ADD (a INT, b INT)` adds two columns, the manual's
+            // `ADD [COLUMN] (col_name column_definition, ...)`.
+            parenthesizedAddColumns: true,
         );
     }
 }

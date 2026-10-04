@@ -485,6 +485,25 @@ cumulative one, and names DDL a request issued outside a migration.
 - **Bindings never reach the log as values.** With `include_bindings` on you get `string(18)`, not
   the address that was bound.
 
+### 12. Gate a deploy on the database it is about to reach
+
+The deploy suite reads the target database itself, read-only and under its own session timeouts, so
+run it from the deploy pipeline on a connection to that database:
+
+```bash
+php artisan sqlens:predeploy
+php artisan sqlens:postdeploy
+php artisan sqlens:drift
+```
+
+- `sqlens:predeploy` checks the target immediately before `migrate --force`: whether the migration
+  role may do what the pending migrations ask, which sessions hold the tables they lock, and what
+  earlier deploys left behind. It is fail-closed, so a check that cannot answer blocks too, unless
+  `--allow-undetermined` is passed and nothing else blocks.
+- `sqlens:postdeploy` verifies once, from the catalog only, what the deploy left behind.
+- `sqlens:drift` compares the live schema with a replay of the migration state and reports where the
+  two disagree; it exits non-zero only with `--fail-on-drift`.
+
 ## Examples
 
 Lint the pending migrations of the default connection:
@@ -592,7 +611,7 @@ Read the changelog callouts before a minor bump, and keep the security floor exp
 configuration rather than relying on a default. `security.min_severity` is the dial that decides
 whether a raised severity reaches your build at all.
 
-### 12. Give your coding agents the rules before they write the migration
+### 13. Give your coding agents the rules before they write the migration
 
 SQLens contains no model. It writes text for whatever agent you use and verifies, deterministically,
 what that agent hands back — the half an agent cannot do for itself.
@@ -637,7 +656,7 @@ clone looks like and exactly where a write path would silently paper over the ga
 every file is current, `1` on a deviation, and `2` when the invocation itself was wrong; a job can
 branch on the number before reading the message.
 
-### 13. Close the loop with a report the agent can act on
+### 14. Close the loop with a report the agent can act on
 
 ```bash
 php artisan sqlens:lint --format=agent

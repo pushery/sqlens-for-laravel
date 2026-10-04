@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Drivers\Pgsql\Deploy;
 
 use Illuminate\Database\Connection;
 use Pushery\SQLens\Attributes\RawSql;
+use Pushery\SQLens\Canonical\Identifier;
 use Pushery\SQLens\Canonical\QuotedIdentifier;
 use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Categories\Category;
@@ -13,6 +14,7 @@ use Pushery\SQLens\Contracts\PreflightCheck;
 use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PreflightContext;
+use Pushery\SQLens\Drivers\Pgsql\Canonical\PgsqlCanonicalization;
 use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
@@ -211,8 +213,19 @@ final readonly class InvalidIndexCheck implements PreflightCheck
     {
         // The qualified form matches a statement that named a schema; the bare form matches one that
         // did not, which then lands in the table's schema — the same schema this row came from.
-        return in_array($schema.'.'.$index, $pendingIndexNames, true)
-            || in_array($index, $pendingIndexNames, true);
+        //
+        // Both in the canonical form the pending names carry. The catalog gives a name raw, and raw
+        // `MixedIdx` never meets the `"MixedIdx"` a statement names: measured on 18, such a leftover
+        // was reported as the quieter INVALID_INDEX while the deploy stopped at the CREATE INDEX.
+        foreach ([QuotedIdentifier::of('"', $schema, $index), QuotedIdentifier::of('"', $index)] as $reference) {
+            $name = Identifier::parse($reference, new PgsqlCanonicalization);
+
+            if ($name instanceof Identifier && in_array($name->canonical(), $pendingIndexNames, true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** The louder finding: this deploy will stop here. */

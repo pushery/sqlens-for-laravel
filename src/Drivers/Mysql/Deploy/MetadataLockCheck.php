@@ -15,6 +15,7 @@ use Pushery\SQLens\Contracts\PreflightCheck;
 use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PreflightContext;
+use Pushery\SQLens\Drivers\Mysql\Canonical\MysqlCanonicalization;
 use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
@@ -197,7 +198,10 @@ final readonly class MetadataLockCheck implements PreflightCheck
                 if (! $target->isSubject()) {
                     continue;
                 }
-                $targets[] = $target->qualifiedName();
+                // As the catalog holds it, because the activity views report `OBJECT_SCHEMA` and
+                // `OBJECT_NAME` raw. The canonical form quotes a keyword, `` `order` ``, which never
+                // equals the `order` a session holds.
+                $targets[] = $target->catalogName(new MysqlCanonicalization);
             }
         }
 

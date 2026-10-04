@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Capture;
 
+use Pushery\SQLens\Canonical\StatementAction;
 use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Capture\PreScan\PreScanHit;
 use Pushery\SQLens\Exceptions\UncanonicalizedStatement;
@@ -429,19 +430,34 @@ final readonly class CaptureResult
         $digests = [];
 
         foreach ($this->statements as $statement) {
-            if ($statement->canonicalSql === null) {
+            $canonical = $statement->canonicalSql;
+
+            if ($canonical === null) {
                 continue;
             }
 
             $digests[] = new MigrationStatementDigest(
                 $statement->sequence,
                 $statement->statementKind,
-                $statement->canonicalSql,
+                $canonical,
                 $statement->withinTransaction,
                 $statement->targets ?? [],
                 $statement->transactionMode,
                 $statement->keyColumns,
                 $statement->columnDefinitions,
+                array_map(
+                    static fn (StatementAction $action): MigrationStatementDigest => new MigrationStatementDigest(
+                        $statement->sequence,
+                        $action->kind,
+                        $canonical,
+                        $statement->withinTransaction,
+                        $action->targets,
+                        $statement->transactionMode,
+                        $action->keyColumns,
+                        $action->columnDefinitions,
+                    ),
+                    $statement->actions,
+                ),
             );
         }
 

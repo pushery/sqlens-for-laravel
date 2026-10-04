@@ -26,6 +26,13 @@ use Pushery\SQLens\Exceptions\InvalidRuleEvidence;
  */
 final readonly class PgTypeChangeMatrix
 {
+    /**
+     * The canonical target types whose specifier decides the answer when it is written.
+     *
+     * @var list<string>
+     */
+    private const array DECIDED_BY_THEIR_SPECIFIER = ['numeric', 'timestamp', 'timestamp with time zone', 'time', 'time with time zone'];
+
     /** The matrix format this reader implements; an unknown version is an error. */
     public const int SCHEMA_VERSION = 1;
 
@@ -92,9 +99,11 @@ final readonly class PgTypeChangeMatrix
         // own: raising the precision at the same scale keeps every stored value and rewrites nothing,
         // changing the scale rewrites the table, and the column's current pair is not in the
         // statement. Measured on 18.4: `numeric(8,2)` to `numeric(12,2)` kept the heap, and
-        // `numeric(14,2)` to `numeric(14,4)` rewrote it. A bare `numeric` stays keyed on its
+        // `numeric(14,2)` to `numeric(14,4)` rewrote it. A time type carries its precision the same
+        // way: `timestamp(3)` to `timestamp(6)` kept the heap, `timestamp(6)` to `timestamp(0)`
+        // rewrote it, and `time` and `timestamptz` behaved alike. A bare target stays keyed on its
         // dominant case, a change from another type.
-        if ($type === 'numeric' && str_contains($rawTargetType, '(')) {
+        if (in_array($type, self::DECIDED_BY_THEIR_SPECIFIER, true) && str_contains($rawTargetType, '(')) {
             return TypeChangeImpact::Unknown;
         }
 

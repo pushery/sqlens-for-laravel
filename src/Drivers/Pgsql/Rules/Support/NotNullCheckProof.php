@@ -42,7 +42,13 @@ final class NotNullCheckProof
         /** @var array<string, true> $awaitingValidation constraint names added NOT VALID, by qualified name */
         $awaitingValidation = [];
 
-        foreach ($statement->migration->statements as $earlier) {
+        $earlierActions = array_merge(...array_map(
+            static fn (MigrationStatementDigest $digest): array => $digest->andItsActions(),
+            $statement->migration->statements,
+        ));
+
+        // Every action, so a check added behind an ADD COLUMN in one statement is the proof it is alone.
+        foreach ($earlierActions as $earlier) {
             if ($earlier->index >= $statement->statementIndex || ! self::isOn($earlier, $table)) {
                 continue;
             }

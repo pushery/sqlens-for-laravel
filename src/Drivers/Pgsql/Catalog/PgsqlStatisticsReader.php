@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Drivers\Pgsql\Catalog;
 use DateTimeImmutable;
 use Illuminate\Database\Connection;
 use Pushery\SQLens\Attributes\RawSql;
+use Pushery\SQLens\Canonical\Identifier;
 use Pushery\SQLens\Catalog\CatalogSkip;
 use Pushery\SQLens\Catalog\Degradation\DatabaseErrorTranslator;
 use Pushery\SQLens\Catalog\ReaderSession;
@@ -19,6 +20,7 @@ use Pushery\SQLens\Catalog\Statistics\StatisticsSnapshot;
 use Pushery\SQLens\Catalog\Statistics\StorageHeadroom;
 use Pushery\SQLens\Catalog\Statistics\TableStatistics;
 use Pushery\SQLens\Contracts\StatisticsReader;
+use Pushery\SQLens\Drivers\Pgsql\Canonical\PgsqlCanonicalization;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 use Throwable;
 
@@ -214,6 +216,12 @@ final readonly class PgsqlStatisticsReader implements StatisticsReader
 
     private function serverName(string $object, string $prefix): string
     {
+        // A request carries the canonical name a statement or a finding wrote, and the catalog holds
+        // it without the quotes that form adds: `"Orders"` is the table `Orders`. Asked as written,
+        // such a table reported no size, and a deploy that rewrites it was answered undetermined.
+        $parsed = Identifier::parse($object, new PgsqlCanonicalization);
+        $object = $parsed instanceof Identifier ? $parsed->catalogName(new PgsqlCanonicalization) : $object;
+
         if ($prefix === '') {
             return $object;
         }

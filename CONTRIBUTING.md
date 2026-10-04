@@ -396,9 +396,10 @@ SQLENS_WRITE_GOVERNANCE_SNAPSHOT=1.2.0 php .github/governance/check-rule-governa
 ```
 
 Commit the result with the release. From then on it is what the next diff measures
-against. A test holds the snapshot's version to the newest `## [x.y.z]` heading in
-`CHANGELOG.md`, so a release that skips this step turns the next `develop` gate red
-instead of leaving the gate to compare against an older release.
+against. `composer governance:check` refuses a tree whose snapshot names another version
+than the newest `## [x.y.z]` heading in `CHANGELOG.md`, so a release cut that skips this
+step fails there, before its gate runs, instead of leaving the comparison to measure
+against an older release. A test holds the same line in the gate.
 
 ## Fixture pairs
 

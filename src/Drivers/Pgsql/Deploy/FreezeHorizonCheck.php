@@ -13,8 +13,12 @@ use Pushery\SQLens\Contracts\PreflightCheck;
 use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PreflightContext;
+use Pushery\SQLens\Drivers\Pgsql\Canonical\PgsqlCanonicalization;
 use Pushery\SQLens\Drivers\Pgsql\Catalog\ApplicationSearchPath;
 use Pushery\SQLens\Drivers\Pgsql\Catalog\FreezeThreshold;
+use Pushery\SQLens\Drivers\Pgsql\PgTypeChangeMatrix;
+use Pushery\SQLens\Drivers\Pgsql\Rules\Support\ColumnTypeChange;
+use Pushery\SQLens\Drivers\Pgsql\TypeChangeImpact;
 use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
@@ -489,10 +493,11 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
                     continue;
                 }
 
-                // The name as the migration wrote it, schema-qualified or bare. The age query matches
+                // The name as the catalog holds it, schema-qualified or bare. The age query matches
                 // a bare name only against the table an unqualified reference finds, so it cannot
-                // pick up a table of the same name in another schema.
-                $targets[] = $target->qualifiedName();
+                // pick up a table of the same name in another schema. Not the canonical form: that
+                // quotes `"Orders"`, and `relname` holds `Orders`, so the table went unexamined.
+                $targets[] = $target->catalogName(new PgsqlCanonicalization);
             }
         }
 
@@ -516,7 +521,7 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
 
             foreach ($statement->targets ?? [] as $target) {
                 if ($target->type === SchemaObjectType::Index) {
-                    $indexes[] = $target->qualifiedName();
+                    $indexes[] = $target->catalogName(new PgsqlCanonicalization);
                 }
             }
         }
@@ -524,12 +529,27 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
         return array_values(array_unique($indexes));
     }
 
-    /** Whether anything in this run rewrites a table, which lengthens the window rather than shortening it. */
+    /**
+     * Whether anything in this run rewrites a table, which lengthens the window rather than shortening it.
+     *
+     * Decided as PG.L2.TYPE_CHANGE_REWRITE decides it, from each pending statement's text: a `USING`
+     * clause rewrites, and so does a target the type matrix calls a rewrite, unless the statement
+     * restates the column's type the way Laravel's `->change()` does, where the current type decides.
+     * The statement's kind cannot answer it: PostgreSQL classifies every `ALTER COLUMN` as a plain
+     * `alter_table`, and a retyping behind another action carries that action's kind.
+     */
     private function rewritesAnything(PreflightContext $context): bool
     {
+        $matrix = PgTypeChangeMatrix::bundled();
+
         return array_any(
             $context->pending->statements,
-            static fn (CapturedStatement $statement): bool => $statement->statementKind === StatementKind::AlterColumn,
+            static function (CapturedStatement $statement) use ($matrix): bool {
+                $change = ColumnTypeChange::inCanonical($statement->canonicalSql ?? '');
+
+                return $change instanceof ColumnTypeChange && ($change->hasUsingClause()
+                    || ($matrix->classify($change->targetType()) === TypeChangeImpact::Rewrite && ! $change->restatesTheColumn()));
+            },
         );
     }
 

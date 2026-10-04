@@ -291,8 +291,12 @@ final class ConstraintNotValidatedRule extends AbstractPgsqlSafetyRule implement
             return null;
         }
 
+        // Every action, so an add behind an ADD COLUMN in one statement pairs with its VALIDATE too.
         return array_find(
-            $statement->migration->statements,
+            array_merge(...array_map(
+                static fn (MigrationStatementDigest $digest): array => $digest->andItsActions(),
+                $statement->migration->statements,
+            )),
             static fn (MigrationStatementDigest $earlier): bool => $earlier->index < $statement->statementIndex
                 && $earlier->kind === StatementKind::AddConstraint
                 && str_contains($earlier->canonical, 'NOT VALID')

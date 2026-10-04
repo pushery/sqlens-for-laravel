@@ -8,6 +8,7 @@ use Illuminate\Database\Connection;
 use Pushery\SQLens\Attributes\RawSql;
 use Pushery\SQLens\Canonical\Identifier;
 use Pushery\SQLens\Canonical\IdentifierComponent;
+use Pushery\SQLens\Canonical\QuotedIdentifier;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\PreflightCheck;
 use Pushery\SQLens\Deploy\CheckResult;
@@ -178,6 +179,14 @@ final readonly class GrantCheck implements PreflightCheck
                 continue;
             }
 
+            // An index's own name is nothing MySQL grants on: `CREATE INDEX` needs INDEX on the table,
+            // `ALTER TABLE … ADD INDEX` needs ALTER on it, and the table is a requirement of its own.
+            // Measured: a user with ALTER on the table adds the index, and was refused here for
+            // lacking CREATE on the index's name.
+            if ($requirement->objectType === SchemaObjectType::Index && $requirement->class === PrivilegeClass::Create) {
+                continue;
+            }
+
             // Safe without a second `instanceof`: `isDerived()` asserts it for the analyzer above.
             $needed = $this->privilegeName($requirement->class);
             $scope = $this->objectScope($requirement, $reading['schema']);
@@ -295,6 +304,7 @@ final readonly class GrantCheck implements PreflightCheck
             PrivilegeClass::Drop => 'DROP',
             PrivilegeClass::References => 'REFERENCES',
             PrivilegeClass::Write => 'INSERT',
+            PrivilegeClass::Index => 'INDEX',
         };
     }
 
@@ -553,13 +563,16 @@ final readonly class GrantCheck implements PreflightCheck
                 'The migration user `%s` holds no `%s` reaching `%s`, and holds no roles that could '
                 .'carry one. `migrate --force` will not fail at the start — it will apply what it '
                 .'can and stop here, leaving the schema half-migrated while the application is '
-                .'already deployed against the other half. `GRANT %s ON %s TO \'%s\'@\'…\';`',
+                .'already deployed against the other half. `GRANT %s ON %s TO %s@\'…\';`',
                 $role,
                 $needed,
                 $requirement->object,
                 $scope,
                 $target,
-                $role,
+                // The user as an identifier rather than a string literal: a `'` in the name would end
+                // the literal, and a backslash in it reads differently under `NO_BACKSLASH_ESCAPES`.
+                // A backtick-quoted part reads the same under every `sql_mode`.
+                QuotedIdentifier::of('`', $role),
             ),
             location: Location::inCatalog($context->driver, $context->connection, $requirement->object, $requirement->objectType),
             category: Category::Safety,

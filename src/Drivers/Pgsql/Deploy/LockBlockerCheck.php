@@ -16,6 +16,7 @@ use Pushery\SQLens\Contracts\PreflightCheck;
 use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PreflightContext;
+use Pushery\SQLens\Drivers\Pgsql\Canonical\PgsqlCanonicalization;
 use Pushery\SQLens\Drivers\Pgsql\Rules\Support\ShareUpdateExclusiveAlter;
 use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
@@ -227,7 +228,7 @@ final readonly class LockBlockerCheck implements PreflightCheck
                 if (stripos($statement->canonicalSql ?? $statement->rawSql, 'concurrently') === false) {
                     foreach ($statement->targets ?? [] as $target) {
                         if ($target->type === SchemaObjectType::Index) {
-                            $droppedIndexes[] = $target->qualifiedName();
+                            $droppedIndexes[] = $target->catalogName(new PgsqlCanonicalization);
                         }
                     }
                 }
@@ -265,10 +266,11 @@ final readonly class LockBlockerCheck implements PreflightCheck
                 if (! $target->isSubject()) {
                     continue;
                 }
-                // The QUALIFIED name, because that is what the activity views report a relation as.
-                // A bare table name would match nothing on a schema-qualified server and everything
-                // on none — both silently.
-                $name = $target->qualifiedName();
+                // The name as the catalog holds it, schema-qualified when the migration wrote it so,
+                // because that is what the activity views report a relation as and what the reader
+                // compares with `relname`. The canonical form quotes `"Orders"`, which never equals
+                // `Orders`, and a session holding that table went unreported.
+                $name = $target->catalogName(new PgsqlCanonicalization);
                 $targets[$name] = ($targets[$name] ?? false) || $stopsReaders;
             }
         }

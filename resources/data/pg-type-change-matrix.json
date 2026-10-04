@@ -39,6 +39,8 @@
         "float4": "real",
         "timestamptz": "timestamp with time zone",
         "timetz": "time with time zone",
+        "timestamp without time zone": "timestamp",
+        "time without time zone": "time",
         "character varying": "varchar",
         "varchar": "varchar"
     }

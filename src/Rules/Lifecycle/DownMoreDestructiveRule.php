@@ -249,8 +249,10 @@ final class DownMoreDestructiveRule extends AbstractLifecycleRule implements Pro
     {
         $touched = $this->tablesTouchedByUp($statement);
         $unaccounted = [];
+        // Every action of the rollback: a DROP COLUMN behind an ADD COLUMN destroys as one alone does.
+        $rollbacks = array_merge(...array_map(static fn (MigrationStatementDigest $digest): array => $digest->andItsActions(), $leg->statements));
 
-        foreach ($leg->statements as $rollback) {
+        foreach ($rollbacks as $rollback) {
             // A drop or a truncate destroys EVERY table it names, so there is no side to pick:
             // `DROP TABLE orders, users` in a rollback whose up() created only `orders` takes
             // `users` with it, rows and all, and that second name is the one this rule exists for.
@@ -305,9 +307,12 @@ final class DownMoreDestructiveRule extends AbstractLifecycleRule implements Pro
         $tables = [];
 
         foreach ($statement->migration->statements as $digest) {
-            foreach ($digest->targets as $target) {
-                if ($target->type === SchemaObjectType::Table) {
-                    $tables[] = $target->qualifiedName();
+            // Every action: a foreign key behind an ADD COLUMN names its parent table as one alone does.
+            foreach ($digest->andItsActions() as $action) {
+                foreach ($action->targets as $target) {
+                    if ($target->type === SchemaObjectType::Table) {
+                        $tables[] = $target->qualifiedName();
+                    }
                 }
             }
         }

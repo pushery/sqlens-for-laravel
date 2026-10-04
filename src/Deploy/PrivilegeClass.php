@@ -59,4 +59,13 @@ enum PrivilegeClass: string
      * that table" — advice that cannot be followed, given to somebody in a deploy window.
      */
     case Ownership = 'ownership';
+
+    /**
+     * Building an index on a table that already exists.
+     *
+     * Its own class because the right sits on the TABLE, and neither engine spells it as `CREATE`:
+     * PostgreSQL requires the table's owner, MySQL the `INDEX` privilege on it. The index's own name
+     * is a separate requirement of class `Create`, which PostgreSQL asks at the schema it lands in.
+     */
+    case Index = 'index';
 }

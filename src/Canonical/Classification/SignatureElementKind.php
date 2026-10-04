@@ -32,6 +32,18 @@ enum SignatureElementKind
      */
     case TargetList;
 
+    /**
+     * One name the grammar allows and the server does not keep, read past without becoming a target.
+     *
+     * MySQL writes `ADD [CONSTRAINT [symbol]] …`, and in three places the server keeps one of two names
+     * and drops the other: a primary key is `PRIMARY` whatever its symbol, a `UNIQUE` that names its
+     * index is that index, and a foreign key's index takes the constraint's name over its own. Read
+     * as a target, the dropped name is an object a naming rule judges and nobody finds in the catalog.
+     * It still has to BE a name: a keyword in its place declines the signature, so
+     * `ADD CONSTRAINT PRIMARY KEY` is left to the signature written for it.
+     */
+    case SkippedName;
+
     /** Advance past the next occurrence of a keyword (e.g. ON, REFERENCES); fail the signature if it is absent. */
     case SeekKeyword;
 

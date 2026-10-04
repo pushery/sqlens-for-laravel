@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Deploy\Checks;
 
+use Pushery\SQLens\Canonical\StatementAction;
 use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Catalog\Statistics\Estimate;
 use Pushery\SQLens\Catalog\Statistics\StatisticsRequest;
@@ -332,7 +333,11 @@ final readonly class DiskHeadroomCheck implements PreflightCheck
         $targets = [];
 
         foreach ($context->pending->statements as $statement) {
-            if (! in_array($statement->statementKind, self::SPACE_HUNGRY_KINDS, true)) {
+            // Every action: a `MODIFY` behind a `DROP INDEX` rebuilds the table as one alone does, and
+            // the statement's own kind is only its first action's.
+            $kinds = [$statement->statementKind, ...array_map(static fn (StatementAction $action): StatementKind => $action->kind, $statement->actions)];
+
+            if (! array_any($kinds, static fn (?StatementKind $kind): bool => in_array($kind, self::SPACE_HUNGRY_KINDS, true))) {
                 continue;
             }
 

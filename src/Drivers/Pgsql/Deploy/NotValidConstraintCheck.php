@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Drivers\Pgsql\Deploy;
 
 use Illuminate\Database\Connection;
 use Pushery\SQLens\Attributes\RawSql;
+use Pushery\SQLens\Canonical\Identifier;
 use Pushery\SQLens\Canonical\QuotedIdentifier;
 use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Categories\Category;
@@ -13,6 +14,7 @@ use Pushery\SQLens\Contracts\PreflightCheck;
 use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PreflightContext;
+use Pushery\SQLens\Drivers\Pgsql\Canonical\PgsqlCanonicalization;
 use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
@@ -114,7 +116,7 @@ final readonly class NotValidConstraintCheck implements PreflightCheck
         foreach (array_map(static fn (mixed $row): object => (object) $row, $rows) as $row) {
             $constraint = $this->text($row, 'constraint_name');
 
-            if (in_array($constraint, $beingValidated, true)) {
+            if (in_array($this->canonicalName($constraint), $beingValidated, true)) {
                 continue;
             }
 
@@ -163,6 +165,20 @@ final readonly class NotValidConstraintCheck implements PreflightCheck
         }
 
         return array_values(array_unique($names));
+    }
+
+    /**
+     * A catalog name in the canonical form the pending targets carry.
+     *
+     * The catalog gives a name raw, and raw `MyCheck` never meets the `"MyCheck"` a statement names:
+     * measured on 18, a constraint this deploy validates was reported as an open debt whenever its
+     * name needed quoting.
+     */
+    private function canonicalName(string $name): string
+    {
+        $parsed = Identifier::parse(QuotedIdentifier::of('"', $name), new PgsqlCanonicalization);
+
+        return $parsed instanceof Identifier ? $parsed->canonical() : $name;
     }
 
     /** One column as a string; a non-scalar becomes empty rather than a plausible wrong value. */

@@ -39,6 +39,11 @@ final readonly class StatementClassificationProfile
      *                                         takes a name reads one of these as the name it is. Empty
      *                                         keeps every keyword out of a name, so a statement naming
      *                                         an object after one stays undetermined
+     * @param  bool  $parenthesizedAddColumns  whether the engine reads `ADD [COLUMN] (a INT, b INT)`
+     *                                         in an `ALTER TABLE` as one added column per member, as
+     *                                         MySQL does. The classifier then reads it as the action
+     *                                         list it means; an engine that refuses the form keeps
+     *                                         the default and its signatures see it as written
      */
     public function __construct(
         public array $signatures,
@@ -46,5 +51,6 @@ final readonly class StatementClassificationProfile
         public array $leadFallback,
         public array $actionOptions = [],
         public array $unreservedNames = [],
+        public bool $parenthesizedAddColumns = false,
     ) {}
 }
