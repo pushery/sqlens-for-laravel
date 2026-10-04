@@ -32,7 +32,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * ## The honesty limit
  *
  * This reads the SERVER's side of the negotiation. A client can refuse independently — PHP's
- * `mysqli.allow_local_infile` and PDO's `PDO::MYSQL_ATTR_LOCAL_INFILE` both default to off on
+ * `mysqli.allow_local_infile` and PDO's `Pdo\Mysql::ATTR_LOCAL_INFILE` both default to off on
  * current builds — and this rule cannot see that. It reports that the server would ask, not that
  * anybody would answer.
  */

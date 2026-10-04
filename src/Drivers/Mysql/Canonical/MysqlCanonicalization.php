@@ -34,6 +34,25 @@ final class MysqlCanonicalization implements DriverCanonicalization
     }
 
     /**
+     * The words of {@see keywords()} that MySQL accepts as an unquoted table, column, index or
+     * constraint name, upper case.
+     *
+     * Read from the server rather than from memory: `information_schema.KEYWORDS` on MySQL 8.4 marks
+     * each keyword reserved or not, and a name may be any word it does not reserve. Three words of the
+     * list are no keyword to the server at all.
+     *
+     * @var list<string>
+     */
+    private const array UNRESERVED_NAMES = [
+        // information_schema.KEYWORDS, RESERVED = 0.
+        'ACTION', 'AFTER', 'ALGORITHM', 'ALWAYS', 'AUTO_INCREMENT', 'DATE', 'DATETIME', 'ENGINE', 'ENUM',
+        'FIRST', 'GEOMETRY', 'IDENTIFIED', 'JSON', 'MODIFY', 'NO', 'OFFSET', 'PASSWORD', 'PRIVILEGES',
+        'TEXT', 'TIME', 'TIMESTAMP', 'TRUNCATE', 'USER', 'YEAR',
+        // No keyword to the server.
+        'INPLACE', 'INSTANT', 'VECTOR',
+    ];
+
+    /**
      * The keywords that END a column's type and begin its modifiers.
      *
      * MySQL's list, and it cannot be PostgreSQL's. `CHARACTER` is here because `CHARACTER SET
@@ -58,7 +77,7 @@ final class MysqlCanonicalization implements DriverCanonicalization
     {
         return [
             // Structural keywords — the shape of the statement.
-            'ADD', 'AFTER', 'ALGORITHM', 'ALTER', 'AS', 'CHANGE', 'COLUMN', 'CONSTRAINT', 'CONVERT',
+            'ADD', 'AFTER', 'ALGORITHM', 'ALTER', 'AS', 'CHANGE', 'CHECK', 'COLUMN', 'CONSTRAINT', 'CONVERT',
             'CREATE', 'DEFAULT', 'DELETE', 'DROP', 'ENGINE', 'EXISTS', 'FIRST', 'FOREIGN', 'FROM',
             'FULLTEXT', 'IF', 'INDEX', 'INPLACE', 'INSERT', 'INSTANT', 'INTO', 'KEY', 'LOCK',
             'MODIFY', 'NOT', 'NULL', 'ON', 'PRIMARY', 'REFERENCES', 'RENAME', 'SELECT', 'SPATIAL',
@@ -174,10 +193,23 @@ final class MysqlCanonicalization implements DriverCanonicalization
         return ["'", '"'];
     }
 
-    /** @return list<string> */
+    /**
+     * The comment openers, with MySQL's double dash spelled out.
+     *
+     * MySQL reads `--` as a comment only when whitespace follows it: `1 --1` is one minus minus one.
+     * A scanner that took it for a comment would hide the rest of that line as text the server never
+     * runs, while the server runs it, and in a schema dump that is the line a `USE` can hide on. So
+     * each whitespace that may follow the dashes is an opener of its own here, the same rule the
+     * formatter's tokenizer applies, and a `--` with anything else after it stays SQL. A `--` that
+     * ends the input with nothing after it stays text as well; there is nothing left for it to hide.
+     *
+     * `#` opens a line comment whatever follows it, and `/*` a block comment.
+     *
+     * @return list<string>
+     */
     public function commentSyntaxes(): array
     {
-        return ['--', '/*', '#'];
+        return ['-- ', "--\t", "--\n", "--\r", "--\v", "--\f", '/*', '#'];
     }
 
     public function supportsDdlTransactions(): bool
@@ -200,6 +232,11 @@ final class MysqlCanonicalization implements DriverCanonicalization
     public function usesBackslashStringEscapes(): bool
     {
         return true;
+    }
+
+    public function nestsBlockComments(): bool
+    {
+        return false;
     }
 
     /**
@@ -376,6 +413,22 @@ final class MysqlCanonicalization implements DriverCanonicalization
                     SignatureElement::keyword('ADD'), SignatureElement::keyword('SPATIAL'),
                     SignatureElement::target($index),
                 ]),
+                // ALTER TABLE <t> ADD CHECK (…)  /  ADD CONSTRAINT CHECK (…)  — a CHECK constraint
+                // without a name; the server names it `<table>_chk_<n>`. `CHECK` is a reserved word
+                // here, so it never names a column unquoted, and before it was a keyword the bare ADD
+                // below read it as one: an added column called `CHECK`. Both shapes sit before every
+                // `ADD CONSTRAINT <k>` one, whose target would otherwise meet the keyword and fail.
+                new StatementSignature(StatementKind::AddConstraint, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('CHECK'),
+                ]),
+                new StatementSignature(StatementKind::AddConstraint, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('ADD'), SignatureElement::keyword('CONSTRAINT'),
+                    SignatureElement::keyword('CHECK'),
+                ]),
                 // ALTER TABLE <t> ADD CONSTRAINT <k> FOREIGN KEY (<c>, …) REFERENCES <t2>
                 //
                 // The columns travel, and they have to be read BEFORE the shape below, which is the
@@ -428,6 +481,15 @@ final class MysqlCanonicalization implements DriverCanonicalization
                     SignatureElement::optionalModifiers(), SignatureElement::target($table),
                     SignatureElement::keyword('DROP'), SignatureElement::keyword('CONSTRAINT'),
                     SignatureElement::optionalModifiers(), SignatureElement::target($constraint),
+                ]),
+                // ALTER TABLE <t> DROP CHECK <k>  — the manual's form for a CHECK constraint. Before
+                // `CHECK` was a keyword, the bare DROP at the end of this list took the word for a
+                // column name and reported a dropped column `CHECK` with its data loss.
+                new StatementSignature(StatementKind::DropConstraint, [
+                    SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::optionalModifiers(), SignatureElement::target($table),
+                    SignatureElement::keyword('DROP'), SignatureElement::keyword('CHECK'),
+                    SignatureElement::target($constraint),
                 ]),
                 // ALTER TABLE <t> MODIFY <c> …  /  CHANGE <c> <c2> …  — Laravel's ->change().
                 // MODIFY keeps the name, CHANGE renames while redefining; both redefine a column,
@@ -508,8 +570,8 @@ final class MysqlCanonicalization implements DriverCanonicalization
                 ]),
                 // ALTER TABLE <t> ADD <c> …  — the BARE form, and the one Laravel emits for a new
                 // column. Same rule as the bare DROP below: it must sit after every specific ADD
-                // shape (PRIMARY KEY, INDEX, KEY, UNIQUE, FULLTEXT, SPATIAL, CONSTRAINT, FOREIGN KEY,
-                // COLUMN), or it reads their keyword as a column name.
+                // shape (PRIMARY KEY, INDEX, KEY, UNIQUE, FULLTEXT, SPATIAL, CONSTRAINT, CHECK,
+                // FOREIGN KEY, COLUMN), or it reads their keyword as a column name.
                 new StatementSignature(StatementKind::AddColumn, [
                     SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
                     SignatureElement::optionalModifiers(), SignatureElement::target($table),
@@ -520,8 +582,8 @@ final class MysqlCanonicalization implements DriverCanonicalization
                 ]),
                 // ALTER TABLE <t> DROP <c>  — the BARE form, and the one Laravel actually emits for
                 // dropColumn(). It must stay LAST of the DROP shapes: every specific one above
-                // (PRIMARY KEY, FOREIGN KEY, INDEX, KEY, CONSTRAINT, COLUMN) would otherwise be read
-                // as a column named after its own keyword.
+                // (PRIMARY KEY, FOREIGN KEY, INDEX, KEY, CONSTRAINT, CHECK, COLUMN) would otherwise be
+                // read as a column named after its own keyword.
                 new StatementSignature(StatementKind::DropColumn, [
                     SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
                     SignatureElement::optionalModifiers(), SignatureElement::target($table),
@@ -624,6 +686,7 @@ final class MysqlCanonicalization implements DriverCanonicalization
             // `ALTER TABLE t ADD INDEX i (a), ALGORITHM=INPLACE, LOCK=NONE`: the last two qualify how
             // the index is built and are not actions of their own.
             actionOptions: ['ALGORITHM', 'LOCK'],
+            unreservedNames: self::UNRESERVED_NAMES,
         );
     }
 }

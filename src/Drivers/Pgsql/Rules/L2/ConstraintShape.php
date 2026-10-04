@@ -82,6 +82,18 @@ enum ConstraintShape
     case Unrecognized;
 
     /**
+     * `EXCLUDE` where only the constraint can stand: before `USING` or the element list.
+     *
+     * The word is not in the PostgreSQL keyword list, so the canonical form folds it to lower case
+     * like any bare word, and an upper-case match never met a statement the pipeline produced: a
+     * named `EXCLUDE` constraint came back `Unrecognized`. Adding it to the list is not the cure: it
+     * is an unreserved word, the classifier refuses a keyword where a name stands, and an unquoted
+     * column called `exclude` would stop resolving. Read in this position, a column of that name
+     * cannot match.
+     */
+    private const string EXCLUDE_CLAUSE = 'exclude\s+(?:USING\b|\()';
+
+    /**
      * What this statement adds, or null when this rule has nothing to say about it.
      *
      * Reads the canonical form for the constraint keywords — which are normalized there — and the
@@ -98,7 +110,12 @@ enum ConstraintShape
 
         $canonical = $statement->canonical;
 
-        if (preg_match('/\bADD (CONSTRAINT|PRIMARY KEY|UNIQUE)\b/', $canonical) !== 1) {
+        // The unnamed forms count too. `ADD CHECK (…)`, `ADD FOREIGN KEY (…)` and `ADD EXCLUDE …` carry
+        // no name, so the profile leaves them `alter_table`, and the server validates or builds
+        // exactly as it does for the named form. Reading only `ADD CONSTRAINT` here answered all three
+        // with null, which is the deliberate exit for a safe form, over a scan under ACCESS EXCLUSIVE.
+        if (preg_match('/\bADD (CONSTRAINT|PRIMARY KEY|UNIQUE|CHECK|FOREIGN KEY)\b/', $canonical) !== 1
+            && preg_match('/\bADD '.self::EXCLUDE_CLAUSE.'/i', $canonical) !== 1) {
             return null;
         }
 
@@ -138,7 +155,7 @@ enum ConstraintShape
             return self::Unique;
         }
 
-        if (preg_match('/\bEXCLUDE\b/', $canonical) === 1) {
+        if (preg_match('/\b'.self::EXCLUDE_CLAUSE.'/i', $canonical) === 1) {
             return self::Exclude;
         }
 

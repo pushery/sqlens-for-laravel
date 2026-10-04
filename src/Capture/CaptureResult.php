@@ -217,6 +217,8 @@ final readonly class CaptureResult
      * pre-scan hits, and inventing one would be a false attribution.
      *
      * @param  list<PreScanHit>  $preScanHits  in file order; empty for a non-pre-scan undetermined
+     * @param  string|null  $detail  what this run learned about the reason, in the words of whatever
+     *                               said so, such as the connection a refused query was sent to
      */
     public static function undetermined(
         string $file,
@@ -226,8 +228,9 @@ final readonly class CaptureResult
         UndeterminedReason $reason,
         array $preScanHits = [],
         ?string $annotationClass = null,
+        ?string $detail = null,
     ): self {
-        return new self($file, $migrationClass, [], $section, $mode, Outcome::Undetermined, $reason, null, $preScanHits, $annotationClass);
+        return new self($file, $migrationClass, [], $section, $mode, Outcome::Undetermined, $reason, $detail, $preScanHits, $annotationClass);
     }
 
     public function isPass(): bool

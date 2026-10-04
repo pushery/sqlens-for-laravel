@@ -154,7 +154,7 @@ final readonly class SideEffectFacadeDetector implements PreScanDetector
                 $migration->file,
                 $line,
                 sprintf(
-                    'The call at line %d %s. Pretend mode intercepts SQL, not the PHP around it, so this would happen for real during a lint run. The migration is reported instead of being executed; move the effect into a deploy step or a job, or capture in shadow mode, which runs against a throwaway database.',
+                    'The call at line %d %s. Pretend mode intercepts SQL, not the PHP around it, so this would happen for real during a lint run. The migration is reported instead of being executed; move the effect into a deploy step or a job.',
                     $line,
                     $match['entry']['reason'],
                 ),

@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Drivers\Mysql\Rules\L9;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\DeclaresJudgedObjectTypes;
 use Pushery\SQLens\Contracts\JudgesMigrationStatements;
+use Pushery\SQLens\Drivers\Mysql\Canonical\MysqlCanonicalization;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
@@ -114,7 +115,7 @@ final class SelectStarInViewRule extends AbstractCatalogRule implements Declares
         // A view whose definition has no select list to read — `AS VALUES (…)`, `AS TABLE t`. Not a
         // pass: the rule looked and could not see, which is a different fact from looking and
         // finding nothing. Silently passing here is the exact shape this package refuses.
-        if (SelectStarInView::selectList($statement->canonical) === null) {
+        if (SelectStarInView::selectList($statement->canonical, new MysqlCanonicalization) === null) {
             return RuleVerdict::undetermined(
                 'This statement creates a view in a form whose select list SQLens does not read, so whether it '
                 .'expands a `*` is unknown. The check did not pass — it did not run.',
@@ -122,7 +123,7 @@ final class SelectStarInViewRule extends AbstractCatalogRule implements Declares
             );
         }
 
-        $stars = SelectStarInView::stars($statement->canonical);
+        $stars = SelectStarInView::stars($statement->canonical, new MysqlCanonicalization);
 
         if ($stars === []) {
             return null;

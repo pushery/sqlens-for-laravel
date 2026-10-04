@@ -1221,7 +1221,7 @@ final readonly class ConfigSchema
                 ? ($value >= 1 && $value <= self::MCP_MAX_FINDINGS_CEILING ? [] : [ConfigViolation::outOfRange($path, $expected, $value)])
                 : [ConfigViolation::wrongType($path, $expected, $value)],
             // Repository-relative, and the refusal of an absolute path is not pedantry: the URI goes
-            // into a report GitHub resolves against the repository, so `/Users/someone/app/config`
+            // into a report GitHub resolves against the repository, so `/home/someone/app/config`
             // matches nothing there and the alert loses the anchor it was given.
             'reporting.sarif.anchor_file' => is_string($value) && trim($value) !== ''
                 ? ($this->isAbsolutePath($value) ? [ConfigViolation::outOfRange($path, $expected, $value)] : [])

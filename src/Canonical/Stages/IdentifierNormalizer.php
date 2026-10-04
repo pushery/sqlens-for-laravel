@@ -80,8 +80,7 @@ final readonly class IdentifierNormalizer implements CanonicalizationStage
             }
 
             if ($hasBlockComment && ScanAt::startsWith($sql, $i, '/*')) {
-                $close = strpos($sql, '*/', $i + 2);
-                $end = $close === false ? $length : $close + 2;
+                $end = QuotedSpan::endOfBlockComment($sql, $i, $this->driver->nestsBlockComments()) ?? $length;
                 $out .= substr($sql, $i, $end - $i);
                 $i = $end;
 

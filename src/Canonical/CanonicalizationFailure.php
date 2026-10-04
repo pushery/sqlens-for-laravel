@@ -105,4 +105,23 @@ final readonly class CanonicalizationFailure
             $detail,
         );
     }
+
+    /**
+     * The failure one action of an `ALTER TABLE` list produced, carried for the whole statement.
+     *
+     * The reason stays the action's own, because the question left unanswered is the same one it
+     * leaves on its own. The detail says which action it was, since the statement's first action
+     * may be perfectly readable and a reader would otherwise look for the fault in the wrong place.
+     *
+     * @param  int  $ordinal  the action's place in the list, counting the first as 1
+     * @param  string  $clause  the first words of the action
+     */
+    public static function inLaterAction(self $failure, int $ordinal, string $clause): self
+    {
+        return new self(
+            $failure->reason,
+            sprintf('action %d of this ALTER TABLE (%s): %s', $ordinal, $clause, $failure->detail),
+            $failure->offset,
+        );
+    }
 }

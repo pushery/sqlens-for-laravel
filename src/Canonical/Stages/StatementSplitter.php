@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Canonical\Stages;
 
 use Pushery\SQLens\Canonical\CanonicalizationFailure;
+use Pushery\SQLens\Canonical\QuotedSpan;
 use Pushery\SQLens\Canonical\ScanAt;
 use Pushery\SQLens\Canonical\StatementPart;
 use Pushery\SQLens\Canonical\StatementPartKind;
@@ -99,6 +100,7 @@ final class StatementSplitter
         $hasBlockComment = in_array('/*', $commentMarkers, true);
         $identifierQuote = $driver->quotingCharacter();
         $backslashEscapes = $driver->usesBackslashStringEscapes();
+        $nestedComments = $driver->nestsBlockComments();
         $directivePrefix = $driver->clientDirectivePrefix();
 
         $parts = [];
@@ -142,13 +144,13 @@ final class StatementSplitter
             }
 
             if ($hasBlockComment && ScanAt::startsWith($batch, $i, '/*')) {
-                $close = strpos($batch, '*/', $i + 2);
-                if ($close === false) {
+                $end = QuotedSpan::endOfBlockComment($batch, $i, $nestedComments);
+                if ($end === null) {
                     return CanonicalizationFailure::unterminatedLiteral('block comment', $i);
                 }
 
-                $current .= substr($batch, $i, $close + 2 - $i);
-                $i = $close + 2;
+                $current .= substr($batch, $i, $end - $i);
+                $i = $end;
 
                 continue;
             }
@@ -170,7 +172,7 @@ final class StatementSplitter
 
             $literal = ScanAt::firstOf($batch, $i, $literals);
             if ($literal !== null) {
-                $end = $this->scanQuoted($batch, $i, $literal, $backslashEscapes);
+                $end = QuotedSpan::endOfLiteral($batch, $i, $literal, $backslashEscapes);
                 if ($end === null) {
                     return CanonicalizationFailure::unterminatedLiteral('string literal', $i);
                 }
@@ -183,7 +185,7 @@ final class StatementSplitter
             }
 
             if ($identifierQuote !== '' && $char === $identifierQuote) {
-                $end = $this->scanQuoted($batch, $i, $identifierQuote, false);
+                $end = QuotedSpan::endOfQuotedIdentifier($batch, $i, $identifierQuote);
                 if ($end === null) {
                     return CanonicalizationFailure::unterminatedLiteral('quoted identifier', $i);
                 }
@@ -343,42 +345,6 @@ final class StatementSplitter
         }
 
         return true;
-    }
-
-    /**
-     * Scan a single-character-quoted region from its opening quote at $start to the
-     * matching close, honoring doubled quotes and (when enabled) backslash
-     * escapes. Returns the index just past the closing quote, or null if it is
-     * never closed.
-     */
-    private function scanQuoted(string $batch, int $start, string $quote, bool $backslashEscapes): ?int
-    {
-        $length = strlen($batch);
-        $j = $start + 1;
-
-        while ($j < $length) {
-            $char = $batch[$j];
-
-            if ($backslashEscapes && $char === '\\') {
-                $j += 2;
-
-                continue;
-            }
-
-            if ($char === $quote) {
-                if ($j + 1 < $length && $batch[$j + 1] === $quote) {
-                    $j += 2; // a doubled quote is an escaped quote, still inside
-
-                    continue;
-                }
-
-                return $j + 1;
-            }
-
-            $j++;
-        }
-
-        return null;
     }
 
     /**

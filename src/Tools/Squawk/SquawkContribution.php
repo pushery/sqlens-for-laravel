@@ -8,10 +8,9 @@ use Pushery\SQLens\Capture\CaptureResult;
 use Pushery\SQLens\Capture\CaptureRun;
 use Pushery\SQLens\Engine\ResolvedServerVersion;
 use Pushery\SQLens\Findings\Finding;
-use Pushery\SQLens\Findings\Outcome;
-use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Subjects\SubjectContext;
 use Pushery\SQLens\Tools\ToolDiagnostic;
+use Pushery\SQLens\Tools\ToolFindingGate;
 use Pushery\SQLens\Tools\ToolPayload;
 use Pushery\SQLens\Tools\ToolPositionMapper;
 
@@ -68,7 +67,7 @@ final readonly class SquawkContribution
         ToolDiagnostic $diagnostic,
         ResolvedServerVersion $version,
         SubjectContext $context,
-        Level $gate,
+        ToolFindingGate $gate,
         bool $fastPath = false,
     ): array {
         // Nothing to run against, and nothing to say about it: the run already reports an
@@ -96,49 +95,25 @@ final readonly class SquawkContribution
             }
         }
 
-        $merged = $this->deduplicator->merge($own, $this->withinGate($tool, $gate));
+        $merged = $this->deduplicator->merge($own, $gate->apply($tool));
 
         return $merged->all();
     }
 
     /**
-     * The `SQUAWK.*` ids a run under this gate does not ask: those above its level, and every one
-     * on a fast path the tool does not run on.
+     * The `SQUAWK.*` ids a run behind this gate does not ask: those above its level or outside its
+     * categories, and every one on a fast path the tool does not run on.
      *
      * A baseline entry under one of them cannot be matched in such a run, so the run cannot call it
-     * stale. The two conditions are the ones {@see self::contribute()} applies.
+     * stale. The conditions are the ones {@see self::contribute()} applies.
      *
      * @return list<string>
      */
-    public function unaskedIds(Level $gate, bool $fastPath = false): array
+    public function unaskedIds(ToolFindingGate $gate, bool $fastPath = false): array
     {
         return $fastPath && ! $this->onFastPath
             ? $this->mapper->reportedIds()
-            : $this->mapper->reportedIds(above: $gate);
-    }
-
-    /**
-     * The tool's findings the run's LEVEL admits — the same gate a rule finding passes.
-     *
-     * Without it an installed binary sharpens a gate the user narrowed on purpose, which is the
-     * one thing an amplifier must never do: the level band is an appetite the project chose, and
-     * a tool has no standing to overrule it.
-     *
-     * The gate applies to VERDICTS only. A degradation is undetermined — it says the tool could
-     * not answer — and that is governed by the undetermined policy and strict mode, not by an
-     * appetite for strictness. Silencing it at a low level would turn "nobody checked" into
-     * "nothing found", which is the silent green this package exists to refuse.
-     *
-     * @param  list<Finding>  $findings
-     * @return list<Finding>
-     */
-    private function withinGate(array $findings, Level $gate): array
-    {
-        return array_values(array_filter(
-            $findings,
-            static fn (Finding $finding): bool => $finding->status->outcome === Outcome::Undetermined
-                || $finding->level->value <= $gate->value,
-        ));
+            : $this->mapper->reportedIds(unaskedBy: $gate);
     }
 
     /**

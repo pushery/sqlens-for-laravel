@@ -188,10 +188,11 @@ final readonly class MysqlActivityReader implements ActivityReader
      * Two switches tell them apart, so both are asked rather than guessed, in one query. The first is
      * `@@performance_schema`. The second is the instrument that fills `metadata_locks`,
      * `wait/lock/metadata/sql/mdl`, which can be switched off at run time while `performance_schema`
-     * stays on; its row in `setup_instruments` answers for it. A server that will not answer gets no
-     * verdict either — an unreadable switch is not an off switch, and claiming it was off would be the
-     * same invention in the other direction — and an instrument the server does not list is not taken
-     * for an enabled one.
+     * stays on; its row in `setup_instruments` answers for it. A server whose answer cannot be read
+     * gets no verdict either — an unreadable switch is not an off switch, and claiming it was off would
+     * be the same invention in the other direction — but it does get a gap, because an unknown state
+     * cannot vouch for silence any more than an off one can. An instrument the server does not list is
+     * not taken for an enabled one.
      *
      * @param  list<CatalogSkip>  $skips
      */
@@ -220,9 +221,19 @@ final readonly class MysqlActivityReader implements ActivityReader
 
         $enabledFlag = $this->number($row, 'enabled');
 
-        // A switch this reader could not read is NOT an off switch. Returning here rather than
-        // reporting one keeps the invention out in both directions.
+        // A switch this reader could not read is NOT an off switch, and not an on switch either.
+        // Reported as unknown, the reading is partial and its silence is not trusted, without
+        // inventing a state in either direction.
         if ($enabledFlag === null) {
+            $skips[] = CatalogSkip::for(
+                SchemaObjectType::Setting,
+                'performance_schema',
+                SkipReason::InstrumentationUnknown,
+                'the server answered @@performance_schema with a value that is neither 0 nor 1, so '
+                .'whether its lock views are being filled could not be established, and an empty answer '
+                .'from them could not be told from a quiet server.',
+            );
+
             return;
         }
 

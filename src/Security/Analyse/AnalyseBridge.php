@@ -8,6 +8,7 @@ use JsonException;
 use Pushery\SQLens\Analyse\AnalyseResultTrace;
 use Pushery\SQLens\Analyse\AnalyseRuleCatalog;
 use Pushery\SQLens\Analyse\AnalyseRuleMetadata;
+use Pushery\SQLens\Canonical\Fingerprint;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
 use Pushery\SQLens\Subjects\SubjectContext;
@@ -168,6 +169,7 @@ final readonly class AnalyseBridge
     private function mapped(array $files, SubjectContext $context): array
     {
         $byIdentifier = $this->rulesByIdentifier();
+        $identities = new CallsiteIdentity;
         $findings = [];
 
         foreach ($files as $file => $entry) {
@@ -190,16 +192,12 @@ final readonly class AnalyseBridge
                     continue;
                 }
 
-                $findings[] = Finding::fail(
+                $line = is_int($message['line'] ?? null) ? $message['line'] : 0;
+                $finding = Finding::fail(
                     $rule->id,
                     $rule->messagePrefix,
                     is_string($message['message'] ?? null) ? $message['message'] : '(the analyzer reported no message)',
-                    Location::inCallsite(
-                        $file,
-                        is_int($message['line'] ?? null) ? $message['line'] : 0,
-                        $identifier,
-                        $this->projectRoot,
-                    ),
+                    Location::inCallsite($file, $line, $identifier, $this->projectRoot),
                     $rule->category,
                     $rule->level,
                     $rule->stability,
@@ -207,6 +205,11 @@ final readonly class AnalyseBridge
                     $context,
                     $rule->severity,
                 );
+
+                // What tells two findings of one rule in one file apart: without it they differ by
+                // their line alone, which the fingerprint leaves out on purpose.
+                $identity = $identities->at($this->absolute($this->analyzedFile($file)), $line);
+                $findings[] = $identity instanceof Fingerprint ? $finding->withExcerpt($identity) : $finding;
             }
         }
 
@@ -225,6 +228,17 @@ final readonly class AnalyseBridge
         }
 
         return $byIdentifier;
+    }
+
+    /**
+     * The file the analyzer read. PHPStan names an error in a method a class takes from a trait's
+     * file as `<file> (in context of class X)`, and only the part before that is a path.
+     */
+    private function analyzedFile(string $file): string
+    {
+        $context = strpos($file, ' (in context of ');
+
+        return $context === false ? $file : substr($file, 0, $context);
     }
 
     private function absolute(string $path): string

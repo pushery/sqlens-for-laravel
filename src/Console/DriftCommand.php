@@ -240,7 +240,7 @@ final class DriftCommand extends Command
 
         if (! $report instanceof DriftReport) {
             $this->outputErrorLine('mode: '.$mode->value);
-            $this->outputErrorLine('sqlens:drift: no expectation could be built: '.$reference?->reason?->value);
+            $this->outputErrorLine('sqlens:drift: no expectation could be built: '.$reference?->describe());
 
             // Asked, not decided: the policy holds the whole verdict, and report mode never blocks.
             // Under the shipped defaults this is the ordinary CI outcome — the reference is a shadow

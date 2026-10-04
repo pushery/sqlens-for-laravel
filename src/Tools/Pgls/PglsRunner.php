@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Tools\Pgls;
 
 use JsonException;
+use Pushery\SQLens\Catalog\SessionBudget;
 use Pushery\SQLens\Tools\ProcessRunner;
 use Pushery\SQLens\Tools\ToolRunOutcome;
 use Pushery\SQLens\Tools\ToolRunResult;
@@ -19,8 +20,16 @@ use Pushery\SQLens\Tools\ToolRunResult;
  *
  * This is the one adapter in the package whose tool opens its own connection, so the question
  * "does it harm anything" could not be reasoned about — it was measured, with `log_statement='all'`
- * on a probe database. A run issues **sixteen statements, zero of them mutating and zero taking a
- * lock**: catalog reads, inside one transaction, with `set local search_path = ''`.
+ * on a probe database. A run issues **sixteen statements, none of them mutating**: catalog reads,
+ * inside one transaction, with `set local search_path = ''`.
+ *
+ * They are not free of locks, and an earlier version of this paragraph said they were. Two of them
+ * call `pg_total_relation_size()` over every relation in the database, which opens each one with
+ * ACCESS SHARE for the length of the call. Measured with a migration holding ACCESS EXCLUSIVE on one
+ * table: the run waited out its whole timeout, and the killed tool's sessions went on waiting in the
+ * lock queue, because the server does not notice a dead client while a backend waits for a lock. So
+ * the tool's sessions get the bounds SQLens gives its own, through `PGOPTIONS`, which the tool
+ * honors: see {@see sessionOptions()}.
  *
  * That measurement is what makes this adapter defensible under "primum non nocere", and it is a
  * property of somebody else's binary rather than of this code — which is exactly why the
@@ -60,6 +69,9 @@ final readonly class PglsRunner
      */
     private const array CONTRACT_EXIT_CODES = [0, 1];
 
+    /** The variable libpq and the tool read server settings for a new session from. */
+    public const string OPTIONS_VARIABLE = 'PGOPTIONS';
+
     public function __construct(private ProcessRunner $runner, private string $packageRoot) {}
 
     /**
@@ -74,10 +86,11 @@ final readonly class PglsRunner
             $this->arguments($invocation->connection),
             $invocation->timeoutSeconds,
             null,
-            // The password, and nothing else. Everything the child gets is named here rather than
-            // inherited, so the tool cannot pick up a `PGHOST` from whichever shell started the
-            // run and quietly audit a different server than the one under audit.
-            $invocation->connection->environment(),
+            // The password and the session bounds, and nothing else. Everything the child gets is
+            // named here rather than inherited, so the tool cannot pick up a `PGHOST` from
+            // whichever shell started the run and quietly audit a different server than the one
+            // under audit.
+            [...$invocation->connection->environment(), self::OPTIONS_VARIABLE => $this->sessionOptions($invocation)],
         );
 
         if ($result->outcome !== ToolRunOutcome::Completed) {
@@ -91,7 +104,7 @@ final readonly class PglsRunner
             );
         }
 
-        return $this->read($result, $invocation->connectionName);
+        return $this->read($result, $invocation);
     }
 
     /**
@@ -121,8 +134,41 @@ final readonly class PglsRunner
         ];
     }
 
+    /**
+     * The settings every session of the tool starts with.
+     *
+     * The bounds SQLens's own reader sessions run under, and two more. The statement bound is the
+     * run's own timeout, so no statement outlives the run that started it. The sessions are
+     * read-only, which the tool never needs to be anything else, and they carry the configured
+     * application name with `-pgls` appended: measured without it, the tool's ten sessions showed
+     * an empty name in `pg_stat_activity`. A space in the name is escaped, because the server
+     * splits this value on whitespace.
+     */
+    private function sessionOptions(PglsInvocation $invocation): string
+    {
+        $session = $this->session($invocation);
+
+        return implode(' ', [
+            '-c application_name='.str_replace(['\\', ' '], ['\\\\', '\\ '], $session->applicationName).'-pgls',
+            '-c default_transaction_read_only=on',
+            '-c lock_timeout='.$session->lockTimeoutMs.'ms',
+            '-c statement_timeout='.(int) ceil($invocation->timeoutSeconds * 1000).'ms',
+            '-c idle_in_transaction_session_timeout='.$session->idleInTransactionTimeoutMs.'ms',
+        ]);
+    }
+
+    private function session(PglsInvocation $invocation): SessionBudget
+    {
+        return $invocation->session ?? SessionBudget::of(
+            SessionBudget::DEFAULT_STATEMENT_TIMEOUT_MS,
+            SessionBudget::DEFAULT_LOCK_TIMEOUT_MS,
+            SessionBudget::DEFAULT_IDLE_IN_TRANSACTION_TIMEOUT_MS,
+            SessionBudget::DEFAULT_APPLICATION_NAME,
+        );
+    }
+
     /** Read the report, or say which way it was not one. */
-    private function read(ToolRunResult $result, string $connectionName): PglsRunResult
+    private function read(ToolRunResult $result, PglsInvocation $invocation): PglsRunResult
     {
         try {
             $decoded = json_decode($result->stdout, true, flags: JSON_THROW_ON_ERROR);
@@ -140,11 +186,18 @@ final readonly class PglsRunner
             //
             // The reader is holding the configuration this name comes from. They find the host
             // under it; the report gains nothing by repeating it.
+            //
+            // The tool answers the same way when its session gave up waiting for a lock, measured
+            // with ACCESS EXCLUSIVE held on one table: the same exit, the same text. So the sentence
+            // names both, with the bound that decided the second.
             return PglsRunResult::failed(
                 PglsFailureReason::DatabaseUnreachable,
                 sprintf(
-                    'postgrestools could not report on the connection "%s" and answered outside its JSON format%s',
-                    $connectionName,
+                    'postgrestools could not report on the connection "%s" and answered outside its JSON format. '
+                    .'It answers this way when it cannot connect, and when one of its sessions waited longer '
+                    .'than %d ms for a lock another session holds%s',
+                    $invocation->connectionName,
+                    $this->session($invocation)->lockTimeoutMs,
                     $this->stderrSuffix($result),
                 ),
             );

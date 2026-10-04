@@ -32,6 +32,33 @@ final class PgsqlCanonicalization implements DriverCanonicalization
     }
 
     /**
+     * The words of {@see keywords()} that PostgreSQL accepts as an unquoted table, column, index or
+     * constraint name, upper case.
+     *
+     * Read from the server rather than from memory: `pg_get_keywords()` on PostgreSQL 18.4 files each
+     * word under a category, and a name may be any word outside the two reserved ones (`R`, and `T`,
+     * which may name a function or a type and nothing else). Twelve words of the list are no
+     * keyword to the server at all, `DATE` and `UUID` among them. `IF` and `EXISTS` are left out
+     * although the server would accept them: they are modifiers here as well, and a column of that
+     * name is less likely than a modifier read as one.
+     *
+     * @var list<string>
+     */
+    private const array UNRESERVED_NAMES = [
+        // pg_get_keywords() category U: not reserved.
+        'ACTION', 'ADD', 'ALTER', 'ALWAYS', 'BY', 'CASCADE', 'COMMENT', 'DELETE', 'DOUBLE', 'DROP',
+        'GENERATED', 'IDENTITY', 'INDEX', 'INSERT', 'KEY', 'NO', 'OPTION', 'PRIVILEGES', 'RENAME',
+        'RESTRICT', 'REVOKE', 'SCHEMA', 'SET', 'STORED', 'TEXT', 'TRUNCATE', 'TYPE', 'UPDATE', 'VALID',
+        'VALIDATE', 'VIRTUAL', 'WITHOUT', 'ZONE',
+        // Category C: not reserved, though no function or type may carry the name.
+        'BETWEEN', 'BIGINT', 'BOOLEAN', 'CHAR', 'DECIMAL', 'FLOAT', 'INTEGER', 'JSON', 'PRECISION',
+        'REAL', 'SMALLINT', 'TIME', 'TIMESTAMP', 'VALUES', 'VARCHAR',
+        // No keyword to the server.
+        'BIGSERIAL', 'BYTEA', 'DATE', 'GEOGRAPHY', 'GEOMETRY', 'INET', 'JSONB', 'MACADDR', 'TSVECTOR',
+        'USAGE', 'UUID', 'VECTOR',
+    ];
+
+    /**
      * The keywords that END a column's type and begin its modifiers.
      *
      * PostgreSQL's list, and it cannot be shared with MySQL's: `CHARACTER VARYING` is a TYPE here
@@ -159,6 +186,11 @@ final class PgsqlCanonicalization implements DriverCanonicalization
     public function usesBackslashStringEscapes(): bool
     {
         return false;
+    }
+
+    public function nestsBlockComments(): bool
+    {
+        return true;
     }
 
     /**
@@ -514,6 +546,7 @@ final class PgsqlCanonicalization implements DriverCanonicalization
                 // column is the `alter table` beside it, and that one carries the target.
                 'COMMENT' => StatementKind::DdlOther,
             ],
+            unreservedNames: self::UNRESERVED_NAMES,
         );
     }
 }

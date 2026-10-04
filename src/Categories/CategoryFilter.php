@@ -47,7 +47,13 @@ final readonly class CategoryFilter
 
         return array_values(array_filter(
             $rules,
-            fn (Rule $rule): bool => in_array($rule->category(), $this->selected, true),
+            fn (Rule $rule): bool => $this->admits($rule->category()),
         ));
+    }
+
+    /** Whether something in this category survives the filter: everything does when nothing is selected. */
+    public function admits(Category $category): bool
+    {
+        return ! $this->isActive() || in_array($category, $this->selected, true);
     }
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Tools\Pgls;
 
+use Pushery\SQLens\Catalog\SessionBudget;
+
 /**
  * The knobs one `dblint` run is given, gathered so the runner never reads configuration itself.
  *
@@ -40,5 +42,13 @@ final readonly class PglsInvocation
          * default timeout does not have to invent one.
          */
         public string $connectionName = '',
+        /**
+         * The bounds SQLens gives its own sessions, handed to the tool's as well.
+         *
+         * The tool opens about ten sessions of its own, and without these they carry no lock bound,
+         * no statement bound and no name in the server's activity view. Null takes the shipped
+         * defaults, for the same throwaway invocation the connection name is defaulted for.
+         */
+        public ?SessionBudget $session = null,
     ) {}
 }

@@ -248,7 +248,7 @@ final readonly class MysqlSchemaDumpReader
         $statement = ltrim($statement);
 
         while ($statement !== '') {
-            if (str_starts_with($statement, '--') || str_starts_with($statement, '#')) {
+            if ($this->opensLineComment($statement)) {
                 $newline = strpos($statement, "\n");
                 $statement = $newline === false ? '' : ltrim(substr($statement, $newline + 1));
 
@@ -268,6 +268,23 @@ final readonly class MysqlSchemaDumpReader
         }
 
         return $statement;
+    }
+
+    /**
+     * Whether the text opens a line comment as MySQL reads one: `#`, or `--` before whitespace.
+     *
+     * `--1` is not a comment to the server, it is minus minus one. Stripping it as one would drop the
+     * rest of the line from inspection while the server runs it, and a `USE` placed there would move
+     * the replay out of the throwaway database unseen. A `--` that ends the statement is a comment
+     * either way, since nothing follows it.
+     */
+    private function opensLineComment(string $statement): bool
+    {
+        if (str_starts_with($statement, '#')) {
+            return true;
+        }
+
+        return str_starts_with($statement, '--') && (strlen($statement) === 2 || ctype_space($statement[2]));
     }
 
     /** What a whole-statement directive says: the text between `/*!` and its version, and `*​/`. */

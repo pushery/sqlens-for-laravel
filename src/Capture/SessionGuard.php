@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Capture;
 
 use Closure;
 use Illuminate\Database\Connection;
+use Pdo\Pgsql as PdoPgsql;
 use Pushery\SQLens\Attributes\RawSql;
 use Pushery\SQLens\Contracts\SessionDefense;
 use Throwable;
@@ -18,12 +19,41 @@ use Throwable;
  * indefinitely — holding up the very traffic the run was meant to protect. Even a
  * catalog read gets a budget.
  *
- * Session scope only. The tool never changes a global, and it never takes a lock
+ * Session or transaction scope only. The tool never changes a global, and it never takes a lock
  * of its own; it only limits how long IT is willing to wait.
  *
  * The statements are per-engine, but the class stays driver-neutral: it switches
  * on the connection's driver KEY, never on a driver class, so the capture
  * namespace keeps importing nothing from `Drivers\Pgsql` or `Drivers\Mysql`.
+ *
+ * ## PostgreSQL: the bound lives in a transaction, never in the session
+ *
+ * Behind a transaction pooler a session `SET` lands on whichever backend carried that one
+ * statement and stays there. PgBouncer's `server_reset_query` runs only in session pooling by
+ * default, and `track_extra_parameters` cannot reset a parameter the server does not announce,
+ * which `statement_timeout` and `lock_timeout` are not. The restore then looks for the setting on
+ * a backend that never had it, and the next client handed the first backend inherits a timeout
+ * it never chose.
+ *
+ * Asking `pg_backend_pid()` twice before writing could not settle that. A changed backend proves
+ * multiplexing, but the same backend twice proves nothing, and under load it is the common answer:
+ * measured behind PgBouncer with three clients reading through a pool of three, a backend kept
+ * `lock_timeout = 3s`, which is this guard's lock budget, after the lint run that set it had
+ * restored it.
+ *
+ * So on PostgreSQL {@see self::bind()} writes nothing at all, and the reads that need a bound get
+ * it from {@see self::within()}: one transaction, both budgets as `SET LOCAL`, the reads, then a
+ * rollback. A pooler keeps a transaction on one backend from its first statement to its last,
+ * `SET LOCAL` ends with the transaction, and the rollback ends it whether the reads succeeded or
+ * not. A host that is already inside a transaction of its own gets a savepoint instead, and rolling
+ * back to the savepoint takes both settings off again, so its transaction carries on with exactly
+ * what it had.
+ *
+ * Inside that window no statement is prepared under a name. PDO can remove a named statement with a
+ * plain `DEALLOCATE`, a pooler that tracks prepared statements renamed it on the way to the server,
+ * the server refuses the `DEALLOCATE`, and inside a transaction that refusal aborts it: the next
+ * read fails with `25P02`, far from its cause. The connection's own setting for this is read first
+ * and put back afterwards.
  *
  * ## Why this is NOT a duplicate of `SessionDefense`, and why it sets LESS
  *
@@ -34,8 +64,9 @@ use Throwable;
  *   - `SessionDefense` bounds a reader session **this package opened**. Nothing is given back, so
  *     every bound is free.
  *   - `SessionGuard` bounds the **host application's** connection, borrowed and returned. Every
- *     setting written here is one {@see self::snapshot()} must read and {@see self::restore()}
- *     must put back — and two of them are not merely inconvenient to restore, they are harmful to
+ *     setting written here is one the host must get back unchanged — through
+ *     {@see self::snapshot()} and {@see self::restore()} on MySQL, through the rollback on
+ *     PostgreSQL — and two of them are not merely inconvenient to give back, they are harmful to
  *     set at all.
  *
  * **`idle_in_transaction_session_timeout` — MEASURED on PostgreSQL 18.4, not reasoned.** A host
@@ -47,10 +78,10 @@ use Throwable;
  *     (host idles 2.5s, as an application may)
  *     SELECT …  ->  FATAL: terminating connection due to idle-in-transaction timeout
  *
- * The row is gone and the connection with it. And the setting could never have helped: SQLens
- * opens no transaction on this connection — the only `beginTransaction` in `src/` is the reader
- * session's — so the session it guards cannot sit idle in one of SQLens's own making. A bound with
- * no upside and a measured downside is not a gap.
+ * The row is gone and the connection with it. And the setting could never have helped: the one
+ * transaction SQLens opens on this connection is the window of {@see self::within()}, which runs
+ * its reads and ends, so the session it guards never sits idle in a transaction of SQLens's own
+ * making. A bound with no upside and a measured downside is not a gap.
  *
  * **`application_name`** is the same family, one notch quieter: it is how a DBA reads
  * `pg_stat_activity` and tells whose session is whose. Writing `sqlens` onto a borrowed connection
@@ -71,16 +102,19 @@ final readonly class SessionGuard
      * Snapshot, bound, and hand back the undo — the whole borrowing, in one call.
      *
      * One entry point rather than three, because the three have an order that is easy to get wrong
-     * (`snapshot()` before `apply()`, or the snapshot records this guard's own bound) and a
-     * precondition that is easy to miss: {@see self::mayWriteSessionState()}. A caller that
-     * arranged them by hand could satisfy two of the three and leave the connection worse than it
-     * found it.
+     * (`snapshot()` before `apply()`, or the snapshot records this guard's own bound). A caller that
+     * arranged them by hand could get it wrong and leave the connection worse than it found it.
+     *
+     * On PostgreSQL it writes nothing and hands back a restore that does nothing. A session `SET` on
+     * a borrowed PostgreSQL connection is the leak described above, and no probe can tell in advance
+     * whether a pooler is there to cause it. The reads that need a bound take it from
+     * {@see self::within()}.
      *
      * @return Closure(): void the restore, a no-op when nothing was written
      */
     public function bind(Connection $connection): Closure
     {
-        if (! $this->mayWriteSessionState($connection)) {
+        if ($connection->getDriverName() === 'pgsql') {
             return static function (): void {};
         }
 
@@ -94,63 +128,110 @@ final readonly class SessionGuard
     }
 
     /**
-     * Whether session state may be written onto this connection at all.
+     * Run `$work` with the borrowed session bounded, and leave nothing behind, whether it returns or
+     * throws.
      *
-     * The question exists because the connection belongs to the host application. Behind a
-     * transaction pooler a session `SET` lands on whichever backend carried that one statement and
-     * stays there — PgBouncer's `server_reset_query` runs only in session pooling by default, and
-     * `track_extra_parameters` cannot reset a parameter the server does not announce, which
-     * `statement_timeout` and `lock_timeout` are not. The restore then looks for the setting on a
-     * backend that never had it, and some stranger's session inherits a five-second timeout it
-     * never chose. Both halves of the mechanism are broken at once, and neither says so.
+     * On PostgreSQL the bound is transaction-local, see the class docblock. On every other engine it
+     * is {@see self::bind()} around the work, so MySQL gets the same snapshot, bound and restore as
+     * before, and an engine this guard cannot bound gets the work alone.
      *
-     * The tell is read-only and conclusive in one direction: `pg_backend_pid()` twice, as two
-     * separate statements. A changed backend can only come from multiplexing. The same pid is the
-     * weaker answer — an idle pooler may well hand back the same backend twice — so it is treated
-     * as "no evidence of pooling" rather than as proof of a direct connection, and the guard
-     * proceeds. That is exactly what it would do without this check, so a false negative costs
-     * nothing, while the true positive stops the leak.
+     * @template TResult
      *
-     * A probe that cannot run leaves the guard applying, deliberately: `select pg_backend_pid()`
-     * failing on a live PostgreSQL connection essentially means the connection is gone, and then
-     * `apply()` writes nothing either. Declining on that signal would drop a correct bound on every
-     * direct connection that hiccuped.
+     * @param  Closure(): TResult  $work
+     * @return TResult
      */
-    public function mayWriteSessionState(Connection $connection): bool
+    public function within(Connection $connection, Closure $work): mixed
     {
-        if ($connection->getDriverName() !== 'pgsql') {
-            return true;
+        if ($connection->getDriverName() === 'pgsql') {
+            return $this->withinTransaction($connection, $work);
         }
 
+        $release = $this->bind($connection);
+
         try {
-            return $this->backendPid($connection) === $this->backendPid($connection);
-        } catch (Throwable) {
-            return true;
+            return $work();
+        } finally {
+            $release();
         }
     }
 
-    /** The backend this statement was served by, or 0 when the server did not say. */
-    #[RawSql(reason: 'asks pg_backend_pid() -- the only read-only tell a transaction pooler cannot hide, and a builder has no verb for a server function called for its own sake')]
-    private function backendPid(Connection $connection): int
+    /**
+     * The PostgreSQL window: a transaction, both budgets as `SET LOCAL`, the work, a rollback.
+     *
+     * A rollback rather than a commit, because the window only reads and a rollback is what undoes a
+     * `SET LOCAL` inside a savepoint. A commit there would only release the savepoint and leave both
+     * settings on the host's own transaction until it ends.
+     *
+     * @template TResult
+     *
+     * @param  Closure(): TResult  $work
+     * @return TResult
+     */
+    private function withinTransaction(Connection $connection, Closure $work): mixed
     {
-        /** @var object{pid?: int|string|null}|null $row */
-        // Not `pg_catalog.`-qualified, and that is the opposite of the rule the pgsql driver
-        // follows — deliberately, for two reasons that point the same way.
-        //
-        // It is not needed: measured on PostgreSQL 18.0, a user function with an identical
-        // signature does not outrank the catalog one, and this call takes no arguments at all.
-        // There is no closer match for a substitute to win with.
-        //
-        // And this file is core. A schema name here is engine vocabulary in a layer that is meant
-        // to have none; the function name alone is already an exemption the purity register has to
-        // carry a reason for. Adding a second term to buy nothing is the wrong trade.
-        //
-        // Asked on the WRITE side, where apply() sends its SETs. On a connection with a read/write
-        // split a plain select goes to the replica, and a stable replica says nothing about a
-        // transaction pooler in front of the primary.
-        $row = $connection->selectOne('select pg_backend_pid() as pid', [], false);
+        $restorePrepares = $this->withoutNamedStatements($connection);
 
-        return is_object($row) ? (int) ($row->pid ?? 0) : 0;
+        // Only calls inside the two `try` blocks, and the loop in a method of its own: line coverage
+        // reports a branch inside a `try` as run whether it ran or not.
+        try {
+            $connection->beginTransaction();
+
+            try {
+                $this->applyTransactionBudget($connection);
+
+                return $work();
+            } finally {
+                $this->rollBackQuietly($connection);
+            }
+        } finally {
+            $restorePrepares();
+        }
+    }
+
+    /** Both budgets as `SET LOCAL`, inside the transaction the window has just opened. */
+    #[RawSql(reason: 'transaction-local SET statements; the query builder has no verb for SET, and every value here is one of this package own bounded constants')]
+    private function applyTransactionBudget(Connection $connection): void
+    {
+        foreach ($this->transactionStatementsFor('pgsql') as $statement) {
+            $connection->statement($statement);
+        }
+    }
+
+    /**
+     * Send the window's statements without a named prepared statement, and hand back what puts the
+     * connection's own setting back.
+     *
+     * The attribute is a property of the PHP connection object and never reaches the server, so
+     * changing it for the window and back leaves nothing on any backend.
+     *
+     * @return Closure(): void
+     */
+    private function withoutNamedStatements(Connection $connection): Closure
+    {
+        $pdo = $connection->getPdo();
+        $before = $pdo->getAttribute(PdoPgsql::ATTR_DISABLE_PREPARES);
+
+        $pdo->setAttribute(PdoPgsql::ATTR_DISABLE_PREPARES, true);
+
+        return static function () use ($pdo, $before): void {
+            $pdo->setAttribute(PdoPgsql::ATTR_DISABLE_PREPARES, $before);
+        };
+    }
+
+    /**
+     * End the window, and swallow a rollback the connection cannot perform.
+     *
+     * The reads have already answered or already thrown, and a failure here must not replace either.
+     * A connection that cannot roll back is gone, and a session that ended takes its `SET LOCAL`
+     * with it.
+     */
+    private function rollBackQuietly(Connection $connection): void
+    {
+        try {
+            $connection->rollBack();
+        } catch (Throwable) {
+            // Nothing left to undo — see above.
+        }
     }
 
     /**
@@ -251,7 +332,7 @@ final readonly class SessionGuard
      * ## The quote is doubled, not backslash-escaped
      *
      * `addslashes()` is the wrong escaper for one of the two engines this serves — and this method
-     * is the shared path, so "one of the two" means every PostgreSQL run.
+     * serves both, so "one of the two" means every PostgreSQL restore.
      *
      * With `standard_conforming_strings` on, the default since 9.1, a backslash inside `'…'` is an
      * ordinary character on PostgreSQL. Measured on 18.0: `SELECT 'a\''` answers `ERROR: unterminated
@@ -322,6 +403,27 @@ final readonly class SessionGuard
                 // `innodb_lock_wait_timeout` does not reach: its default is a year. Same budget,
                 // same seconds.
                 sprintf('SET SESSION lock_wait_timeout = %d', $this->lockSeconds()),
+            ],
+            default => [],
+        };
+    }
+
+    /**
+     * The transaction-local statements for an engine: the same two PostgreSQL budgets as
+     * {@see self::statementsFor()}, written `SET LOCAL` so they end with the transaction that
+     * {@see self::within()} opens.
+     *
+     * Empty for every other engine. MySQL has no transaction-scoped form of its session variables,
+     * which is why its bound stays a session one there, snapshotted and restored.
+     *
+     * @return list<string>
+     */
+    public function transactionStatementsFor(string $driver): array
+    {
+        return match ($driver) {
+            'pgsql' => [
+                sprintf('SET LOCAL statement_timeout = %d', $this->budget['statement_timeout']),
+                sprintf('SET LOCAL lock_timeout = %d', $this->budget['lock_timeout']),
             ],
             default => [],
         };

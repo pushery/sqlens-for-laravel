@@ -37,12 +37,24 @@ enum UndeterminedReason: string
      */
     case UnknownServerVersion = 'unknown_server_version';
     case PretendLimit = 'pretend_limit';
+
     /**
-     * The migration names a connection of its own, and the run captured on another one.
+     * A bound value of a captured statement could not be written into its text: it has no SQL
+     * literal (an array, an object, a stream), or Laravel's pretend log refused to escape it (a
+     * string holding a NUL or invalid UTF-8), or the statement's placeholders and its values do not
+     * line up. Either way the statement could not be read, which says nothing about the migration:
+     * it is the reading that stopped, and the finding names the binding.
+     */
+    case BindingNotRendered = 'binding_not_rendered';
+    /**
+     * The migration names a connection of its own, or sends a query to one, and the run captured on
+     * another.
      *
      * Laravel's migrator runs a migration on the connection it declares, so a verdict drawn from the
      * capture connection's driver, catalog and version is about a database the migration never
-     * touches. Reported instead of judged: a pass here would be a pass for the wrong database.
+     * touches. A query to another connection from inside the migration is refused by the capture's
+     * fence before it runs, and what it would have done there is just as unknown. Reported instead of
+     * judged: a pass here would be a pass for the wrong database.
      */
     case MigrationOnAnotherConnection = 'migration_on_another_connection';
     case UnsupportedEngine = 'unsupported_engine';
@@ -536,8 +548,9 @@ enum UndeterminedReason: string
      * The static pre-scan flagged this migration before it was captured — a side
      * effect it would fire, a query result it depends on, an introspection guard
      * pretend cannot see past, or a call into code the scan cannot follow. The
-     * migration is not pretend-executed at all; the specific hits carry the line
-     * and the resolution, and shadow mode is the truth mode that can answer.
+     * migration is not executed; the specific hits carry the line and what becomes
+     * of it. Shadow mode answers only the introspection guard, by running the
+     * migration against a throwaway database that holds the schema it asks about.
      */
     case PreScanFlagged = 'prescan_flagged';
 
@@ -683,6 +696,13 @@ enum UndeterminedReason: string
     case ShadowSessionTimeout = 'shadow_session_timeout';
 
     /**
+     * The server ended a shadow session while a migration ran: a terminated backend, a restart, a
+     * dropped network. The migration never reached a verdict, so it is not judged, and the finding
+     * carries the driver's own message rather than a failure the migration did not cause.
+     */
+    case ShadowConnectionLost = 'shadow_connection_lost';
+
+    /**
      * The shadow target sits behind a transaction pooler (PgBouncer in
      * transaction mode), where `CREATE DATABASE … TEMPLATE` and the other template
      * operations the shadow mode needs cannot run. Detected heuristically before
@@ -774,6 +794,13 @@ enum UndeterminedReason: string
      * dropped and nothing is cloned: a template nobody verified is not a template.
      */
     case ShadowTemplateBuildFailed = 'shadow_template_build_failed';
+    /**
+     * The database refused to create or prepare the throwaway shadow database for a reason none of
+     * the checks before provisioning names, a server that takes no writes among them. The migrations
+     * are not judged, and the finding carries the database's own message, masked as every capture
+     * message is, rather than a stack trace in place of the report.
+     */
+    case ShadowProvisioningFailed = 'shadow_provisioning_failed';
 
     /**
      * The `schema:dump` artifact could not be split into statements safely — an
@@ -1286,7 +1313,7 @@ enum UndeterminedReason: string
             self::AssumedVersionSkew => 'The assumed server version pin disagrees with the version the connected server reported, so the result reflects the pin rather than the live instance.',
             self::UnparsableMigration => 'The migration file could not be parsed, so its contents could not be inspected.',
             self::UncanonicalizableStatement => 'A captured statement could not be substituted or canonicalized into the form a rule reads.',
-            self::PreScanFlagged => 'The static pre-scan flagged this migration, so it was not pretend-executed; resolve it in shadow mode.',
+            self::PreScanFlagged => 'The static pre-scan flagged this migration, so it was not executed. Shadow mode runs one whose only hits are introspection guards; any other hit holds it back in both modes.',
             self::NoActiveRules => 'A filter (the requested categories or the level) left no rules active for this run, so nothing was checked; widen the selection.',
             self::NoMigrationsRead => 'No migration was read, so the run judged nothing; --path lints the PENDING migrations of a connection, and nothing is pending once they have all run.',
             self::StatisticsUnavailable => 'The check needs the server table statistics, and this run has no reader for them: a lint run opens no catalog session. The audit and preflight runs do.',
@@ -1300,6 +1327,7 @@ enum UndeterminedReason: string
             self::SequenceOwnershipUnclear => 'The column draws from a sequence it owns through a default that is not the shape serial produces, so whether it should become an identity column could not be answered.',
             self::IndexUsageWindowUnknown => 'How long the server has been counting index scans could not be established, so a zero scan count is not evidence that an index is unused.',
             self::ShadowSessionTimeout => 'A shadow session hit its own statement, lock, or idle-transaction timeout.',
+            self::ShadowConnectionLost => 'The server ended the shadow session while the migration ran, so the migration never reached a verdict.',
             self::ShadowTransactionPooling => 'The shadow target sits behind a transaction pooler; configure a direct connection under capture.shadow.direct_connection.',
             self::ShadowDirectConnectionElsewhere => 'capture.shadow.direct_connection addresses a different server than the connection under examination; it must reach the same server, bypassing the pooler.',
             self::ShadowConnectionCollides => 'A connection meant for a throwaway database reaches a database the run must not touch, so nothing was built or replayed through it. Either capture.shadow.connection resolves to the same place as the connection under examination, and building the reference there would create and then DROP a database on the instance being compared: point it at a separate server or a separate database. Or the server placed a connection built for a throwaway database in another one, which the detail names.',
@@ -1310,6 +1338,7 @@ enum UndeterminedReason: string
             self::ShadowMysqlSchemaDumpMissing => 'The MySQL schema dump the shadow mode rebuilds from is missing or unreadable; run php artisan schema:dump.',
             self::ShadowPgsqlSchemaDumpMissing => 'The PostgreSQL schema dump the shadow template is built from is missing or unreadable; run php artisan schema:dump.',
             self::ShadowTemplateBuildFailed => 'The empty shadow template could not be built, so nothing was cloned; the half-built database was dropped.',
+            self::ShadowProvisioningFailed => 'The database refused to create the throwaway shadow database, for a reason none of the checks before it names.',
             self::ShadowMysqlDumpUnparseable => 'The MySQL schema dump could not be split into statements safely, so no part of it was replayed.',
             self::ShadowMysqlDumpRefused => 'The MySQL schema dump holds a statement the replay refuses, because it would reach past the throwaway database or builds no schema, so no part of it was replayed.',
             self::ShadowMysqlReplayFailed => 'A statement from the MySQL schema dump failed while it was being replayed, so the half-built shadow database was dropped.',
@@ -1332,7 +1361,8 @@ enum UndeterminedReason: string
             self::UnreadableServerVersionPin => 'The assume_server_version pin could not be read as a version; nothing was assumed in its place.',
             self::UnclassifiedTypeChange => 'The column type change targets a type the type-change matrix does not classify, so whether it rewrites the table is unknown.',
             self::PretendLimit => 'A result-dependent migration cannot be captured in pretend mode; shadow is needed.',
-            self::MigrationOnAnotherConnection => 'The migration declares a connection of its own, which migrate runs it on, and this run captured on another one; lint that connection to judge it.',
+            self::BindingNotRendered => 'A bound value of one of its statements could not be written into the statement\'s text, or the statement\'s placeholders and values do not line up, so the statement could not be read.',
+            self::MigrationOnAnotherConnection => 'The migration declares a connection of its own or sends a query to another one, and this run captured on a different connection, so what it does there was not captured; lint that connection to judge it.',
             self::UnsupportedEngine => 'The engine is not supported (MariaDB, SQLite).',
             self::ServerBelowSupportedFloor => 'The server (or the pinned version this run reasons from) is below the floor this driver\'s rules were written for, so the findings may be wrong in both directions; upgrade the server or raise the pin.',
             self::MissingExternalTool => 'An optional external tool the check relies on is not installed.',

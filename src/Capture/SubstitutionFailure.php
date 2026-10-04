@@ -16,6 +16,9 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  */
 final readonly class SubstitutionFailure
 {
+    /**
+     * @param  string  $detail  what failed, written to continue the finding's "In this run, …" sentence
+     */
     public function __construct(
         public UndeterminedReason $reason,
         public string $detail,
@@ -25,8 +28,8 @@ final readonly class SubstitutionFailure
     public static function unrepresentable(string $type, int $position): self
     {
         return new self(
-            UndeterminedReason::PretendLimit,
-            sprintf('Binding %d is a %s, which has no faithful SQL literal form.', $position, $type),
+            UndeterminedReason::BindingNotRendered,
+            sprintf('binding %d (%s) has no faithful SQL literal form', $position, $type),
         );
     }
 
@@ -34,9 +37,9 @@ final readonly class SubstitutionFailure
     public static function countMismatch(int $placeholders, int $bindings): self
     {
         return new self(
-            UndeterminedReason::PretendLimit,
+            UndeterminedReason::BindingNotRendered,
             sprintf(
-                'The statement has %d placeholder(s) but %d binding(s); refusing to guess which belongs where.',
+                'a statement has %d placeholder(s) but %d binding(s), and SQLens does not guess which belongs where',
                 $placeholders,
                 $bindings,
             ),

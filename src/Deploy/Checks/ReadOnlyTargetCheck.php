@@ -100,7 +100,18 @@ final readonly class ReadOnlyTargetCheck implements PreflightCheck
         }
 
         try {
-            $acceptance = $capability->writeAcceptance($context->session);
+            $acceptance = $capability->writeAcceptance($context->session, $context->migrationRole);
+        } catch (PreflightStateUnreadable $unclear) {
+            // The reader answered and says why its answer does not decide: nothing came back, or the
+            // value that came back belongs to a role other than the one the migrations run as. Not
+            // "the server would not say", which would send a reader looking for a connection problem.
+            return CheckResult::undetermined(
+                self::ID,
+                UndeterminedReason::WriteAcceptanceUnreadable,
+                'whether the server accepts writes could not be told ('.new CredentialRedactor()->redact($unclear->getMessage()).'). '
+                .'Nothing follows from that: an unread setting is not a permissive one, and a deploy '
+                .'sent at a standby fails whether or not this gate could see it coming.',
+            );
         } catch (Throwable $error) {
             // Undetermined, never a pass. "The variable could not be read" and "the instance accepts
             // writes" are opposite answers, and only one of them is safe to act on.

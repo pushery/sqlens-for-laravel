@@ -7,6 +7,8 @@ namespace Pushery\SQLens\Drivers\Pgsql\Shadow;
 use Illuminate\Database\ConnectionInterface;
 use Pushery\SQLens\Attributes\RawSql;
 use Pushery\SQLens\Contracts\ShadowDatabaseCatalog;
+use Pushery\SQLens\Exceptions\ShadowProvisioningUndetermined;
+use Pushery\SQLens\Findings\UndeterminedReason;
 
 /**
  * The real PostgreSQL maintenance gateway: the concrete SQL behind the
@@ -35,7 +37,15 @@ final readonly class ConnectionMaintenanceGateway implements MaintenanceGateway,
      */
     public const string MAINTENANCE_DATABASE = 'postgres';
 
-    public function __construct(private ConnectionInterface $maintenance) {}
+    /**
+     * @param  ConnectionInterface|null  $source  the database the shadow stands in for. Given, a new
+     *                                            template takes its encoding and locale, see
+     *                                            {@see createEmptyDatabase()}.
+     */
+    public function __construct(
+        private ConnectionInterface $maintenance,
+        private ?ConnectionInterface $source = null,
+    ) {}
 
     #[RawSql(reason: 'lists databases by name prefix so the shadow harness can find and reap its own leftovers; pg_database is not a model')]
     public function listDatabasesWithPrefix(string $prefix): array
@@ -133,17 +143,71 @@ final readonly class ConnectionMaintenanceGateway implements MaintenanceGateway,
 
     #[RawSql(
         reason: 'CREATE DATABASE -- DDL, and the query builder has no verb for it',
-        interpolation: 'the name is built from the prefix this class owns; no engine binds a database name',
+        interpolation: 'the name is built from the prefix this class owns, and the encoding and locale are read from pg_database and written as quoted literals; no engine binds either',
     )]
     public function createEmptyDatabase(string $name): void
     {
         // template0, never template1: template1 is the default source and a site may
         // have added objects to it, so it is not guaranteed to be pristine. template0
         // is, and PostgreSQL keeps it that way.
+        //
+        // Its encoding and locale are the cluster's, though, and a project's database may have
+        // others. Measured on PostgreSQL 18: a LATIN1 database refuses a `€` its UTF8 shadow took,
+        // so the shadow passed a migration the real database would fail, and an ICU database got a
+        // libc shadow. So the template takes the source database's when the gateway knows it.
         $this->maintenance->statement(sprintf(
-            'CREATE DATABASE %s TEMPLATE template0',
+            'CREATE DATABASE %s TEMPLATE template0%s',
             $this->quoteIdentifier($name),
+            $this->source instanceof ConnectionInterface ? $this->localeOf($this->source) : '',
         ));
+    }
+
+    /**
+     * The clauses that give a new database the encoding, locale provider and locale of $source, read
+     * from its own row in `pg_database`, ICU rules included.
+     *
+     * @throws ShadowProvisioningUndetermined when the source does not describe itself
+     */
+    #[RawSql(reason: 'reads the encoding and locale of the database the shadow stands in for from pg_database; a catalog row, not a model')]
+    private function localeOf(ConnectionInterface $source): string
+    {
+        $row = $source->selectOne(
+            'select pg_catalog.pg_encoding_to_char(encoding) as encoding, datlocprovider as provider, datcollate, '
+            .'datctype, datlocale, daticurules from pg_catalog.pg_database where datname = pg_catalog.current_database()',
+        );
+
+        // PostgreSQL always has a row for the database a session is in. A driver answering without
+        // one leaves the template's rules unknown, and a shadow under unknown rules is not built.
+        if (! is_object($row)) {
+            throw new ShadowProvisioningUndetermined(UndeterminedReason::ShadowTemplateBuildFailed);
+        }
+
+        $clauses = sprintf(
+            ' ENCODING %s LC_COLLATE %s LC_CTYPE %s',
+            $this->literal($row, 'encoding'),
+            $this->literal($row, 'datcollate'),
+            $this->literal($row, 'datctype'),
+        );
+
+        return $clauses.match ($this->text($row, 'provider')) {
+            'i' => ' LOCALE_PROVIDER icu ICU_LOCALE '.$this->literal($row, 'datlocale').($this->text($row, 'daticurules') === '' ? '' : ' ICU_RULES '.$this->literal($row, 'daticurules')),
+            'b' => ' LOCALE_PROVIDER builtin BUILTIN_LOCALE '.$this->literal($row, 'datlocale'),
+            default => ' LOCALE_PROVIDER libc',
+        };
+    }
+
+    /** A column of a catalog row as a string literal, its quotes doubled. */
+    private function literal(object $row, string $key): string
+    {
+        return "'".str_replace("'", "''", $this->text($row, $key))."'";
+    }
+
+    /** A column of a catalog row as text, or the empty string when it is null. */
+    private function text(object $row, string $key): string
+    {
+        $value = $row->{$key} ?? null;
+
+        return is_scalar($value) ? (string) $value : '';
     }
 
     #[RawSql(

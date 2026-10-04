@@ -40,7 +40,9 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * It decorates rather than replaces: the inner captor (pretend today, shadow
  * later) owns HOW the SQL is obtained; this owns turning what it obtained into
  * the one form the rules read. A second capture mode gets canonicalization for
- * free by being wrapped, with no second canonicalizing path to drift.
+ * free by being wrapped, with no second canonicalizing path to drift. The two
+ * modes differ in one respect it has to know: a pretend capture carries its
+ * bindings inlined by the framework already, and is not substituted again.
  *
  * One captured entry is not always one statement. `DB::unprepared()` hands the
  * server a whole batch, a trigger with its function or a `.sql` file read in,
@@ -62,7 +64,7 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
 
     /**
      * Assemble the decorator for a driver — the substitutor from its binding
-     * formatter, the canonicalizer from the standard pipeline. The one place a
+     * formatter and its literal syntax, the canonicalizer from the standard pipeline. The one place a
      * caller wires capture to canonicalization, so the pipeline order is never
      * re-listed here.
      *
@@ -79,7 +81,7 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
     ): self {
         return new self(
             $inner,
-            new BindingSubstitutor($formatter),
+            new BindingSubstitutor($formatter, $canonicalization),
             CanonicalizationPipeline::forDriver($canonicalization),
             $context,
             $canonicalization,
@@ -122,10 +124,10 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
         $canonicalized = [];
 
         foreach ($result->statements as $statement) {
-            $statements = $this->statementsIn($statement);
+            $statements = $this->statementsIn($statement, $result->mode);
 
-            if ($statements instanceof UndeterminedReason) {
-                return $this->undetermined($result, $statements);
+            if ($statements instanceof SubstitutionFailure) {
+                return $this->undetermined($result, $statements->reason, $statements->detail);
             }
 
             foreach ($statements as [$each, $substituted]) {
@@ -155,8 +157,11 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
         );
     }
 
-    /** The whole migration as undetermined, for the reason one of its statements could not be rendered. */
-    private function undetermined(CaptureResult $result, UndeterminedReason $reason): CaptureResult
+    /**
+     * The whole migration as undetermined, for the reason one of its statements could not be rendered,
+     * and what this run learned about it when there is something to say.
+     */
+    private function undetermined(CaptureResult $result, UndeterminedReason $reason, ?string $detail = null): CaptureResult
     {
         return CaptureResult::undetermined(
             $result->file,
@@ -165,6 +170,7 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
             $result->mode,
             $reason,
             annotationClass: $result->annotationClass,
+            detail: $detail,
         );
     }
 
@@ -178,18 +184,26 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
      *
      * An entry the splitter cannot read stays whole, and the canonicalization decides about it as it
      * decides about any single statement. The splitter is stricter than the canonicalization on one
-     * point: it reads a MySQL backslash as an escape, so a value ending in one leaves a literal open.
-     * Refusing such an entry would turn a migration the canonicalization reads today into an
-     * undetermined one.
+     * point: it refuses a literal that never closes, where the canonicalization reads it to the end of
+     * the statement. Refusing such an entry would turn a migration the canonicalization reads today
+     * into an undetermined one. A bound value never leaves a literal open, because the substitutor
+     * writes it by the same syntax the splitter reads.
      *
-     * @return list<array{CapturedStatement, string}>|UndeterminedReason
+     * @return list<array{CapturedStatement, string}>|SubstitutionFailure
      */
-    private function statementsIn(CapturedStatement $statement): array|UndeterminedReason
+    private function statementsIn(CapturedStatement $statement, CaptureMode $mode): array|SubstitutionFailure
     {
-        $substituted = $this->substitutor->substitute($statement->rawSql, $statement->bindings);
+        // A pretend capture is complete: `Connection::logQuery()` inlines every binding with the
+        // framework's own grammar before it logs. Substituted a second time, a `?` left in it would
+        // be read as a placeholder, and on PostgreSQL that is the jsonb operator.
+        $substituted = $statement->rawSql;
+
+        if ($mode === CaptureMode::Shadow) {
+            $substituted = $this->substitutor->substitute($statement->rawSql, $statement->bindings);
+        }
 
         if ($substituted instanceof SubstitutionFailure) {
-            return $substituted->reason;
+            return $substituted;
         }
 
         $parts = new StatementSplitter()->split($substituted, $this->syntax);
@@ -243,7 +257,8 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
             ->withCanonicalSql($canonical->canonicalSql)
             // The whole canonical form, kind and targets included, so a finding about this statement
             // is told apart from one about another by what the statement is, not by where it sits.
-            ->withExcerpt(Fingerprint::of($canonical))
+            // The identity variant, so the form version moving does not move the identity with it.
+            ->withExcerpt(Fingerprint::forFindingIdentity($canonical))
             // The RESOLVED transaction mode, not the migrator flag it started from. The
             // resolver can land on Undetermined — an explicit transaction opening inside
             // the migrator's, an unbalanced marker — and a lock-hygiene rule that only

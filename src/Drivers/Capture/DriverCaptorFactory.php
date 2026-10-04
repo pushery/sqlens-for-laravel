@@ -304,7 +304,8 @@ final readonly class DriverCaptorFactory
                 fn (): string => ShadowDatabaseName::generate($prefix),
                 $connectionConfig,
                 new PgsqlVirginTemplateBuilder(
-                    new ConnectionMaintenanceGateway($this->maintenanceConnection($connectionName, ConnectionMaintenanceGateway::MAINTENANCE_DATABASE)),
+                    // Told which database the shadow stands in for, so the template takes its encoding and locale.
+                    new ConnectionMaintenanceGateway($this->maintenanceConnection($connectionName, ConnectionMaintenanceGateway::MAINTENANCE_DATABASE), $this->database->connection($connectionName)),
                     $this->config,
                     $this->database,
                     fn (): string => ShadowDatabaseName::generate(ShadowDatabaseName::templatePrefix($prefix)),

@@ -321,13 +321,26 @@ final class ConstraintNotValidatedRule extends AbstractPgsqlSafetyRule implement
         );
     }
 
+    /**
+     * The extra sentence an unnamed constraint needs: the second step has to name what the first one
+     * added, and PostgreSQL picks the name of `ADD CHECK (…)` or `ADD FOREIGN KEY (…)` itself.
+     */
+    private function unnamedNote(MigrationStatementView $statement): string
+    {
+        return $statement->soleTarget(SchemaObjectType::Constraint) instanceof StatementTarget
+            ? ''
+            : ' This constraint has no name, so PostgreSQL picks one. Name it in the add, because the '
+                .'VALIDATE has to name it.';
+    }
+
     protected function judge(MigrationStatementView $statement): ?string
     {
         return match (ConstraintShape::of($statement)) {
             ConstraintShape::NotValidCapable => 'ADD CONSTRAINT without NOT VALID validates every existing row under a lock before '
                 .'it returns — and a foreign key locks the referenced table too, stalling traffic to it. '
                 .'Add the constraint NOT VALID, then VALIDATE CONSTRAINT in a separate migration, which '
-                .'scans under a weaker lock that does not block reads and writes.',
+                .'scans under a weaker lock that does not block reads and writes.'
+                .$this->unnamedNote($statement),
             ConstraintShape::PrimaryKey, ConstraintShape::Unique => 'Adding a PRIMARY KEY or UNIQUE constraint builds its index under a lock that blocks '
                 .'writes for the whole build. These do not support NOT VALID; instead CREATE UNIQUE INDEX '
                 .'CONCURRENTLY and then ADD CONSTRAINT … USING INDEX, which promotes the ready-built index '

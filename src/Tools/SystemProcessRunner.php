@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Tools;
 
+use Closure;
+use Override;
 use Pushery\SQLens\Findings\CredentialRedactor;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
@@ -27,8 +29,15 @@ final readonly class SystemProcessRunner implements ProcessRunner
      *                                 what happens when the bound is hit is identical at 0.2 s and
      *                                 at 5 s, so nothing about the tested path is a configuration
      *                                 production does not have.
+     * @param  string  $osFamily  the platform whose process table a stopped tool's descendants are
+     *                            read from. A parameter only so every way of reading it can be
+     *                            driven on one machine; production never passes anything but the
+     *                            default, and a test pins that.
      */
-    public function __construct(private float $timeoutSeconds = self::PROBE_TIMEOUT_SECONDS) {}
+    public function __construct(
+        private float $timeoutSeconds = self::PROBE_TIMEOUT_SECONDS,
+        private string $osFamily = PHP_OS_FAMILY,
+    ) {}
 
     public function locate(string $binaryName): ?string
     {
@@ -67,7 +76,7 @@ final readonly class SystemProcessRunner implements ProcessRunner
 
     public function version(string $binaryPath): ?string
     {
-        $process = new Process([$binaryPath, '--version']);
+        $process = $this->process([$binaryPath, '--version']);
         $process->setTimeout($this->timeoutSeconds);
 
         try {
@@ -127,7 +136,7 @@ final readonly class SystemProcessRunner implements ProcessRunner
 
     public function run(string $binaryPath, array $arguments, float $timeoutSeconds, ?string $stdin = null, array $environment = []): ToolRunResult
     {
-        $process = new Process([$binaryPath, ...$arguments], null, $this->childEnvironment($environment));
+        $process = $this->process([$binaryPath, ...$arguments], $this->childEnvironment($environment));
         $process->setTimeout($timeoutSeconds);
 
         if ($stdin !== null) {
@@ -173,6 +182,86 @@ final readonly class SystemProcessRunner implements ProcessRunner
             $process->getOutput(),
             $this->excerpt($process->getErrorOutput()),
         );
+    }
+
+    /**
+     * A process whose stop takes every process it started down with it.
+     *
+     * Symfony stops a process by signaling the pid it started, and only that pid. A tool installed
+     * through npm is not the program it names: `postgrestools` on the path is a node launcher that
+     * runs the native binary as its child and waits for it. Measured with the launcher the npm
+     * package installs, a three-second bound and a database that stopped answering after the
+     * startup: the timeout ended the launcher, and the native binary went on as an orphan of init,
+     * holding ten database sessions open after the run had reported that nothing was measured.
+     * Called directly, the same binary left nothing behind.
+     *
+     * So the descendants are read before Symfony sends its signal, while the tool still links them
+     * to this run, and killed first. Symfony then stops the tool itself as it always did.
+     *
+     * @param  list<string>  $command
+     * @param  array<string, string|false>|null  $environment
+     */
+    private function process(array $command, ?array $environment = null): Process
+    {
+        return new class($command, $environment, $this->stopDescendants(...)) extends Process
+        {
+            /**
+             * @param  list<string>  $command
+             * @param  array<string, string|false>|null  $environment
+             * @param  Closure(int): void  $beforeStop
+             */
+            public function __construct(array $command, ?array $environment, private readonly Closure $beforeStop)
+            {
+                parent::__construct($command, null, $environment);
+            }
+
+            #[Override]
+            public function stop(float $timeout = 10, ?int $signal = null): ?int
+            {
+                $pid = $this->isRunning() ? $this->getPid() : null;
+
+                if ($pid !== null) {
+                    ($this->beforeStop)($pid);
+                }
+
+                return parent::stop($timeout, $signal);
+            }
+        };
+    }
+
+    /**
+     * Kill every process below `$pid`, read while `$pid` still links them to this run.
+     *
+     * Killed outright, the way Symfony ends a process that outlives its stop window. The `kill` is
+     * the shell's own, because a container without procps has no `kill` binary but always a shell.
+     */
+    private function stopDescendants(int $pid): void
+    {
+        $descendants = array_diff($this->processTable()->descendantsOf($pid), [getmypid()]);
+
+        if ($descendants !== []) {
+            new Process(['/bin/sh', '-c', 'kill -KILL "$@" 2>/dev/null', 'sh', ...array_map(strval(...), $descendants)])->run();
+        }
+    }
+
+    /** The process table of this platform, read the way the platform publishes it. */
+    private function processTable(): ProcessTable
+    {
+        return match ($this->osFamily) {
+            'Linux' => ProcessTable::fromProc('/proc'),
+            // Symfony stops a whole tree there already, through `taskkill /T`.
+            'Windows' => ProcessTable::empty(),
+            default => ProcessTable::fromPsOutput($this->processList()),
+        };
+    }
+
+    /** What `ps` prints about every process, or nothing where there is no `ps` to ask. */
+    private function processList(): string
+    {
+        $ps = new Process(['ps', '-A', '-o', 'pid=', '-o', 'ppid=']);
+        $ps->run();
+
+        return $ps->getOutput();
     }
 
     /**

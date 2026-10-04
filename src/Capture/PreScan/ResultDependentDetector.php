@@ -25,8 +25,8 @@ use Pushery\SQLens\Rules\VersionWindow;
  * hold a strict SUBSET of the statements the real migration runs — and the run
  * would be green, because nothing failed. That is the exact shape of "silent
  * green" the package refuses, so a migration with this shape is `undetermined`
- * and the report points at the shadow mode, which executes for real against a
- * throwaway database and can answer.
+ * and the report points at a job instead. Shadow mode cannot answer either: it
+ * runs against a throwaway database that holds the schema and none of the rows.
  *
  * Three arms, each deliberately scoped:
  *
@@ -180,7 +180,7 @@ final readonly class ResultDependentDetector implements PreScanDetector
             $file,
             $call['line'],
             sprintf(
-                '%s at line %d %s. Pretend mode cannot capture what this migration really emits; run it in shadow mode, which executes against a throwaway database and can answer.',
+                '%s at line %d %s. Pretend mode cannot capture what this migration really emits, and neither can a shadow run, whose throwaway database has the schema and none of the rows; move the result-dependent work into a job.',
                 $this->label($kind),
                 $call['line'],
                 $reason,

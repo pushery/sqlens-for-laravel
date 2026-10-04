@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Deploy\Drift;
 
 use Pushery\SQLens\Catalog\CatalogSnapshot;
+use Pushery\SQLens\Exceptions\ShadowDatabaseKept;
 use Pushery\SQLens\Findings\UndeterminedReason;
 
 /**
@@ -22,10 +23,14 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  */
 final readonly class ShadowReferenceOutcome
 {
+    /**
+     * @param  list<string>  $keptDatabases  what `capture.shadow.keep_on_failure` left on the server
+     */
     private function __construct(
         public ?CatalogSnapshot $snapshot,
         public ?UndeterminedReason $reason,
         public ?string $shadowDatabase,
+        public array $keptDatabases = [],
     ) {}
 
     /**
@@ -40,10 +45,28 @@ final readonly class ShadowReferenceOutcome
         return new self($snapshot, null, $shadowDatabase);
     }
 
-    /** No expectation could be built, and this is why. */
-    public static function undetermined(UndeterminedReason $reason): self
+    /**
+     * No expectation could be built, and this is why.
+     *
+     * @param  list<string>  $keptDatabases  the databases a failed replay left standing for inspection
+     */
+    public static function undetermined(UndeterminedReason $reason, array $keptDatabases = []): self
     {
-        return new self(null, $reason, null);
+        return new self(null, $reason, null, $keptDatabases);
+    }
+
+    /**
+     * Why there is no expectation, and which databases are still on the server when the run kept
+     * them. The reason alone names none, and a person who asked for the databases to be kept needs
+     * exactly that to find them.
+     */
+    public function describe(): string
+    {
+        $reason = (string) $this->reason?->value;
+
+        return $this->keptDatabases === []
+            ? $reason
+            : $reason.'; '.UndeterminedReason::ShadowKeptOnFailure->value.': '.ShadowDatabaseKept::sentence($this->keptDatabases);
     }
 
     public function isUndetermined(): bool

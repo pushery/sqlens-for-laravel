@@ -99,7 +99,7 @@ final readonly class DynamicCallDetector implements PreScanDetector
                 $migration->file,
                 $call['line'],
                 sprintf(
-                    'The migration makes %s at line %d, a call the static pre-scan cannot resolve, so it cannot say what the call runs or that it is safe. Pretend mode would run it for real. Write the call out, move it into a step the deploy runs after the migration, or capture in shadow mode.',
+                    'The migration makes %s at line %d, a call the static pre-scan cannot resolve, so it cannot say what the call runs or that it is safe. Pretend mode would run it for real. Write the call out, or move it into a step the deploy runs after the migration.',
                     $call['target']->description,
                     $call['line'],
                 ),

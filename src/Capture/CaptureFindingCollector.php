@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Capture;
 use LogicException;
 use Pushery\SQLens\Agent\Remediation\RemediationValidator;
 use Pushery\SQLens\Canonical\Fingerprint;
+use Pushery\SQLens\Capture\PreScan\PreScanGate;
 use Pushery\SQLens\Capture\PreScan\PreScanHit;
 use Pushery\SQLens\Capture\Rules\CaptureRule;
 use Pushery\SQLens\Contracts\DerivesDowntimeClass;
@@ -19,6 +20,7 @@ use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
 use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Findings\UndeterminedReason;
+use Pushery\SQLens\Subjects\CaptureMode;
 use Pushery\SQLens\Subjects\MigrationSql;
 use Pushery\SQLens\Subjects\SubjectContext;
 
@@ -264,6 +266,26 @@ final readonly class CaptureFindingCollector
     }
 
     /**
+     * What becomes of a migration the pre-scan flagged, for the kind of hit and the mode of the run.
+     *
+     * The sentence used to send every reader to shadow mode, which runs only a migration whose hits
+     * are all introspection guards: a reader who followed it for a side effect found the same finding
+     * under `--shadow` and nothing to do about it.
+     */
+    private function preScanResolution(PreScanHit $hit, CaptureResult $result): string
+    {
+        if (! PreScanGate::shadowResolves($hit->ruleId)) {
+            return 'so it was not executed, and shadow mode holds it back as well, because a throwaway '
+                .'database cannot contain what it reaches or the data its path depends on';
+        }
+
+        return $result->mode === CaptureMode::Shadow
+            ? 'and another hit held it back, so this guard was not run either'
+            : 'so it was not pretend-executed; shadow mode runs it against a throwaway database, where '
+                .'this guard gets a real answer';
+    }
+
+    /**
      * One pre-scan hit as an undetermined finding: the detector's own metadata gives
      * it the category, level, stability, and documentation page a report and a
      * baseline address it by; the hit gives it the line and the reason a user reads.
@@ -277,7 +299,7 @@ final readonly class CaptureFindingCollector
         return Finding::undetermined(
             $hit->ruleId,
             $metadata->messagePrefix,
-            sprintf('%s (%s). The pre-scan flagged this migration, so it was not pretend-executed; shadow mode is the truth mode that can resolve it.', $hit->reason, $hit->target),
+            sprintf('%s (%s). The pre-scan flagged this migration, %s.', $hit->reason, $hit->target, $this->preScanResolution($hit, $result)),
             UndeterminedReason::PreScanFlagged,
             Location::inMigration(
                 $result->file,

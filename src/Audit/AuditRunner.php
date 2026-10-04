@@ -98,8 +98,10 @@ use Pushery\SQLens\Subjects\SubjectContext;
 use Pushery\SQLens\Today;
 use Pushery\SQLens\Tools\MissingToolNotice;
 use Pushery\SQLens\Tools\Squawk\SquawkRuleIds;
+use Pushery\SQLens\Tools\ToolContribution;
 use Pushery\SQLens\Tools\ToolContributions;
 use Pushery\SQLens\Tools\ToolDiagnostic;
+use Pushery\SQLens\Tools\ToolFindingGate;
 use Pushery\SQLens\Tools\ToolLocator;
 use Pushery\SQLens\Tools\UnverifiableToolPrefixes;
 use Throwable;
@@ -1392,7 +1394,10 @@ final readonly class AuditRunner implements AuditRuns
             return [];
         }
 
-        return BaselineRuleIds::violations($baseline, $this->allRules());
+        // The tools' namespaces as well, as the lint suite passes them. Without them a baseline entry
+        // for a Postgres Language Server finding was an unknown id here, so accepting one such finding
+        // turned every audit into a misconfiguration.
+        return BaselineRuleIds::violations($baseline, $this->allRules(), $this->drivers->everyToolPrefix());
     }
 
     /**
@@ -1680,11 +1685,27 @@ final readonly class AuditRunner implements AuditRuns
         // would pin duplicates, and every later run would carry an entry for a finding that no
         // longer exists in that shape.
         //
-        // Resolved by CONTRACT, never by `instanceof`: a runner that names one tool has to be
-        // edited for the second, and the edit that gets forgotten is invisible — nothing fails, the
-        // tool is simply never asked.
+        // Resolved by CONTRACT, never by an `instanceof` on a tool class: a runner that names one tool
+        // has to be edited for the second, and the edit that gets forgotten is invisible — nothing
+        // fails, the tool is simply never asked.
+        //
+        // A tool's verdicts pass the run's level and category gates like a rule's. The ids those
+        // gates leave out were not asked, so their baseline entries are not this run's to judge.
+        $toolGate = new ToolFindingGate(
+            new LevelGate(Level::from($level)),
+            new CategoryFilter(array_map(Category::from(...), $activeCategories)),
+        );
+        $unaskedToolIds = [];
+
         foreach ($diagnostics as $diagnostic) {
-            $findings = $this->contributions->for($diagnostic->tool)?->contribute($findings, $diagnostic, $target->connection, $subjectContext, $target->pinnedHost) ?? $findings;
+            $contribution = $this->contributions->for($diagnostic->tool);
+
+            if (! $contribution instanceof ToolContribution) {
+                continue;
+            }
+
+            $findings = $contribution->contribute($findings, $diagnostic, $target->connection, $subjectContext, $target->pinnedHost, $toolGate);
+            $unaskedToolIds = [...$unaskedToolIds, ...$contribution->unaskedIds($toolGate)];
         }
 
         // Under a strict profile a FIXABLE absence is an error rather than a degradation — and
@@ -1717,7 +1738,7 @@ final readonly class AuditRunner implements AuditRuns
             // run never reads. They are the lint suite's to call stale, not this one's. Nor are the
             // entries of rules this run's level, categories or stability left out, or that the
             // server's version or role withheld: nobody asked for their findings.
-            scope: BaselineScope::of(Suite::Audit, $this->allRules(), [LocationKind::Catalog], $askedRules),
+            scope: BaselineScope::of(Suite::Audit, $this->allRules(), [LocationKind::Catalog], $askedRules)->without($unaskedToolIds),
         );
 
         // Stale entries are carried into the Result, not dropped: a baseline line that matches

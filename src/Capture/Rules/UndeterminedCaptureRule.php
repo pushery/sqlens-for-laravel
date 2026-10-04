@@ -7,9 +7,12 @@ namespace Pushery\SQLens\Capture\Rules;
 use LogicException;
 use Pushery\SQLens\Capture\CaptureResult;
 use Pushery\SQLens\Capture\CaptureRuleMetadata;
+use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
+use Pushery\SQLens\Security\RowValueMask;
+use Pushery\SQLens\Security\SecretLiteralMask;
 use Pushery\SQLens\Subjects\SubjectContext;
 
 /**
@@ -85,9 +88,13 @@ final readonly class UndeterminedCaptureRule implements CaptureRule
             self::RULE_ID,
             'sqlens.lint',
             sprintf(
-                'The migration %s could not be captured and is reported as undetermined, not passed: %s The run checked nothing for this migration.',
+                'The migration %s could not be captured and is reported as undetermined, not passed: %s%s The run checked nothing for this migration.',
                 $result->migrationClass,
                 $reason->description(),
+                // What this run learned about the reason, such as the connection a refused query went
+                // to, or the database's own message. The reason says what kind of thing happened; this
+                // says where.
+                $result->failureDetail === null ? '' : ' In this run, '.rtrim($this->masked($result->failureDetail), '.').'.',
             ),
             $reason,
             Location::inMigration(
@@ -103,5 +110,15 @@ final readonly class UndeterminedCaptureRule implements CaptureRule
             $this->metadata()->documentationUrl,
             $context,
         );
+    }
+
+    /**
+     * A detail can be the database's own message, which may name the configured host or user, quote a
+     * password from the statement, or quote the row a constraint refused. The same three masks the
+     * error rules apply, in the same order.
+     */
+    private function masked(string $detail): string
+    {
+        return RowValueMask::in(SecretLiteralMask::in((new CredentialRedactor)->redact($detail)));
     }
 }

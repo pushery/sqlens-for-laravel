@@ -97,6 +97,7 @@ use Pushery\SQLens\Tools\MissingToolNotice;
 use Pushery\SQLens\Tools\Squawk\SquawkContribution;
 use Pushery\SQLens\Tools\Squawk\SquawkTool;
 use Pushery\SQLens\Tools\ToolDiagnostic;
+use Pushery\SQLens\Tools\ToolFindingGate;
 use Pushery\SQLens\Tools\ToolLocator;
 use Pushery\SQLens\Tools\UnverifiableToolPrefixes;
 use Throwable;
@@ -383,6 +384,10 @@ final readonly class LintRunner implements LintRuns
         $stabilityGate = StabilityGate::fromConfig($this->config->get('sqlens.stability'));
         $leveledAndScoped = $stabilityGate->apply($categoryFilter->apply($gate->active($registry)));
 
+        // An external tool's verdicts pass the same level and category gates, through the same two
+        // objects rather than a second reading of the run's settings.
+        $toolGate = new ToolFindingGate($gate, $categoryFilter);
+
         // The version axis, last and three-valued: a rule outside a KNOWN version's
         // window produces no finding; under an UNKNOWN version a version-independent rule
         // still runs, while a version-dependent one becomes an undetermined finding
@@ -660,7 +665,7 @@ final readonly class LintRunner implements LintRuns
         // differently from one without it.
         foreach ($diagnostics as $diagnostic) {
             if ($diagnostic->tool instanceof SquawkTool) {
-                $findings = $this->squawk->contribute($findings, $run, $diagnostic, $resolvedVersion, $subjectContext, Level::from($activeLevel), $files !== []);
+                $findings = $this->squawk->contribute($findings, $run, $diagnostic, $resolvedVersion, $subjectContext, $toolGate, $files !== []);
             }
         }
 
@@ -717,7 +722,7 @@ final readonly class LintRunner implements LintRuns
             Suite::Lint,
             $unverifiable,
             $crossSuiteFindings,
-            $this->baselineScope($activeRules, $activeLevel, $readMigrations, $existingMigrations, $files !== []),
+            $this->baselineScope($activeRules, $toolGate, $readMigrations, $existingMigrations, $files !== []),
         );
 
         // …and each one is NAMED, because "kept in the file" without a word is the same silence as
@@ -833,10 +838,11 @@ final readonly class LintRunner implements LintRuns
 
         $budget = new CaptureConnectionResolver($this->drivers, $this->config)->sessionBudget();
 
-        // Through the one seam, which owns the order (snapshot before apply) AND the precondition:
-        // on a connection that measures as multiplexed nothing is written at all, because a `SET`
-        // there lands on a backend this run will never see again and the restore would look for it
-        // on a third. See SessionGuard::mayWriteSessionState().
+        // Through the one seam, which owns the order (snapshot before apply) AND the engine rule: on
+        // PostgreSQL it writes nothing here, because a session `SET` on a borrowed connection lands,
+        // behind a transaction pooler, on a backend this run will never see again. The reads that
+        // need the bound there are the pending resolution's, and it bounds them in a transaction of
+        // its own. See SessionGuard::within().
         return new SessionGuard($budget)->bind($connection);
     }
 
@@ -1662,7 +1668,7 @@ final readonly class LintRunner implements LintRuns
      * The baseline also holds the audit suite's catalog entries, which no lint run reads, and the
      * entries of rules this run's gates left out: `sqlens:security` and a run under `--category`
      * or `--level` apply a part of the suite, and an entry of the rest matched nothing because
-     * nobody asked for it. Squawk's findings pass the level the same way.
+     * nobody asked for it. Squawk's findings pass the level and the categories the same way.
      *
      * And a run reads only some of the migrations: the pending ones, which leaves out every
      * migration that already ran on this database, or the files given to `--file`. An entry about
@@ -1674,10 +1680,10 @@ final readonly class LintRunner implements LintRuns
      * @param  list<string>  $read  the migrations the run read, by name
      * @param  list<string>  $existing  every migration the project has, by name
      */
-    private function baselineScope(array $activeRules, int $level, array $read, array $existing, bool $fastPath): BaselineScope
+    private function baselineScope(array $activeRules, ToolFindingGate $toolGate, array $read, array $existing, bool $fastPath): BaselineScope
     {
         return BaselineScope::of(Suite::Lint, $this->drivers->everyRule(), [LocationKind::Migration, LocationKind::Callsite], $activeRules)
-            ->without($this->squawk->unaskedIds(Level::from($level), $fastPath))
+            ->without($this->squawk->unaskedIds($toolGate, $fastPath))
             ->readingOnly($read, $existing);
     }
 

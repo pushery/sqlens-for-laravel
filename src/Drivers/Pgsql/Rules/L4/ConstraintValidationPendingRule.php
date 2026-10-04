@@ -145,6 +145,33 @@ final class ConstraintValidationPendingRule extends AbstractPgsqlSafetyRule impl
         return Confidence::Heuristic;
     }
 
+    /**
+     * The verdict on `ADD CHECK (…) NOT VALID` and `ADD FOREIGN KEY (…) NOT VALID` without a name.
+     *
+     * The profile leaves both `alter_table`, so the named path above never sees them. The first half
+     * is as right as in the named form; the second half has to name the constraint, and the name is
+     * one PostgreSQL picks. So this is reported, and nothing is recorded: the finding names no object,
+     * and {@see self::debtReference()} answers null for it, because a debt keyed on nothing would
+     * collide with every other one of its kind.
+     */
+    private function unnamedNotValidAdd(MigrationStatementView $statement): ?RuleVerdict
+    {
+        if (! $statement->is(StatementKind::AlterTable)
+            || preg_match('/\bADD (CHECK|FOREIGN KEY)\b/', $statement->canonical) !== 1
+            || ! str_contains($statement->canonical, 'NOT VALID')) {
+            return null;
+        }
+
+        return RuleVerdict::flag(
+            'A constraint is added `NOT VALID` without a name, so PostgreSQL names it itself. That first '
+            .'half is the right move: it applies to every new row at once and takes a brief metadata '
+            .'lock instead of scanning the table. The second half, `ALTER TABLE … VALIDATE CONSTRAINT` '
+            .'in a later migration, has to name the constraint, and nothing in this migration says '
+            .'which name it got, so no debt can be recorded for it either. Name it in the add, so the '
+            .'validation can name it too.',
+        );
+    }
+
     #[Override]
     /**
      * One statement, not three — because step one already happened.
@@ -185,7 +212,7 @@ final class ConstraintValidationPendingRule extends AbstractPgsqlSafetyRule impl
     protected function verdict(MigrationStatementView $statement): ?RuleVerdict
     {
         if (! $statement->is(StatementKind::AddConstraint)) {
-            return null;
+            return $this->unnamedNotValidAdd($statement);
         }
 
         // The safe form is the SUBJECT here, the exact inverse of the level-2 rule where it is the

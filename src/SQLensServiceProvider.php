@@ -37,6 +37,7 @@ use Pushery\SQLens\Capture\Shadow\ApplicationShadowClearance;
 use Pushery\SQLens\Capture\Shadow\ProductionConnectionDetector;
 use Pushery\SQLens\Catalog\CatalogReaderFactory;
 use Pushery\SQLens\Catalog\CatalogReaders;
+use Pushery\SQLens\Catalog\ReaderConnectionFactory;
 use Pushery\SQLens\Catalog\ReaderSession;
 use Pushery\SQLens\Catalog\SessionBudget;
 use Pushery\SQLens\Config\GuardProfileInheritance;
@@ -552,6 +553,7 @@ final class SQLensServiceProvider extends ServiceProvider
                 new PglsFindingMapper(PglsRuleMap::bundled()),
                 PglsRuleMap::bundled(),
                 $app->make(Repository::class),
+                $app->make(ReaderConnectionFactory::class),
             ),
         ]));
 
@@ -662,7 +664,7 @@ final class SQLensServiceProvider extends ServiceProvider
                 }
 
                 if (! in_array('sqlfluff', $settings->disabledBackends, true)) {
-                    $backends[] = new SqlFluffBackend($processes, $settings->sqlFluffPath ?? 'sqlfluff', $settings->timeout);
+                    $backends[] = new SqlFluffBackend($processes, $settings->sqlFluffPath ?? 'sqlfluff', $settings->timeout, $app->basePath());
                 }
 
                 // Last, and always present — and never switchable off. The two above are better at

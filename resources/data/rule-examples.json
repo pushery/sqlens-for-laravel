@@ -767,10 +767,10 @@
         },
         "SEC.CFG.STATEMENT_LOGGING_SECRETS": {
             "bad": "# postgresql.conf: every statement, and every value in it, into the log.\nlog_statement = 'all'",
-            "good": "# Schema changes keep an audit trail; row values never reach the log.\nlog_statement = 'ddl'",
+            "good": "# Schema changes keep an audit trail without row values. A schema change is\n# still logged verbatim, so role passwords are set with psql's \\password.\nlog_statement = 'ddl'",
             "language": "ini",
             "note": "The hardening half of the switch its privacy sibling SEC.CFG.STATEMENT_LOGGING reads, and the half that was missing until 2026-08-13: MySQL had a secrets view of general_log and PostgreSQL only a privacy view of log_statement, so a team filtering on --category=security never saw that CREATE ROLE ... LOGIN PASSWORD writes the password into the log. Nothing was red; the report simply had no finding in it.",
-            "false_positives": "mod rather than all narrows it to writes, which is a real mitigation and still logs every value a migration or job writes. ddl and none carry no values and are not reported. A short debugging window is legitimate and indistinguishable from a forgotten switch, which is the point: the cost is silent and grows with uptime."
+            "false_positives": "mod rather than all narrows it to writes, which is a real mitigation and still logs every value a migration or job writes. ddl carries no row values and is not reported, although it still writes every schema change verbatim, a password typed into CREATE ROLE or ALTER ROLE included; none logs nothing and is not reported either. A short debugging window is legitimate and indistinguishable from a forgotten switch, which is the point: the cost is silent and grows with uptime."
         },
         "SEC.CFG.TLS_DISABLED": {
             "bad": "# postgresql.conf: the server cannot negotiate TLS at all.\nssl = off",

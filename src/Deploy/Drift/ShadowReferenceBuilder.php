@@ -8,11 +8,13 @@ use Pushery\SQLens\Capture\CaptureSection;
 use Pushery\SQLens\Capture\PendingMigration;
 use Pushery\SQLens\Capture\Shadow\GuardDecision;
 use Pushery\SQLens\Capture\Shadow\ShadowConnectionLatch;
+use Pushery\SQLens\Capture\Shadow\ShadowSession;
 use Pushery\SQLens\Catalog\CatalogReaderFactory;
 use Pushery\SQLens\Catalog\CatalogRequest;
 use Pushery\SQLens\Catalog\ReaderConnectionFactory;
 use Pushery\SQLens\Contracts\ShadowProvisioner;
 use Pushery\SQLens\Contracts\ShadowRunner;
+use Pushery\SQLens\Exceptions\ShadowDatabaseKept;
 use Pushery\SQLens\Exceptions\ShadowProvisioningUndetermined;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Subjects\SubjectContext;
@@ -111,7 +113,7 @@ final readonly class ShadowReferenceBuilder
                 if ($result->isFail() || $result->isUndetermined()) {
                     $failed = true;
 
-                    return ShadowReferenceOutcome::undetermined(UndeterminedReason::ShadowMigrateFailed);
+                    return $this->failedWith(UndeterminedReason::ShadowMigrateFailed, $session);
                 }
             }
 
@@ -131,7 +133,7 @@ final readonly class ShadowReferenceBuilder
             } catch (ShadowProvisioningUndetermined $refusal) {
                 $failed = true;
 
-                return ShadowReferenceOutcome::undetermined($refusal->reason);
+                return $this->failedWith($refusal->reason, $session);
             }
 
             $snapshot = $this->readers
@@ -151,7 +153,9 @@ final readonly class ShadowReferenceBuilder
         } catch (Throwable $failure) {
             $failed = true;
 
-            throw $failure;
+            // keep_on_failure keeps the databases for a person to look inside, and the error that
+            // stopped the replay names none of them, so the one that reaches the caller does.
+            throw $this->keepOnFailure ? ShadowDatabaseKept::after($failure, $session->databases()) : $failure;
         } finally {
             // `keep_on_failure` is the one case where a failed run's database is deliberately left
             // standing, for a person to look inside. A SUCCESSFUL run is always torn down: keeping
@@ -160,5 +164,14 @@ final readonly class ShadowReferenceBuilder
                 $this->provisioner->destroy($session);
             }
         }
+    }
+
+    /**
+     * A replay that did not come through clean, naming the databases `keep_on_failure` leaves on the
+     * server. Kept and unnamed, they would stand there with nobody told where to look or what to drop.
+     */
+    private function failedWith(UndeterminedReason $reason, ShadowSession $session): ShadowReferenceOutcome
+    {
+        return ShadowReferenceOutcome::undetermined($reason, $this->keepOnFailure ? $session->databases() : []);
     }
 }

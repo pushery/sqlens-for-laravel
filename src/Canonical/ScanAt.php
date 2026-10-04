@@ -27,8 +27,12 @@ final class ScanAt
      */
     public static function firstOf(string $sql, int $at, array $candidates): ?string
     {
+        // The first character decides almost every position before a comparison is needed: the
+        // walk asks this at every character, and most characters open nothing.
+        $char = $sql[$at] ?? '';
+
         foreach ($candidates as $candidate) {
-            if (self::startsWith($sql, $at, $candidate)) {
+            if ($candidate !== '' && $candidate[0] === $char && self::startsWith($sql, $at, $candidate)) {
                 return $candidate;
             }
         }
