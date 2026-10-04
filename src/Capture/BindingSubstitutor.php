@@ -19,10 +19,10 @@ use Pushery\SQLens\Contracts\DriverCanonicalization;
  * database. Reading it as a safe-to-run string would be a security bug, not a
  * feature request.
  *
- * The statement arrives the way PDO received it, beside its bindings: the shape
- * `DB::listen` reports. Laravel's pretend log is complete already, because the
- * framework inlines the bindings itself before it logs, and the capture decorator
- * hands it on without coming here. Two PDO conventions decide what a `?` is.
+ * The statement arrives the way PDO receives it, beside its bindings, in both
+ * capture modes: the shape `DB::listen` reports, and what the pretend captor takes
+ * from the connection before Laravel writes its log. Two PDO conventions decide
+ * what a `?` is.
  * `??` is PDO's escape for a `?` the server receives as SQL, which is how the
  * jsonb `?`, `?|` and `?&` operators reach PostgreSQL. And a statement without
  * bindings has nothing to fill: one that ran that way went through `PDO::exec()`,

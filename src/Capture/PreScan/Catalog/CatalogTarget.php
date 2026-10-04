@@ -151,16 +151,18 @@ final readonly class CatalogTarget
             return $target->targetsFunction($this->function);
         }
 
+        // Class, method and function names are matched without regard to case, as PHP calls them:
+        // `File_Put_Contents()`, `Dispatch()` and `->Notify()` run what their lowercase spellings run.
         if ($this->namespacePrefix !== null) {
-            return $target->class !== null && str_starts_with($target->class, $this->namespacePrefix);
+            return $target->class !== null && str_starts_with(strtolower($target->class), strtolower($this->namespacePrefix));
         }
 
         if ($this->class === null) {
-            return $target->method === $this->method;
+            return $target->method !== null && strcasecmp($target->method, $this->method ?? '') === 0;
         }
 
         return $this->method === null
-            ? $target->class === $this->class
+            ? $target->targetsClass($this->class)
             : $target->targets($this->class, $this->method);
     }
 

@@ -52,7 +52,7 @@ final class SchemaSubjectCollector extends NodeVisitorAbstract
      * argument and could be read — but a rename is not an introduction, and this map answers "where
      * did this come from", not "where was it last touched".
      */
-    private const array TABLE_METHODS = ['create', 'table', 'createIfNotExists'];
+    private const array TABLE_METHODS = ['create', 'table', 'createifnotexists'];
 
     /** @var array<string, array{file: string, line: int}> subject => where it was introduced */
     private array $subjects = [];
@@ -151,11 +151,12 @@ final class SchemaSubjectCollector extends NodeVisitorAbstract
         // name resolver has already run over this AST.
         $class = $node->class->toString();
 
-        if (! str_ends_with($class, 'Schema')) {
+        // Both without regard to case, which is how PHP reads a class and a method name.
+        if (! str_ends_with(strtolower($class), 'schema')) {
             return null;
         }
 
-        if (! in_array($node->name->toString(), self::TABLE_METHODS, true)) {
+        if (! in_array($node->name->toLowerString(), self::TABLE_METHODS, true)) {
             return null;
         }
 

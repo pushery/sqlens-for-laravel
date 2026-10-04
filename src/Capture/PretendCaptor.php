@@ -34,11 +34,14 @@ use Throwable;
  *   offline run. Building the grammar from the connection object up front makes
  *   the same capture work whether or not a server answers, with no second code
  *   path.
- * - **The logged `query` already has its bindings inlined** (`values (1)`, not
- *   `values (?)`), with `bindings` still carried separately. The captor keeps
- *   both as the framework hands them over: the text is complete, so the
- *   substitution stage leaves it as it is, and the bindings stay because a rule
- *   reads where a value came from.
+ * - **Each statement is taken the way PDO would receive it**, the SQL with its
+ *   placeholders and the bindings beside it, from {@see PretendStatementTap}
+ *   rather than from the pretend log. The log's text has the bindings written in
+ *   already, by a scanner that reads `\'` as an escape on every driver, so on
+ *   PostgreSQL a placeholder behind `'C:\'` stays empty there. The substitution
+ *   stage fills the placeholders the way it does for a shadow capture, and the
+ *   two modes give the same text. The log is still read, to hold it to the same
+ *   statements: when the two disagree, the migration is undetermined and says so.
  *
  * The captor resolves NOTHING about which migrations are pending — it is handed
  * an already-ordered list and works exactly that list, so a run can never quietly
@@ -58,19 +61,23 @@ final readonly class PretendCaptor implements Captor
 
     private CaptureConnectionFence $fence;
 
+    private PretendStatementTap $tap;
+
     /**
      * The loader is injectable and SHARED on purpose: the same run reads a migration's forward leg
      * and its rollback leg, and a second `require` of a named-class migration is an uncatchable
      * fatal. See {@see MigrationLoader}.
      *
      * The manager is the one the `Schema` and `DB` facades resolve through, and the fence keeps the
-     * method on the capture connection. See {@see self::captureOne()} for both.
+     * method on the capture connection. See {@see self::captureOne()} for both. The tap is shared
+     * for the same reason the fence is: it hooks each connection once.
      */
-    public function __construct(private Connection $connection, ?MigrationLoader $loader = null, ?DatabaseManager $database = null, ?CaptureConnectionFence $fence = null)
+    public function __construct(private Connection $connection, ?MigrationLoader $loader = null, ?DatabaseManager $database = null, ?CaptureConnectionFence $fence = null, ?PretendStatementTap $tap = null)
     {
         $this->loader = $loader ?? new MigrationLoader;
         $this->database = $database ?? Container::getInstance()->make(DatabaseManager::class);
         $this->fence = $fence ?? Container::getInstance()->make(CaptureConnectionFence::class);
+        $this->tap = $tap ?? Container::getInstance()->make(PretendStatementTap::class);
     }
 
     public function capture(iterable $migrations, CaptureSection $section): CaptureRun
@@ -127,19 +134,21 @@ final readonly class PretendCaptor implements Captor
             $elsewhere = null;
 
             try {
-                $log = $this->connection->pretend(function () use ($pending, $method, $name, &$migration, &$elsewhere): void {
-                    $this->fence->around($this->connection, function () use ($pending, $method, $name, &$migration, &$elsewhere): void {
-                        $this->database->usingConnection($name, function () use ($pending, $method, &$migration, &$elsewhere): void {
-                            $migration = $this->loader->load($pending->file);
+                [$log, $recorded] = $this->tap->recording($this->connection, function () use ($pending, $method, $name, &$migration, &$elsewhere): array {
+                    return $this->connection->pretend(function () use ($pending, $method, $name, &$migration, &$elsewhere): void {
+                        $this->fence->around($this->connection, function () use ($pending, $method, $name, &$migration, &$elsewhere): void {
+                            $this->database->usingConnection($name, function () use ($pending, $method, &$migration, &$elsewhere): void {
+                                $migration = $this->loader->load($pending->file);
 
-                            // A migration that names a connection of its own runs there under
-                            // `migrate`, and capturing it here would judge it against a database it
-                            // never touches. It is not run, and says why below.
-                            $elsewhere = $this->declaredElsewhere($migration);
+                                // A migration that names a connection of its own runs there under
+                                // `migrate`, and capturing it here would judge it against a database it
+                                // never touches. It is not run, and says why below.
+                                $elsewhere = $this->declaredElsewhere($migration);
 
-                            if ($elsewhere === null && method_exists($migration, $method)) {
-                                $migration->{$method}();
-                            }
+                                if ($elsewhere === null && method_exists($migration, $method)) {
+                                    $migration->{$method}();
+                                }
+                            });
                         });
                     });
                 });
@@ -218,10 +227,25 @@ final readonly class PretendCaptor implements Captor
             return CaptureResult::captured($pending->file, $pending->migrationClass, [], $section, $this->mode(), $annotationClass);
         }
 
+        // Both lists come out of the same `Connection::run()` call, one entry per statement. A
+        // migration that writes into the query log itself, through `logQuery()`, breaks that, and
+        // then which text belongs to which statement is not known. That is reported, not guessed.
+        if (count($log) !== count($recorded)) {
+            return CaptureResult::undetermined(
+                $pending->file,
+                $pending->migrationClass,
+                $section,
+                $this->mode(),
+                UndeterminedReason::PretendLogDiverged,
+                annotationClass: $annotationClass,
+                detail: sprintf('the pretend log holds %d statement(s), and the migration sent %d', count($log), count($recorded)),
+            );
+        }
+
         return CaptureResult::captured(
             $pending->file,
             $pending->migrationClass,
-            $this->statementsFrom($log, $section, $this->withinTransaction($migration)),
+            $this->statementsFrom($recorded, $section, $this->withinTransaction($migration)),
             $section,
             $this->mode(),
             $annotationClass,
@@ -256,21 +280,19 @@ final readonly class PretendCaptor implements Captor
     }
 
     /**
-     * Turn the pretend query log into ordered captured statements.
+     * Turn the statements the migration sent into ordered captured statements.
      *
-     * The logged text and the bindings are kept as the framework hands them over.
-     * The framework inlined the bindings itself, so this captor must not grow a
-     * second, divergent inliner, and the substitution stage does not run over a
-     * text that is complete already.
+     * The SQL and the bindings are kept apart, as a shadow capture keeps them, because writing
+     * the one into the other is the substitution stage's job for both modes: this captor grows no
+     * inliner of its own.
      *
-     * @param  array<array-key, array{query: string, bindings: array<array-key, mixed>, time: float|null}>  $log  the shape Connection::pretend() declares
+     * @param  list<array{sql: string, bindings: list<mixed>}>  $recorded
      * @return list<CapturedStatement>
      */
-    private function statementsFrom(array $log, CaptureSection $section, bool $withinTransaction): array
+    private function statementsFrom(array $recorded, CaptureSection $section, bool $withinTransaction): array
     {
         $statements = [];
-        // A fresh, zero-based sequence, independent of whatever keys the log
-        // happened to carry — the statement's own ordinal, not the log's.
+        // A fresh, zero-based sequence: the statement's own ordinal in the migration.
         $sequence = 0;
         // getName() is nullable on the framework's Connection, but a resolved
         // capture connection always has one; the coalesce keeps the value object's
@@ -278,10 +300,10 @@ final readonly class PretendCaptor implements Captor
         $connectionName = $this->connection->getName() ?? '';
         $driver = $this->connection->getDriverName();
 
-        foreach ($log as $entry) {
+        foreach ($recorded as $entry) {
             $statements[] = new CapturedStatement(
-                rawSql: $entry['query'],
-                bindings: array_values($entry['bindings']),
+                rawSql: $entry['sql'],
+                bindings: $entry['bindings'],
                 sequence: $sequence,
                 direction: $section->direction(),
                 withinTransaction: $withinTransaction,

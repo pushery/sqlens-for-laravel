@@ -124,14 +124,14 @@ final readonly class AgentReporter implements Reporter
     private function heading(Result $result, RunContext $context): array
     {
         $servers = array_map(
-            static fn (ReportedServerVersion $version): string => $version->connection.' '.$version->version,
+            static fn (ReportedServerVersion $version): string => MarkdownText::inline($version->connection.' '.$version->version),
             $context->serverVersions,
         );
 
         $tools = [];
 
         foreach ($context->toolVersions as $tool => $version) {
-            $tools[] = $tool.' '.$version;
+            $tools[] = MarkdownText::inline($tool.' '.$version);
         }
 
         return [
@@ -273,11 +273,13 @@ final readonly class AgentReporter implements Reporter
 
         $where = $finding->location->file ?? $finding->location->objectName ?? 'the run';
 
+        // The rule id, the message and the place are text a rule, a catalog or a tool wrote, so
+        // each stays on its line: a line break in one of them would start a block of its own.
         return [
-            '### '.$finding->ruleId.($decision->blockedBy instanceof GateAxis ? ' — BLOCKING' : ''),
+            '### '.MarkdownText::inline($finding->ruleId).($decision->blockedBy instanceof GateAxis ? ' — BLOCKING' : ''),
             '',
-            '- '.$finding->message,
-            '- **Where:** '.$where.($finding->location->line !== null ? ':'.$finding->location->line : ''),
+            '- '.MarkdownText::inline($finding->message),
+            '- **Where:** '.MarkdownText::inline($where).($finding->location->line !== null ? ':'.$finding->location->line : ''),
             '- **Judged by:** '.$axis
                 .($finding->downtimeClass instanceof DowntimeClass ? ' · **Downtime:** '.$finding->downtimeClass->value : '')
                 .($finding->downtimeUndetermined instanceof DowntimeUndetermined ? ' · **Downtime:** undetermined ('.$finding->downtimeUndetermined->reason->value.')' : ''),

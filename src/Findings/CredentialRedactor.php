@@ -139,4 +139,24 @@ final class CredentialRedactor
             $text,
         ) ?? $text;
     }
+
+    /**
+     * A configured URL as a message may show it: its user information and its query replaced, its
+     * host and path kept, so the message still says which address was meant.
+     *
+     * A source that authenticates in its URL has nowhere else to carry the credential than before
+     * the `@`, as `user:token` or a token alone, or in the query, as `?private_token=…`. The URL
+     * pattern in redact() knows only the `user:password@` form. Text that is not a URL comes back
+     * unchanged, a question mark in it included.
+     */
+    public function url(string $text): string
+    {
+        if (preg_match('#^[a-z][a-z0-9+.\-]*://#i', $text) !== 1) {
+            return $text;
+        }
+
+        $text = preg_replace('#^([a-z][a-z0-9+.\-]*://)[^/?\#@\s]*@#i', '$1'.self::REDACTED.'@', $text) ?? $text;
+
+        return preg_replace('/\?.*$/s', '?'.self::REDACTED, $text) ?? $text;
+    }
 }

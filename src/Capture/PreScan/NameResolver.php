@@ -43,8 +43,11 @@ final readonly class NameResolver
     /** The helpers that resolve their first argument out of the container. */
     private const array CONTAINER_HELPERS = ['app', 'resolve'];
 
-    /** The container's own methods that resolve their first argument. */
-    private const array CONTAINER_METHODS = ['make', 'makeWith', 'get'];
+    /**
+     * The container's own methods that resolve their first argument, in lowercase: a method name is
+     * compared the way PHP reads it, without regard to case.
+     */
+    private const array CONTAINER_METHODS = ['make', 'makewith', 'get'];
 
     /**
      * The classes whose `getInstance()` is the container.
@@ -92,7 +95,8 @@ final readonly class NameResolver
      */
     public function __construct(?array $aliases = null)
     {
-        $this->aliases = $aliases ?? self::frameworkAliases();
+        // Keyed in lowercase, because PHP reads a class name in any case and so does an alias.
+        $this->aliases = array_change_key_case($aliases ?? self::frameworkAliases(), CASE_LOWER);
     }
 
     /**
@@ -143,14 +147,14 @@ final readonly class NameResolver
     {
         if ($node instanceof FuncCall) {
             $helper = $node->name instanceof Name ? $this->nameOf($node->name) : null;
-            $key = $helper !== null && in_array($helper, self::CONTAINER_HELPERS, true) ? $this->containerKeyIn($node->args) : null;
+            $key = $helper !== null && in_array(strtolower($helper), self::CONTAINER_HELPERS, true) ? $this->containerKeyIn($node->args) : null;
 
             return $key === null ? null : [$key, sprintf("%s('%s')", $helper, $key)];
         }
 
         if ($node instanceof MethodCall) {
             $method = $this->methodName($node->name);
-            $container = $method !== null && in_array($method, self::CONTAINER_METHODS, true) ? $this->containerSpelling($node->var) : null;
+            $container = $method !== null && in_array(strtolower($method), self::CONTAINER_METHODS, true) ? $this->containerSpelling($node->var) : null;
             $key = $container === null ? null : $this->containerKeyIn($node->args);
 
             return $key === null ? null : [$key, sprintf("%s->%s('%s')", $container, $method, $key)];
@@ -158,7 +162,7 @@ final readonly class NameResolver
 
         if ($node instanceof StaticCall && $node->class instanceof Name) {
             $method = $this->methodName($node->name);
-            $key = $method !== null && in_array($method, self::CONTAINER_METHODS, true) && $this->classFor($node->class) === App::class
+            $key = $method !== null && in_array(strtolower($method), self::CONTAINER_METHODS, true) && strcasecmp($this->classFor($node->class), App::class) === 0
                 ? $this->containerKeyIn($node->args)
                 : null;
 
@@ -174,14 +178,16 @@ final readonly class NameResolver
      */
     private function containerSpelling(Expr $receiver): ?string
     {
-        if ($receiver instanceof FuncCall && $receiver->name instanceof Name && $receiver->args === [] && $this->nameOf($receiver->name) === 'app') {
+        if ($receiver instanceof FuncCall && $receiver->name instanceof Name && $receiver->args === [] && strcasecmp($this->nameOf($receiver->name), 'app') === 0) {
             return 'app()';
         }
 
-        if ($receiver instanceof StaticCall && $receiver->class instanceof Name && $this->methodName($receiver->name) === 'getInstance') {
+        if ($receiver instanceof StaticCall && $receiver->class instanceof Name && strcasecmp($this->methodName($receiver->name) ?? '', 'getInstance') === 0) {
             $class = $this->classFor($receiver->class);
 
-            return in_array($class, self::CONTAINER_CLASSES, true) ? substr((string) strrchr('\\'.$class, '\\'), 1).'::getInstance()' : null;
+            return array_any(self::CONTAINER_CLASSES, static fn (string $container): bool => strcasecmp($container, $class) === 0)
+                ? substr((string) strrchr('\\'.$class, '\\'), 1).'::getInstance()'
+                : null;
         }
 
         return null;
@@ -209,7 +215,7 @@ final readonly class NameResolver
             return $value->value === '' ? null : ltrim($value->value, '\\');
         }
 
-        return $value instanceof ClassConstFetch && $value->class instanceof Name && $this->methodName($value->name) === 'class'
+        return $value instanceof ClassConstFetch && $value->class instanceof Name && strcasecmp($this->methodName($value->name) ?? '', 'class') === 0
             ? $this->nameOf($value->class)
             : null;
     }
@@ -283,7 +289,7 @@ final readonly class NameResolver
 
         $name = $this->nameOf($node->name);
 
-        if (in_array($name, ['call_user_func', 'call_user_func_array'], true)) {
+        if (in_array(strtolower($name), ['call_user_func', 'call_user_func_array'], true)) {
             return CallTarget::dynamic('a call through '.$name.'()');
         }
 
@@ -301,7 +307,7 @@ final readonly class NameResolver
     {
         $resolved = $this->nameOf($name);
 
-        return $this->aliases[$resolved] ?? $resolved;
+        return $this->aliases[strtolower($resolved)] ?? $resolved;
     }
 
     private function nameOf(Name $name): string

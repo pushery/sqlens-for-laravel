@@ -94,6 +94,7 @@ return [
         'agent_rules_unknown_target' => 'Unknown --target ":target". Use one of: :known.',
         'agent_rules_output_needs_one_target' => '--output writes one path, so it needs a single --target. One file cannot hold three artifacts.',
         'agent_rules_written' => 'Wrote :path.',
+        'agent_rules_outside_project' => ':path leads outside this project, through a symlink or a path that climbs out of it, so nothing was read or written. Point it at a file inside the project.',
         'agent_rules_check_missing' => ':path is missing. Run sqlens:agent-rules to create it.',
         'agent_rules_check_stale' => ':path is out of date. Run sqlens:agent-rules to update it.',
         'agent_rules_check_current' => 'Every agent context file is current (:count checked).',

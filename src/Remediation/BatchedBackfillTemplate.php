@@ -198,6 +198,10 @@ final readonly class BatchedBackfillTemplate
      */
     private function build(array $steps, array $context, string $ruleId, DowntimeClass $downtimeClass): RemediationPayload
     {
+        if (array_key_exists('table', $context)) {
+            $context['table'] = $this->builderName($context['table']);
+        }
+
         return new RemediationPayload(
             steps: array_map(
                 static fn (RemediationStep $step): RemediationStep => $step->filled($context),
@@ -217,5 +221,22 @@ final readonly class BatchedBackfillTemplate
                 $this->evidence->for($ruleId),
             ),
         );
+    }
+
+    /**
+     * The table as Laravel's query builder takes it: unquoted, schema and name joined by a dot.
+     *
+     * A rule hands over the canonical name, which quotes a part the engine would not read back bare,
+     * such as a keyword, mixed case or a special character. The builder quotes every name itself, so
+     * those quotes would become part of the name: `DB::table('"order"')` addresses a table called
+     * `"order"`, quotes included, and the job would run against a table that does not exist.
+     */
+    private function builderName(string $canonical): string
+    {
+        return preg_replace_callback(
+            '/"(?:[^"]|"")*"|`(?:[^`]|``)*`/',
+            static fn (array $quoted): string => str_replace($quoted[0][0].$quoted[0][0], $quoted[0][0], substr($quoted[0], 1, -1)),
+            $canonical,
+        ) ?? $canonical;
     }
 }

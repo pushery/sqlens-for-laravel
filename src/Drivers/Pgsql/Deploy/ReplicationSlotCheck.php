@@ -55,10 +55,15 @@ use Throwable;
  * - `reserved` — within `max_slot_wal_keep_size`, or unbounded because none is set.
  * - `extended` — past the configured limit; the segments are kept anyway, for now.
  * - `unreserved` — no longer guaranteed; the consumer must catch up or it will not be able to.
- * - `lost` — segments are gone. The consumer cannot resume and must be rebuilt.
+ * - `lost` — the server has invalidated the slot, because its WAL went past
+ *   `max_slot_wal_keep_size` or because it sat idle past `idle_replication_slot_timeout`. The
+ *   consumer cannot resume and must be rebuilt.
  *
- * `lost` is the one that reads as the least urgent and is the most final: the damage is done, and
- * the slot is now pure retention with nothing to show for it.
+ * `lost` is the one that reads as the least urgent and is the most final: the damage is done. It is
+ * also the one state that holds nothing. An invalidated slot keeps no WAL for its consumer, and the
+ * first cause clears its `restart_lsn` on top, so it costs a migration no headroom at all. It is
+ * reported anyway, at high, without a size, because the consumer behind it is broken and nothing
+ * else in a deploy says so.
  *
  * ## What this never does
  *
@@ -112,14 +117,21 @@ final readonly class ReplicationSlotCheck implements PreflightCheck
                 // `safe_wal_size` is null whenever `max_slot_wal_keep_size` is unset — which is the
                 // DEFAULT, and the most dangerous configuration, because retention is then unbounded.
                 // Reporting null there would leave the worst case as the one with no number.
+                //
+                // On a standby `pg_current_wal_lsn()` refuses with "recovery is in progress" as soon
+                // as one row reaches it, so there the end of WAL is the newer of what the standby has
+                // received and what it has replayed.
                 .' case when restart_lsn is null then null'
-                .'      else pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) end as retained_bytes'
+                .'      else pg_wal_lsn_diff(case when pg_is_in_recovery()'
+                .'          then greatest(pg_last_wal_receive_lsn(), pg_last_wal_replay_lsn())'
+                .'          else pg_current_wal_lsn() end, restart_lsn) end as retained_bytes'
                 .' from pg_replication_slots'
                 // A slot that reserves nothing is holding nothing. A freshly created slot waiting for
                 // its first consumer looks identical to a retired one on `active` alone, and only
                 // `restart_lsn` tells them apart — so the distinction is made here rather than left
-                // to a reader.
-                .' where not active and restart_lsn is not null'
+                // to a reader. The one slot without a `restart_lsn` that still has to be named is
+                // the one the server invalidated: removing its WAL clears that column too.
+                .' where not active and (restart_lsn is not null or wal_status = \'lost\')'
                 .' order by slot_name',
             ));
         } catch (Throwable $failure) {
@@ -159,19 +171,7 @@ final readonly class ReplicationSlotCheck implements PreflightCheck
         return Finding::fail(
             ruleId: self::ID,
             messagePrefix: DeployNotice::MESSAGE_PREFIX,
-            message: sprintf(
-                'The %s replication slot `%s` has no consumer connected and is holding %s of WAL '
-                .'(wal_status: %s). %s A migration that rewrites a table needs room for a second copy '
-                .'while it runs, and this slot has already spent some of it. SQLens does not drop the '
-                .'slot: dropping one detaches its consumer permanently, and a replica that was merely '
-                .'offline for maintenance would then need rebuilding from a base backup. Find out what '
-                .'was reading from it, then either reconnect it or drop the slot deliberately.',
-                $type === '' ? 'inactive' : $type,
-                $slot,
-                $retainedBytes === null ? 'an unreported amount' : $this->humanBytes($retainedBytes),
-                $walStatus === '' ? 'not reported' : $walStatus,
-                $this->statusSentence($walStatus),
-            ),
+            message: $this->message($type === '' ? 'inactive' : $type, $slot, $walStatus, $retainedBytes),
             location: Location::inCatalog($context->driver, $context->connection, $slot, SchemaObjectType::Setting),
             category: Category::Safety,
             level: Level::Capturable,
@@ -188,6 +188,42 @@ final readonly class ReplicationSlotCheck implements PreflightCheck
         );
     }
 
+    /**
+     * What the finding says about one slot.
+     *
+     * An invalidated slot gets a message of its own, without a size. It holds no WAL any more, and the
+     * size the query computes for one the server invalidated as idle, whose `restart_lsn` it keeps,
+     * would count WAL that is already gone.
+     */
+    private function message(string $type, string $slot, string $walStatus, ?int $retainedBytes): string
+    {
+        if ($walStatus === 'lost') {
+            return sprintf(
+                'The %s replication slot `%s` has no consumer connected, and the server has invalidated '
+                .'it (wal_status: lost). Whatever was reading from it cannot resume and has to be rebuilt. '
+                .'The slot itself holds no WAL any more, so it takes nothing from the room a migration '
+                .'needs. SQLens does not drop the slot: find out what was reading from it, rebuild or '
+                .'retire that consumer, then drop the slot deliberately.',
+                $type,
+                $slot,
+            );
+        }
+
+        return sprintf(
+            'The %s replication slot `%s` has no consumer connected and is holding %s of WAL '
+            .'(wal_status: %s). %s A migration that rewrites a table needs room for a second copy '
+            .'while it runs, and this slot has already spent some of it. SQLens does not drop the '
+            .'slot: dropping one detaches its consumer permanently, and a replica that was merely '
+            .'offline for maintenance would then need rebuilding from a base backup. Find out what '
+            .'was reading from it, then either reconnect it or drop the slot deliberately.',
+            $type,
+            $slot,
+            $retainedBytes === null ? 'an unreported amount' : $this->humanBytes($retainedBytes),
+            $walStatus === '' ? 'not reported' : $walStatus,
+            $this->statusSentence($walStatus),
+        );
+    }
+
     /** The sentence that turns the server's one-word status into what it means for this deploy. */
     private function statusSentence(string $walStatus): string
     {
@@ -198,8 +234,6 @@ final readonly class ReplicationSlotCheck implements PreflightCheck
                 .'anyway, for now.',
             'unreserved' => 'The segments are no longer guaranteed. The consumer has to catch up '
                 .'soon or it will no longer be able to.',
-            'lost' => 'The segments are GONE. Whatever was reading from this slot cannot resume and '
-                .'has to be rebuilt — so the slot is now retention with nothing left to show for it.',
             default => 'This build does not know that wal_status, which is a gap in SQLens rather '
                 .'than in your database — the slot and its size above still stand.',
         };

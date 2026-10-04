@@ -78,6 +78,33 @@ final readonly class ArtifactWriting
     }
 
     /**
+     * Whether a path, every symlink on the way to it resolved, still lies inside the root.
+     *
+     * The write follows a symlink: `replace()` resolves one at the target and replaces the file it
+     * points to. A link committed into a repository can point anywhere, `../../` and absolute paths
+     * included, so a target is checked before it is read, printed or written. A link that stays
+     * inside the project, `CLAUDE.md` onto `AGENTS.md`, is an ordinary setup and passes.
+     *
+     * The deepest part of the path that exists is what gets resolved, because a file not written
+     * yet can still sit under a linked directory. A link that leads nowhere cannot be shown to stay
+     * inside, and is answered as not staying.
+     */
+    public static function staysInside(string $root, string $path): bool
+    {
+        $existing = $path;
+
+        while (! file_exists($existing) && ! is_link($existing) && dirname($existing) !== $existing) {
+            $existing = dirname($existing);
+        }
+
+        $resolved = realpath($existing);
+        $base = realpath($root);
+
+        return $resolved !== false && $base !== false
+            && ($resolved === $base || str_starts_with($resolved, rtrim($base, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR));
+    }
+
+    /**
      * Text as an artifact carries it: one line ending, exactly one trailing newline.
      *
      * Applied at the seam rather than trusted to each renderer, so "the file ends in a newline" is

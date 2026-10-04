@@ -162,6 +162,22 @@ final class AgentRulesCommand extends Command
         $dryRun = $this->option('dry-run') === true;
         $deviations = 0;
 
+        // Every target is checked before the first one is read, printed or written: a symlink at a
+        // target, or at a directory above it, would otherwise send this command to a file outside
+        // the project, and a run that refused halfway would leave the other files written.
+        $escaping = array_values(array_filter(
+            array_map(static fn (GeneratedArtifact $artifact): string => $override ?? $artifact->path, $artifacts),
+            static fn (string $relative): bool => ! ArtifactWriting::staysInside($root, $root.'/'.ltrim($relative, '/')),
+        ));
+
+        foreach ($escaping as $relative) {
+            $this->stderr()->writeln($this->translate($translator, 'agent_rules_outside_project', ['path' => $relative]));
+        }
+
+        if ($escaping !== []) {
+            return ExitCode::Misconfiguration->value;
+        }
+
         foreach ($artifacts as $artifact) {
             $relative = $override ?? $artifact->path;
             $absolute = $root.'/'.ltrim($relative, '/');

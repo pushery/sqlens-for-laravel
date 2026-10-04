@@ -215,7 +215,7 @@ final readonly class IndirectCallDetector implements PreScanDetector
             return null;
         }
 
-        if (! in_array($this->functionName($node->var->name), self::CONTAINER_RESOLVERS, true)) {
+        if (! in_array(strtolower($this->functionName($node->var->name)), self::CONTAINER_RESOLVERS, true)) {
             return null;
         }
 

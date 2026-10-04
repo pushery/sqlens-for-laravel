@@ -32,6 +32,7 @@ use Pushery\SQLens\Capture\CaptureConnectionResolver;
 use Pushery\SQLens\Capture\MigrationPaths;
 use Pushery\SQLens\Capture\MigrationsTable;
 use Pushery\SQLens\Capture\PendingMigrationResolver;
+use Pushery\SQLens\Capture\PretendStatementTap;
 use Pushery\SQLens\Capture\SessionGuard;
 use Pushery\SQLens\Capture\Shadow\ApplicationShadowClearance;
 use Pushery\SQLens\Capture\Shadow\ProductionConnectionDetector;
@@ -417,6 +418,8 @@ final class SQLensServiceProvider extends ServiceProvider
         // One fence per application. It guards each connection once, and a second fence would guard
         // them all again without being the one a capture runs under.
         $this->app->singleton(CaptureConnectionFence::class);
+        // One tap per application, for the same reason: it hooks each connection once.
+        $this->app->singleton(PretendStatementTap::class);
         // The injection half, and it is bound EXPLICITLY rather than left to autowiring — which is
         // the whole reason this binding exists. `SecurityRunner` takes it as `?AnalyseBridge = null`,
         // and the container answers an unresolvable optional dependency with the default instead of
@@ -471,15 +474,19 @@ final class SQLensServiceProvider extends ServiceProvider
                 return new SeverityEscalator(EscalationThresholds::load($keyed));
             },
         );
-        // Who may start a database-creating run. Bound as a seam because TWO callers ask — the lint
-        // command and the MCP shadow tool — and a second gathering of the guard's inputs would be a
-        // second answer to "which environments are allowed", free to drift toward permissive.
         // What this build exposes as tools. Bound rather than called statically wherever it is
         // needed, because the two lists it is compared against — the configuration surface and this
         // one — only differ in a window that a test has to be able to create.
         $this->app->singleton(ToolRegistry::class, static fn (): ToolRegistry => ToolRegistry::declared());
 
-        $this->app->singleton(
+        // Who may start a database-creating run. Bound as a seam because TWO callers ask — the lint
+        // command and the MCP shadow tool — and a second gathering of the guard's inputs would be a
+        // second answer to "which environments are allowed", free to drift toward permissive.
+        //
+        // Bound, not a singleton: the clearance is readonly and cheap, and a singleton built from the
+        // container would keep the first one it was handed, which a long-lived worker replaces per
+        // request.
+        $this->app->bind(
             ShadowClearance::class,
             static fn (Application $app): ShadowClearance => new ApplicationShadowClearance(
                 $app,

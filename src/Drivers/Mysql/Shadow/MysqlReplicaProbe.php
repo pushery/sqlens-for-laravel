@@ -24,8 +24,10 @@ final readonly class MysqlReplicaProbe implements ReplicaProbe
     #[RawSql(reason: 'asks @@read_only, because writing to a replica is the one mistake the shadow harness must never make')]
     public function isReplica(string $connectionName): bool
     {
+        // Through the WRITE side. On a connection with a read/write split the read side is a
+        // replica by design, and the question is about the server provisioning writes to.
         $row = $this->connections->connection($connectionName)
-            ->selectOne('select @@read_only as read_only, @@innodb_read_only as innodb_read_only');
+            ->selectOne('select @@read_only as read_only, @@innodb_read_only as innodb_read_only', [], false);
 
         // Either flag being on marks the instance read-only — a replica sets
         // read_only, and innodb_read_only can be on independently, so both are

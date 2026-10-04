@@ -46,6 +46,15 @@ enum UndeterminedReason: string
      * it is the reading that stopped, and the finding names the binding.
      */
     case BindingNotRendered = 'binding_not_rendered';
+
+    /**
+     * In pretend mode the statements the migration sent and the ones Laravel's pretend log holds do
+     * not line up. Both come out of the same call, one entry per statement, so this takes a migration
+     * that writes into the query log itself; which text belongs to which statement is then not known,
+     * and a guess would judge one statement's text as another's. Shadow mode reads each statement as
+     * the server receives it.
+     */
+    case PretendLogDiverged = 'pretend_log_diverged';
     /**
      * The migration names a connection of its own, or sends a query to one, and the run captured on
      * another.
@@ -1361,6 +1370,7 @@ enum UndeterminedReason: string
             self::UnreadableServerVersionPin => 'The assume_server_version pin could not be read as a version; nothing was assumed in its place.',
             self::UnclassifiedTypeChange => 'The column type change targets a type the type-change matrix does not classify, so whether it rewrites the table is unknown.',
             self::PretendLimit => 'A result-dependent migration cannot be captured in pretend mode; shadow is needed.',
+            self::PretendLogDiverged => 'In pretend mode, the statements the migration sent and the statements Laravel\'s pretend log holds do not line up, so which text belongs to which statement is not known.',
             self::BindingNotRendered => 'A bound value of one of its statements could not be written into the statement\'s text, or the statement\'s placeholders and values do not line up, so the statement could not be read.',
             self::MigrationOnAnotherConnection => 'The migration declares a connection of its own or sends a query to another one, and this run captured on a different connection, so what it does there was not captured; lint that connection to judge it.',
             self::UnsupportedEngine => 'The engine is not supported (MariaDB, SQLite).',

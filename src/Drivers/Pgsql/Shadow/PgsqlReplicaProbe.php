@@ -24,8 +24,10 @@ final readonly class PgsqlReplicaProbe implements ReplicaProbe
     #[RawSql(reason: 'asks pg_catalog.pg_is_in_recovery(), because writing to a replica is the one mistake the shadow harness must never make')]
     public function isReplica(string $connectionName): bool
     {
+        // Through the WRITE side. On a connection with a read/write split the read side is a
+        // replica by design, and the question is about the server provisioning writes to.
         $row = $this->connections->connection($connectionName)
-            ->selectOne('select pg_catalog.pg_is_in_recovery() as in_recovery');
+            ->selectOne('select pg_catalog.pg_is_in_recovery() as in_recovery', [], false);
 
         // A boolean column comes back as a PHP bool or the string 't'/'f'/'1'/'0'
         // depending on the driver's casting; normalize either into a clean bool

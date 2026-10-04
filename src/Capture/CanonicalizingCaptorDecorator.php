@@ -40,9 +40,9 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * It decorates rather than replaces: the inner captor (pretend today, shadow
  * later) owns HOW the SQL is obtained; this owns turning what it obtained into
  * the one form the rules read. A second capture mode gets canonicalization for
- * free by being wrapped, with no second canonicalizing path to drift. The two
- * modes differ in one respect it has to know: a pretend capture carries its
- * bindings inlined by the framework already, and is not substituted again.
+ * free by being wrapped, with no second canonicalizing path to drift. Both modes
+ * hand over each statement the way PDO receives it, so the substitution runs
+ * over both alike.
  *
  * One captured entry is not always one statement. `DB::unprepared()` hands the
  * server a whole batch, a trigger with its function or a `.sql` file read in,
@@ -124,7 +124,7 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
         $canonicalized = [];
 
         foreach ($result->statements as $statement) {
-            $statements = $this->statementsIn($statement, $result->mode);
+            $statements = $this->statementsIn($statement);
 
             if ($statements instanceof SubstitutionFailure) {
                 return $this->undetermined($result, $statements->reason, $statements->detail);
@@ -191,16 +191,9 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
      *
      * @return list<array{CapturedStatement, string}>|SubstitutionFailure
      */
-    private function statementsIn(CapturedStatement $statement, CaptureMode $mode): array|SubstitutionFailure
+    private function statementsIn(CapturedStatement $statement): array|SubstitutionFailure
     {
-        // A pretend capture is complete: `Connection::logQuery()` inlines every binding with the
-        // framework's own grammar before it logs. Substituted a second time, a `?` left in it would
-        // be read as a placeholder, and on PostgreSQL that is the jsonb operator.
-        $substituted = $statement->rawSql;
-
-        if ($mode === CaptureMode::Shadow) {
-            $substituted = $this->substitutor->substitute($statement->rawSql, $statement->bindings);
-        }
+        $substituted = $this->substitutor->substitute($statement->rawSql, $statement->bindings);
 
         if ($substituted instanceof SubstitutionFailure) {
             return $substituted;
