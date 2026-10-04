@@ -290,8 +290,11 @@ return [
     | max_execution_time, innodb_lock_wait_timeout and lock_wait_timeout on
     | MySQL, the last one for the metadata lock a schema change queues behind.
     | MySQL bounds no schema change's RUN: max_execution_time covers read-only
-    | SELECT statements only. Session scope only — never global, and the tool
-    | never takes a lock of its own.
+    | SELECT statements only. On MySQL the bound is session scope and is put
+    | back afterwards. On PostgreSQL it is SET LOCAL inside a short transaction
+    | around the reads, because behind a transaction pooler a session setting
+    | stays on a backend the next client gets. Never global, and the tool never
+    | takes a lock of its own.
     |
     | This is the second half of "first, do no harm". A lint run may point at a
     | production connection, and a run without a time budget can hold a query or

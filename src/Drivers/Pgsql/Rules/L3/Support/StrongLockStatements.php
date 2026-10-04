@@ -9,6 +9,7 @@ use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Canonical\StatementTarget;
 use Pushery\SQLens\Canonical\StringLiteralMask;
 use Pushery\SQLens\Drivers\Pgsql\Canonical\PgsqlCanonicalization;
+use Pushery\SQLens\Drivers\Pgsql\Catalog\DurationValue;
 use Pushery\SQLens\Drivers\Pgsql\Rules\Support\ShareUpdateExclusiveAlter;
 use Pushery\SQLens\Subjects\MigrationContext;
 use Pushery\SQLens\Subjects\MigrationStatementDigest;
@@ -223,10 +224,17 @@ final class StrongLockStatements
      */
     public static function timeoutSetBefore(array $stream, int $gateIndex, string $timeout): bool
     {
-        return array_any(
-            $stream,
-            static fn (MigrationStatementDigest $digest): bool => $digest->index < $gateIndex && self::setsTimeout($digest, $timeout),
-        );
+        // The LAST statement that touches the timeout decides, not any of them: a `RESET`, a
+        // `SET … TO DEFAULT` or a `SET … = 0` after a bound takes the bound away again.
+        $bounded = false;
+
+        foreach ($stream as $digest) {
+            if ($digest->index < $gateIndex && self::timeoutSettingIn($digest->canonical, $timeout) !== null) {
+                $bounded = self::setsTimeout($digest, $timeout);
+            }
+        }
+
+        return $bounded;
     }
 
     /**
@@ -280,16 +288,84 @@ final class StrongLockStatements
      * The literals are masked first for the same reason the MySQL side masks them: an `->insert()`
      * whose value spells `set lock_timeout = 5s` is data, and counting it would be the same false
      * green arriving through the other door.
+     *
+     * **And the value has to be a bound.** `SET lock_timeout = 0`, `SET lock_timeout TO DEFAULT` and
+     * `'100us'`, which PostgreSQL rounds to zero, all leave the wait unbounded. Neither is an
+     * `ALTER ROLE … SET` or `ALTER DATABASE … SET` a bound: they change what later sessions start
+     * with, never the session running the migration. {@see self::timeoutSettingIn()} reads both, for
+     * this rule and for the preflight check alike.
      */
     public static function setsTimeout(MigrationStatementDigest $digest, string $timeout): bool
     {
-        $canonical = StringLiteralMask::forDriver(new PgsqlCanonicalization)->apply($digest->canonical);
+        $setting = self::timeoutSettingIn($digest->canonical, $timeout);
 
-        if (preg_match('/\bSET\s+(SESSION\s+|LOCAL\s+)?'.preg_quote($timeout, '/').'\b/i', $canonical, $match) !== 1) {
-            return false;
+        return $setting !== null && $setting['bounded'] && (! $setting['local'] || $digest->withinTransaction);
+    }
+
+    /**
+     * What a statement does to its own session's value of the named timeout, or null when it leaves
+     * it alone.
+     *
+     * `local` says whether the change lasts only until the transaction ends, `bounded` whether the
+     * value it leaves is a wait limit at all: a duration above zero milliseconds once PostgreSQL has
+     * rounded it. `RESET` and `DISCARD ALL` take a bound away.
+     *
+     * Only a statement that BEGINS with the keyword counts, at the start or after a `;`, which is
+     * what keeps `ALTER ROLE app SET lock_timeout = '3s'` out. That position is found on the masked
+     * text, so a literal that spells the words is data; the value is read from the original text,
+     * because the mask empties every literal and a duration is usually written as one.
+     *
+     * @return array{local: bool, bounded: bool}|null
+     */
+    public static function timeoutSettingIn(string $canonical, string $timeout): ?array
+    {
+        $masked = StringLiteralMask::forDriver(new PgsqlCanonicalization)->apply($canonical);
+        $name = preg_quote($timeout, '/');
+
+        $statements = preg_match_all(
+            '/(?:^|;)\s*(?:(?<reset>RESET\s+(?:'.$name.'|ALL)\b|DISCARD\s+ALL\b)|SET\s+(?:(?<scope>SESSION|LOCAL)\s+)?'.$name.'\s*(?:=|\bTO\b)\s*(?<value>[^;]*?))\s*(?=;|$)/i',
+            $masked,
+            $matches,
+            PREG_SET_ORDER,
+        );
+
+        $last = $statements === false ? false : end($matches);
+
+        if ($last === false) {
+            return null;
         }
 
-        return ! self::isLocalScope($match[1] ?? '') || $digest->withinTransaction;
+        if (($last['reset'] ?? '') !== '') {
+            return ['local' => false, 'bounded' => false];
+        }
+
+        return [
+            'local' => strcasecmp($last['scope'] ?? '', 'LOCAL') === 0,
+            'bounded' => (DurationValue::milliseconds(self::settingValue($canonical, $name, $last['value'] ?? '')) ?? 0) > 0,
+        ];
+    }
+
+    /**
+     * The value a `SET` assigns, as written: the masked value itself when it is a bare word or number,
+     * the original literal's content when it is a quoted string.
+     */
+    private static function settingValue(string $canonical, string $name, string $masked): string
+    {
+        $masked = trim($masked);
+
+        if (! str_ends_with($masked, "''")) {
+            return $masked;
+        }
+
+        $found = preg_match_all(
+            '/(?:^|;)\\s*SET\\s+(?:(?:SESSION|LOCAL)\\s+)?'.$name."\\s*(?:=|\\bTO\\b)\\s*E?'((?:[^']|'')*)'/i",
+            $canonical,
+            $literals,
+        );
+
+        $literal = $found === false ? false : end($literals[1]);
+
+        return $literal === false ? '' : str_replace("''", "'", $literal);
     }
 
     /**
@@ -304,27 +380,13 @@ final class StrongLockStatements
      */
     public static function ineffectiveLocalTimeoutBefore(array $stream, int $gateIndex, string $timeout): bool
     {
-        $mask = StringLiteralMask::forDriver(new PgsqlCanonicalization);
-
-        return array_any($stream, static function (MigrationStatementDigest $digest) use ($gateIndex, $timeout, $mask): bool {
+        return array_any($stream, static function (MigrationStatementDigest $digest) use ($gateIndex, $timeout): bool {
             if ($digest->index >= $gateIndex || $digest->withinTransaction) {
                 return false;
             }
 
-            $matched = preg_match(
-                '/\bSET\s+(SESSION\s+|LOCAL\s+)?'.preg_quote($timeout, '/').'\b/i',
-                $mask->apply($digest->canonical),
-                $match,
-            );
-
-            return $matched === 1 && self::isLocalScope($match[1] ?? '');
+            return self::timeoutSettingIn($digest->canonical, $timeout)['local'] ?? false;
         });
-    }
-
-    /** Whether the captured scope word is `LOCAL`. An absent scope is session scope, which is effective. */
-    private static function isLocalScope(string $scope): bool
-    {
-        return stripos($scope, 'LOCAL') !== false;
     }
 
     /** Whether the canonical form carries the `CONCURRENTLY` clause. */

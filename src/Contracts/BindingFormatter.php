@@ -25,4 +25,11 @@ interface BindingFormatter
 
     /** The date format this engine's grammar uses for a timestamp literal. */
     public function dateFormat(): string;
+
+    /**
+     * How this engine writes a byte string that is not text, as a literal of the same bytes:
+     * `X'ff00'` on MySQL, `'\xff00'::bytea` on PostgreSQL. Hex keeps the analysis text printable,
+     * and the engine reads it back as exactly those bytes.
+     */
+    public function binaryLiteral(string $bytes): string;
 }

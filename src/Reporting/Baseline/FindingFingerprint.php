@@ -25,6 +25,10 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * the same canonical form, so it produces the same fingerprint, and a Laravel
  * grammar change cannot invalidate a whole baseline at once.
  *
+ * A call site has no statement to canonicalize. Its excerpt is the identity of the
+ * call site instead: the functions it sits in and the code on its line, which move
+ * with the call when a line is inserted above it.
+ *
  * Two genuinely different findings get different fingerprints (different excerpt or
  * location); several identical findings in one subject share a fingerprint and are
  * told apart by a separate, deterministic ordinal on the baseline entry.

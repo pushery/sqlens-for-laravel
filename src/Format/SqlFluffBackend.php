@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Format;
 
+use Pushery\SQLens\Tools\ProcessRunner;
 use Pushery\SQLens\Tools\ToolRunResult;
 
 /**
@@ -21,9 +22,34 @@ use Pushery\SQLens\Tools\ToolRunResult;
  * neither of the two this package supports. A run that omitted the flag would produce output shaped
  * for a third grammar — plausible, committed, and wrong in ways nobody would attribute to a missing
  * argument.
+ *
+ * ## The text is SQL, never a template, and only the project's `.sqlfluff` is read
+ *
+ * Told nothing, SQLFluff renders the text as a Jinja template and reads configuration from the home
+ * directory and from every directory above the working one. Measured on 4.3.0: a
+ * `-- sqlfluff:templater:jinja:library_path:<dir>` line in the formatted SQL imported and ran the
+ * Python modules in that directory, a `.sqlfluff` in the home directory changed the output on one
+ * machine and not on another, and a literal such as `'{% x %}'` was refused as broken template
+ * syntax. So every run passes `--templater raw` and `--library-path none`, which neither a
+ * configuration file nor a directive in the text overrides (a `-- sqlfluff:templater:jinja` line was
+ * measured to leave `raw` in place), and `--ignore-local-config`. The project's own `.sqlfluff` at
+ * its root is then named with `--config`, because it is part of the repository and the place this
+ * backend sends a layout it cannot express itself.
  */
 final readonly class SqlFluffBackend extends ExternalSqlFormatter
 {
+    /**
+     * @param  string|null  $projectRoot  where the project's `.sqlfluff` is looked for; null reads none
+     */
+    public function __construct(
+        ProcessRunner $processes,
+        string $binary,
+        int $timeoutSeconds = 15,
+        private ?string $projectRoot = null,
+    ) {
+        parent::__construct($processes, $binary, $timeoutSeconds);
+    }
+
     public function name(): string
     {
         return 'sqlfluff';
@@ -47,7 +73,25 @@ final readonly class SqlFluffBackend extends ExternalSqlFormatter
             // measured on 4.3.0 the call ends with exit 2 and "No such option", so every file would
             // come back refused. Layout values reach SQLFluff through the directives in input()
             // instead.
+            '--templater', 'raw',
+            '--library-path', 'none',
+            '--ignore-local-config',
+            ...$this->projectConfiguration(),
         ];
+    }
+
+    /**
+     * `--config` naming the project's `.sqlfluff`, or nothing when there is none.
+     *
+     * @return list<string>
+     */
+    private function projectConfiguration(): array
+    {
+        if ($this->projectRoot === null || ! is_file($this->projectRoot.'/.sqlfluff')) {
+            return [];
+        }
+
+        return ['--config', $this->projectRoot.'/.sqlfluff'];
     }
 
     /**
@@ -128,9 +172,9 @@ final readonly class SqlFluffBackend extends ExternalSqlFormatter
     public function unexpressible(FormatStyle $style): array
     {
         // SQLFluff's formatter takes its layout from configuration rather than from flags. Leading
-        // commas ARE expressible there — through `.sqlfluff`, which is the project's file rather than
-        // this package's, and reaching into it would mean a library editing a user's tool
-        // configuration.
+        // commas ARE expressible there — through the `.sqlfluff` at the project's root, which is the
+        // project's file rather than this package's, and reaching into it would mean a library
+        // editing a user's tool configuration.
         return $style->leadingCommas ? ['leading_commas (set it in your own .sqlfluff instead)'] : [];
     }
 

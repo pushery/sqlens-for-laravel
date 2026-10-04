@@ -46,6 +46,8 @@ final readonly class UndeterminedSection
         // Defeated by reading alone. The shadow mode is the answer, and it is the answer a reader
         // is least likely to already know.
         UndeterminedReason::PretendLimit->value => 'Run in shadow mode so the migration is executed against a throwaway database and the statement can be read.',
+        // Not a mode to switch: the reading stopped at a value, in shadow mode as much as in pretend.
+        UndeterminedReason::BindingNotRendered->value => 'Read this statement by hand: one of its bound values could not be written into its text, or its placeholders and values do not line up, and the finding names which. A value the pretend log refused is read in shadow mode.',
         // The pre-scan's own verdict: this migration decides what to do from a query result, or
         // reaches past the schema builder, so its statements do not exist until it runs.
         UndeterminedReason::PreScanFlagged->value => 'Run in shadow mode: the pre-scan found this migration decides what it does at run time, so its statements do not exist to be read.',

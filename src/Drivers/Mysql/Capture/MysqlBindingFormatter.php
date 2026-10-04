@@ -25,4 +25,9 @@ final readonly class MysqlBindingFormatter implements BindingFormatter
     {
         return 'Y-m-d H:i:s';
     }
+
+    public function binaryLiteral(string $bytes): string
+    {
+        return "X'".bin2hex($bytes)."'";
+    }
 }

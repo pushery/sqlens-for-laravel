@@ -16,6 +16,7 @@ use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\StabilityTier;
 use Pushery\SQLens\Subjects\MigrationDirection;
 use Pushery\SQLens\Subjects\SubjectContext;
+use Pushery\SQLens\Tools\ToolFindingGate;
 use Pushery\SQLens\Tools\ToolPosition;
 use Pushery\SQLens\Tools\ToolPositionResult;
 
@@ -86,21 +87,23 @@ final readonly class SquawkFindingMapper
     }
 
     /**
-     * The ids this mapper reports a verdict under, or only those whose level is above `$above`.
+     * The ids this mapper reports a verdict under, or only those a run behind `$unaskedBy` does not
+     * ask for: a level above its own, or a category outside its selection.
      *
      * Read from the map rather than from a run, because the question is what the tool could have
-     * said: a run whose level leaves a rule out never hears from it.
+     * said: a run whose gates leave a rule out never hears from it. The level and category are the
+     * ones {@see self::finding()} gives the verdict.
      *
      * @return list<string>
      */
-    public function reportedIds(?Level $above = null): array
+    public function reportedIds(?ToolFindingGate $unaskedBy = null): array
     {
         $ids = [];
 
         foreach ($this->map->rules() as $rule) {
             $mapping = $this->map->for($rule);
 
-            if ($mapping?->surfaces() === true && (! $above instanceof Level || ($mapping->level ?? Level::Capturable)->value > $above->value)) {
+            if ($mapping?->surfaces() === true && (! $unaskedBy instanceof ToolFindingGate || ! $unaskedBy->asks($mapping->level ?? Level::Capturable, $mapping->category ?? Category::Safety))) {
                 $ids[] = self::ID_PREFIX.$rule;
             }
         }

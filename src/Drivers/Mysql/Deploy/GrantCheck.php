@@ -203,12 +203,22 @@ final readonly class GrantCheck implements PreflightCheck
             }
 
             if ($unknownFor !== []) {
-                $unanswered[] = sprintf(
-                    '%s: which database it is in could not be established. The name is not qualified '
-                    .'and the reading connection has no default database, so no grant below the global '
-                    .'level can be matched to it.',
-                    $requirement->object,
-                );
+                // Two different reasons, and the sentence has to name the one that applies: a name
+                // that does not split at all is not an unqualified one, and the connection that read
+                // it may well have a default database.
+                $unanswered[] = $scope === null
+                    ? sprintf(
+                        '%s: which database it is in could not be established. The name does not split '
+                        .'into a database and an object, which MySQL names in at most two parts, so no '
+                        .'grant below the global level can be matched to it.',
+                        $requirement->object,
+                    )
+                    : sprintf(
+                        '%s: which database it is in could not be established. The name is not qualified '
+                        .'and the reading connection has no default database, so no grant below the global '
+                        .'level can be matched to it.',
+                        $requirement->object,
+                    );
 
                 continue;
             }
@@ -249,7 +259,7 @@ final readonly class GrantCheck implements PreflightCheck
                 continue;
             }
 
-            $findings[] = $this->finding($context, $role, $requirement, $needed);
+            $findings[] = $this->finding($context, $role, $requirement, $needed, $scope);
         }
 
         if ($unanswered !== []) {
@@ -520,9 +530,21 @@ final readonly class GrantCheck implements PreflightCheck
         return is_numeric($count) && (int) $count === 0;
     }
 
-    private function finding(PreflightContext $context, string $role, PrivilegeRequirement $requirement, string $needed): Finding
+    /**
+     * The finding for a privilege the migration user provably lacks, with the grant that supplies it.
+     *
+     * A database is granted on as `` `name`.* ``. Written as `ON archive`, the suggestion would name a
+     * TABLE called `archive` in the default database of whoever runs it: a privilege on an object
+     * nobody meant, and the deploy would fail exactly as before.
+     *
+     * @param  array{schema: string|null, name: string}|null  $objectScope
+     */
+    private function finding(PreflightContext $context, string $role, PrivilegeRequirement $requirement, string $needed, ?array $objectScope): Finding
     {
         $scope = $requirement->class === PrivilegeClass::Write ? 'INSERT, UPDATE' : $needed;
+        $target = $objectScope !== null && in_array($requirement->objectType, [SchemaObjectType::Schema, SchemaObjectType::Database], true)
+            ? '`'.str_replace('`', '``', $objectScope['name']).'`.*'
+            : $requirement->object;
 
         return Finding::fail(
             ruleId: self::ID,
@@ -536,7 +558,7 @@ final readonly class GrantCheck implements PreflightCheck
                 $needed,
                 $requirement->object,
                 $scope,
-                $requirement->object,
+                $target,
                 $role,
             ),
             location: Location::inCatalog($context->driver, $context->connection, $requirement->object, $requirement->objectType),

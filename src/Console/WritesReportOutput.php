@@ -77,6 +77,12 @@ trait WritesReportOutput
      * Called from a `finally`, never from the individual return sites. There are a dozen of those
      * and a thirteenth arrives with the next option; remembering to clean up at each one is exactly
      * the kind of discipline that holds until it does not.
+     *
+     * Only a regular file AT the path is removed, never a symbolic link. `is_file()` follows a link
+     * and `unlink()` removes the link itself, so the name the caller passed went away while the file
+     * it points at stayed behind, empty. Named `/dev/stdout` with stdout redirected into a file, that
+     * name is the container's own device link, and a run as root deleted it for every process after
+     * it. What a link points at was opened for writing like any other target, and stays where it is.
      */
     private function discardReportOutput(OutputInterface $output): void
     {
@@ -89,7 +95,7 @@ trait WritesReportOutput
 
         $this->closeReportOutput($output);
 
-        if (is_string($path) && is_file($path)) {
+        if (is_string($path) && is_file($path) && ! is_link($path)) {
             @unlink($path);
         }
     }

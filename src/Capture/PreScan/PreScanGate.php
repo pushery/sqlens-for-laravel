@@ -18,8 +18,15 @@ use Pushery\SQLens\Subjects\DownMethodState;
 
 /**
  * The gate that turns a pre-scan hit into a safe consequence: a flagged migration
- * is NOT pretend-executed, and its result is `undetermined` with the hits that
- * flagged it and a pointer to shadow mode.
+ * is NOT executed, and its result is `undetermined` with the hits that flagged it.
+ *
+ * One kind of hit is answered differently in shadow mode. An introspection guard asks
+ * the schema a question pretend cannot answer, and the throwaway database a shadow run
+ * migrates holds exactly that schema, so a migration whose only hits are guards is
+ * handed to the shadow captor and run. Every other hit keeps a migration out of both
+ * modes: a side effect reaches outside the database, a dynamic or indirect call could
+ * run anything, and a branch on query results would follow a throwaway database's
+ * data rather than production's.
  *
  * Detecting a side effect is not the same as preventing one — this is where the
  * prevention happens. The side-effect detector can only say "this migration would
@@ -40,6 +47,13 @@ use Pushery\SQLens\Subjects\DownMethodState;
  */
 final readonly class PreScanGate implements Captor
 {
+    /**
+     * The pre-scan rules whose hits a shadow run answers by running the migration.
+     *
+     * @var list<string>
+     */
+    private const array SHADOW_RESOLVES = [SchemaIntrospectionGuardDetector::RULE_ID];
+
     /**
      * @param  list<PreScanDetector>  $detectors
      * @param  Captor|null  $downLegCaptor  a PRETEND captor used to read what `down()` would emit —
@@ -190,6 +204,12 @@ final readonly class PreScanGate implements Captor
         return $this->inner->mode();
     }
 
+    /** Whether a shadow run answers this pre-scan rule's hit by running the migration it flagged. */
+    public static function shadowResolves(string $ruleId): bool
+    {
+        return in_array($ruleId, self::SHADOW_RESOLVES, true);
+    }
+
     /**
      * Judge one migration: null lets it through to the captor, a CaptureResult is
      * the undetermined verdict that keeps it out of the pretend run.
@@ -228,7 +248,7 @@ final readonly class PreScanGate implements Captor
 
         $hits = $this->hits($scanned);
 
-        if ($hits === []) {
+        if ($hits === [] || ($this->mode() === CaptureMode::Shadow && array_all($hits, static fn (PreScanHit $hit): bool => self::shadowResolves($hit->ruleId)))) {
             return null;
         }
 

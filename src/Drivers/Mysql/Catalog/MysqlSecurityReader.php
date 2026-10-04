@@ -767,8 +767,11 @@ final readonly class MysqlSecurityReader implements SecurityReader
                     'select ROUTINE_SCHEMA as routine_schema, ROUTINE_NAME as routine_name,'
                     .' SECURITY_TYPE as security_type, DEFINER as definer'
                     .' from information_schema.ROUTINES'
-                    // The server's own schemas are the server's business, and every install has them.
-                    ." where ROUTINE_SCHEMA not in ('mysql', 'information_schema', 'performance_schema', 'sys')"
+                    // The audited database's routines, as on PostgreSQL, where a catalog is one
+                    // database. On MySQL a schema IS a database, and every other one on a shared
+                    // server belongs to another application: read server-wide, an audit of one
+                    // reported the definer routines of all of them as its own.
+                    .' where ROUTINE_SCHEMA = database()'
                     .' order by ROUTINE_SCHEMA, ROUTINE_NAME',
                 )),
                 // Read beside them rather than after them, for the reason above — and it is the only

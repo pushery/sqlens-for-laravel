@@ -84,6 +84,7 @@ final class StringLiteralMask
         private readonly string $identifierQuote,
         private readonly array $lineComments,
         private readonly bool $blockComments,
+        private readonly bool $nestedComments,
         private readonly bool $dollarQuotes,
     ) {}
 
@@ -102,6 +103,7 @@ final class StringLiteralMask
             $driver->quotingCharacter(),
             array_values(array_filter($driver->commentSyntaxes(), static fn (string $marker): bool => $marker !== '/*')),
             in_array('/*', $driver->commentSyntaxes(), true),
+            $driver->nestsBlockComments(),
             $driver->supportsDollarQuotedStrings(),
         );
     }
@@ -141,7 +143,8 @@ final class StringLiteralMask
      *   end that literal at the next quote, and the value after it would be logged as text.
      * - **Dollar quotes**, on an engine that has them: `$$…$$` and `$tag$…$tag$` keep their tags.
      * - **`E'…'`**, the escape-string form, is read with backslash escapes even where plain literals
-     *   have none. Read without them, `E'it\'s'` would end at the escaped quote.
+     *   have none, as {@see QuotedSpan} reads it everywhere. Read without them, `E'it\'s'` would end
+     *   at the escaped quote.
      *
      * A literal that never closes is shaped to the end of the statement rather than left as text.
      */
@@ -158,17 +161,19 @@ final class StringLiteralMask
             if ($lineComment !== null) {
                 $newline = strpos($sql, "\n", $i);
                 $end = $newline === false ? $length : $newline;
-                $from = $i + strlen($lineComment);
-                $out .= $lineComment.$this->shaped(substr($sql, $from, $end - $from));
+                // Never past the line's end: an opener may carry the newline itself (MySQL's `--`
+                // before a line break), and the line break belongs to the text after the comment.
+                $from = min($i + strlen($lineComment), $end);
+                $out .= substr($sql, $i, $from - $i).$this->shaped(substr($sql, $from, $end - $from));
                 $i = $end;
 
                 continue;
             }
 
             if ($this->blockComments && ScanAt::startsWith($sql, $i, '/*')) {
-                $close = strpos($sql, '*/', $i + 2);
-                $out .= '/*'.$this->shaped(substr($sql, $i + 2, ($close === false ? $length : $close) - $i - 2)).($close === false ? '' : '*/');
-                $i = $close === false ? $length : $close + 2;
+                $end = QuotedSpan::endOfBlockComment($sql, $i, $this->nestedComments);
+                $out .= '/*'.$this->shaped(substr($sql, $i + 2, ($end === null ? $length : $end - 2) - $i - 2)).($end === null ? '' : '*/');
+                $i = $end ?? $length;
 
                 continue;
             }
@@ -201,7 +206,7 @@ final class StringLiteralMask
                 continue;
             }
 
-            $end = QuotedSpan::endOfLiteral($sql, $i, $char, $this->backslashEscapes || $this->opensAnEscapeString($sql, $i));
+            $end = QuotedSpan::endOfLiteral($sql, $i, $char, $this->backslashEscapes);
             $out .= $char.$this->shape(substr($sql, $i + 1, ($end ?? $length + 1) - $i - 2)).($end === null ? '' : $char);
             $i = $end ?? $length;
         }
@@ -250,22 +255,6 @@ final class StringLiteralMask
     private function shape(string $content): string
     {
         return sprintf('<string(%d)>', mb_strlen($content));
-    }
-
-    /**
-     * Whether the quote at $at opens an escape string: a single quote right after a standalone `E`.
-     *
-     * Standalone means the character before the `E` does not continue a word, so the `E` that ends
-     * `ELSE'x'` does not count. On an engine whose plain literals take backslash escapes already,
-     * the answer changes nothing.
-     */
-    private function opensAnEscapeString(string $sql, int $at): bool
-    {
-        if ($sql[$at] !== "'" || $at === 0 || strtoupper($sql[$at - 1]) !== 'E') {
-            return false;
-        }
-
-        return $at === 1 || preg_match('/[A-Za-z0-9_$]/', $sql[$at - 2]) !== 1;
     }
 
     /**

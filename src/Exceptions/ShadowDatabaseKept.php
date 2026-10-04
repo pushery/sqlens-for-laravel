@@ -21,15 +21,7 @@ final class ShadowDatabaseKept extends RuntimeException
      */
     private function __construct(public readonly array $databases, Throwable $stopped)
     {
-        $one = count($databases) === 1;
-
-        parent::__construct(sprintf(
-            '%s — capture.shadow.keep_on_failure kept %s for inspection: %s. Drop %s when done.',
-            $stopped->getMessage(),
-            $one ? 'the throwaway database' : 'the throwaway databases',
-            implode(', ', $databases),
-            $one ? 'it' : 'them',
-        ), previous: $stopped);
+        parent::__construct($stopped->getMessage().' — '.self::sentence($databases), previous: $stopped);
     }
 
     /**
@@ -38,5 +30,22 @@ final class ShadowDatabaseKept extends RuntimeException
     public static function after(Throwable $stopped, array $databases): self
     {
         return new self($databases, $stopped);
+    }
+
+    /**
+     * Which databases are still on the server, and that they are the reader's to drop.
+     *
+     * @param  list<string>  $databases
+     */
+    public static function sentence(array $databases): string
+    {
+        $one = count($databases) === 1;
+
+        return sprintf(
+            'capture.shadow.keep_on_failure kept %s for inspection: %s. Drop %s when done.',
+            $one ? 'the throwaway database' : 'the throwaway databases',
+            implode(', ', $databases),
+            $one ? 'it' : 'them',
+        );
     }
 }

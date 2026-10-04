@@ -19,8 +19,12 @@ use Pushery\SQLens\Deploy\WriteAcceptance;
  */
 final readonly class MysqlWriteAcceptance implements ReadsWriteAcceptance
 {
+    /**
+     * `read_only` and `super_read_only` are global and no account carries its own, so the role the
+     * migrations run as changes nothing here.
+     */
     #[RawSql(reason: 'reads @@read_only and @@super_read_only; a session variable is not something a query builder can name')]
-    public function writeAcceptance(ReaderSession $session): WriteAcceptance
+    public function writeAcceptance(ReaderSession $session, ?string $migrationRole = null): WriteAcceptance
     {
         $row = $session->read(static fn (Connection $db): array => $db->select(
             'select @@super_read_only as super_read_only, @@read_only as read_only',

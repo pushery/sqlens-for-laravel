@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Rules\Pedantic;
 
+use Pushery\SQLens\Canonical\StringLiteralMask;
+use Pushery\SQLens\Contracts\DriverCanonicalization;
+
 /**
  * Whether a view's DDL selects `*`, and which reference does it.
  *
@@ -46,6 +49,18 @@ namespace Pushery\SQLens\Rules\Pedantic;
  * A pattern cannot count parentheses, and every discrimination above is a counting question. It
  * also has to ignore what is inside a string literal — `SELECT '*' AS marker` is not a star — and a
  * pattern that tried would need to know where literals begin, which is the same counting problem.
+ *
+ * Where a literal ends is the driver's to say: on PostgreSQL `'\'` is a whole literal, on MySQL it
+ * is an escaped quote that runs on. So the definition is masked with the driver's
+ * {@see StringLiteralMask} before it is read, and every literal is empty by the time a star is
+ * looked for.
+ *
+ * ## Every branch of a set operation
+ *
+ * `SELECT a FROM t UNION ALL SELECT * FROM u` freezes the columns of `u` exactly as a single select
+ * would. So the lists of the branches joined by `UNION`, `INTERSECT` or `EXCEPT` at depth zero are
+ * read as well, and a branch that is not a `SELECT` (`TABLE u`, `VALUES …`) makes the definition one
+ * this scan cannot read rather than one it read as clean.
  */
 final readonly class SelectStarInView
 {
@@ -64,51 +79,96 @@ final readonly class SelectStarInView
     }
 
     /**
-     * Every star reference in the outer select list, in the order they appear.
+     * Every star reference in the outer select list and in the lists of the branches joined to it,
+     * in the order they appear.
      *
      * @return list<string> `*` for a bare star, `alias.*` for a qualified one; empty when the
-     *                      statement is not a view definition or its select list names its columns
+     *                      statement is not a view definition or its select lists name their columns
      */
-    public static function stars(string $canonical): array
+    public static function stars(string $canonical, DriverCanonicalization $syntax): array
     {
         if (! self::isViewDefinition($canonical)) {
             return [];
         }
 
-        $list = self::selectList($canonical);
+        $found = [];
 
-        if ($list === null) {
-            return [];
+        foreach (self::selectLists(StringLiteralMask::forDriver($syntax)->apply($canonical)) ?? [] as $list) {
+            array_push($found, ...self::starsIn($list));
         }
 
-        return self::starsIn($list);
+        return $found;
     }
 
     /**
-     * The outer select list: from after the definition's `SELECT` to its own `FROM`.
+     * The outer select list: from after the definition's `SELECT` to its own `FROM`, with every
+     * string literal emptied.
      *
      * Returns null when there is no such list to read — a view defined through a `VALUES` clause, a
-     * `TABLE t` shorthand, or a statement this scan cannot follow. Null is not "no stars": the
-     * caller must not turn it into a pass, which is why it is a distinct answer rather than an
-     * empty array.
+     * `TABLE t` shorthand, a set operation one of whose branches is such a form, or a statement this
+     * scan cannot follow. Null is not "no stars": the caller must not turn it into a pass, which is
+     * why it is a distinct answer rather than an empty array.
      */
-    public static function selectList(string $canonical): ?string
+    public static function selectList(string $canonical, DriverCanonicalization $syntax): ?string
     {
-        $start = self::outerSelectOffset($canonical);
+        return (self::selectLists(StringLiteralMask::forDriver($syntax)->apply($canonical)) ?? [])[0] ?? null;
+    }
+
+    /**
+     * The definition's select list followed by the list of every branch a set operation joins to it
+     * at depth zero, or null when one of them cannot be read.
+     *
+     * @return list<string>|null
+     */
+    private static function selectLists(string $sql): ?array
+    {
+        $start = self::outerSelectOffset($sql);
 
         if ($start === null) {
             return null;
         }
 
+        [$list, $end] = self::listFrom($sql, $start);
+        $lists = [$list];
+
+        while ($end !== null) {
+            $operator = self::nextSetOperator($sql, $end);
+
+            if ($operator === null) {
+                break;
+            }
+
+            $start = self::branchSelect($sql, $operator);
+
+            if ($start === null) {
+                return null;
+            }
+
+            [$list, $end] = self::listFrom($sql, $start);
+            $lists[] = $list;
+        }
+
+        return $lists;
+    }
+
+    /**
+     * One select list from `$start` and the offset where it stopped: at its own `FROM`, at a set
+     * operator, or at a closing parenthesis at depth zero. A list that runs to the end of the
+     * statement comes back with null.
+     *
+     * @return array{string, int|null}
+     */
+    private static function listFrom(string $sql, int $start): array
+    {
         $depth = 0;
-        $length = strlen($canonical);
+        $length = strlen($sql);
         $offset = $start;
 
         while ($offset < $length) {
-            $char = $canonical[$offset];
+            $char = $sql[$offset];
 
             if (in_array($char, ["'", '"', '`'], true)) {
-                $offset = self::skipQuoted($canonical, $offset);
+                $offset = self::skipQuoted($sql, $offset);
 
                 continue;
             }
@@ -122,9 +182,10 @@ final readonly class SelectStarInView
 
             if ($char === ')') {
                 // A closing parenthesis at depth zero ends the definition itself — `CREATE VIEW v AS
-                // (SELECT …)`. The list ends here for the same reason a FROM would end it.
+                // (SELECT …)` — or a branch of it. The list ends here for the same reason a FROM
+                // would end it.
                 if ($depth === 0) {
-                    return substr($canonical, $start, $offset - $start);
+                    return [substr($sql, $start, $offset - $start), $offset];
                 }
 
                 $depth--;
@@ -133,8 +194,8 @@ final readonly class SelectStarInView
                 continue;
             }
 
-            if ($depth === 0 && self::keywordAt($canonical, $offset, 'FROM')) {
-                return substr($canonical, $start, $offset - $start);
+            if ($depth === 0 && (self::keywordAt($sql, $offset, 'FROM') || self::setOperatorAt($sql, $offset) !== null)) {
+                return [substr($sql, $start, $offset - $start), $offset];
             }
 
             $offset++;
@@ -142,7 +203,75 @@ final readonly class SelectStarInView
 
         // No FROM at all is still a select list — `CREATE VIEW v AS SELECT 1`. Returning it rather
         // than null keeps a constant view from being reported as unreadable.
-        return substr($canonical, $start);
+        return [substr($sql, $start), null];
+    }
+
+    /**
+     * The offset just past the next set operator at depth zero from `$offset`, or null when the
+     * definition joins no further branch.
+     *
+     * A closing parenthesis at depth zero closes a branch, or the definition, that was opened before
+     * `$offset`; what may follow it is the next operator, so the scan goes on.
+     */
+    private static function nextSetOperator(string $sql, int $offset): ?int
+    {
+        $depth = 0;
+        $length = strlen($sql);
+
+        while ($offset < $length) {
+            $char = $sql[$offset];
+
+            if (in_array($char, ["'", '"', '`'], true)) {
+                $offset = self::skipQuoted($sql, $offset);
+
+                continue;
+            }
+
+            if ($char === '(' || $char === ')') {
+                $depth = max(0, $depth + ($char === '(' ? 1 : -1));
+                $offset++;
+
+                continue;
+            }
+
+            $operator = $depth === 0 ? self::setOperatorAt($sql, $offset) : null;
+
+            if ($operator !== null) {
+                return $offset + strlen($operator);
+            }
+
+            $offset++;
+        }
+
+        return null;
+    }
+
+    /**
+     * The offset just past the `SELECT` of the branch after a set operator, or null when the branch
+     * is not a select: `UNION TABLE u` or `UNION VALUES …` holds no list this scan can read.
+     *
+     * The operator's own quantifier (`ALL`, `DISTINCT`) and the parentheses a branch may stand in
+     * come first.
+     */
+    private static function branchSelect(string $sql, int $offset): ?int
+    {
+        if (preg_match('/\G\s*(?:(?:ALL|DISTINCT)\b\s*)?(?:\(\s*)*SELECT\b/i', $sql, $matches, 0, $offset) !== 1) {
+            return null;
+        }
+
+        return $offset + strlen($matches[0]);
+    }
+
+    /** The set operator standing at `$offset` as a whole word, or null. */
+    private static function setOperatorAt(string $sql, int $offset): ?string
+    {
+        foreach (['UNION', 'INTERSECT', 'EXCEPT'] as $operator) {
+            if (self::keywordAt($sql, $offset, $operator)) {
+                return $operator;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -330,38 +459,19 @@ final readonly class SelectStarInView
     }
 
     /**
-     * The offset just past the quoted run starting at `$offset`.
+     * The offset just past the quoted run starting at `$offset`, or the end of the subject when the
+     * run is never closed.
      *
-     * A doubled quote inside a run is an escaped quote in both engines' default modes, so the run
-     * continues — the case that decides whether `'it''s *'` is read as one literal or as two with a
-     * bare star between them.
+     * The definition is masked before it is read, so a string literal is empty here and the run that
+     * carries content is a quoted identifier. Its one escape, a doubled quote, needs no branch of its
+     * own: the first quote ends this run and the second opens the next at once, with nothing between
+     * them. `"it""s *"` is therefore read as two adjacent runs that cover exactly the characters one
+     * run would, and the star inside the name is never read as a bare one.
      */
     private static function skipQuoted(string $subject, int $offset): int
     {
-        $quote = $subject[$offset];
-        $length = strlen($subject);
-        $offset++;
+        $close = strpos($subject, $subject[$offset], $offset + 1);
 
-        while ($offset < $length) {
-            if ($subject[$offset] === '\\' && $quote === "'") {
-                $offset += 2;
-
-                continue;
-            }
-
-            if ($subject[$offset] === $quote) {
-                if (substr($subject, $offset + 1, 1) === $quote) {
-                    $offset += 2;
-
-                    continue;
-                }
-
-                return $offset + 1;
-            }
-
-            $offset++;
-        }
-
-        return $length;
+        return $close === false ? strlen($subject) : $close + 1;
     }
 }

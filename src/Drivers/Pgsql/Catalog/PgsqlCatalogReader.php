@@ -1109,9 +1109,16 @@ final readonly class PgsqlCatalogReader implements CatalogReader
      * The collations whose recorded version can be compared against the installed one.
      *
      * Two sources, one subject type. The DATABASE's own collation lives on `pg_database` and is the
-     * one almost every index in an ordinary schema is actually built on; explicitly created
-     * collations live on `pg_collation`. A rule asking "has this drifted" asks the same question of
-     * both, so splitting them into two types would be the same rule twice.
+     * one almost every index in an ordinary schema is actually built on; every other collation lives
+     * on `pg_collation`. A rule asking "has this drifted" asks the same question of both, so
+     * splitting them into two types would be the same rule twice.
+     *
+     * From `pg_catalog` only the collations something depends on are read. That schema is where
+     * `initdb` puts the operating system's and ICU's collations, and `COLLATE "de-DE-x-icu"` is the
+     * usual way to pick a language, so excluding it with the other system schemas left exactly those
+     * indexes unchecked. Reading all of it would report on the thousand-odd collations nobody uses.
+     * A dependency on a pinned collation (`default`, `C`, `POSIX`, the builtin ones) is not recorded
+     * in `pg_depend`, so those stay out as well; the database row covers the default one.
      *
      * The two version functions are NOT interchangeable, and the difference is not cosmetic:
      * `pg_database_collation_actual_version()` takes a database oid and
@@ -1145,6 +1152,9 @@ final readonly class PgsqlCatalogReader implements CatalogReader
             FROM pg_collation c
             JOIN pg_namespace n ON n.oid = c.collnamespace
             WHERE n.nspname <> ALL (?)
+               OR (n.nspname = 'pg_catalog' AND EXISTS (
+                      SELECT 1 FROM pg_depend dep
+                      WHERE dep.refclassid = 'pg_collation'::regclass AND dep.refobjid = c.oid))
             ORDER BY 1, 3, 2
             SQL, [$this->arrayLiteral(self::SYSTEM_SCHEMAS)]);
 

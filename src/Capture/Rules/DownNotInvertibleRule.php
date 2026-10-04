@@ -11,6 +11,7 @@ use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
+use Pushery\SQLens\Security\RowValueMask;
 use Pushery\SQLens\Security\SecretLiteralMask;
 use Pushery\SQLens\Subjects\CaptureMode;
 /**
@@ -143,6 +144,12 @@ final readonly class DownNotInvertibleRule implements CaptureRule
         // surfaces never carry the value: "none of those has a redactor".
         $detail = SecretLiteralMask::in($detail);
 
-        return str_replace(rtrim($projectRoot, '/').'/', '', $detail);
+        // And a third: a constraint the database enforced quotes the row it refused
+        // (`Key (email)=(…)`, `Failing row contains (…)`, `Duplicate entry '…'`), which is row data
+        // and does not belong in a finding. Masked by the shape of the message, like the secret.
+        $detail = RowValueMask::in($detail);
+
+        // The sentence around the detail ends it with a period of its own.
+        return rtrim(str_replace(rtrim($projectRoot, '/').'/', '', $detail), '.');
     }
 }

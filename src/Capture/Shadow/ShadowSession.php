@@ -58,4 +58,17 @@ final readonly class ShadowSession
             'started_at' => $this->startedAt->setTimezone(new DateTimeZone('UTC'))->format(DateTimeImmutable::ATOM),
         ];
     }
+
+    /**
+     * The databases this session put on the server: the one the migrations run in, and on PostgreSQL
+     * the template it was cloned from, which carries the project's whole schema as well.
+     *
+     * @return list<string>
+     */
+    public function databases(): array
+    {
+        return $this->templateDatabase === null
+            ? [$this->shadowDatabase]
+            : [$this->shadowDatabase, $this->templateDatabase];
+    }
 }

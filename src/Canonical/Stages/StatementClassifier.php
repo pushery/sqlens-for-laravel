@@ -100,7 +100,13 @@ final readonly class StatementClassifier implements CanonicalizationStage
             return $classification;
         }
 
-        return [...$classification, $this->actionsOf($tokens, $profile, $classification)];
+        $actions = $this->actionsOf($tokens, $profile, $classification);
+
+        if ($actions instanceof CanonicalizationFailure) {
+            return $actions;
+        }
+
+        return [...$classification, $actions];
     }
 
     /**
@@ -112,7 +118,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
     private function classifyTokens(array $tokens, StatementClassificationProfile $profile): array|CanonicalizationFailure
     {
         foreach ($profile->signatures as $signature) {
-            $match = $this->match($signature, $tokens, $profile->modifiers);
+            $match = $this->match($signature, $tokens, $profile);
             if ($match instanceof CanonicalizationFailure) {
                 return $match;
             }
@@ -141,17 +147,21 @@ final readonly class StatementClassifier implements CanonicalizationStage
      * columns in one statement, `drop a, drop b`, and the second column is a question of its own for
      * every rule that names the column it judges. Left out: an action that repeats a question, such
      * as the `ALTER COLUMN name …` clauses PostgreSQL's `change()` emits one after another about one
-     * table; a table option the driver declares, such as MySQL's `ALGORITHM`, which qualifies the
-     * other actions and does nothing of its own; and an action the signatures and the fallback
-     * cannot classify, which reaches no rule here, as it did before.
+     * table; and a table option the driver declares, such as MySQL's `ALGORITHM`, which qualifies the
+     * other actions and does nothing of its own.
+     *
+     * An action the signatures and the fallback cannot classify makes the whole statement
+     * undetermined, with the reason it would carry on its own. Skipping it turned "this cannot be
+     * judged" into a silent pass whenever a readable action stood in front of it: a foreign key
+     * behind an `ADD COLUMN` reached no rule, and nothing said that a clause went unread.
      *
      * @param  list<StatementToken>  $tokens
      * @param  array{StatementKind, list<StatementTarget>, list<string>, list<ColumnDefinition>|null}  $statement
-     * @return list<StatementAction>
+     * @return list<StatementAction>|CanonicalizationFailure
      */
-    private function actionsOf(array $tokens, StatementClassificationProfile $profile, array $statement): array
+    private function actionsOf(array $tokens, StatementClassificationProfile $profile, array $statement): array|CanonicalizationFailure
     {
-        $header = $this->alterTableHeader($tokens, $profile->modifiers);
+        $header = $this->alterTableHeader($tokens, $profile);
 
         if ($header === null) {
             return [];
@@ -160,7 +170,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
         $actions = [];
         $asked = [$this->questionOf($statement) => true];
 
-        foreach (array_slice($this->actionSegments(array_slice($tokens, count($header))), 1) as $segment) {
+        foreach (array_slice($this->actionSegments(array_slice($tokens, count($header))), 1) as $position => $segment) {
             if ($segment[0]->type === TokenType::Keyword && in_array($segment[0]->text, $profile->actionOptions, true)) {
                 continue;
             }
@@ -168,7 +178,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
             $classification = $this->classifyTokens([...$header, ...$segment], $profile);
 
             if ($classification instanceof CanonicalizationFailure) {
-                continue;
+                return CanonicalizationFailure::inLaterAction($classification, $position + 2, $this->leadingWords($segment));
             }
 
             $question = $this->questionOf($classification);
@@ -184,6 +194,21 @@ final readonly class StatementClassifier implements CanonicalizationStage
         }
 
         return $actions;
+    }
+
+    /**
+     * The first words of an action, enough to find it in the statement: `ADD CONSTRAINT FOREIGN …`.
+     *
+     * The token stream has no punctuation left, so the whole segment would read like a statement
+     * nobody wrote. Three words name the clause without pretending to quote it.
+     *
+     * @param  non-empty-list<StatementToken>  $segment
+     */
+    private function leadingWords(array $segment): string
+    {
+        $words = array_map(static fn (StatementToken $token): string => $token->text, array_slice($segment, 0, 3));
+
+        return implode(' ', $words).(count($segment) > 3 ? ' …' : '');
     }
 
     /**
@@ -214,12 +239,12 @@ final readonly class StatementClassifier implements CanonicalizationStage
      * The tokens of an `ALTER TABLE` up to and including its table, or null for any other statement.
      *
      * @param  list<StatementToken>  $tokens
-     * @param  list<string>  $modifiers
      * @return non-empty-list<StatementToken>|null
      */
-    private function alterTableHeader(array $tokens, array $modifiers): ?array
+    private function alterTableHeader(array $tokens, StatementClassificationProfile $profile): ?array
     {
         $count = count($tokens);
+        $modifiers = $profile->modifiers;
 
         if ($count < 3
             || $tokens[0]->type !== TokenType::Keyword || $tokens[0]->text !== 'ALTER'
@@ -233,7 +258,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
             $index++;
         }
 
-        return $index < $count && $tokens[$index]->type === TokenType::Identifier
+        return $index < $count && $this->nameIn($tokens[$index], $profile->unreservedNames) !== null
             ? array_slice($tokens, 0, $index + 1)
             : null;
     }
@@ -270,11 +295,11 @@ final readonly class StatementClassifier implements CanonicalizationStage
      * Apply one signature to the tokens.
      *
      * @param  list<StatementToken>  $tokens
-     * @param  list<string>  $modifiers
      * @return array{list<StatementTarget>, list<string>, list<ColumnDefinition>|null}|CanonicalizationFailure|null null = no match; failure = a resolvable target was expected but absent
      */
-    private function match(StatementSignature $signature, array $tokens, array $modifiers): array|CanonicalizationFailure|null
+    private function match(StatementSignature $signature, array $tokens, StatementClassificationProfile $profile): array|CanonicalizationFailure|null
     {
+        $modifiers = $profile->modifiers;
         $index = 0;
         $count = count($tokens);
         $targets = [];
@@ -334,9 +359,9 @@ final readonly class StatementClassifier implements CanonicalizationStage
                     $captured = [];
 
                     while ($index < $count
-                        && $tokens[$index]->type === TokenType::Identifier
+                        && ($member = $this->nameIn($tokens[$index], $profile->unreservedNames)) !== null
                         && $tokens[$index]->precededBy === ($captured === [] ? '(' : ',')) {
-                        $captured[] = $tokens[$index]->text;
+                        $captured[] = $tokens[$index]->type === TokenType::Identifier ? $member : $this->canonicalName($member);
                         $index++;
                     }
 
@@ -353,7 +378,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
                     break;
 
                 case SignatureElementKind::ColumnDefinitions:
-                    $read = $this->readColumnDefinitions($tokens, $index, $count, $element->clauseTerminators);
+                    $read = $this->readColumnDefinitions($tokens, $index, $count, $element->clauseTerminators, $profile->unreservedNames);
 
                     if ($read === null) {
                         // The body was not readable AS A WHOLE. The statement still classifies and
@@ -382,6 +407,15 @@ final readonly class StatementClassifier implements CanonicalizationStage
                         $next = $tokens[$index];
 
                         if ($next->type === TokenType::Keyword && in_array($next->text, $element->clauseTerminators, true)) {
+                            break;
+                        }
+
+                        // A comma at the statement's own level ends the type: what follows it is the
+                        // next action of an ALTER TABLE list, which actionSegments() splits at the
+                        // same comma. Read on, `nickname text, DROP COLUMN legacy` gave the column
+                        // the type `TEXT DROP COLUMN legacy`. The comma inside `numeric(10, 2)` sits
+                        // one level deeper and stays part of the type.
+                        if ($next->depth === 0 && $next->precededBy === ',') {
                             break;
                         }
 
@@ -499,13 +533,15 @@ final readonly class StatementClassifier implements CanonicalizationStage
                 case SignatureElementKind::Target:
                     $type = $element->targetType ?? throw new LogicException('a Target element must carry a type');
 
-                    if ($index >= $count || $tokens[$index]->type !== TokenType::Identifier) {
+                    $name = $index < $count ? $this->nameIn($tokens[$index], $profile->unreservedNames) : null;
+
+                    if ($name === null) {
                         return CanonicalizationFailure::ambiguousTarget(
                             sprintf('the %s target of a recognized statement is not a resolvable identifier', $type->value),
                         );
                     }
 
-                    $identifier = Identifier::parse($tokens[$index]->text, $this->driver);
+                    $identifier = Identifier::parse($name, $this->driver);
                     if ($identifier instanceof CanonicalizationFailure) {
                         return $identifier;
                     }
@@ -526,13 +562,15 @@ final readonly class StatementClassifier implements CanonicalizationStage
                             $index++;
                         }
 
-                        if ($index >= $count || $tokens[$index]->type !== TokenType::Identifier) {
+                        $name = $index < $count ? $this->nameIn($tokens[$index], $profile->unreservedNames) : null;
+
+                        if ($name === null) {
                             return CanonicalizationFailure::ambiguousTarget(
                                 sprintf('a %s in the target list of a recognized statement is not a resolvable identifier', $type->value),
                             );
                         }
 
-                        $identifier = Identifier::parse($tokens[$index]->text, $this->driver);
+                        $identifier = Identifier::parse($name, $this->driver);
 
                         if ($identifier instanceof CanonicalizationFailure) {
                             return $identifier;
@@ -579,9 +617,10 @@ final readonly class StatementClassifier implements CanonicalizationStage
      *
      * @param  list<StatementToken>  $tokens
      * @param  list<string>  $typeTerminators
+     * @param  list<string>  $unreservedNames  the keywords that open a column rather than a table constraint
      * @return array{list<ColumnDefinition>, int}|null the definitions and the index just past the body
      */
-    private function readColumnDefinitions(array $tokens, int $index, int $count, array $typeTerminators): ?array
+    private function readColumnDefinitions(array $tokens, int $index, int $count, array $typeTerminators, array $unreservedNames): ?array
     {
         if ($index >= $count || $tokens[$index]->depth !== 1 || $tokens[$index]->precededBy !== '(') {
             return null; // no body opens here — a `CREATE TABLE … AS SELECT`, or a form with no list
@@ -590,16 +629,19 @@ final readonly class StatementClassifier implements CanonicalizationStage
         $definitions = [];
 
         // Every iteration begins on a MEMBER, and nothing inside the loop re-checks that. The first
-        // one is the guard above — depth 1, preceded by `(`. Every later one is guaranteed by
-        // `skipMember()`, which returns either a token at depth 1 preceded by a comma or an index
-        // outside the body entirely. A second check here would be a branch no run can enter, which
-        // the coverage floor names and the next reader cannot tell from an untested one.
+        // one is the guard above — depth 1, preceded by `(`. Every later one is guaranteed by the
+        // type loop, which stops on the next member, or by `skipMember()`, which returns either a
+        // token at depth 1 preceded by a comma or an index outside the body entirely. A second check
+        // here would be a branch no run can enter, which the coverage floor names and the next
+        // reader cannot tell from an untested one.
         while ($index < $count && $tokens[$index]->depth >= 1) {
             $token = $tokens[$index];
 
-            if ($token->type === TokenType::Keyword) {
-                // A table constraint — PRIMARY KEY, UNIQUE, FOREIGN KEY, CHECK, EXCLUDE,
-                // CONSTRAINT. Skipped rather than read as a column named PRIMARY.
+            if ($token->type === TokenType::Keyword && ! in_array($token->text, $unreservedNames, true)) {
+                // A table constraint — PRIMARY KEY, UNIQUE, FOREIGN KEY, CHECK, CONSTRAINT, and on
+                // MySQL an INDEX or KEY. Every word that opens one is reserved on its engine, so it
+                // is skipped rather than read as a column named PRIMARY. A keyword the server
+                // accepts as a name, such as `type` or `comment`, opens a column like any other.
                 $index = $this->skipMember($tokens, $index, $count);
 
                 continue;
@@ -625,7 +667,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
             // `"Mixed"` keeps its quotes because its case is significant. A rule comparing a
             // definition against a catalog column needs the two spellings to be the same one, and
             // this is the parser that already decides that everywhere else.
-            $identifier = Identifier::parse($token->text, $this->driver);
+            $identifier = Identifier::parse($token->type === TokenType::Keyword ? strtolower($token->text) : $token->text, $this->driver);
 
             if ($identifier instanceof CanonicalizationFailure) {
                 return null; // a name this layer cannot resolve is a member it did not read
@@ -661,7 +703,13 @@ final readonly class StatementClassifier implements CanonicalizationStage
                 $type === [] ? null : CanonicalType::fromRaw(implode(' ', $type)),
             );
 
-            $index = $this->skipMember($tokens, $index, $count);
+            // The type stops on a modifier, on the next member, or past the body, and only from a
+            // modifier is part of this member left to pass over. skipMember() steps past the token it
+            // is handed, so handed the next member's name it dropped that member: every second
+            // column that carried no modifier went missing.
+            if ($index < $count && $tokens[$index]->depth >= 1 && ($tokens[$index]->depth !== 1 || $tokens[$index]->precededBy !== ',')) {
+                $index = $this->skipMember($tokens, $index, $count);
+            }
         }
 
         // The body has to have held at least one COLUMN. A parenthesized group of nothing but
@@ -778,8 +826,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
             }
 
             if ($hasBlockComment && ScanAt::startsWith($sql, $i, '/*')) {
-                $close = strpos($sql, '*/', $i + 2);
-                $i = $close === false ? $length : $close + 2;
+                $i = QuotedSpan::endOfBlockComment($sql, $i, $this->driver->nestsBlockComments()) ?? $length;
 
                 continue;
             }
@@ -825,6 +872,37 @@ final readonly class StatementClassifier implements CanonicalizationStage
         }
 
         return $tokens;
+    }
+
+    /**
+     * The name a token gives where a statement names an object: an identifier, or a keyword the
+     * server accepts there unquoted, such as `type` or `comment`. Null for anything else.
+     *
+     * A keyword arrives upper case, because the casing stage runs first. Lower case is what both
+     * engines resolve the unquoted word to: PostgreSQL folds it, and MySQL compares column names
+     * without regard to case.
+     *
+     * @param  list<string>  $unreservedNames
+     */
+    private function nameIn(StatementToken $token, array $unreservedNames): ?string
+    {
+        if ($token->type === TokenType::Identifier) {
+            return $token->text;
+        }
+
+        return in_array($token->text, $unreservedNames, true) ? strtolower($token->text) : null;
+    }
+
+    /**
+     * A keyword's name as the identifier stage writes it: quoted, because it is a word of the keyword
+     * list, so `type` and `"type"` name the same column. An identifier token already carries that
+     * spelling.
+     */
+    private function canonicalName(string $name): string
+    {
+        $identifier = Identifier::parse($name, $this->driver);
+
+        return $identifier instanceof CanonicalizationFailure ? $name : $identifier->canonical();
     }
 
     /**

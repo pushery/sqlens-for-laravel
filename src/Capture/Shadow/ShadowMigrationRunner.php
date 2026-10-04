@@ -4,22 +4,25 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Capture\Shadow;
 
+use Closure;
 use Illuminate\Container\Container;
 use Illuminate\Database\Connection;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Grammars\Grammar;
 use Pushery\SQLens\Capture\CaptureConnectionFence;
 use Pushery\SQLens\Capture\CaptureResult;
 use Pushery\SQLens\Capture\CaptureRun;
 use Pushery\SQLens\Capture\CaptureSection;
+use Pushery\SQLens\Capture\DriverMessage;
+use Pushery\SQLens\Capture\ForeignConnectionRefused;
 use Pushery\SQLens\Capture\MigrationLoader;
 use Pushery\SQLens\Capture\PendingMigration;
 use Pushery\SQLens\Contracts\ShadowRunner;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Subjects\CaptureMode;
+use ReflectionProperty;
 use Throwable;
 
 /**
@@ -43,7 +46,9 @@ use Throwable;
  * is the migration's, and it reaches the rules whole, exactly as the pretend log does.
  *
  * The default connection is pointed at the shadow for the duration of the run so a
- * migration's `Schema`/`DB` calls land on it, and restored afterwards. The listener
+ * migration's `Schema`/`DB` calls land on it, and restored afterwards. So is the NAME of the
+ * linted connection: a migration that names it, as Telescope's does through `getConnection()`,
+ * means the database this run stands in for, and reaches the shadow too. The listener
  * is registered per run on the (throwaway) shadow connection; because each run reads
  * only its OWN collector, a listener left on a reused connection cannot corrupt a
  * later run's capture.
@@ -85,6 +90,7 @@ final readonly class ShadowMigrationRunner implements ShadowRunner
         // the shadow for the run and restore it afterwards, whatever happens.
         $previousDefault = $this->db->getDefaultConnection();
         $this->db->setDefaultConnection($session->connectionName);
+        $restoreSource = $this->resolveSourceToShadow($session->sourceConnection, $connection);
 
         try {
             $results = [];
@@ -115,10 +121,76 @@ final readonly class ShadowMigrationRunner implements ShadowRunner
                 $failed = $result->isFail() || $result->isUndetermined();
             }
         } finally {
+            $restoreSource();
             $this->db->setDefaultConnection($previousDefault);
         }
 
         return CaptureRun::of($results, CaptureMode::Shadow);
+    }
+
+    /**
+     * Resolve the linted connection's NAME to the shadow connection for the run, and hand back what
+     * restores it.
+     *
+     * A migration that names the connection being linted means the database the shadow stands in
+     * for, and before this it reached the real one, which the fence refuses: the migration failed as
+     * `CAP.L0.MIGRATE_ERROR` and every migration after it went unjudged. The manager has no setter
+     * for one cached connection that leaves the others alone, and `purge()` would disconnect a
+     * connection the host application may still hold, so the cached object is set aside rather than
+     * closed, and put back afterwards. Any other name still reaches its own connection, and the
+     * fence still refuses it.
+     *
+     * @return Closure(): void
+     */
+    private function resolveSourceToShadow(string $source, Connection $shadow): Closure
+    {
+        $cache = new ReflectionProperty(DatabaseManager::class, 'connections');
+        $connections = (array) $cache->getValue($this->db);
+        $held = $connections[$source] ?? null;
+        $connections[$source] = $shadow;
+        $cache->setValue($this->db, $connections);
+
+        return function () use ($cache, $source, $held): void {
+            $connections = (array) $cache->getValue($this->db);
+            unset($connections[$source]);
+            $cache->setValue($this->db, $held === null ? $connections : [...$connections, $source => $held]);
+        };
+    }
+
+    /**
+     * A migration that sends a query to a connection the capture does not own, refused by the fence
+     * before it ran: not a fault in the migration, and the case a declared `$connection` already
+     * names, so it is reported the same way, with the connection, as the pretend path reports it.
+     */
+    private function onAnotherConnection(PendingMigration $pending, CaptureSection $section, ForeignConnectionRefused $refused, ?string $annotationClass = null): CaptureResult
+    {
+        return CaptureResult::undetermined(
+            $pending->file,
+            $pending->migrationClass,
+            $section,
+            CaptureMode::Shadow,
+            UndeterminedReason::MigrationOnAnotherConnection,
+            annotationClass: $annotationClass,
+            detail: $refused->getMessage(),
+        );
+    }
+
+    /**
+     * A migration whose session the server ended, by termination, restart or a dropped network:
+     * undetermined with the driver's words, not a `CAP.L0.MIGRATE_ERROR` about a migration that never
+     * reached a verdict and may well be sound.
+     */
+    private function connectionLost(PendingMigration $pending, CaptureSection $section, Throwable $lost, ?string $annotationClass = null): CaptureResult
+    {
+        return CaptureResult::undetermined(
+            $pending->file,
+            $pending->migrationClass,
+            $section,
+            CaptureMode::Shadow,
+            UndeterminedReason::ShadowConnectionLost,
+            annotationClass: $annotationClass,
+            detail: $this->safeDetail($lost),
+        );
     }
 
     private function captureOne(PendingMigration $pending, CaptureSection $section, ShadowStatementCollector $collector, Connection $shadow): CaptureResult
@@ -128,7 +200,13 @@ final readonly class ShadowMigrationRunner implements ShadowRunner
         // file that cannot be loaded is a failed migration rather than the end of the run.
         try {
             $migration = $this->fence->around($shadow, fn (): Migration => $this->load($pending->file));
+        } catch (ForeignConnectionRefused $refused) {
+            return $this->onAnotherConnection($pending, $section, $refused);
         } catch (Throwable $throwable) {
+            if (ConnectionLossDetector::isConnectionLoss($throwable)) {
+                return $this->connectionLost($pending, $section, $throwable);
+            }
+
             return CaptureResult::failed($pending->file, $pending->migrationClass, [], $section, CaptureMode::Shadow, $this->safeDetail($throwable));
         }
 
@@ -170,6 +248,8 @@ final readonly class ShadowMigrationRunner implements ShadowRunner
             // The default connection is the shadow, and a migration that names another connection
             // would reach a real database: the fence refuses its queries before they run.
             $this->fence->around($shadow, fn () => $this->asTheMigratorRunsIt($shadow, $migration, $method));
+        } catch (ForeignConnectionRefused $refused) {
+            return $this->onAnotherConnection($pending, $section, $refused, $annotationClass);
         } catch (Throwable $throwable) {
             // A session timeout is the tool's OWN budget firing, not a fault in the
             // migration, so it is undetermined (shadow_session_timeout) — never a
@@ -183,6 +263,12 @@ final readonly class ShadowMigrationRunner implements ShadowRunner
                     UndeterminedReason::ShadowSessionTimeout,
                     annotationClass: $annotationClass,
                 );
+            }
+
+            // The server ended the session: the statement never reached a verdict. Asked after the
+            // timeout, because a budget firing is the tool's own doing and has its own reason.
+            if (ConnectionLossDetector::isConnectionLoss($throwable)) {
+                return $this->connectionLost($pending, $section, $throwable, $annotationClass);
             }
 
             // A migration that fails mid-run is a failure carrying the driver's own
@@ -263,9 +349,7 @@ final readonly class ShadowMigrationRunner implements ShadowRunner
      */
     private function safeDetail(Throwable $throwable): string
     {
-        return $throwable instanceof QueryException && $throwable->getPrevious() instanceof Throwable
-            ? $throwable->getPrevious()->getMessage()
-            : $throwable->getMessage();
+        return DriverMessage::of($throwable);
     }
 
     /**

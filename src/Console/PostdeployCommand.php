@@ -306,7 +306,9 @@ final class PostdeployCommand extends Command
         // database, and a private shape would make `downtime_class` and the severity axis stop
         // working in the one report somebody reads while a deploy is still warm.
         $reporter->report(
-            Result::of([...$findings, ...$expectation->findings, ...$overrun, ...$debt['findings']]),
+            // A check that could not answer stands in the result as an undetermined finding of its
+            // own. Added here and not before the debt pass, which reads every object name as owed.
+            Result::of([...$findings, ...$report->undeterminedGaps($postdeployContext->driver, $name, $profileName), ...$expectation->findings, ...$overrun, ...$debt['findings']]),
             $runContext->collect(ReportingCaptureMode::Pretend, $timeouts, $report->describeTimings() ?: null, $consumedMs, $today)
                 ->withUndeterminedWaiver($waived)
                 // The comparison as its OWN block rather than mixed into the findings — and present
@@ -449,7 +451,7 @@ final class PostdeployCommand extends Command
         $drift = $comparison->report;
 
         if (! $drift instanceof DriftReport) {
-            return ExpectationReport::unavailable((string) $comparison->reference?->reason?->value);
+            return ExpectationReport::unavailable((string) $comparison->reference?->describe());
         }
 
         try {

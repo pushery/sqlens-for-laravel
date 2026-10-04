@@ -6,9 +6,12 @@ namespace Pushery\SQLens\Capture\Shadow;
 
 use DateTimeImmutable;
 use DateTimeZone;
+use Illuminate\Database\QueryException;
+use PDOException;
 use Pushery\SQLens\Capture\CaptureResult;
 use Pushery\SQLens\Capture\CaptureRun;
 use Pushery\SQLens\Capture\CaptureSection;
+use Pushery\SQLens\Capture\DriverMessage;
 use Pushery\SQLens\Capture\PendingMigration;
 use Pushery\SQLens\Contracts\Captor;
 use Pushery\SQLens\Contracts\PoolerProbe;
@@ -173,11 +176,21 @@ final readonly class ShadowCaptor implements Captor
         // has none. The provisioner now discards it on every path out, so what the caller
         // sees is what this comment claims: nothing REMAINS.
         //
-        // Any OTHER throwable from provisioning is a real failure and propagates.
+        // A database that refuses for a reason none of those checks names is a check that could not
+        // run as well. Measured on a read-only PostgreSQL: `CREATE DATABASE` answered SQLSTATE 25006.
+        // Propagated, Laravel's console handler printed the exception on STDOUT, where the report
+        // belongs, with the connection's host, port and database and the statement, and the command
+        // exited 1, which this package's exit codes reserve for findings above the gate. So it is
+        // reported as `shadow_provisioning_failed`, in the database's own words.
+        //
+        // Only the database's answer. Any other throwable from provisioning is a real failure, a
+        // defect in this package among them, and propagates.
         try {
             $session = $this->provisioner->provision();
         } catch (ShadowProvisioningUndetermined $undetermined) {
             return $this->allUndetermined($pending, $section, $undetermined->reason);
+        } catch (QueryException|PDOException $refused) {
+            return $this->allUndetermined($pending, $section, UndeterminedReason::ShadowProvisioningFailed, DriverMessage::of($refused));
         }
 
         try {
@@ -188,7 +201,7 @@ final readonly class ShadowCaptor implements Captor
             // keep_on_failure keeps the databases for a person to look inside, and the error that
             // stopped the run names none of them, so the one that reaches the caller does.
             if ($this->keepOnFailure) {
-                throw ShadowDatabaseKept::after($throwable, $this->databasesOf($session));
+                throw ShadowDatabaseKept::after($throwable, $session->databases());
             }
 
             // A failed run: drop the throwaway database (best effort — the original
@@ -310,19 +323,6 @@ final readonly class ShadowCaptor implements Captor
     }
 
     /**
-     * The databases a run left on the server: the one the migrations ran in, and on PostgreSQL the
-     * template it was cloned from, which carries the project's whole schema as well.
-     *
-     * @return list<string>
-     */
-    private function databasesOf(ShadowSession $session): array
-    {
-        return $session->templateDatabase === null
-            ? [$session->shadowDatabase]
-            : [$session->shadowDatabase, $session->templateDatabase];
-    }
-
-    /**
      * One result per kept database, named as its "file" the way {@see teardownFailures()} names a
      * leaked one, so a reader can find it and drop it.
      *
@@ -338,7 +338,7 @@ final readonly class ShadowCaptor implements Captor
                 $this->mode(),
                 UndeterminedReason::ShadowKeptOnFailure,
             ),
-            $this->databasesOf($session),
+            $session->databases(),
         );
     }
 
@@ -354,7 +354,7 @@ final readonly class ShadowCaptor implements Captor
      *
      * @param  list<PendingMigration>  $pending
      */
-    private function allUndetermined(array $pending, CaptureSection $section, UndeterminedReason $reason): CaptureRun
+    private function allUndetermined(array $pending, CaptureSection $section, UndeterminedReason $reason, ?string $detail = null): CaptureRun
     {
         $results = array_map(
             fn (PendingMigration $migration): CaptureResult => CaptureResult::undetermined(
@@ -363,6 +363,7 @@ final readonly class ShadowCaptor implements Captor
                 $section,
                 $this->mode(),
                 $reason,
+                detail: $detail,
             ),
             $pending,
         );

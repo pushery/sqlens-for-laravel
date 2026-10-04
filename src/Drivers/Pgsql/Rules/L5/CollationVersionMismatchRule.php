@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Drivers\Pgsql\Rules\L5;
 
 use Pushery\SQLens\Agent\Remediation\RemediationValidator;
+use Pushery\SQLens\Canonical\QuotedIdentifier;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\DeclaresJudgedObjectTypes;
 use Pushery\SQLens\Contracts\ProvidesSchemaObjectRemediation;
@@ -200,8 +201,12 @@ final class CollationVersionMismatchRule extends AbstractCatalogRule implements 
      * the other's object. Finding the indexes differs too: PostgreSQL records no `pg_depend` row for
      * the database's default collation, which is pinned, so its indexes are the ones with a key column
      * in it, read from `pg_index.indcollation`, where it is the one collation whose provider is `d`.
-     * An explicitly created collation does have its rows, and it is named schema-qualified, so it is
-     * resolved with `regcollation` rather than compared by bare name. Measured on PostgreSQL 18.4.
+     * Every other collation does have its rows, and it is named schema-qualified, so it is resolved
+     * with `regcollation` rather than compared by bare name. Measured on PostgreSQL 18.4.
+     *
+     * That name is filled in, quoted, because the collation is a fact of the finding and not a choice
+     * of the reader. The collations PostgreSQL imports from ICU carry upper case and dashes, and
+     * `'pg_catalog.de-DE-x-icu'::regcollation` is read as `de-de-x-icu`, which does not exist.
      */
     public function remediationForObject(SchemaObject $object): ?RemediationPayload
     {
@@ -217,32 +222,39 @@ final class CollationVersionMismatchRule extends AbstractCatalogRule implements 
 
         $database = $object->getString('collation_scope') === 'database';
 
+        $steps = [
+            new RemediationStep(
+                order: 1,
+                kind: RemediationStepKind::ManualGate,
+                noteKey: 'sqlens::messages.remediation.reindex_before_refresh.find_dependents',
+                sqlTemplate: $this->dependentsQuery($database),
+                withinTransaction: false,
+            ),
+            new RemediationStep(
+                order: 2,
+                kind: RemediationStepKind::SeparateMigration,
+                noteKey: 'sqlens::messages.remediation.reindex_before_refresh.reindex',
+                sqlTemplate: 'REINDEX INDEX CONCURRENTLY {{index}}',
+                withinTransaction: false,
+            ),
+            new RemediationStep(
+                order: 3,
+                kind: RemediationStepKind::SeparateMigration,
+                noteKey: 'sqlens::messages.remediation.reindex_before_refresh.refresh_version',
+                sqlTemplate: $database
+                    ? 'ALTER DATABASE {{database}} REFRESH COLLATION VERSION'
+                    : 'ALTER COLLATION {{collation}} REFRESH VERSION',
+                withinTransaction: true,
+            ),
+        ];
+
+        if (! $database) {
+            $context = ['collation' => $this->quotedCollation($object)];
+            $steps = array_map(static fn (RemediationStep $step): RemediationStep => $step->filled($context), $steps);
+        }
+
         return new RemediationPayload(
-            steps: [
-                new RemediationStep(
-                    order: 1,
-                    kind: RemediationStepKind::ManualGate,
-                    noteKey: 'sqlens::messages.remediation.reindex_before_refresh.find_dependents',
-                    sqlTemplate: $this->dependentsQuery($database),
-                    withinTransaction: false,
-                ),
-                new RemediationStep(
-                    order: 2,
-                    kind: RemediationStepKind::SeparateMigration,
-                    noteKey: 'sqlens::messages.remediation.reindex_before_refresh.reindex',
-                    sqlTemplate: 'REINDEX INDEX CONCURRENTLY {{index}}',
-                    withinTransaction: false,
-                ),
-                new RemediationStep(
-                    order: 3,
-                    kind: RemediationStepKind::SeparateMigration,
-                    noteKey: 'sqlens::messages.remediation.reindex_before_refresh.refresh_version',
-                    sqlTemplate: $database
-                        ? 'ALTER DATABASE {{database}} REFRESH COLLATION VERSION'
-                        : 'ALTER COLLATION {{collation}} REFRESH VERSION',
-                    withinTransaction: true,
-                ),
-            ],
+            steps: $steps,
             strategy: RemediationStrategy::ReindexBeforeRefresh,
             ruleId: $this->id(),
             preconditions: [
@@ -252,6 +264,21 @@ final class CollationVersionMismatchRule extends AbstractCatalogRule implements 
             verification: 'sqlens::messages.remediation.reindex_before_refresh.verification',
             subject: RemediationSubject::SchemaObject,
         );
+    }
+
+    /** The collation the finding names, schema-qualified and quoted part by part. */
+    private function quotedCollation(SchemaObject $object): string
+    {
+        $schema = (string) $object->parent;
+        $name = $object->qualifiedName;
+
+        // An if, not a three-line ternary: the coverage driver never marks the else line of one
+        // as run, so the floor would fail over formatting rather than over a missing test.
+        if ($schema !== '' && str_starts_with($name, $schema.'.')) {
+            $name = substr($name, strlen($schema) + 1);
+        }
+
+        return QuotedIdentifier::of('"', $schema, $name);
     }
 
     /** The query that lists the indexes sorted under the collation, for either kind of collation. */

@@ -102,8 +102,25 @@ final readonly class CanonicalFormVersion
      *
      * PostgreSQL does not escape with a backslash, so none of its forms moved, and neither did the
      * keyword lists. The stages now share {@see QuotedSpan}, which asks the driver.
+     *
+     * Went to 7 for `CHECK`, added to the MySQL list so `DROP CHECK <k>` and an unnamed
+     * `ADD CHECK (…)` match signatures of their own. Without it the word arrived as an identifier,
+     * and the bare `DROP <c>` and `ADD <c>` read it as a column called `check`: a dropped column with
+     * its data, reported for a migration that drops a constraint. Measured before and after:
+     *
+     *     alter table orders drop check orders_total_check
+     *       form 6 -> ALTER TABLE orders DROP check orders_total_check
+     *       form 7 -> ALTER TABLE orders DROP CHECK orders_total_check
+     *
+     *     alter table `orders` add `check` int
+     *       form 6 -> ALTER TABLE orders ADD check INT
+     *       form 7 -> ALTER TABLE orders ADD `check` INT
+     *
+     * The first is now a dropped constraint rather than a dropped column. The second keeps its quotes
+     * because the name collides with a keyword, which is what tells it apart from the keyword. The
+     * PostgreSQL list already carried the word, so none of its forms moved.
      */
-    public const int CURRENT = 6;
+    public const int CURRENT = 7;
 
     public function __construct(public int $version) {}
 

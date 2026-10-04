@@ -44,8 +44,8 @@ use Pushery\SQLens\Rules\VersionWindow;
  * know whether `UserBackfill::run()` sends a notification or formats a string. So
  * it could either leave the case as a named honesty limit ("the pre-scan sees one
  * level") or flag it conservatively. It flags: the honesty limit would sit
- * exactly where the disaster happens, `undetermined` costs the user only a shadow
- * run, and a silent `pass` costs a sent message. The finding says plainly that a
+ * exactly where the disaster happens, `undetermined` costs the user only an
+ * allowlist entry, and a silent `pass` costs a sent message. The finding says plainly that a
  * helper call from a migration is common and fine — the point is that pretend
  * cannot see what it does, not that the call is wrong.
  *
@@ -134,9 +134,9 @@ final readonly class IndirectCallDetector implements PreScanDetector
                     Schema::table('users', fn (Blueprint $t) => $t->string('slug')->nullable());
                 }
 
-                // The backfill is a job the deploy dispatches after the migration, or
-                // a shadow run captures it against a throwaway database. If the class
-                // is known-safe, add it to
+                // The backfill is a job the deploy dispatches after the migration.
+                // Shadow mode holds a flagged call back as well. If the class is
+                // known-safe, add it to
                 // sqlens.capture.prescan.indirect_calls.allowlist.
                 PHP,
         );
@@ -164,7 +164,7 @@ final readonly class IndirectCallDetector implements PreScanDetector
                 $migration->file,
                 $call['line'],
                 sprintf(
-                    'The migration calls into %s at line %d, code the static pre-scan cannot follow. A helper call from a migration is common and fine — the point is that pretend mode runs it for real without seeing what it does, so it could fire a side effect or depend on data. Move it into a job the deploy dispatches, capture in shadow mode, or add %s to sqlens.capture.prescan.indirect_calls.allowlist if it is known-safe.',
+                    'The migration calls into %s at line %d, code the static pre-scan cannot follow. A helper call from a migration is common and fine — the point is that pretend mode runs it for real without seeing what it does, so it could fire a side effect or depend on data. Move it into a job the deploy dispatches, or add %s to sqlens.capture.prescan.indirect_calls.allowlist if it is known-safe.',
                     $class,
                     $call['line'],
                     $class,

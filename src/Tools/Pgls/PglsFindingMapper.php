@@ -48,6 +48,16 @@ final readonly class PglsFindingMapper
     /** The config path a reader edits to change how this adapter behaves. */
     public const string MESSAGE_PREFIX = 'sqlens.tools.pgls';
 
+    /** Every finding of this adapter is a security finding: `dblint`'s other rules are not mapped. */
+    public const Category CATEGORY = Category::Security;
+
+    /**
+     * The lowest level, and that is a decision rather than a placeholder: strictness levels are this
+     * package's own ladder, and a tool's rule did not climb it. Filing an external check at a level
+     * SQLens chose for it would make the ladder mean two different things.
+     */
+    public const Level LEVEL = Level::Capturable;
+
     /**
      * Preview, like the Squawk adapter's findings and for the same reason: the identity of these
      * ids follows a tool this package does not control, so promising them at the stable tier would
@@ -99,11 +109,8 @@ final readonly class PglsFindingMapper
                 $raw->message,
             ),
             $this->location($raw, $instance),
-            Category::Security,
-            // The lowest level, and that is a decision rather than a placeholder: strictness levels
-            // are this package's own ladder, and a tool's rule did not climb it. Filing an external
-            // check at a level SQLens chose for it would make the ladder mean two different things.
-            Level::Capturable,
+            self::CATEGORY,
+            self::LEVEL,
             self::STABILITY,
             DocumentationSite::page('tools/pgls'),
             $context,
@@ -135,8 +142,8 @@ final readonly class PglsFindingMapper
             // and the branch that chose between them could only ever be exercised by one arm.
             UndeterminedReason::MissingExternalTool,
             Location::inCatalog('pgsql', $instance, $instance, SchemaObjectType::Database),
-            Category::Security,
-            Level::Capturable,
+            self::CATEGORY,
+            self::LEVEL,
             self::STABILITY,
             DocumentationSite::page('tools/pgls'),
             $context,
@@ -157,8 +164,8 @@ final readonly class PglsFindingMapper
             ),
             UndeterminedReason::ToolRuleUnmapped,
             $this->location($raw, $instance),
-            Category::Security,
-            Level::Capturable,
+            self::CATEGORY,
+            self::LEVEL,
             self::STABILITY,
             DocumentationSite::page('tools/pgls'),
             $context,

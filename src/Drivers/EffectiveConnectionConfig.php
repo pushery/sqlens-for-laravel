@@ -53,12 +53,56 @@ final readonly class EffectiveConnectionConfig
 
         $write = $parsed['write'] ?? null;
 
-        if (is_array($write)) {
-            /** @var array<string, mixed> $parsed */
-            $parsed = Arr::except(array_merge($parsed, $write), ['read', 'write']);
+        // `ConnectionFactory::make()` opens a split only when a `read` block is set. Without one it
+        // connects with the connection's own keys and never reads a `write` block, so neither does
+        // this: a `database` in such a block is not the database the connection reaches.
+        if (isset($parsed['read']) && is_array($write)) {
+            $parsed = array_merge($parsed, self::writeOverlay($parsed, $write));
         }
 
-        return $parsed;
+        /** @var array<string, mixed> */
+        return Arr::except($parsed, ['read', 'write']);
+    }
+
+    /**
+     * What the write side lays over the connection: the block, the one entry of a list, or what the
+     * entries of a longer list agree on.
+     *
+     * `getReadWriteConfig()` takes `write` as a list when it has an entry `0` and picks one entry at
+     * random. A key every entry agrees on is certain whichever it picks. Hosts that differ are a pool,
+     * which is how the framework reads a host list anyway. Any other key the entries disagree on has
+     * no single answer and keeps the connection's own value, because a list where the framework
+     * expects one value would break every connection built from this configuration.
+     *
+     * @param  array<array-key, mixed>  $base
+     * @param  array<array-key, mixed>  $write
+     * @return array<array-key, mixed>
+     */
+    private static function writeOverlay(array $base, array $write): array
+    {
+        $entries = isset($write[0])
+            ? array_values(array_filter($write, is_array(...)))
+            : [$write];
+
+        if (count($entries) < 2) {
+            return $entries[0] ?? [];
+        }
+
+        $overlay = [];
+
+        foreach (array_unique(array_merge(...array_map(array_keys(...), $entries))) as $key) {
+            // An entry without the key inherits the connection's own value, as the merge does.
+            $values = array_map(static fn (array $entry): mixed => array_key_exists($key, $entry) ? $entry[$key] : ($base[$key] ?? null), $entries);
+            $distinct = array_values(array_unique(array_map(serialize(...), $values)));
+
+            if (count($distinct) === 1) {
+                $overlay[$key] = $values[0];
+            } elseif ($key === 'host') {
+                $overlay['host'] = array_values(array_unique(array_filter(Arr::flatten($values), is_string(...))));
+            }
+        }
+
+        return $overlay;
     }
 
     /**

@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Tools;
 
+use Pushery\SQLens\Categories\CategoryFilter;
 use Pushery\SQLens\Findings\Finding;
+use Pushery\SQLens\Levels\Level;
+use Pushery\SQLens\Levels\LevelGate;
 use Pushery\SQLens\Subjects\SubjectContext;
 
 /**
@@ -34,7 +37,18 @@ interface ToolContribution
 
     /**
      * @param  list<Finding>  $own  what the run's own rules produced
+     * @param  ToolFindingGate  $gate  the run's level and category gates, which the tool's verdicts pass like a rule's
      * @return list<Finding>
      */
-    public function contribute(array $own, ToolDiagnostic $diagnostic, string $connectionName, SubjectContext $context, ?string $pinnedHost = null): array;
+    public function contribute(array $own, ToolDiagnostic $diagnostic, string $connectionName, SubjectContext $context, ?string $pinnedHost = null, ToolFindingGate $gate = new ToolFindingGate(new LevelGate(Level::Pedantic), new CategoryFilter([]))): array;
+
+    /**
+     * The ids this tool reports a verdict under that a run behind this gate does not ask for.
+     *
+     * A baseline entry under one of them cannot be matched in such a run, so the run must not call
+     * it stale.
+     *
+     * @return list<string>
+     */
+    public function unaskedIds(ToolFindingGate $gate): array;
 }

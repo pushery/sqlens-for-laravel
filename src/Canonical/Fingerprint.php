@@ -7,10 +7,10 @@ namespace Pushery\SQLens\Canonical;
 /**
  * A stable hash over the FULL canonical form — not just the canonical SQL text, but
  * the canonical-form version, the statement kind, and the (order-independent) set
- * of targets, plus the transaction mode. It is the identity a baseline entry stores
- * and the later drift comparator compares, so a change a rule can see — a different
- * kind or a different target under identical SQL — MUST change it, or the hash would
- * be blind to exactly the fields rules read.
+ * of targets, plus the transaction mode. Its identity variant,
+ * {@see self::forFindingIdentity()}, is what a baseline entry stores, so a change a
+ * rule can see — a different kind or a different target under identical SQL — MUST
+ * change it, or the hash would be blind to exactly the fields rules read.
  *
  * Deterministic by construction: sets are ordered explicitly (never left to PHP
  * array order), the hash is content-only, and nothing here depends on locale, the
@@ -28,11 +28,38 @@ final readonly class Fingerprint
 
     private const string RECORD = "\x1e";
 
+    /**
+     * The form version a finding's identity is computed under, whatever the current form is.
+     *
+     * A baseline entry and a SARIF `partialFingerprints` value carry the statement a finding is about,
+     * and both are meant to survive an upgrade. With the current version in that hash, every bump of
+     * the form gave every accepted finding a new identity: the project had to regenerate its baseline,
+     * and a regenerated baseline accepts whatever is reported at that moment, new findings included.
+     * Held here, an identity changes only when the statement's own canonical form does.
+     *
+     * 6 is the form under which an identity first carried its statement, so every baseline written
+     * since then keeps matching. The value is history, never the current form: it does not move with
+     * {@see CanonicalFormVersion::CURRENT}.
+     */
+    private const int IDENTITY_FORM_VERSION = 6;
+
     private function __construct(public string $value) {}
 
     public static function of(CanonicalStatement|CanonicalizationFailure $form): self
     {
         return new self(hash('sha256', self::payload($form)));
+    }
+
+    /**
+     * The fingerprint a finding's identity carries: the whole canonical form, with the form version
+     * held at {@see self::IDENTITY_FORM_VERSION}.
+     *
+     * {@see self::of()} is the one to compare stored canonical statements with, where the version has
+     * to take part. This one is for recognizing a finding across runs and upgrades.
+     */
+    public static function forFindingIdentity(CanonicalStatement|CanonicalizationFailure $form): self
+    {
+        return new self(hash('sha256', self::payload($form, self::IDENTITY_FORM_VERSION)));
     }
 
     /** Rehydrate a stored fingerprint (a baseline entry) without recomputing it. */
@@ -46,7 +73,7 @@ final readonly class Fingerprint
         return hash_equals($this->value, $other->value);
     }
 
-    private static function payload(CanonicalStatement|CanonicalizationFailure $form): string
+    private static function payload(CanonicalStatement|CanonicalizationFailure $form, ?int $formVersion = null): string
     {
         if ($form instanceof CanonicalizationFailure) {
             // The leading tag keeps an undetermined payload disjoint from every
@@ -55,7 +82,7 @@ final readonly class Fingerprint
         }
 
         return implode(self::UNIT, [
-            'v'.$form->formVersion->version,
+            'v'.($formVersion ?? $form->formVersion->version),
             $form->statementKind instanceof StatementKind ? $form->statementKind->value : 'unclassified',
             $form->canonicalSql,
             $form->transaction->mode->value,

@@ -145,6 +145,17 @@ enum SkipReason: string
     case InstrumentationDisabled = 'instrumentation_disabled';
 
     /**
+     * The server answered whether its instrumentation is on, and the answer was neither on nor off.
+     *
+     * MySQL's `@@performance_schema` answers 0 or 1 on every server, so a value that is no number is
+     * a reading nobody can vouch for. Read as off, it would send an operator to restart a server that
+     * may be recording perfectly well. Read as on, an empty lock view would pass for a quiet server.
+     * Named as unknown, the silence is simply not trusted, which is the one conclusion the answer
+     * supports.
+     */
+    case InstrumentationUnknown = 'instrumentation_unknown';
+
+    /**
      * Whether this skip means something in scope went UNREAD.
      *
      * Four classes, not two, and the last two are the reason this method exists rather than a
@@ -214,6 +225,9 @@ enum SkipReason: string
             // willingness to collect the data at all, which no grant and no retry changes — the
             // operator has to restart with it on, or accept that this reading cannot be made here.
             self::InstrumentationDisabled => UndeterminedReason::ManagedDatabaseRestriction,
+            // The server answered and the answer cannot describe it: neither on nor off is a state
+            // its instrumentation can be in. That is the implausible reading, not a failed one.
+            self::InstrumentationUnknown => UndeterminedReason::CatalogReadingImplausible,
             // A deliberate exclusion and a comprehension limit are not failures at all: the project
             // asked for the first, and the second belongs to the rule that met it. Neither leaves
             // the reading incomplete, so neither is a gap.

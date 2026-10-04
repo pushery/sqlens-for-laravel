@@ -69,8 +69,13 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * sets `lock_timeout` before its first strong lock, as `PG.L3.MISSING_LOCK_TIMEOUT` asks, does not
  * wait under the role's value, and the finding then travels as an `info` note beside a passing result.
  *
- * The three settings below the line read `reset_val` as it is: what a fresh session of the reading
- * role starts with, which is the server's value while that role has no default of its own.
+ * `statement_timeout` is read the same way, for the migration role, because it bounds the
+ * migration's own statements. `idle_in_transaction_session_timeout` bounds the sessions a migration
+ * waits behind rather than the migration, so it is read as the server's value: the default of this
+ * database or of every role, then `reset_val` while the reading role has no default of its own.
+ * Neither of the two ever stops a deploy, so a value this reading cannot see travels as an
+ * `undetermined` note beside the result instead of making the whole check undetermined.
+ * `max_wal_size` is read from `reset_val` as it is: no role default can change it.
  *
  * ## Why `lock_timeout = 0` is a finding here and not in `lint`
  *
@@ -171,7 +176,7 @@ final readonly class ServerSettingsCheck implements PreflightCheck
         // report to contradict itself.
         $pending = ! $context->pending->isEmpty();
 
-        // The stored defaults, for the one judgment read for the role the migrations run as.
+        // The stored defaults, for the judgments read for a role rather than for this session.
         $defaults = new PgsqlRoleDefaultsReader($context->session)->read();
 
         foreach ($this->judgments() as $name => $judge) {
@@ -187,12 +192,20 @@ final readonly class ServerSettingsCheck implements PreflightCheck
 
             // Narrowed for the analyzer by the guard above: `unreadableReason()` returns a string
             // for every state in which either of these is null.
-            $start = $name === 'lock_timeout'
-                ? $this->migrationStart((string) $setting?->serverValue(), $defaults, $context->migrationRole)
-                : ['value' => (string) $setting?->serverValue()];
+            $start = match ($name) {
+                'lock_timeout', 'statement_timeout' => $this->migrationStart($name, (string) $setting?->serverValue(), $defaults, $context->migrationRole),
+                'idle_in_transaction_session_timeout' => $this->serverStart($name, (string) $setting?->serverValue(), $defaults),
+                default => ['value' => (string) $setting?->serverValue()],
+            };
 
             if (isset($start['unknown'])) {
-                $unreadable[] = $start['unknown'];
+                // Only the judgment that can stop the deploy stops it when it cannot be made. The two
+                // below the line say what could not be told, beside a result they do not hold back.
+                if ($name === 'lock_timeout') {
+                    $unreadable[] = $start['unknown'];
+                } else {
+                    $reported[] = $this->untold($context, $name, $start['unknown']);
+                }
 
                 continue;
             }
@@ -305,10 +318,10 @@ final readonly class ServerSettingsCheck implements PreflightCheck
                 'downtime' => DowntimeClass::Blocking,
                 'confidence' => Confidence::Deterministic,
             ],
-            'statement_timeout' => fn (string $value): ?array => $value !== '0' ? null : [
+            'statement_timeout' => fn (string $value, PreflightContext $context): ?array => $value !== '0' ? null : [
                 'id' => 'DEPLOY.CONTEXT.SETTING.STATEMENT_TIMEOUT_UNBOUNDED',
                 'setting' => 'statement_timeout',
-                'state' => 'The server runs with `statement_timeout = 0`. This is a common and '
+                'state' => $this->freshSession('statement_timeout', $context).' This is a common and '
                     .'defensible setting, and it is reported rather than judged: it means a statement '
                     .'that turns out to be far more expensive than expected has no upper bound of its '
                     .'own.',
@@ -336,7 +349,7 @@ final readonly class ServerSettingsCheck implements PreflightCheck
     }
 
     /**
-     * The `lock_timeout` a fresh session of the role the migrations run as starts with, in
+     * The value of a setting a fresh session of the role the migrations run as starts with, in
      * milliseconds, or the clause saying why this reading cannot tell.
      *
      * The role's own default first, then the default of this database or of every role, then the
@@ -346,35 +359,74 @@ final readonly class ServerSettingsCheck implements PreflightCheck
      *
      * @return array{value: string}|array{unknown: string}
      */
-    private function migrationStart(string $readerValue, RoleDefaults $defaults, ?string $role): array
+    private function migrationStart(string $setting, string $readerValue, RoleDefaults $defaults, ?string $role): array
     {
         if (! $defaults->read) {
-            return ['unknown' => 'the defaults stored per role and database could not be read, so the '
-                .'`lock_timeout` the migrations start with is unknown'];
+            return ['unknown' => sprintf('the defaults stored per role and database could not be read, so the '
+                .'`%s` the migrations start with is unknown', $setting)];
         }
 
-        $owners = $defaults->rolesWithOwn('lock_timeout');
+        $owners = $defaults->rolesWithOwn($setting);
 
         if ($role === null && $owners !== []) {
             return ['unknown' => sprintf(
                 'the role the migrations run as is not configured, and %s %s, so which value the migrations '
                 .'start with is unknown',
                 implode(', ', array_map(static fn (string $owner): string => '`'.$owner.'`', $owners)),
-                count($owners) === 1 ? 'carries a `lock_timeout` default of its own' : 'carry `lock_timeout` defaults of their own',
+                count($owners) === 1 ? sprintf('carries a `%s` default of its own', $setting) : sprintf('carry `%s` defaults of their own', $setting),
             )];
         }
 
-        $stored = ($role === null ? null : $defaults->own($role, 'lock_timeout')) ?? $defaults->shared('lock_timeout');
+        $stored = ($role === null ? null : $defaults->own($role, $setting)) ?? $defaults->shared($setting);
 
         if ($stored === null && in_array($defaults->reader, $owners, true)) {
             return ['unknown' => sprintf(
-                '`%s`, the role this check reads as, carries a `lock_timeout` default of its own, which '
+                '`%s`, the role this check reads as, carries a `%s` default of its own, which '
                 .'hides the server\'s value, and `%s`, the role the migrations run as, has none',
                 $defaults->reader,
+                $setting,
                 (string) $role,
             )];
         }
 
+        return $this->startValue($setting, $stored, $readerValue);
+    }
+
+    /**
+     * The value of a setting a session on this database starts with when its role carries no default
+     * of its own: the default of this database or of every role, then the server's value, which
+     * `reset_val` shows only while the reading role carries no default of its own.
+     *
+     * @return array{value: string}|array{unknown: string}
+     */
+    private function serverStart(string $setting, string $readerValue, RoleDefaults $defaults): array
+    {
+        if (! $defaults->read) {
+            return ['unknown' => sprintf('the defaults stored per role and database could not be read, so the '
+                .'`%s` this server gives a session is unknown', $setting)];
+        }
+
+        $stored = $defaults->shared($setting);
+
+        if ($stored === null && in_array($defaults->reader, $defaults->rolesWithOwn($setting), true)) {
+            return ['unknown' => sprintf(
+                '`%s`, the role this check reads as, carries its own `%s` default, which hides the '
+                .'server\'s value',
+                $defaults->reader,
+                $setting,
+            )];
+        }
+
+        return $this->startValue($setting, $stored, $readerValue);
+    }
+
+    /**
+     * A stored default in milliseconds, or the session's own value when nothing is stored.
+     *
+     * @return array{value: string}|array{unknown: string}
+     */
+    private function startValue(string $setting, ?string $stored, string $readerValue): array
+    {
         if ($stored === null) {
             return ['value' => $readerValue];
         }
@@ -383,8 +435,56 @@ final readonly class ServerSettingsCheck implements PreflightCheck
         $milliseconds = DurationValue::milliseconds($stored);
 
         return $milliseconds === null
-            ? ['unknown' => "the stored default `lock_timeout = {$stored}` is not a duration this check can read"]
+            ? ['unknown' => "the stored default `{$setting} = {$stored}` is not a duration this check can read"]
             : ['value' => (string) $milliseconds];
+    }
+
+    /**
+     * The first sentence of a finding about a value a fresh session of the migration role starts with.
+     */
+    private function freshSession(string $setting, PreflightContext $context): string
+    {
+        return match ($context->migrationRole === null) {
+            true => sprintf('The role the migrations run as is not configured, and a fresh session of any role on this '
+                .'database starts with `%s = 0`: none carries a default of its own.', $setting),
+            false => sprintf(
+                'A fresh session of `%s`, the role the migrations run as, starts with `%s = 0`.',
+                $context->migrationRole,
+                $setting,
+            ),
+        };
+    }
+
+    /**
+     * The note for a setting below the line whose value this reading could not establish.
+     *
+     * Undetermined, because nothing was judged, and beside a passing result, because the setting
+     * itself never stops a deploy: the verdict waits on a check that cannot answer, never on a note.
+     */
+    private function untold(PreflightContext $context, string $setting, string $clause): Finding
+    {
+        $ids = [
+            'statement_timeout' => 'DEPLOY.CONTEXT.SETTING.STATEMENT_TIMEOUT_UNBOUNDED',
+            'idle_in_transaction_session_timeout' => 'DEPLOY.CONTEXT.SETTING.IDLE_IN_TRANSACTION_UNBOUNDED',
+        ];
+
+        return Finding::undetermined(
+            ruleId: $ids[$setting] ?? self::ID,
+            messagePrefix: DeployNotice::MESSAGE_PREFIX,
+            message: sprintf(
+                'Whether `%s` is bounded could not be told: %s. The setting is reported rather than judged, '
+                .'so this does not hold the deploy.',
+                $setting,
+                $clause,
+            ),
+            reason: UndeterminedReason::SettingUnreadable,
+            location: Location::inCatalog($context->driver, $context->connection, $setting, SchemaObjectType::Setting),
+            category: Category::Safety,
+            level: Level::Capturable,
+            stability: StabilityTier::Stable,
+            documentationUrl: RuleDocumentationUrl::for(self::ID),
+            context: new SubjectContext(driver: $context->driver, profile: $context->profile, strictTools: false),
+        );
     }
 
     /**
@@ -403,7 +503,7 @@ final readonly class ServerSettingsCheck implements PreflightCheck
 
         // Nothing pending bounds nothing: the notice of such a run keeps the severity of the value, and
         // `finding()` leaves the premise below unsaid.
-        $bounded = ! $context->pending->isEmpty() && ! $unbounded instanceof CapturedStatement && $context->pending->statementsComplete;
+        $bounded = ! $context->pending->isEmpty() && ! $unbounded instanceof CapturedStatement && $context->pending->readInFull();
 
         $pending = match (true) {
             $unbounded instanceof CapturedStatement => sprintf(
@@ -419,14 +519,7 @@ final readonly class ServerSettingsCheck implements PreflightCheck
                 .'on a table that already exists runs after its session sets a `lock_timeout` of its own.',
         };
 
-        $freshSession = match ($context->migrationRole === null) {
-            true => 'The role the migrations run as is not configured, and a fresh session of any role on this '
-                .'database starts with `lock_timeout = 0`: none carries a default of its own.',
-            false => sprintf(
-                'A fresh session of `%s`, the role the migrations run as, starts with `lock_timeout = 0`.',
-                $context->migrationRole,
-            ),
-        };
+        $freshSession = $this->freshSession('lock_timeout', $context);
 
         return [
             'id' => 'DEPLOY.CONTEXT.SETTING.LOCK_TIMEOUT_UNBOUNDED',
@@ -479,7 +572,9 @@ final readonly class ServerSettingsCheck implements PreflightCheck
                 continue;
             }
 
-            $set = $this->lockTimeoutSetIn($statement->canonicalSql);
+            // The same reading PG.L3.MISSING_LOCK_TIMEOUT takes of the same statement, so the preflight
+            // and the lint never answer one SET two ways.
+            $set = StrongLockStatements::timeoutSettingIn($statement->canonicalSql, 'lock_timeout');
 
             if ($set !== null) {
                 if (! $set['local']) {
@@ -520,37 +615,6 @@ final readonly class ServerSettingsCheck implements PreflightCheck
         }
 
         return [$first, $locking];
-    }
-
-    /**
-     * What a statement does to its session's `lock_timeout`, or null when it leaves it alone.
-     *
-     * `local` says whether the change lasts only until the transaction ends, `bounded` whether the value
-     * it leaves is one. A value that is not a duration this check can read is no bound it can count.
-     *
-     * @return array{local: bool, bounded: bool}|null
-     */
-    private function lockTimeoutSetIn(string $canonical): ?array
-    {
-        // The grammar refuses `RESET` and `DISCARD` today, so a migration holding one is not captured
-        // whole and the verdict stops the deploy for that reason. Read here all the same, so the day
-        // the grammar learns them they take the bound away instead of passing for none.
-        if (preg_match('/^(?:RESET\s+(?:lock_timeout|ALL)|DISCARD\s+ALL)\s*;?\s*$/i', $canonical) === 1) {
-            return ['local' => false, 'bounded' => false];
-        }
-
-        if (preg_match('/^SET\s+(?:(?<scope>SESSION|LOCAL)\s+)?lock_timeout\s*(?:=|\bTO\b)\s*(?<value>.+?)\s*;?\s*$/is', $canonical, $match) !== 1) {
-            return null;
-        }
-
-        $value = preg_match("/^'((?:[^']|'')*)'$/s", $match['value'], $literal) === 1
-            ? str_replace("''", "'", $literal[1])
-            : $match['value'];
-
-        return [
-            'local' => strcasecmp($match['scope'], 'LOCAL') === 0,
-            'bounded' => (DurationValue::milliseconds($value) ?? 0) > 0,
-        ];
     }
 
     /** The tables a statement names, for a message: `orders`, or `orders` and `customers`. */

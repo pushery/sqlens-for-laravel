@@ -42,6 +42,17 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * log is a leaked credential wherever the log is. A development database that shares a password
  * with anything else has already lost it, and "it was only staging" is the sentence that follows
  * every credential incident.
+ *
+ * ## Silent at `ddl`, which is not the same as `ddl` being free of credentials
+ *
+ * `ddl` writes every schema change verbatim, and a role password is set by a schema change.
+ * Measured on PostgreSQL 18 at `ddl`: `CREATE ROLE`, `ALTER ROLE`, `CREATE USER MAPPING` and a
+ * `CREATE SUBSCRIPTION` connection string all reached the log with the password in them. The rule
+ * still does not report `ddl`, because what decides the leak there is how passwords are written,
+ * and the switch cannot show that: psql's `\password` encrypts on the client and sends a SCRAM
+ * verifier, and a server run that way logs no password at `ddl`. A finding that stayed on after
+ * that fix would be muted, and its `all` case with it. So the message says what `ddl` still logs
+ * wherever it recommends it, and `limitations()` says it for the silence.
  */
 final class StatementLoggingSecretsRule extends AbstractSettingSecurityRule
 {
@@ -113,10 +124,10 @@ final class StatementLoggingSecretsRule extends AbstractSettingSecurityRule
 
     protected function violation(string $serverValue, ServerSettingExpectation $expectation, SchemaObject $object): ?string
     {
-        // `all` and `mod` are the two of the four values that reach data. `ddl` logs schema changes
-        // only and `none` logs nothing, and neither carries a value — so neither is this rule's
-        // subject, and reporting them would make the rule noise on the setting people are told to
-        // use.
+        // `all` and `mod` are the two of the four values that log row values, and those flow
+        // whatever anybody does. `none` logs nothing. `ddl` logs schema changes verbatim, a role
+        // password typed into one included, but whether one is typed is not visible in the switch;
+        // the class docblock says why that stays silent.
         $value = strtolower(trim($serverValue));
 
         if ($value !== 'all' && $value !== 'mod') {
@@ -146,7 +157,10 @@ final class StatementLoggingSecretsRule extends AbstractSettingSecurityRule
             .'whatever protects the database itself, and routinely swept into log shipping — '
             .'holding a copy of what the database was guarding. Credentials in it stay valid until '
             .'somebody rotates them, and nobody rotates what they do not know leaked. Set it to '
-            .'`ddl` to keep an audit trail without values, or `none`. %s',
+            .'`ddl` to keep an audit trail of schema changes without row values, or `none`. `ddl` '
+            .'still writes every schema change verbatim, `CREATE ROLE … PASSWORD \'…\'` included, '
+            .'so set role passwords with psql\'s `\password`, which sends a SCRAM verifier instead '
+            .'of the password. %s',
             $value,
             $everyRead,
             $this->remediation($expectation),
@@ -173,6 +187,12 @@ final class StatementLoggingSecretsRule extends AbstractSettingSecurityRule
             .'settings — `log_min_duration_statement` logs slow queries in full, and the auto_explain '
             .'module logs them with their parameters — and neither is read here, so a quiet verdict '
             .'from this rule is not a statement about the server\'s logging as a whole',
+            'is silent at `ddl`, and `ddl` is not free of credentials. It writes every schema change '
+            .'verbatim, so a password typed into `CREATE ROLE`, `ALTER ROLE`, `CREATE USER MAPPING` '
+            .'or a `CREATE SUBSCRIPTION` connection string reaches the log there as well. Whether one '
+            .'is typed is not visible in the switch: psql\'s `\password` sends a SCRAM verifier '
+            .'instead. A migration that sets a role password from a literal is reported by '
+            .'`SEC.AUTH.PASSWORD_LITERAL_IN_MIGRATION`',
         ];
     }
 }

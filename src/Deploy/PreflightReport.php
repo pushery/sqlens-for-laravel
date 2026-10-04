@@ -4,9 +4,17 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Deploy;
 
+use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Findings\Finding;
+use Pushery\SQLens\Findings\Location;
 use Pushery\SQLens\Findings\Outcome;
+use Pushery\SQLens\Findings\UndeterminedReason;
+use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Reporting\CredentialRedaction;
+use Pushery\SQLens\Rules\RuleDocumentationUrl;
+use Pushery\SQLens\Rules\StabilityTier;
+use Pushery\SQLens\Subjects\SchemaObjectType;
+use Pushery\SQLens\Subjects\SubjectContext;
 
 /**
  * What a whole preflight run answered.
@@ -91,6 +99,56 @@ final readonly class PreflightReport
     public function findings(): array
     {
         return array_merge(...array_map(static fn (CheckResult $r): array => $r->findings, $this->results));
+    }
+
+    /**
+     * One undetermined finding for each check that could not answer and has no finding saying so.
+     *
+     * An undetermined result carries its reason as a sentence on the result, not as a finding, so a
+     * report built from the findings alone left the check out entirely: `--format=json` listed
+     * nothing for it, `summary.counts` counted its reason as 0, and a deploy script reading the
+     * document at exit 3 could not tell which check held the deploy or why. The console wrote the
+     * sentence to stderr, the one stream an archived report does not keep.
+     *
+     * The check id is the finding's rule id, the reason its undetermined reason and the sentence its
+     * message, so every surface built from the findings carries all three. Kept apart from
+     * {@see self::findings()} on purpose: that list is also read for debts, where every object name
+     * counts as still owed, and the database a check could not read is not a debt.
+     *
+     * An undetermined finding never breaches a gate, so the verdict and the exit code do not move.
+     *
+     * @return list<Finding>
+     */
+    public function undeterminedGaps(string $driver, string $connection, string $profile): array
+    {
+        $gaps = [];
+
+        foreach ($this->undetermined() as $result) {
+            if (! $result->undeterminedReason instanceof UndeterminedReason || $this->saysItself($result)) {
+                continue;
+            }
+
+            $gaps[] = Finding::undetermined(
+                $result->checkId,
+                DeployNotice::MESSAGE_PREFIX,
+                (string) $result->reason,
+                $result->undeterminedReason,
+                Location::inCatalog($driver, $connection, $connection, SchemaObjectType::Database),
+                Category::Safety,
+                Level::Capturable,
+                StabilityTier::Stable,
+                RuleDocumentationUrl::for($result->checkId),
+                new SubjectContext(driver: $driver, profile: $profile, strictTools: false),
+            );
+        }
+
+        return $gaps;
+    }
+
+    /** Whether an undetermined result already carries an undetermined finding of its own. */
+    private function saysItself(CheckResult $result): bool
+    {
+        return array_any($result->findings, static fn (Finding $finding): bool => $finding->status->outcome === Outcome::Undetermined);
     }
 
     /** @return array<string, mixed> */

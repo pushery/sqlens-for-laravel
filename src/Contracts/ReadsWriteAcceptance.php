@@ -39,8 +39,12 @@ interface ReadsWriteAcceptance
     /**
      * Read the instance's write state over the session the run already opened.
      *
+     * @param  string|null  $migrationRole  the role the migrations run as, when the configuration
+     *                                      names one: a setting a role can carry for itself is judged
+     *                                      for that role, not for the one reading
+     *
      * @throws Throwable when the server will not answer. The caller turns that into a named
      *                   `undetermined` — an unread setting is not a permissive one.
      */
-    public function writeAcceptance(ReaderSession $session): WriteAcceptance;
+    public function writeAcceptance(ReaderSession $session, ?string $migrationRole = null): WriteAcceptance;
 }

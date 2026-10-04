@@ -31,7 +31,8 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * 1.0, so no rule can retrofit them later. Level and severity are separate
  * fields (separate accessors) so the reporter can show the two axes apart.
  *
- * A finding never quotes row contents and never carries a credential value.
+ * A finding never carries a credential value, and the row values a database error quotes are masked
+ * by the shape of the message before a capture finding carries it.
  */
 final readonly class Finding
 {
@@ -118,12 +119,14 @@ final readonly class Finding
          */
         public ?DowntimeUndetermined $downtimeUndetermined = null,
         /**
-         * The canonical form of the statement this finding is about, as a fingerprint, or null for a
-         * finding that is about no single statement.
+         * What this finding is about, as a fingerprint: the canonical form of its statement, or, for a
+         * call site the analyse half reports, the identity of that call site (the functions it sits
+         * in and the code on its line). Null for a finding that is about neither.
          *
-         * It is what tells two findings of one rule in one migration apart for a baseline. Without
-         * it they differ only by their order, and an accepted finding's acceptance moves to whichever
-         * finding takes its place when a statement is inserted above it.
+         * It is what tells two findings of one rule in one migration, or in one PHP file, apart for a
+         * baseline and for SARIF. Without it they differ only by their order, and an accepted
+         * finding's acceptance moves to whichever finding takes its place when a statement is
+         * inserted above it.
          */
         public ?Fingerprint $excerpt = null,
     ) {}

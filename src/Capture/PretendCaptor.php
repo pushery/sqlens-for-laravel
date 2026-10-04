@@ -36,8 +36,9 @@ use Throwable;
  *   path.
  * - **The logged `query` already has its bindings inlined** (`values (1)`, not
  *   `values (?)`), with `bindings` still carried separately. The captor keeps
- *   the raw grammar output AND the bindings; turning them into one canonical
- *   string is the substitution and canonicalization stages' job, not this one's.
+ *   both as the framework hands them over: the text is complete, so the
+ *   substitution stage leaves it as it is, and the bindings stay because a rule
+ *   reads where a value came from.
  *
  * The captor resolves NOTHING about which migrations are pending — it is handed
  * an already-ordered list and works exactly that list, so a run can never quietly
@@ -145,7 +146,37 @@ final readonly class PretendCaptor implements Captor
             } finally {
                 $this->connection->setReadPdo($readHandle);
             }
+        } catch (ForeignConnectionRefused $refused) {
+            // Not a fault in the migration: it sends a query to a connection this capture does not
+            // own, and the fence refused it before it ran. That is the case a declared `$connection`
+            // already names, so it is reported the same way, with the connection, rather than as a
+            // migration that failed.
+            return CaptureResult::undetermined(
+                $pending->file,
+                $pending->migrationClass,
+                $section,
+                $this->mode(),
+                UndeterminedReason::MigrationOnAnotherConnection,
+                annotationClass: $migration instanceof Migration ? $migration::class : null,
+                detail: $refused->getMessage(),
+            );
         } catch (Throwable $exception) {
+            // Laravel writes every binding into the pretend log itself, and refuses a value it has
+            // no escape for: a string holding a NUL or invalid UTF-8, an array. The refusal stops
+            // the migration's method where it stands, but the migration did nothing wrong, and in
+            // shadow mode the same statement runs and is read. So it is not reported as a failure.
+            if ($this->thrownWritingThePretendLog($exception)) {
+                return CaptureResult::undetermined(
+                    $pending->file,
+                    $pending->migrationClass,
+                    $section,
+                    $this->mode(),
+                    UndeterminedReason::BindingNotRendered,
+                    annotationClass: $migration instanceof Migration ? $migration::class : null,
+                    detail: 'the pretend log refused a bound value: '.$exception->getMessage(),
+                );
+            }
+
             // A migration that throws under pretend does not crash the run: it is
             // recorded as a failure carrying the exception message, the level-0
             // capture rule judges it, and the remaining migrations still run. The
@@ -198,6 +229,15 @@ final readonly class PretendCaptor implements Captor
     }
 
     /**
+     * Whether the exception came from Laravel writing a binding into the pretend log
+     * (`Grammar::substituteBindingsIntoRawSql()`), rather than from the migration.
+     */
+    private function thrownWritingThePretendLog(Throwable $exception): bool
+    {
+        return array_any($exception->getTrace(), fn (array $frame): bool => $frame['function'] === 'substituteBindingsIntoRawSql');
+    }
+
+    /**
      * The connection a migration declares, when it is not the one this run captures on.
      *
      * Laravel's migrator resolves a migration's connection from `getConnection()` and runs the
@@ -218,9 +258,10 @@ final readonly class PretendCaptor implements Captor
     /**
      * Turn the pretend query log into ordered captured statements.
      *
-     * The raw grammar output and the bindings are kept as the framework hands
-     * them over — separate — because the substitution stage owns turning them
-     * into one string and this captor must not grow a second, divergent inliner.
+     * The logged text and the bindings are kept as the framework hands them over.
+     * The framework inlined the bindings itself, so this captor must not grow a
+     * second, divergent inliner, and the substitution stage does not run over a
+     * text that is complete already.
      *
      * @param  array<array-key, array{query: string, bindings: array<array-key, mixed>, time: float|null}>  $log  the shape Connection::pretend() declares
      * @return list<CapturedStatement>

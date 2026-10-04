@@ -30,6 +30,20 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
 final readonly class MetadataLockStatements
 {
     /**
+     * How long a lock wait stops being a wait and becomes an outage, in seconds.
+     *
+     * A DECLARED expectation rather than a measured one, and it is declared once, here, so the lint
+     * rule and the preflight check cannot disagree about one `SET`. MySQL ships
+     * `lock_wait_timeout = 31536000`, one year, which at deploy time is indistinguishable from
+     * waiting forever. An hour is the line: past it, the deploy has already failed in every way that
+     * matters to whoever is watching it, and the metadata lock it holds has blocked every DDL behind
+     * it for that whole time.
+     *
+     * @see https://dev.mysql.com/doc/refman/8.4/en/server-system-variables.html
+     */
+    public const int SESSION_WAIT_CEILING_SECONDS = 3600;
+
+    /**
      * The kinds that take a metadata lock strong enough to block readers and writers.
      *
      * `Dml`, `SessionSetting` and `CreateTable` are absent on purpose: the first takes row locks
@@ -92,19 +106,29 @@ final readonly class MetadataLockStatements
      */
     public static function timeoutSetBefore(array $stream, int $gateIndex, string $timeout): bool
     {
-        return array_any(
-            $stream,
-            static fn (MigrationStatementDigest $digest): bool => $digest->index < $gateIndex && self::setsTimeout($digest, $timeout),
-        );
+        // The LAST statement that touches the variable decides, not any of them: a later
+        // `SET … = DEFAULT` takes a bound away again.
+        $bounded = false;
+
+        foreach ($stream as $digest) {
+            if ($digest->index < $gateIndex && self::sessionTimeoutIn($digest->canonical, $timeout) !== null) {
+                $bounded = self::setsTimeout($digest, $timeout);
+            }
+        }
+
+        return $bounded;
     }
 
     /**
-     * Whether the statement is a `SET [SESSION] <timeout> = …` for exactly the named variable.
+     * Whether the statement bounds its own session's value of exactly the named variable, to an hour
+     * at most ({@see self::SESSION_WAIT_CEILING_SECONDS}).
      *
-     * The word boundary at the end is load-bearing: without it, `lock_wait_timeout` would match
-     * inside `innodb_lock_wait_timeout`, and a migration that bounded only its ROW locks would be
-     * read as having bounded its METADATA lock. Those are different locks, and that is precisely
-     * the confusion this rule family exists to prevent.
+     * The name is compared whole: `lock_wait_timeout` must never be read inside
+     * `innodb_lock_wait_timeout`, or a migration that bounded only its ROW locks would be read as
+     * having bounded its METADATA lock. Those are different locks, and that is precisely the
+     * confusion this rule family exists to prevent. And `SET GLOBAL`, `= DEFAULT` or a year bound
+     * nothing for the session running the migration; {@see self::sessionTimeoutIn()} reads them for
+     * this rule and for the preflight check alike.
      *
      * Read off the canonical string because a plain `SET` is not a classified DDL kind.
      *
@@ -127,10 +151,91 @@ final readonly class MetadataLockStatements
      */
     public static function setsTimeout(MigrationStatementDigest $digest, string $timeout): bool
     {
-        $canonical = StringLiteralMask::forDriver(new MysqlCanonicalization)->apply($digest->canonical);
+        $seconds = self::sessionTimeoutIn($digest->canonical, $timeout)['seconds'] ?? null;
 
-        return preg_match('/(?<![a-z_])'.preg_quote($timeout, '/').'\b\s*(?:=|:=)/i', $canonical) === 1
-            && preg_match('/\bSET\b/i', $canonical) === 1;
+        return $seconds !== null && $seconds <= self::SESSION_WAIT_CEILING_SECONDS;
+    }
+
+    /**
+     * What a statement does to its own session's value of the named variable, or null when it leaves
+     * it alone.
+     *
+     * `seconds` is the value it sets, or null for one that bounds nothing this can read: `DEFAULT`,
+     * which on MySQL 8.4 is a year, or an expression. A `GLOBAL` or `PERSIST` assignment changes what
+     * LATER connections start with, never this session, so it leaves the session's value alone. The
+     * scope keyword carries over to the following assignments of the same `SET`, as the manual says,
+     * and `@@SESSION.`, `@@LOCAL.` or a bare `@@` name the session for that one assignment.
+     *
+     * Only a statement that BEGINS with `SET`, at the start or after a `;`, and read off the masked
+     * text, so the words inside a value are data and `UPDATE t SET …` is no session setting.
+     *
+     * @return array{seconds: int|null}|null
+     */
+    public static function sessionTimeoutIn(string $canonical, string $variable): ?array
+    {
+        $masked = StringLiteralMask::forDriver(new MysqlCanonicalization)->apply($canonical);
+        $found = null;
+
+        foreach (explode(';', $masked) as $statement) {
+            if (preg_match('/^\s*SET\s+(.*)$/is', $statement, $set) !== 1) {
+                continue;
+            }
+
+            $scope = 'SESSION';
+
+            foreach (self::assignments($set[1]) as $assignment) {
+                if (preg_match('/^(?:(?<keyword>GLOBAL|SESSION|LOCAL|PERSIST|PERSIST_ONLY)\s+)?(?<at>@@(?:(?<qualifier>GLOBAL|SESSION|LOCAL|PERSIST|PERSIST_ONLY)\.)?)?(?<name>[a-z_][a-z0-9_]*)\s*(?::=|=)\s*(?<value>.*)$/is', $assignment, $part) !== 1) {
+                    continue;
+                }
+
+                if ($part['keyword'] !== '') {
+                    $scope = strtoupper($part['keyword']);
+                }
+
+                $effective = $part['qualifier'] !== '' ? strtoupper($part['qualifier']) : ($part['at'] !== '' ? 'SESSION' : $scope);
+
+                if (strcasecmp($part['name'], $variable) !== 0 || ! in_array($effective, ['SESSION', 'LOCAL'], true)) {
+                    continue;
+                }
+
+                $value = trim($part['value']);
+                $found = ['seconds' => ctype_digit($value) ? (int) $value : null];
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * The comma-separated assignments of one `SET`, a comma inside parentheses left where it is.
+     *
+     * @return list<string>
+     */
+    private static function assignments(string $list): array
+    {
+        $parts = [];
+        $depth = 0;
+        $current = '';
+
+        foreach (str_split($list) as $char) {
+            if ($char === ',' && $depth === 0) {
+                $parts[] = trim($current);
+                $current = '';
+
+                continue;
+            }
+
+            $depth += match ($char) {
+                '(' => 1,
+                ')' => -1,
+                default => 0,
+            };
+            $current .= $char;
+        }
+
+        $parts[] = trim($current);
+
+        return $parts;
     }
 
     /** Whether every table this statement names was created earlier in the same migration. */

@@ -493,6 +493,8 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
      * `pg_checksums --enable` on a cleanly shut-down cluster, so it takes the `Offline`
      * arm — a maintenance window rather than a migration. The two plans differ by orders of
      * magnitude, and this sentence is read exactly where one of them gets scheduled.
+     *
+     * A whole sentence, capital letter included: every rule appends it after a full stop.
      */
     final protected function remediation(ServerSettingExpectation $expectation): string
     {
@@ -502,10 +504,10 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
             // change plus a reload, and saying "a session can set it" to somebody holding a
             // server-baseline finding answers a question they did not ask: they need the server
             // fixed, not a workaround one connection at a time.
-            SettingChangeCost::Session, SettingChangeCost::Reload => 'changing what the server hands new connections is a configuration change plus a reload — no downtime.',
-            SettingChangeCost::Restart => 'changing it takes a server restart, so it needs a maintenance window.',
-            SettingChangeCost::Offline => 'it can be turned on in place with pg_checksums --enable, which needs the cluster cleanly shut down — a maintenance window, not a new cluster and a dump/restore.',
-            SettingChangeCost::Initdb => 'it was fixed when the cluster was initialized and cannot be changed on this one — moving it means a new cluster and a dump/restore.',
+            SettingChangeCost::Session, SettingChangeCost::Reload => 'Changing what the server hands new connections is a configuration change plus a reload — no downtime.',
+            SettingChangeCost::Restart => 'Changing it takes a server restart, so it needs a maintenance window.',
+            SettingChangeCost::Offline => 'It can be turned on in place with pg_checksums --enable, which needs the cluster cleanly shut down — a maintenance window, not a new cluster and a dump/restore.',
+            SettingChangeCost::Initdb => 'It was fixed when the cluster was initialized and cannot be changed on this one — moving it means a new cluster and a dump/restore.',
         };
     }
 }

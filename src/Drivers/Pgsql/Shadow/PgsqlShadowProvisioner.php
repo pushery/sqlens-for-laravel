@@ -49,7 +49,7 @@ use Throwable;
  *
  * Only when all three hold is `CREATE DATABASE … TEMPLATE` issued and a runtime
  * connection to the clone registered. Encoding, collation, and locale are inherited
- * from the template and never overridden.
+ * from the template, which carries the ones of the database the shadow stands in for.
  *
  * WHAT THE TEMPLATE MAY BE is the load-bearing part. `CREATE DATABASE … TEMPLATE`
  * copies its source byte for byte — every row of it — and none of the three checks

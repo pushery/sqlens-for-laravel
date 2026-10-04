@@ -68,12 +68,21 @@ final readonly class LevelGate
         return array_values(array_filter($registry->executable(), fn (Rule $rule): bool => ! $this->admits($rule)));
     }
 
-    private function admits(Rule $rule): bool
+    /**
+     * The same decision for something that carries a level and a category without being a rule: an
+     * external tool's finding, or an id its map describes.
+     */
+    public function admitsAt(Level $level, Category $category): bool
     {
-        if ($this->active->includes($rule->level())) {
+        if ($this->active->includes($level)) {
             return true;
         }
 
-        return in_array($rule->category(), self::SEVERITY_GATED, true);
+        return in_array($category, self::SEVERITY_GATED, true);
+    }
+
+    private function admits(Rule $rule): bool
+    {
+        return $this->admitsAt($rule->level(), $rule->category());
     }
 }

@@ -5,11 +5,16 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Tools\Pgls;
 
 use Illuminate\Contracts\Config\Repository as Config;
+use Pushery\SQLens\Catalog\ReaderConnectionFactory;
+use Pushery\SQLens\Categories\CategoryFilter;
 use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Findings\Finding;
+use Pushery\SQLens\Levels\Level;
+use Pushery\SQLens\Levels\LevelGate;
 use Pushery\SQLens\Subjects\SubjectContext;
 use Pushery\SQLens\Tools\ToolContribution;
 use Pushery\SQLens\Tools\ToolDiagnostic;
+use Pushery\SQLens\Tools\ToolFindingGate;
 
 /**
  * Folds the Postgres Language Server's schema findings into an audit run.
@@ -46,13 +51,18 @@ final readonly class PglsContribution implements ToolContribution
         private PglsFindingMapper $mapper,
         private PglsRuleMap $map,
         private Config $config,
+        /**
+         * Where the configured session bounds come from, so the tool's sessions run under the ones
+         * the catalog reader's do. Null leaves the invocation on the shipped defaults.
+         */
+        private ?ReaderConnectionFactory $readers = null,
     ) {}
 
     /**
      * @param  list<Finding>  $own  the findings the run's own rules produced
      * @return list<Finding>
      */
-    public function contribute(array $own, ToolDiagnostic $diagnostic, string $connectionName, SubjectContext $context, ?string $pinnedHost = null): array
+    public function contribute(array $own, ToolDiagnostic $diagnostic, string $connectionName, SubjectContext $context, ?string $pinnedHost = null, ToolFindingGate $gate = new ToolFindingGate(new LevelGate(Level::Pedantic), new CategoryFilter([]))): array
     {
         // An unavailable tool is already reported by the run's missing-tool notice, which says what
         // it would have added and why it did not run. A second sentence here would be the same
@@ -78,7 +88,7 @@ final readonly class PglsContribution implements ToolContribution
             )];
         }
 
-        $result = $this->runner->run($diagnostic->path, new PglsInvocation($connection, $this->timeout(), $connectionName));
+        $result = $this->runner->run($diagnostic->path, new PglsInvocation($connection, $this->timeout(), $connectionName, $this->readers?->budget()));
 
         if (! $result->produced()) {
             return [...$own, $this->mapper->unavailable(
@@ -104,7 +114,22 @@ final readonly class PglsContribution implements ToolContribution
         // the agreement becomes a CONFIRMATION on ours and the duplicate goes — a reader handed the
         // same advice twice starts skimming, and the next thing they skim is the finding they had
         // not seen. Our own findings are never dropped or changed by anything the tool said.
-        return new PglsDeduplicator($version)->merge($own, $mapped)->all();
+        return new PglsDeduplicator($version)->merge($own, $gate->apply($mapped))->all();
+    }
+
+    /**
+     * Every id the catalog maps when the gate leaves security out, and none otherwise: each verdict
+     * of this adapter has the same category and level.
+     *
+     * @return list<string>
+     */
+    public function unaskedIds(ToolFindingGate $gate): array
+    {
+        if ($gate->asks(PglsFindingMapper::LEVEL, PglsFindingMapper::CATEGORY)) {
+            return [];
+        }
+
+        return array_map(static fn (string $rule): string => PglsFindingMapper::ID_PREFIX.$rule, $this->map->ruleNames());
     }
 
     /**

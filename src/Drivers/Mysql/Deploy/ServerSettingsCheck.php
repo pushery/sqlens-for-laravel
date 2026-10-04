@@ -6,7 +6,6 @@ namespace Pushery\SQLens\Drivers\Mysql\Deploy;
 
 use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Canonical\StatementTarget;
-use Pushery\SQLens\Canonical\StringLiteralMask;
 use Pushery\SQLens\Capture\CapturedStatement;
 use Pushery\SQLens\Catalog\ReaderConnectionFactory;
 use Pushery\SQLens\Catalog\Setting;
@@ -15,7 +14,6 @@ use Pushery\SQLens\Contracts\PreflightCheck;
 use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\DeployNotice;
 use Pushery\SQLens\Deploy\PreflightContext;
-use Pushery\SQLens\Drivers\Mysql\Canonical\MysqlCanonicalization;
 use Pushery\SQLens\Drivers\Mysql\Catalog\MysqlServerSettingsReader;
 use Pushery\SQLens\Drivers\Mysql\Rules\L3\Support\MetadataLockStatements;
 use Pushery\SQLens\Drivers\Mysql\Rules\Support\SqlModeFlags;
@@ -101,18 +99,8 @@ final readonly class ServerSettingsCheck implements PreflightCheck
 {
     public const string ID = 'DEPLOY.CONTEXT.SETTING';
 
-    /**
-     * How long a lock wait stops being a wait and becomes an outage, in seconds.
-     *
-     * A DECLARED expectation rather than a measured one, and it is declared here so it is arguable.
-     * MySQL ships `lock_wait_timeout = 31536000` — one year — which at deploy time is
-     * indistinguishable from waiting forever. An hour is the line: past it, the deploy has already
-     * failed in every way that matters to whoever is watching it, and the metadata lock it is
-     * holding has been blocking every DDL behind it for that entire time.
-     *
-     * @see https://dev.mysql.com/doc/refman/8.4/en/server-system-variables.html
-     */
-    private const int LOCK_WAIT_CEILING_SECONDS = 3600;
+    /** The hour past which a lock wait is an outage, declared once for the lint rule and this check. */
+    private const int LOCK_WAIT_CEILING_SECONDS = MetadataLockStatements::SESSION_WAIT_CEILING_SECONDS;
 
     /**
      * MySQL's shipped `innodb_online_alter_log_max_size`, in bytes (128 MiB).
@@ -350,7 +338,7 @@ final readonly class ServerSettingsCheck implements PreflightCheck
                 .'its session sets a `lock_wait_timeout` of at most an hour.',
                 $this->tablesOf($unbounded),
             );
-        } elseif (! $context->pending->statementsComplete) {
+        } elseif (! $context->pending->readInFull()) {
             $premise = ' A migration is about to run under it, and the statements handed to this check are '
                 .'not all the deploy runs, so nothing here can say whether it sets its own bound first.';
         } else {
@@ -419,10 +407,12 @@ final readonly class ServerSettingsCheck implements PreflightCheck
                 continue;
             }
 
-            $seconds = $this->sessionLockWaitIn($statement->canonicalSql);
+            // The same reading MY.L3.MISSING_LOCK_WAIT_TIMEOUT takes of the same statement, so the
+            // preflight and the lint never answer one SET two ways.
+            $setting = MetadataLockStatements::sessionTimeoutIn($statement->canonicalSql, 'lock_wait_timeout');
 
-            if ($seconds !== null) {
-                $bounded[$statement->connectionName] = $seconds <= self::LOCK_WAIT_CEILING_SECONDS;
+            if ($setting !== null) {
+                $bounded[$statement->connectionName] = $setting['seconds'] !== null && $setting['seconds'] <= self::LOCK_WAIT_CEILING_SECONDS;
 
                 continue;
             }
@@ -455,22 +445,6 @@ final readonly class ServerSettingsCheck implements PreflightCheck
         }
 
         return [$first, $locking];
-    }
-
-    /**
-     * The seconds a statement bounds its own session's `lock_wait_timeout` to, or null when it sets none.
-     *
-     * `SET SESSION lock_wait_timeout = 5`, and the same without the keyword or through `@@`. Not
-     * `SET GLOBAL`: that changes what later connections start with, and the session that ran it keeps
-     * its own value. A value that is not a plain number is no bound this check can read.
-     */
-    private function sessionLockWaitIn(string $canonical): ?int
-    {
-        $masked = StringLiteralMask::forDriver(new MysqlCanonicalization)->apply($canonical);
-
-        return preg_match('/^SET\s+(?:SESSION\s+|LOCAL\s+|@@SESSION\.|@@LOCAL\.|@@)?lock_wait_timeout\s*(?::=|=)\s*(\d+)\s*(?:,|$)/i', $masked, $matches) === 1
-            ? (int) $matches[1]
-            : null;
     }
 
     /** The tables a statement names, for a message: `orders`, or `orders` and `customers`. */

@@ -23,4 +23,9 @@ final readonly class PgsqlBindingFormatter implements BindingFormatter
     {
         return 'Y-m-d H:i:s';
     }
+
+    public function binaryLiteral(string $bytes): string
+    {
+        return "'\\x".bin2hex($bytes)."'::bytea";
+    }
 }

@@ -47,18 +47,26 @@ final readonly class PglsTool implements Tool
     public const string MINIMUM_VERSION = '0.25.7';
 
     /**
-     * Exclusive ceiling — the next MINOR, not the next major, and that is a deliberate narrowing.
+     * Exclusive ceiling — the minor after the last one measured, not the next major, and that is a
+     * deliberate narrowing.
      *
      * The usual rule (a tool may change its output at a major) assumes the tool has had a 1.0 to
      * make that promise at. This one has not: at 0.x the version number carries no compatibility
      * commitment at all, so "anything below 1.0" would admit every future release of a program
      * that is still entitled to rename its rules between minors.
      *
+     * 0.26.0 was measured against the same probe database as the minimum: it executes the
+     * identical splinter catalog, byte for byte, answers in the identical report shape with the
+     * identical findings, prints the identical `--version` line, and answers an unreachable server
+     * in the identical plain text. So the window reaches through the 0.26 line, and the catalog in
+     * {@see PglsRuleMap} still names its measurement as the minimum. The next minor is a new
+     * measurement, not a number to move.
+     *
      * When 1.0 arrives, this bound is a decision to make again — not a number to carry forward by
      * pattern. The tool will have started promising something, and what it promises is what the
      * window should be drawn from.
      */
-    public const string BELOW_VERSION = '0.26.0';
+    public const string BELOW_VERSION = '0.27.0';
 
     /**
      * The exact shape of the measured `--version` line: `Version: 0.25.7`.
@@ -68,7 +76,7 @@ final readonly class PglsTool implements Tool
      * it at all. Anchored at both ends, so a line this adapter does not recognize is reported as
      * unreadable rather than mined for the first number in it.
      *
-     * A pre-release (`0.26.0-rc.1`) fails it, and that is the intended direction: an unreleased
+     * A pre-release (`0.27.0-rc.1`) fails it, and that is the intended direction: an unreleased
      * build is precisely the one whose output nobody has measured.
      */
     private const string VERSION_LINE = '/^Version: (\d+\.\d+\.\d+)$/';

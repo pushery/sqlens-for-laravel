@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Deploy;
 
 use Pushery\SQLens\Capture\CapturedStatement;
+use Pushery\SQLens\Subjects\MigrationDirection;
 
 /**
  * The migrations this deploy is about to run, as the preflight sees them.
@@ -39,5 +40,22 @@ final readonly class PendingWork
     public function isEmpty(): bool
     {
         return $this->files === [];
+    }
+
+    /**
+     * Whether a check may conclude from what the statements do not contain: every pending migration
+     * was captured, and every `up()` statement handed over was read into canonical form.
+     *
+     * A capture that passes carries no statement it could not canonicalize, so in a run the second
+     * half holds whenever the first does. It is asked anyway, because a check that concluded "nothing
+     * here waits" from a statement it never read would be answering for something it did not see.
+     * Only `up()` runs at deploy time, so a rollback statement decides nothing here.
+     */
+    public function readInFull(): bool
+    {
+        return $this->statementsComplete && array_all(
+            $this->statements,
+            static fn (CapturedStatement $statement): bool => $statement->direction !== MigrationDirection::Up || $statement->canonicalSql !== null,
+        );
     }
 }

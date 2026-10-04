@@ -1473,13 +1473,19 @@
                 "type": "doc",
                 "url": "https://www.postgresql.org/docs/18/runtime-config-logging.html#GUC-LOG-STATEMENT",
                 "applies_to": "PostgreSQL 18",
-                "note": "log_statement is documented as taking none, ddl, mod and all, and as logging the statement TEXT. Cited for which two of the four reach values: ddl and none carry no row data and are not reported."
+                "note": "log_statement is documented as taking none, ddl, mod and all, and as logging the statement TEXT. Cited for which of the four reach row values: all and mod, which are reported. ddl logs data definition statements only, as their full text, so it carries no row values and still carries a PASSWORD clause; none logs nothing. Neither is reported."
             },
             {
                 "type": "doc",
                 "url": "https://www.postgresql.org/docs/18/sql-createrole.html",
                 "applies_to": "PostgreSQL 18",
-                "note": "CREATE ROLE documents PASSWORD as part of the statement. That is the whole basis of the secrets half: PostgreSQL does not rewrite it before logging the way MySQL rewrites some statements for its error log, so at log_statement = all or mod the password is in the file verbatim."
+                "note": "CREATE ROLE documents PASSWORD as part of the statement. That is the whole basis of the secrets half: PostgreSQL does not rewrite it before logging the way MySQL rewrites some statements for its error log, so at log_statement = all, mod or ddl the password is in the file verbatim. CREATE ROLE and ALTER ROLE are data definition statements, which is why ddl is in that list."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/app-psql.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "psql's \\password prompts for the new password, encrypts it on the client and sends it as an ALTER ROLE, documented as keeping the password out of the server log. It is the remedy the message names for ddl: the statement then carries a SCRAM verifier, which the server stores as given."
             }
         ],
         "SEC.CFG.TLS_DISABLED": [

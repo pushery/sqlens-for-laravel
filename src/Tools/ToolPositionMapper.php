@@ -78,7 +78,9 @@ final readonly class ToolPositionMapper
             statementIndex: $statement->origin->statementIndex,
             direction: $statement->origin->direction,
             targets: $statement->targets,
-            excerpt: Fingerprint::of($statement),
+            // The identity variant, as for a rule's own finding: the two must agree on which
+            // statement a finding is about, across an upgrade of the canonical form too.
+            excerpt: Fingerprint::forFindingIdentity($statement),
         ));
     }
 

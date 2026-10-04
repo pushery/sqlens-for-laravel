@@ -33,11 +33,18 @@ final readonly class StatementClassificationProfile
      *                                       `ALGORITHM` and `LOCK`: they qualify every action of the
      *                                       statement and do nothing of their own, so they are not
      *                                       classified as one
+     * @param  list<string>  $unreservedNames  the keywords, upper case, that the server accepts as an
+     *                                         unquoted table, column, index or constraint name, such
+     *                                         as PostgreSQL's `type` or MySQL's `date`. A position that
+     *                                         takes a name reads one of these as the name it is. Empty
+     *                                         keeps every keyword out of a name, so a statement naming
+     *                                         an object after one stays undetermined
      */
     public function __construct(
         public array $signatures,
         public array $modifiers,
         public array $leadFallback,
         public array $actionOptions = [],
+        public array $unreservedNames = [],
     ) {}
 }

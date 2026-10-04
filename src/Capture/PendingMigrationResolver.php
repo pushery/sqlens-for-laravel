@@ -93,29 +93,27 @@ final readonly class PendingMigrationResolver implements PendingResolver
         // forget what it cannot construct without.
         //
         // After the reachability check and before the first catalog read, which is the only correct
-        // window rather than a stylistic choice. `bind()` writes with `Connection::statement()`,
+        // window rather than a stylistic choice. The bound writes with `Connection::statement()`,
         // which throws on an unreachable server — binding above would turn the named
         // `ConnectionUnreachable` skip into a stack trace, replacing the specific answer with a
-        // crash. Below it are the three reads this bounds.
+        // crash. Inside it are the three reads this bounds.
         //
         // Nesting is safe by construction, which is what lets the lint path keep its own outer
-        // bound: `bind()` snapshots whatever it finds and restores exactly that, so an inner bind
-        // over an identical outer one restores the outer value rather than the pre-run one.
-        $release = $this->sessionGuard->bind($target);
-
-        try {
-            return $this->resolveBounded($target, $connection);
-        } finally {
-            $release();
-        }
+        // bound. On MySQL the guard snapshots whatever it finds and restores exactly that, so an
+        // inner bound over an identical outer one restores the outer value rather than the pre-run
+        // one. On PostgreSQL the inner window is a savepoint, and rolling back to it puts the outer
+        // `SET LOCAL` back.
+        return $this->sessionGuard->within(
+            $target,
+            fn (): PendingResolution => $this->resolveBounded($target, $connection),
+        );
     }
 
     /**
      * The reads themselves, with the session already bounded by {@see self::resolve()}.
      *
-     * Split out for the `finally` rather than for length: every exit below — three named skips and
-     * the resolved list — has to release the bound, and a single return point is the only way that
-     * is true of a path somebody adds later too.
+     * Split out so the whole set runs inside the guard's window: every exit below — three named
+     * skips and the resolved list — happens inside it, and a path somebody adds later does too.
      */
     private function resolveBounded(Connection $target, string $connection): PendingResolution
     {

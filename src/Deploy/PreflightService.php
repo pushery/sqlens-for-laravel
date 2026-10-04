@@ -230,7 +230,9 @@ final readonly class PreflightService implements PreflightRuns
             // The lint half's book rides along with its findings: what it hid, so the report does not
             // read as though nothing was hidden, and its stale baseline entries, which under
             // `sqlens.baseline.stale = error` are what stops the deploy.
-            Result::of([...$escalation->weighed, ...$report->findings(), ...$escalation->unweighed], $lint->result->suppressed, $lint->result->staleBaselineEntries),
+            // A check that could not answer stands in the result as an undetermined finding of its
+            // own, beside what the checks found, or the document has no trace of what held it.
+            Result::of([...$escalation->weighed, ...$report->findings(), ...$report->undeterminedGaps($context->driver, $context->connection, $context->profile), ...$escalation->unweighed], $lint->result->suppressed, $lint->result->staleBaselineEntries),
             // `pretend`, because that is what this run DID: it lints the pending migrations with
             // Laravel's --pretend and then reads the catalog. The header used to say whatever
             // `sqlens.mode` held, for a run that never consulted it.

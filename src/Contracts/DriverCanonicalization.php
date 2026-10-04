@@ -49,7 +49,10 @@ interface DriverCanonicalization
 
     /**
      * The comment syntaxes the splitter must skip — e.g. `--` and `/*` for both
-     * engines, plus `#` for MySQL.
+     * engines, plus `#` for MySQL. An opener is matched literally, so an engine that
+     * needs a particular character after one lists each form it accepts: MySQL's `--`
+     * opens a comment only before whitespace, and it is declared as `-- `, `--\t` and
+     * the other whitespace forms rather than as `--`.
      *
      * @return list<string>
      */
@@ -78,9 +81,17 @@ interface DriverCanonicalization
      * Whether a backslash escapes the next character inside a string literal
      * (MySQL, by default) or is a literal backslash (PostgreSQL standard strings).
      * The splitter needs this to find where a literal ends; both engines also
-     * accept a doubled quote (`''`).
+     * accept a doubled quote (`''`). An escape string, `E'…'`, reads backslash
+     * escapes either way.
      */
     public function usesBackslashStringEscapes(): bool;
+
+    /**
+     * Whether a block comment nests (PostgreSQL), so a comment opened inside one
+     * needs a close of its own, or ends at its first closing marker (MySQL, which
+     * refuses the rest as a syntax error).
+     */
+    public function nestsBlockComments(): bool;
 
     /**
      * The character that opens a CLIENT directive at the start of a line, or `''`
