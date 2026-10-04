@@ -51,9 +51,26 @@ final readonly class SecretLiteralMask
     private const array SECRET_PATTERNS = [
         // PASSWORD '…' / PASSWORD "…" — CREATE USER, ALTER ROLE, ALTER USER, CREATE ROLE. The
         // optional ENCRYPTED is PostgreSQL's second spelling of the same clause.
-        '/(\bPASSWORD\s+)(\'[^\']*\'|"[^"]*")/i',
+        //
+        // Every quoted literal below is read to its real end: a doubled quote is the one escape both
+        // engines know, and a backslash escapes the next character in MySQL. A literal read to the
+        // first quote instead stopped inside `'it''s-a-secret'` and printed the rest.
+        '/(\bPASSWORD\s+)('.self::LITERAL.')/i',
         // MySQL: IDENTIFIED BY '…' and IDENTIFIED WITH … BY '…'.
-        '/(\bIDENTIFIED\s+(?:WITH\s+\S+\s+)?BY\s+)(\'[^\']*\'|"[^"]*")/i',
+        '/(\bIDENTIFIED\s+(?:WITH\s+\S+\s+)?BY\s+)('.self::LITERAL.')/i',
+        // MySQL: IDENTIFIED WITH plugin AS '…' — the stored hash itself, which for
+        // `mysql_native_password` is an unsalted SHA1 of the SHA1 and cracks like a password.
+        '/(\bIDENTIFIED\s+WITH\s+\S+\s+AS\s+)('.self::LITERAL.')/i',
+        // MySQL: … IDENTIFIED BY '…' REPLACE '…' and SET PASSWORD = '…' REPLACE '…' — the CURRENT
+        // password, given to authorize the change. No other statement puts a literal right after
+        // the keyword: REPLACE INTO, replace(…) and CREATE OR REPLACE are followed by something else.
+        '/(\bREPLACE\s+)('.self::LITERAL.')/i',
+        // An assignment to a password option: SOURCE_PASSWORD = '…' and MASTER_PASSWORD = '…' in
+        // CHANGE REPLICATION SOURCE, PASSWORD = '…' in START REPLICA.
+        '/(\b\w*PASSWORD\s*=\s*)('.self::LITERAL.')/i',
+        // The same key unquoted, as libpq conninfo writes it inside a literal of its own:
+        // CREATE SUBSCRIPTION … CONNECTION 'host=… password=…', dblink_connect('… password=…').
+        '/(\b\w*PASSWORD\s*=\s*)([^\s\'";,)]+)/i',
         // The unquoted MySQL form, ended by whitespace, a semicolon or a closing paren.
         //
         // `RANDOM PASSWORD` is excluded, and the exclusion is not cosmetic. It is MySQL 8's
@@ -68,11 +85,21 @@ final readonly class SecretLiteralMask
         '/(\bIDENTIFIED\s+BY\s+)(?!RANDOM\s+PASSWORD\b)([^\s;\'")]+)/i',
         // MySQL's assignment form — `SET PASSWORD FOR … = '…'`. The `PASSWORD` pattern above does
         // not reach it: the keyword is followed by `FOR`, not by the literal.
-        '/(\bSET\s+PASSWORD\b[^=]*=\s*)(\'[^\']*\'|"[^"]*")/i',
+        '/(\bSET\s+PASSWORD\b[^=]*=\s*)('.self::LITERAL.')/i',
         // A DSN or URL carrying `user:password@` — the shape a connection string takes wherever it
-        // is written down, including inside a migration that builds one.
-        '/(\b[a-z][a-z0-9+.-]*:\/\/[^\s:\/@]+:)([^\s@]+)(@)/i',
+        // is written down, including inside a migration that builds one. The user may be empty, as
+        // in `redis://:…@cache`, and the password runs to the LAST `@` before the host, because a
+        // password with an unencoded `@` in it is common and a host never contains one.
+        '/(\b[a-z][a-z0-9+.-]*:\/\/[^\s:\/@]*:)([^\s\/]*)(@)(?=[^\s@\/]*(?:[\/\s\'"?#]|$))/i',
     ];
+
+    /**
+     * A quoted literal read to its real end, in either quote: a doubled quote is an escaped one in
+     * both engines, and a backslash escapes the next character in MySQL. Taking a PostgreSQL
+     * backslash for an escape can only run a match on past the literal, never stop it short, which
+     * is the direction a mask may err in.
+     */
+    private const string LITERAL = '\'(?:[^\'\\\\]|\'\'|\\\\.)*\'|"(?:[^"\\\\]|""|\\\\.)*"';
 
     /** The text with every credential literal replaced, and everything else untouched. */
     public static function in(string $text): string

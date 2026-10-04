@@ -113,11 +113,11 @@ costs it always looks small and reasonable on the day it is added. So there is n
 allowance list and no suppression comment. If the rule is in the way, the design is
 what needs to change.
 
-Two arch tests enforce it, and both report the exact file and line:
+Two architecture tests enforce it, and both report the exact file and line:
 
-- `tests/Unit/DriverIsolationArchTest.php` — neither driver namespace references
-  the other, in either direction.
-- `tests/Unit/CorePurityArchTest.php` — the core references no concrete driver AND
+- **Driver isolation** — neither driver namespace references the other, in either
+  direction.
+- **Core purity** — the core references no concrete driver AND
   carries no engine vocabulary (`pg_catalog`, `information_schema`,
   `CONCURRENTLY`, …) in a string literal. The second half matters on its own:
   a core that never imports a driver but embeds a catalog name is engine-specific
@@ -403,12 +403,12 @@ instead of leaving the gate to compare against an older release.
 ## Fixture pairs
 
 Every rule is held by a **pair**: a migration that must make it fire and one that must
-keep it silent. Both live in one directory named after the rule id, lowercased with dots
-turned into dashes — the same slug the rule's documentation URL uses, so one id has one
-slug everywhere:
+keep it silent. Both live in one directory of the engine suite's fixtures, named after the
+rule id, lowercased with dots turned into dashes — the same slug the rule's documentation URL
+uses, so one id has one slug everywhere:
 
 ```text
-tests/Postgres/Fixtures/pg-l2-concurrently/
+Fixtures/pg-l2-concurrently/
     bad.php          the migration the rule must flag
     good.php         the same intent, done safely — it must produce NO finding
     expected.json    exactly what bad.php produces
@@ -506,9 +506,9 @@ restating them; that direction still holds, and the reverse would have been a mi
 
 ### What keeps it honest
 
-`tests/Support/LandingCopyBlocks.php` is the register: one entry per block, naming the heading it
-lives under, a **marker** phrase lifted from the copy itself, and whether it is written yet.
-`tests/Feature/Docs/LandingCopyBlocksTest.php` holds it to that in **both** directions — a written
+A register in the test suite holds one entry per block, naming the heading it lives under, a
+**marker** phrase lifted from the copy itself, and whether it is written yet. A test holds the
+register to that in **both** directions — a written
 block must still carry its marker, and a block registered as pending must still be absent. The
 second half is what stops the register going stale the day somebody writes the missing copy.
 

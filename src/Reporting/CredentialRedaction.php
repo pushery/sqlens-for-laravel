@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Reporting;
 
 use Illuminate\Contracts\Config\Repository;
+use InvalidArgumentException;
+use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Security\SecretLiteralMask;
 use Throwable;
 
@@ -137,26 +139,17 @@ final readonly class CredentialRedaction
                 continue;
             }
 
-            // The read/write split nests its credentials, so this loop reads both blocks as well as
-            // the top level. Laravel lets a connection carry `read` and `write` blocks, each able to
-            // override `host`, `username`, `password`, `database` and `port`. A replica's password
-            // therefore lives at `database.connections.pgsql.read.password`, and it is the one
-            // credential most likely to differ from the primary's.
-            //
-            // This package is pointed at production and reports what it read; a report is pasted into
-            // a ticket. Reading only the top level would make the redaction weakest exactly where the
-            // topology is most complicated.
-            foreach ([$connection, $connection['read'] ?? null, $connection['write'] ?? null] as $scope) {
-                if (! is_array($scope)) {
-                    continue;
-                }
-
+            foreach ($this->scopesOf($connection) as $scope) {
                 foreach ($fields as $field) {
                     // A host can be a list. Laravel accepts `'host' => ['replica-1', 'replica-2']`
                     // and picks one per request, so an `is_string()` test on its own would skip every
                     // host of every multi-host connection — silently, because a skipped value looks
                     // exactly like a connection that configured none.
                     foreach (is_array($scope[$field] ?? null) ? $scope[$field] : [$scope[$field] ?? null] as $value) {
+                        // A number counts as well: the framework's URL parser turns a password of
+                        // digits into an integer, and the driver still quotes it as text.
+                        $value = is_int($value) || is_float($value) ? (string) $value : $value;
+
                         // Short values are left alone: removing a host called `db` would blank out the
                         // letters `db` wherever they appeared, including inside the word a reader needed.
                         // Four characters is the floor at which a value is distinctive enough to be worth
@@ -175,5 +168,52 @@ final readonly class CredentialRedaction
         usort($unique, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
 
         return $unique;
+    }
+
+    /**
+     * Every place a connection keeps the values it connects with.
+     *
+     * The read/write split nests its credentials, so the blocks are read as well as the top level.
+     * Laravel lets each block override `host`, `username`, `password`, `database` and `port`, and a
+     * replica's password is the one credential most likely to differ from the primary's. A block is
+     * written in one of two shapes: a single set of keys, or a LIST of them the framework picks from
+     * at random, where the values sit one level deeper. This package is pointed at production and
+     * reports what it read, and a report is pasted into a ticket; reading one shape only would make
+     * the redaction weakest exactly where the topology is most complicated.
+     *
+     * Each place is read a second time with its `url` taken apart. On a `url` connection the URL's
+     * parts are the values the framework connects with, and a driver's message quotes them one by
+     * one; masking the URL as a whole string leaves every one of them in the message. A URL the
+     * framework cannot parse either is still masked whole, and taking it apart is skipped rather
+     * than allowed to stop the message from being redacted at all.
+     *
+     * @param  array<array-key, mixed>  $connection
+     * @return list<array<array-key, mixed>>
+     */
+    private function scopesOf(array $connection): array
+    {
+        $scopes = [$connection];
+
+        foreach ([$connection['read'] ?? null, $connection['write'] ?? null] as $block) {
+            foreach (is_array($block) && array_is_list($block) ? $block : [$block] as $entry) {
+                if (is_array($entry)) {
+                    $scopes[] = $entry;
+                }
+            }
+        }
+
+        foreach ($scopes as $scope) {
+            if (! is_string($scope['url'] ?? null)) {
+                continue;
+            }
+
+            try {
+                $scopes[] = EffectiveConnectionConfig::withoutUrl($scope);
+            } catch (InvalidArgumentException) {
+                continue;
+            }
+        }
+
+        return $scopes;
     }
 }

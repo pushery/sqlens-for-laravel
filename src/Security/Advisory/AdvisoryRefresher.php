@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Security\Advisory;
 
 use Illuminate\Contracts\Config\Repository as Config;
 use Illuminate\Http\Client\Factory;
+use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\PackageVersion;
 use Throwable;
 
@@ -94,6 +95,10 @@ final readonly class AdvisoryRefresher
     /** The bytes the source served, or the refusal that explains why there are none. */
     private function fetch(string $source): AdvisoryRefreshOutcome|string
     {
+        // The source as these messages may show it. A private source can authenticate only in its
+        // URL, the request carries no other credential, and the message is printed into a CI log.
+        $shown = new CredentialRedactor()->url($source);
+
         try {
             $response = $this->http
                 ->timeout(self::TIMEOUT_SECONDS)
@@ -107,19 +112,25 @@ final readonly class AdvisoryRefresher
                 // able to tell which tool asked, and a version makes a report about a bad response
                 // actionable.
                 ->withHeaders(['User-Agent' => 'pushery/sqlens-for-laravel '.PackageVersion::forUserAgent()])
+                // `https only` holds for the whole way, not only for the configured address. The
+                // client follows redirects to plain http by default, and a source, or a CDN in front
+                // of it, that sends one would hand this baseline over the wire unprotected.
+                ->withOptions(['allow_redirects' => ['max' => 5, 'protocols' => ['https']]])
                 ->get($source);
         } catch (Throwable $exception) {
             return AdvisoryRefreshOutcome::refused(sprintf(
                 'the advisory source "%s" could not be reached, so the existing file is unchanged: %s',
-                $source,
-                $exception->getMessage(),
+                $shown,
+                // The client's own message can name the URL as well, in whatever form its version
+                // chose to print it.
+                str_replace($source, $shown, $exception->getMessage()),
             ));
         }
 
         if ($response->failed()) {
             return AdvisoryRefreshOutcome::refused(sprintf(
                 'the advisory source "%s" answered %d, so the existing file is unchanged',
-                $source,
+                $shown,
                 $response->status(),
             ));
         }

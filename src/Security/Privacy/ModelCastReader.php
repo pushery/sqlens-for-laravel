@@ -178,18 +178,10 @@ final class ModelCastReader
                 continue;
             }
 
-            $narrowed = [];
-
-            foreach ($casts as $attribute => $cast) {
-                // Narrowed explicitly rather than cast wholesale: a cast declaration that is not a
-                // string is not one this class can reason about, and turning it into one with
-                // strval() would invent a name to compare against the family.
-                if (is_string($attribute) && is_string($cast)) {
-                    $narrowed[$attribute] = $cast;
-                }
-            }
-
-            $index[$table][$class] = $narrowed;
+            // Taken whole: `getCasts()` answers attribute name => cast name, both strings. The
+            // framework folds an array or a Stringable cast object into its string form when the
+            // model initializes, and reads every cast as a string from there on.
+            $index[$table][$class] = $casts;
         }
 
         return $this->index = $index;

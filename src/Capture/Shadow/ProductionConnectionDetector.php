@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Capture\Shadow;
 
 use Illuminate\Contracts\Config\Repository;
+use Pushery\SQLens\Audit\ReadTopology;
 use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 
 /**
@@ -13,7 +14,9 @@ use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
  *
  * It is a HEURISTIC and says so. There is no field in a Laravel connection that
  * declares "this is production", so the answer is read off the names a project
- * actually uses: the connection name and the database name. That means it can be
+ * actually uses: the connection name, the database name, and the host. The host is
+ * not optional: the commonest Laravel setup keeps one database name in every
+ * environment and tells production apart by `DB_HOST` alone. That means it can be
  * wrong, and the direction it is allowed to be wrong in is fixed: a false POSITIVE
  * costs a developer a refused shadow run, while a false NEGATIVE would let a mode
  * that creates and drops databases loose on production. So the markers are matched
@@ -39,7 +42,7 @@ final readonly class ProductionConnectionDetector
 {
     /**
      * The substrings that mark a name as production. Matched case-insensitively
-     * against both the connection name and the database name, on word-ish
+     * against the connection name, the database name and every host, on word-ish
      * boundaries so `production_replica` and `acme-prod` match while `reproduce`
      * and `probe` do not — a marker has to be a segment of the name, not a
      * coincidence inside a longer word.
@@ -108,17 +111,33 @@ final readonly class ProductionConnectionDetector
             return ['name' => $connection, ...$match];
         }
 
+        $configured = $this->config->get('database.connections.'.$connection);
+
         // The database the connection reaches, which on a `url`-configured connection is the URL's
         // path rather than the `database` key beside it.
-        $database = EffectiveConnectionConfig::for($this->config->get('database.connections.'.$connection))['database'] ?? null;
+        $database = EffectiveConnectionConfig::for($configured)['database'] ?? null;
+        $match = is_string($database) ? $this->markerIn($database) : null;
 
-        if (! is_string($database)) {
-            return null;
+        if ($match !== null) {
+            return ['name' => $database, ...$match];
         }
 
-        $match = $this->markerIn($database);
+        // Every host it reaches: the write side's after the URL is resolved, and each one a `read`
+        // block offers, because a replica of production is production for the question asked here.
+        $hosts = [
+            ...ReadTopology::of(EffectiveConnectionConfig::for($configured))->hosts,
+            ...ReadTopology::of(EffectiveConnectionConfig::withoutUrl($configured))->hosts,
+        ];
 
-        return $match === null ? null : ['name' => $database, ...$match];
+        foreach ($hosts as $host) {
+            $match = $this->markerIn($host);
+
+            if ($match !== null) {
+                return ['name' => $host, ...$match];
+            }
+        }
+
+        return null;
     }
 
     /**

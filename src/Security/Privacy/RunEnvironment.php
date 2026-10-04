@@ -30,8 +30,8 @@ use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
  *    that set `APP_ENV=production` has said the thing outright, and a local copy of a production
  *    dump under `APP_ENV=local` is a developer's database whatever it is called.
  * 2. **What the names suggest** — the existing {@see ProductionConnectionDetector}, reused rather
- *    than reimplemented. It reads the connection and database names, and it is a heuristic that
- *    says so: it may say yes and never no.
+ *    than reimplemented. It reads the connection name, the database name and the hosts, and it is
+ *    a heuristic that says so: it may say yes and never no.
  * 3. **What the environment declares about the server** — `sqlens.security.server.lifetime`. A
  *    server declared `disposable` is one the pipeline creates and destroys, which is a statement
  *    about the server itself rather than about whoever launched the run.

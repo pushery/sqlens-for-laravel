@@ -53,13 +53,21 @@ use Throwable;
  */
 final readonly class ShadowCaptor implements Captor
 {
+    /**
+     * @param  string  $provisioningConnection  The connection the throwaway databases are built on,
+     *                                          as {@see ShadowProvisioningConnection} names it, and so
+     *                                          the one both probes ask: a replica there refuses the
+     *                                          CREATE DATABASE, a pooler there breaks the template
+     *                                          operations. Once a shadow or a direct connection is
+     *                                          configured, it is not the connection being examined.
+     */
     public function __construct(
         private GuardDecision $decision,
         private ?ShadowProvisioner $provisioner,
         private ShadowRunner $runner,
         private bool $keepOnFailure = false,
         private ?ReplicaProbe $replicaProbe = null,
-        private string $connectionName = '',
+        private string $provisioningConnection = '',
         private ?PoolerProbe $poolerProbe = null,
         private bool $hasDirectConnection = false,
         private bool $directConnectionElsewhere = false,
@@ -103,33 +111,35 @@ final readonly class ShadowCaptor implements Captor
             return $this->allUndetermined($pending, $section, UndeterminedReason::ShadowConnectionCollides);
         }
 
-        // A read replica has a different state than its primary and forbids the
-        // writes provisioning needs. Detected BEFORE any database is created, so a
-        // replica target is a named undetermined, never a run against the wrong
-        // instance. The probe is a read; when none is wired, there is nothing to
-        // detect and the flow proceeds.
-        if ($this->replicaProbe instanceof ReplicaProbe && $this->replicaProbe->isReplica($this->connectionName)) {
-            return $this->allUndetermined($pending, $section, UndeterminedReason::TargetIsReplica);
-        }
-
-        // A direct connection pointed at ANOTHER server is refused before the pooler
-        // question is even asked, because it is the more dangerous of the two: a pooled
-        // source costs a failed run, while provisioning on an instance nobody named
-        // creates and drops databases somewhere the operator is not looking. Decided
-        // from configuration alone — no connection is opened to find out, so the check
-        // cannot itself become a reason the run stops.
+        // A direct connection pointed at ANOTHER server is refused before either probe is
+        // asked, because it is the more dangerous of the two: a pooled source costs a failed
+        // run, while provisioning on an instance nobody named creates and drops databases
+        // somewhere the operator is not looking. Decided from configuration alone — no
+        // connection is opened to find out, so the check cannot itself become a reason the
+        // run stops. Ahead of the replica probe for the reason the collision check is: the
+        // probe opens the connection provisioning would use, and that is the server this
+        // refusal is about.
         if ($this->directConnectionElsewhere) {
             return $this->allUndetermined($pending, $section, UndeterminedReason::ShadowDirectConnectionElsewhere);
         }
 
+        // A read replica has a different state than its primary and forbids the
+        // writes provisioning needs. Detected BEFORE any database is created, so a
+        // replica target is a named undetermined, never a run against the wrong
+        // instance. The probe asks the connection provisioning runs on, and is a read;
+        // when none is wired, there is nothing to detect and the flow proceeds.
+        if ($this->replicaProbe instanceof ReplicaProbe && $this->replicaProbe->isReplica($this->provisioningConnection)) {
+            return $this->allUndetermined($pending, $section, UndeterminedReason::TargetIsReplica);
+        }
+
         // A transaction pooler (PgBouncer) breaks the template operations
         // provisioning needs. When a direct connection is configured it is used and
-        // no probe is needed; otherwise the source is checked, and a pooled source
-        // stops the run BEFORE any DDL — with an actionable reason, never a failed
-        // CREATE DATABASE. The check is heuristic and named one in the reason.
+        // no probe is needed; otherwise the connection provisioning runs on is checked,
+        // and a pooled one stops the run BEFORE any DDL — with an actionable reason,
+        // never a failed CREATE DATABASE. The check is heuristic and named one in the reason.
         if (! $this->hasDirectConnection
             && $this->poolerProbe instanceof PoolerProbe
-            && $this->poolerProbe->isTransactionPooled($this->connectionName)) {
+            && $this->poolerProbe->isTransactionPooled($this->provisioningConnection)) {
             return $this->allUndetermined($pending, $section, UndeterminedReason::ShadowTransactionPooling);
         }
 

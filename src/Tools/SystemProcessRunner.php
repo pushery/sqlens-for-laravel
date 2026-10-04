@@ -76,7 +76,10 @@ final readonly class SystemProcessRunner implements ProcessRunner
 
     public function version(string $binaryPath): ?string
     {
-        $process = $this->process([$binaryPath, '--version']);
+        // The same allowlisted environment as a run. A probe is the first time a binary nothing is
+        // known about yet is started, which is the worst moment to hand it the whole shell, and its
+        // answer is parsed, which is why it needs the C locale as much as a run does.
+        $process = $this->process([$binaryPath, '--version'], $this->childEnvironment([]));
         $process->setTimeout($this->timeoutSeconds);
 
         try {
@@ -311,8 +314,12 @@ final readonly class SystemProcessRunner implements ProcessRunner
         // Everything else is REMOVED rather than left alone. Symfony merges what it is given
         // with the parent environment, so an allowlist only becomes one when the remainder is
         // explicitly unset — `false` is Symfony's "delete this variable".
-        foreach (array_keys(getenv()) as $name) {
-            if (! array_key_exists($name, $environment)) {
+        //
+        // The parent environment Symfony merges is `$_ENV` as well as `getenv()`, so both are
+        // walked. A variable that lives only in `$_ENV` is the shape Laravel loads `.env` in once
+        // putenv is disabled, and it carried `DB_PASSWORD` and `APP_KEY` into every tool.
+        foreach (array_keys([...getenv(), ...$_ENV]) as $name) {
+            if (is_string($name) && ! array_key_exists($name, $environment)) {
                 $environment[$name] = false;
             }
         }

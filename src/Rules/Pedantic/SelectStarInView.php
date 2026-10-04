@@ -420,11 +420,18 @@ final readonly class SelectStarInView
             return null;
         }
 
-        if (preg_match('/([A-Za-z_][A-Za-z0-9_$]*|"[^"]*"|`[^`]*`)\.$/', $before, $matches) !== 1) {
+        if (preg_match('/([A-Za-z_][A-Za-z0-9_$]*|"(?:[^"]|"")*"|`(?:[^`]|``)*`)\.$/', $before, $matches) !== 1) {
             return null;
         }
 
-        return trim($matches[1], '"`');
+        $name = $matches[1];
+
+        if ($name[0] !== '"' && $name[0] !== '`') {
+            return $name;
+        }
+
+        // A quoted name keeps its one escape, a doubled quote, as the single quote it stands for.
+        return str_replace($name[0].$name[0], $name[0], substr($name, 1, -1));
     }
 
     /**

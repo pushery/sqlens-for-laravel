@@ -906,7 +906,12 @@ final readonly class ConfigSchema
             // A pinned path or none. An empty string is rejected rather than treated as "no
             // path": it is what a half-filled environment variable interpolates to, and reading
             // it as "look on \$PATH" would turn a broken deployment into a silent fallback.
-            'tools.squawk.path', 'tools.pgls.path' => $value === null || (is_string($value) && $value !== '')
+            //
+            // And a pin is ABSOLUTE, as the expectation says. A bare name was looked up on the
+            // inherited \$PATH, relative entries included, which is the one search the null route
+            // refuses, and the binary it found was handed the database password. A relative path
+            // named a different file from every working directory.
+            'tools.squawk.path', 'tools.pgls.path' => $value === null || (is_string($value) && $value !== '' && $this->isAbsolutePath($value))
                 ? []
                 : [is_string($value)
                     ? ConfigViolation::outOfRange($path, $expected, $value)
@@ -1132,10 +1137,15 @@ final readonly class ConfigSchema
             // project decided to do without the backend. `null` has meant "look on the search path"
             // since this block existed and keeps meaning it — reading a falsy null as a decision
             // would turn every default installation into one that switched both backends off.
+            //
+            // A path is absolute for the reason the tool pins above are: a bare name is a search on
+            // the inherited \$PATH, and a relative path names another file from every directory.
             'format.binaries.pgformatter',
-            'format.binaries.sqlfluff' => $value === null || $value === false || (is_string($value) && $value !== '')
+            'format.binaries.sqlfluff' => $value === null || $value === false || (is_string($value) && $value !== '' && $this->isAbsolutePath($value))
                 ? []
-                : [ConfigViolation::wrongType($path, $expected, $value)],
+                : [is_string($value)
+                    ? ConfigViolation::outOfRange($path, $expected, $value)
+                    : ConfigViolation::wrongType($path, $expected, $value)],
             'format.timeout',
             'format.style.indent',
             'format.style.line_width' => is_int($value) && $value > 0

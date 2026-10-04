@@ -364,9 +364,19 @@ return [
     */
 
     'capture' => [
+        // A ceiling here is read from the environment as well, so a host can tighten it per
+        // environment without publishing this file: publishing freezes every OTHER default in it,
+        // a security default a later release corrects included. Read typed and held to a floor
+        // of 1: `(int) 'abc'` is 0, and for a ceiling 0 means none, so a typo in a `.env` would
+        // remove the limit. A value that is no positive integer lands on the number shipped here.
+        // SQLENS_CAPTURE_STATEMENT_TIMEOUT and SQLENS_CAPTURE_LOCK_TIMEOUT, in milliseconds.
         'session' => [
-            'statement_timeout' => 5000,
-            'lock_timeout' => 3000,
+            'statement_timeout' => is_numeric($captureStatementTimeout = env('SQLENS_CAPTURE_STATEMENT_TIMEOUT')) && (int) $captureStatementTimeout >= 1
+                ? (int) $captureStatementTimeout
+                : 5000,
+            'lock_timeout' => is_numeric($captureLockTimeout = env('SQLENS_CAPTURE_LOCK_TIMEOUT')) && (int) $captureLockTimeout >= 1
+                ? (int) $captureLockTimeout
+                : 3000,
         ],
 
         'prescan' => [
@@ -463,7 +473,10 @@ return [
 
             // How many seconds the whole shadow provisioning and migration may take.
             // Positive; zero would mean "wait forever", the harm this prevents.
-            'timeout' => 120,
+            // SQLENS_SHADOW_TIMEOUT sets it per environment, held to a floor of 1.
+            'timeout' => is_numeric($shadowTimeout = env('SQLENS_SHADOW_TIMEOUT')) && (int) $shadowTimeout >= 1
+                ? (int) $shadowTimeout
+                : 120,
         ],
     ],
 
@@ -500,10 +513,19 @@ return [
 
     'catalog' => [
 
+        // SQLENS_CATALOG_STATEMENT_TIMEOUT, SQLENS_CATALOG_LOCK_TIMEOUT and
+        // SQLENS_CATALOG_IDLE_IN_TRANSACTION_TIMEOUT set the three bounds per environment, in
+        // milliseconds, read the way the capture session reads its own: typed, with a floor of 1.
         'session' => [
-            'statement_timeout' => 5000,
-            'lock_timeout' => 1000,
-            'idle_in_transaction_timeout' => 5000,
+            'statement_timeout' => is_numeric($catalogStatementTimeout = env('SQLENS_CATALOG_STATEMENT_TIMEOUT')) && (int) $catalogStatementTimeout >= 1
+                ? (int) $catalogStatementTimeout
+                : 5000,
+            'lock_timeout' => is_numeric($catalogLockTimeout = env('SQLENS_CATALOG_LOCK_TIMEOUT')) && (int) $catalogLockTimeout >= 1
+                ? (int) $catalogLockTimeout
+                : 1000,
+            'idle_in_transaction_timeout' => is_numeric($catalogIdleTimeout = env('SQLENS_CATALOG_IDLE_IN_TRANSACTION_TIMEOUT')) && (int) $catalogIdleTimeout >= 1
+                ? (int) $catalogIdleTimeout
+                : 5000,
             'application_name' => 'sqlens',
         ],
 
@@ -1533,8 +1555,12 @@ return [
              * one tool call and leave no room for the work. Crossing the ceiling is REPORTED as
              * crossing it — never a quiet truncation, which reads exactly like a database with
              * fewer problems than it has.
+             *
+             * SQLENS_MCP_MAX_FINDINGS sets it per environment, held to a floor of 1.
              */
-            'max_findings' => 200,
+            'max_findings' => is_numeric($mcpMaxFindings = env('SQLENS_MCP_MAX_FINDINGS')) && (int) $mcpMaxFindings >= 1
+                ? (int) $mcpMaxFindings
+                : 200,
 
             /*
              * Which tools the server exposes. A name that is not listed here is not a tool.
@@ -1804,7 +1830,10 @@ return [
         'squawk' => [
             'path' => null,
             'enabled' => true,
-            'timeout' => 10,
+            // Seconds; SQLENS_SQUAWK_TIMEOUT sets it per environment, held to a floor of 1.
+            'timeout' => is_numeric($squawkTimeout = env('SQLENS_SQUAWK_TIMEOUT')) && (int) $squawkTimeout >= 1
+                ? (int) $squawkTimeout
+                : 10,
             'fast_path' => false,
         ],
 
@@ -1843,7 +1872,10 @@ return [
         'pgls' => [
             'path' => null,
             'enabled' => true,
-            'timeout' => 30,
+            // Seconds; SQLENS_PGLS_TIMEOUT sets it per environment, held to a floor of 1.
+            'timeout' => is_numeric($pglsTimeout = env('SQLENS_PGLS_TIMEOUT')) && (int) $pglsTimeout >= 1
+                ? (int) $pglsTimeout
+                : 30,
         ],
 
     ],
@@ -2119,8 +2151,12 @@ return [
         /*
          * A bound, not a suggestion. A formatter without one holds a CI step —
          * and the whole shared queue behind it — for as long as it stands.
+         *
+         * Seconds; SQLENS_FORMAT_TIMEOUT sets it per environment, held to a floor of 1.
          */
-        'timeout' => 15,
+        'timeout' => is_numeric($formatTimeout = env('SQLENS_FORMAT_TIMEOUT')) && (int) $formatTimeout >= 1
+            ? (int) $formatTimeout
+            : 15,
 
         /*
          * The house style. Four options, and the fewness is deliberate: every

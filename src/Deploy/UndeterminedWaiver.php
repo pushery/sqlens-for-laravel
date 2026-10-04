@@ -125,8 +125,8 @@ final readonly class UndeterminedWaiver
     /**
      * Is this waiver open at all — for every reason, or for a named few?
      *
-     * Separate from {@see opensFor()} on purpose, and the difference is what gets reported rather
-     * than what gets decided. `opensFor()` answers about THIS run's unanswered checks and is what
+     * Separate from {@see opensForReasons()} on purpose, and the difference is what gets reported
+     * rather than what gets decided. `opensForReasons()` answers about THIS run's unanswered checks and is what
      * the exit code turns on; this answers about the waiver itself, which is the fact a deploy log
      * needs even on a run where nothing went unanswered. Collapsing them would make an escape hatch
      * invisible exactly when it changed nothing — and an escape hatch nobody can see used is the
@@ -138,25 +138,13 @@ final readonly class UndeterminedWaiver
     }
 
     /**
-     * Does this waiver cover EVERY answer that could not be given on this run?
+     * Does this waiver cover EVERY reason an answer could not be given on this run?
      *
      * Every one, not any: the caller has already established that the run is blocked by nothing
      * else, so a single uncovered reason is a question the deploy is about to proceed past
-     * unanswered. Partial coverage is the one result that must not read as permission.
-     *
-     * @param  list<CheckResult>  $undetermined
-     */
-    public function opensFor(array $undetermined): bool
-    {
-        return $this->opensForReasons(array_map(
-            static fn (CheckResult $result): ?UndeterminedReason => $result->undeterminedReason,
-            $undetermined,
-        ));
-    }
-
-    /**
-     * {@see self::opensFor()} over the reasons themselves, wherever they came from. A reason nobody
-     * named, null, is one no list can cover, so only a waiver open for every reason passes it.
+     * unanswered. Partial coverage is the one result that must not read as permission. The reasons
+     * come from wherever the run found them, a check or a finding; one nobody named, null, is one no
+     * list can cover, so only a waiver open for every reason passes it.
      *
      * @param  list<UndeterminedReason|null>  $reasons
      */

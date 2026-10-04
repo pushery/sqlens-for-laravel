@@ -93,25 +93,39 @@ final readonly class CallTarget
         return new self(null, null, null, true, $description);
     }
 
-    /** Whether this call targets the given fully-qualified class, exactly. */
+    /**
+     * Whether this call targets the given fully-qualified class.
+     *
+     * Compared the way PHP compares class names, without regard to case: `\illuminate\support\facades\http`
+     * names the same class as `Http` does, and a migration that writes it so calls it all the same.
+     */
     public function targetsClass(string $fqcn): bool
     {
-        return $this->class === ltrim($fqcn, '\\');
+        return $this->class !== null && strcasecmp($this->class, ltrim($fqcn, '\\')) === 0;
     }
 
-    /** Whether this is `<class>::<method>` / `<class>-><method>` for the given pair. */
+    /**
+     * Whether this is `<class>::<method>` / `<class>-><method>` for the given pair.
+     *
+     * The method name without regard to case as well: PHP calls `->Notify()` and `->notify()` alike.
+     */
     public function targets(string $fqcn, string $method): bool
     {
-        return $this->targetsClass($fqcn) && $this->method === $method;
+        return $this->targetsClass($fqcn) && $this->method !== null && strcasecmp($this->method, $method) === 0;
     }
 
-    /** Whether this is a call to the given free function. */
+    /** Whether this is a call to the given free function, which PHP names without regard to case. */
     public function targetsFunction(string $name): bool
     {
-        return $this->function === ltrim($name, '\\');
+        return $this->function !== null && strcasecmp($this->function, ltrim($name, '\\')) === 0;
     }
 
-    /** Whether this call resolves the given key out of the container. */
+    /**
+     * Whether this call resolves the given key out of the container.
+     *
+     * Exactly, unlike the names above: the container keys its bindings by the string, so `app('Cache')`
+     * resolves something other than `app('cache')`.
+     */
     public function resolvesContainerKey(string $key): bool
     {
         return $this->containerKey !== null && $this->containerKey === ltrim($key, '\\');

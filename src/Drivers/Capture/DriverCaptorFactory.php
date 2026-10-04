@@ -17,6 +17,7 @@ use Pushery\SQLens\Capture\MigrationLoader;
 use Pushery\SQLens\Capture\MigrationPaths;
 use Pushery\SQLens\Capture\PreScan\PreScanGate;
 use Pushery\SQLens\Capture\PretendCaptor;
+use Pushery\SQLens\Capture\PretendStatementTap;
 use Pushery\SQLens\Capture\Shadow\GuardDecision;
 use Pushery\SQLens\Capture\Shadow\ShadowCaptor;
 use Pushery\SQLens\Capture\Shadow\ShadowDatabaseName;
@@ -208,7 +209,9 @@ final readonly class DriverCaptorFactory
             $runner,
             $this->config->get('sqlens.capture.shadow.keep_on_failure') === true,
             $this->replicaProbeFor($key),
-            $connectionName,
+            // The probes ask the server the throwaway databases are built on, which is the run's
+            // own only while no shadow or direct connection is configured.
+            ShadowProvisioningConnection::for($this->config, $connectionName),
             $key === 'pgsql' ? new PgsqlPoolerProbe($this->database) : null,
             is_string($this->config->get('sqlens.capture.shadow.direct_connection')),
             $this->directConnectionIsElsewhere($connectionName),
@@ -245,7 +248,7 @@ final readonly class DriverCaptorFactory
         MigrationLoader $loader,
     ): Captor {
         return CanonicalizingCaptorDecorator::forDriver(
-            new PretendCaptor($this->database->connection($connectionName), $loader, $this->database, $this->app->make(CaptureConnectionFence::class)),
+            new PretendCaptor($this->database->connection($connectionName), $loader, $this->database, $this->app->make(CaptureConnectionFence::class), $this->app->make(PretendStatementTap::class)),
             $canonicalization,
             $formatter,
             $this->subjectContextFor($key),

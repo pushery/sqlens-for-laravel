@@ -184,15 +184,21 @@ final readonly class RemediationRenderer
             sprintf('  %d. **%s** — %s', $step->order, $this->kindLabel($step->kind, $subject), $this->text($step->noteKey)),
         ];
 
+        // A step carries the names it was filled with, and a name is text a catalog wrote: the SQL
+        // stays on its one line, and each block is fenced with more backticks than it holds in a
+        // row, so no line of either can close its fence and write past it.
         if ($step->sqlTemplate !== null) {
-            $lines = [...$lines, '', '     ```sql', '     '.$step->sqlTemplate, '     ```'];
+            $sql = MarkdownText::inline($step->sqlTemplate);
+            $fence = MarkdownText::fence($sql);
+            $lines = [...$lines, '', '     '.$fence.'sql', '     '.$sql, '     '.$fence];
         }
 
         if ($step->laravelSnippet !== null) {
-            $lines = [...$lines, '', '     ```php', ...array_map(
+            $fence = MarkdownText::fence($step->laravelSnippet);
+            $lines = [...$lines, '', '     '.$fence.'php', ...array_map(
                 static fn (string $line): string => '     '.$line,
                 explode("\n", $step->laravelSnippet),
-            ), '     ```'];
+            ), '     '.$fence];
         }
 
         return [...$lines, ''];

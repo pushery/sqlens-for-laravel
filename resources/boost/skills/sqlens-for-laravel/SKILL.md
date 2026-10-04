@@ -11,9 +11,8 @@ metadata:
 # SQLens for Laravel
 
 Use this skill when a Laravel application installs or integrates the
-`pushery/sqlens-for-laravel` package. Laravel Boost surfaces it inside
-consuming applications, so keep it focused on adoption — never on package
-internals.
+`pushery/sqlens-for-laravel` package. The full reference is at
+<https://docs.pushery.com/sqlens-for-laravel/>.
 
 ## Primary Goal
 
@@ -508,10 +507,12 @@ php artisan sqlens:format --check
 
 ## Anti-Patterns
 
-- Do not document package internals here; keep the skill focused on adoption
-  in Laravel applications.
-- Do not duplicate the full README; link the deeper reference material instead
-  and keep this skill small enough to load and apply quickly.
+- Do not lower `level` to quiet a security finding. Security and privacy findings
+  answer to `security.min_severity`, not to the level, as the next section explains.
+- Do not read an `undetermined` result as a pass. It names a check that could not run
+  and why, so a run full of them has checked less than it appears to.
+- Do not point shadow mode at a production database. It refuses to run outside
+  `capture.shadow.allowed_environments`, and `--force` does not override that.
 
 ## Levels and security severity are two dials, not one
 

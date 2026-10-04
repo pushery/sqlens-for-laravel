@@ -50,6 +50,8 @@ final readonly class UndeterminedSection
         UndeterminedReason::BindingNotRendered->value => 'Read this statement by hand: one of its bound values could not be written into its text, or its placeholders and values do not line up, and the finding names which. A value the pretend log refused is read in shadow mode.',
         // The pre-scan's own verdict: this migration decides what to do from a query result, or
         // reaches past the schema builder, so its statements do not exist until it runs.
+        // The pretend log and the statements disagree. Shadow mode reads each statement on its own.
+        UndeterminedReason::PretendLogDiverged->value => 'Run in shadow mode, where each statement is read as the server receives it, or remove the call that writes into the query log from the migration.',
         UndeterminedReason::PreScanFlagged->value => 'Run in shadow mode: the pre-scan found this migration decides what it does at run time, so its statements do not exist to be read.',
         // A tool the strict mode required and did not find.
         UndeterminedReason::MissingExternalTool->value => 'Install the tool at the version this build was measured against, or drop strict tool mode for this run and accept the reduced coverage knowingly.',
@@ -114,9 +116,9 @@ final readonly class UndeterminedSection
         }
 
         $lines = [
-            '### '.$finding->ruleId,
+            '### '.MarkdownText::inline($finding->ruleId),
             '',
-            '- '.$finding->message,
+            '- '.MarkdownText::inline($finding->message),
             '- **Why it could not answer:** '.$reason->description(),
         ];
 

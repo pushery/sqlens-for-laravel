@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Config;
 
+use Pushery\SQLens\Findings\CredentialRedactor;
+
 /**
  * One configuration violation: the dotted path of the offending key, what the
  * schema expects there, and what was actually found. Violations are collected,
@@ -207,6 +209,10 @@ final readonly class ConfigViolation
      * Render a found value with its type spelled out — `string "3"` and
      * `integer 3` must stay distinguishable, because a quoted level in an env
      * var is exactly the kind of mistake this validator exists to surface.
+     *
+     * A URL is shown without its user information and its query. Every command
+     * that validates the config prints this line, into a CI log among others,
+     * and a private source refused for its scheme carries its token there.
      */
     private static function describe(mixed $value): string
     {
@@ -215,7 +221,7 @@ final readonly class ConfigViolation
             is_bool($value) => 'boolean '.($value ? 'true' : 'false'),
             is_int($value) => 'integer '.$value,
             is_float($value) => 'float '.$value,
-            is_string($value) => 'string "'.$value.'"',
+            is_string($value) => 'string "'.new CredentialRedactor()->url($value).'"',
             is_array($value) => 'an array',
             default => 'an instance of '.get_debug_type($value),
         };
