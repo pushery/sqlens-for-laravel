@@ -15,6 +15,7 @@ use Pushery\SQLens\Agent\Mcp\McpConnection;
 use Pushery\SQLens\Agent\Mcp\ProfileRefusal;
 use Pushery\SQLens\Agent\Mcp\ReportPage;
 use Pushery\SQLens\Agent\Mcp\ToolAnswer;
+use Pushery\SQLens\Catalog\CatalogSkip;
 use Pushery\SQLens\Config\ProfileApplication;
 use Pushery\SQLens\Deploy\PreflightBlocker;
 use Pushery\SQLens\Deploy\PreflightOutcome;
@@ -152,6 +153,10 @@ final class PredeployTool extends SqlensTool
                 // waive, and a waiver cannot carry a deploy past a missing gate.
                 'gate' => $this->gate($outcome->verdict($waiver)),
                 'allow_undetermined' => $allowUndetermined,
+                // Always null here, and present anyway: a run that never happened read through no
+                // connection, and a key that is absent on one path would make its absence mean
+                // something on the other.
+                'advisory' => $outcome->advisory?->toArray(),
             ]);
         }
 
@@ -190,6 +195,12 @@ final class PredeployTool extends SqlensTool
             // invisibly is not an emergency exit, it is a default nobody agreed to — and the one
             // reading a deploy log afterwards is the person who needs to see it most.
             'allow_undetermined' => $allowUndetermined,
+            // The note `sqlens:predeploy` prints on STDERR when the preflight read through the
+            // connection that runs the migrations, or null. A protocol caller has no STDERR, so
+            // without this field the one run that reads with ALTER and DROP rights would look
+            // exactly like the one that does not. It is a note and decides nothing: `gate` above is
+            // the same with it as without it.
+            'advisory' => $outcome->advisory?->toArray(),
             // The contract the findings below are shaped by. The CLI's JSON consumer is told this
             // and an MCP caller was not, which made the version a promise kept in one channel only —
             // an agent reading these fields had no way to know which contract it was holding.
@@ -255,20 +266,29 @@ final class PredeployTool extends SqlensTool
         ];
     }
 
-    /** A sentence for a client that shows text rather than structure. */
+    /**
+     * A sentence for a client that shows text rather than structure.
+     *
+     * It carries the advisory too, because a client that shows only this sentence has no other way
+     * to learn that the preflight read with migration rights.
+     */
     private function summary(PreflightOutcome $outcome, ReportPage $page): string
     {
-        if ($page->total === 0) {
-            return 'Nothing blocked the deploy on '.$outcome->connection.'.';
+        $summary = $page->total === 0
+            ? 'Nothing blocked the deploy on '.$outcome->connection.'.'
+            : sprintf(
+                '%d finding(s) before the deploy on %s, %d returned. %s',
+                $page->total,
+                (string) $outcome->connection,
+                count($page->rows),
+                $page->truncated ? 'The list is CUT: '.$page->reason.'.' : 'Nothing was left out.',
+            );
+
+        if ($outcome->advisory instanceof CatalogSkip) {
+            $summary .= ' Note: '.$outcome->advisory->detail;
         }
 
-        return sprintf(
-            '%d finding(s) before the deploy on %s, %d returned. %s',
-            $page->total,
-            (string) $outcome->connection,
-            count($page->rows),
-            $page->truncated ? 'The list is CUT: '.$page->reason.'.' : 'Nothing was left out.',
-        );
+        return $summary;
     }
 
     private function ceiling(Repository $config): int

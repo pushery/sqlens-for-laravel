@@ -51,11 +51,12 @@ final class ConfigValidator
      *
      * ## An absent schema key is a NOTICE, not a violation
      *
-     * It used to be fatal everywhere except one opt-in root, and that was measured to be an
-     * upgrade breaker: `mergeConfigFrom()` is a shallow merge, so an application that published
-     * `config/sqlens.php` before a release added a nested key has that key missing permanently.
-     * Every `sqlens:*` command then exited on misconfiguration — a package release nobody could
-     * install without hand-editing a file.
+     * Treating it as fatal was measured to be an upgrade breaker while a published copy was merged
+     * with Laravel's flat `mergeConfigFrom()`: an application that published `config/sqlens.php`
+     * before a release added a nested key had that key missing for good, and every `sqlens:*`
+     * command exited on misconfiguration. Published copies are merged map by map now
+     * (`PublishedConfigMerge`), so they no longer lose a key that way, but a value set at runtime
+     * still can, and a run on the shipped default is the right answer to it.
      *
      * The protection that was traded away is real and is named rather than dropped: a published
      * copy that lost a whole section now runs on defaults the project believes it overrode. It

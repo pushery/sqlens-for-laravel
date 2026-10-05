@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Rules\Convention;
 
 use Pushery\SQLens\Catalog\Understanding\TopLevelList;
 use Pushery\SQLens\Exceptions\InvalidNamingPattern;
+use Pushery\SQLens\Exceptions\NamingPatternGaveUp;
 use Pushery\SQLens\Subjects\SchemaObject;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
@@ -189,7 +190,17 @@ final readonly class SnakeCaseIdentifiers
      * raises here is about the pattern, and it is not swallowed — it is re-read below and becomes
      * the sentence of a named exception, which says more than the warning did.
      *
+     * ## Why a pattern that compiles and still fails is a third answer
+     *
+     * A pattern can compile and give up on one name: one that backtracks without bound, or a name
+     * that is not valid UTF-8 under a `/u` pattern. `preg_match()` answers `false` for that name
+     * alone, and the same pattern runs against the empty string without complaint, which is what
+     * tells the two cases apart. Read as either answer, that `false` would accuse or clear a name
+     * nobody judged, so it is an exception of its own, and the naming rules report the name as
+     * undetermined.
+     *
      * @throws InvalidNamingPattern when the pattern cannot be compiled
+     * @throws NamingPatternGaveUp when the pattern compiles and PCRE gave up on this identifier
      */
     public static function violates(string $identifier, string $pattern = self::DEFAULT_PATTERN): bool
     {
@@ -200,21 +211,32 @@ final readonly class SnakeCaseIdentifiers
         $matched = @preg_match($pattern, $identifier);
 
         if ($matched === false) {
-            throw InvalidNamingPattern::unusable($pattern, self::whyPcreRefused($pattern, $identifier));
+            // Read before the probe below, which replaces it.
+            $refusal = preg_last_error_msg();
+            $compilation = self::compilationFailure($pattern);
+
+            // PCRE raises a diagnostic for a pattern it cannot compile and none for a match it gives
+            // up on, so without one the pattern is usable and only this identifier defeated it.
+            if ($compilation === null) {
+                throw NamingPatternGaveUp::on($pattern, $identifier, $refusal);
+            }
+
+            throw InvalidNamingPattern::unusable($pattern, $compilation);
         }
 
         return $matched !== 1;
     }
 
     /**
-     * PCRE's own sentence about the pattern, captured from the diagnostic it raises.
+     * PCRE's own sentence about a pattern it cannot compile, or null when the pattern compiles.
      *
-     * Re-running the match is the price of one exception and nothing else: this is reached only on
-     * the path that is about to throw. `preg_last_error_msg()` is not used because it answers
-     * "Internal error" for a compilation failure — true, and useless to somebody looking for the
-     * character they mistyped.
+     * Captured from the diagnostic PCRE raises, which it does for a compilation failure whatever the
+     * subject, so the probe runs against the empty string. Running it is the price of one exception
+     * and nothing else: this is reached only on the path that is about to throw.
+     * `preg_last_error_msg()` is not used for the sentence because it answers "Internal error" for a
+     * compilation failure — true, and useless to somebody looking for the character they mistyped.
      */
-    private static function whyPcreRefused(string $pattern, string $identifier): string
+    private static function compilationFailure(string $pattern): ?string
     {
         $diagnostic = null;
 
@@ -225,13 +247,13 @@ final readonly class SnakeCaseIdentifiers
         });
 
         try {
-            preg_match($pattern, $identifier);
+            preg_match($pattern, '');
         } finally {
             restore_error_handler();
         }
 
         if (! is_string($diagnostic)) {
-            return preg_last_error_msg();
+            return null;
         }
 
         // `preg_match(): Compilation failed: …` — the prefix names the function a reader never

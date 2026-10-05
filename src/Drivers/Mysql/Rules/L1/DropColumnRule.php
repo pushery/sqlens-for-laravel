@@ -30,15 +30,23 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * ## Its downtime class is CONDITIONAL, and that is the interesting part
  *
  * The class is never named in this file — it comes from the online-DDL matrix, whose `drop_column`
- * entry is `INSTANT` with `lock: none` and **four conditions** that take it off that path: a
- * functional index over the column, a table already out of instant row-version budget,
- * `ROW_FORMAT=COMPRESSED`, and a `FULLTEXT` index on the table.
+ * entry is `INSTANT` with `lock: none`, and each of its conditions takes the statement off that
+ * path:
+ *
+ * - `column_has_functional_index` — a functional index covers the column;
+ * - `column_has_index` — any index covers it, an ordinary one included: measured on 8.4.10, a
+ *   pinned `ALGORITHM=INSTANT` that the server accepts on an unindexed column is refused with
+ *   error 1845 once a plain `KEY` covers it, and InnoDB gives every foreign-key column such an
+ *   index;
+ * - `instant_row_version_limit_reached` — the table is out of instant row-version budget;
+ * - `row_format_compressed` — the table uses `ROW_FORMAT=COMPRESSED`;
+ * - `table_has_fulltext_index` — the table carries a `FULLTEXT` index.
  *
  * A caller that decided nothing about the live table gets the blind context, and a conditional
  * entry then resolves to **undetermined** rather than to its cheap case. That is the honest answer:
- * one of those four turns the statement into a full rebuild, and the row-version one makes the
- * server **refuse it outright** rather than fall back. Reporting `instant` from a static read would
- * be a promise the server has not made.
+ * any of those conditions makes the statement more than a metadata change, and the row-version one
+ * makes the server **refuse it outright** rather than fall back. Reporting `instant` from a static
+ * read would be a promise the server has not made.
  *
  * ## Why the message is not the PostgreSQL one
  *

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Rules\Convention;
 
+use Pushery\SQLens\Exceptions\NamingPatternGaveUp;
+
 /**
  * What a project says an identifier should look like, and which identifiers it does not judge.
  *
@@ -78,10 +80,22 @@ final readonly class NamingConvention
      * Matched against the BARE name rather than the qualified one, because that is what the rule
      * judges — an exemption written against `app.legacy_Table` would silently never fire, and a
      * pattern that matches nothing is an exemption a project believes it has.
+     *
+     * @throws NamingPatternGaveUp when PCRE gave up matching an exempt pattern against this name
      */
     public function exempts(string $identifier): bool
     {
-        return array_any($this->exempt, static fn (string $pattern): bool => @preg_match($pattern, $identifier) === 1);
+        return array_any($this->exempt, static function (string $pattern) use ($identifier): bool {
+            $matched = @preg_match($pattern, $identifier);
+
+            // Every entry compiled when this was built, so `false` is PCRE giving up on this name,
+            // and reading it as "not exempt" would judge a name the project asked to leave alone.
+            if ($matched === false) {
+                throw NamingPatternGaveUp::on($pattern, $identifier, preg_last_error_msg());
+            }
+
+            return $matched === 1;
+        });
     }
 
     /**

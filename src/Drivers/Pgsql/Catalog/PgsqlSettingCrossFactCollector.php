@@ -17,7 +17,8 @@ use Throwable;
  * What a PostgreSQL server-baseline rule needs BESIDE the setting it judges.
  *
  * The MySQL side has had one of these since the `local_infile` finding needed to know who holds
- * `FILE`. This is the PostgreSQL half, and it starts with one fact because one rule needs one.
+ * `FILE`. This is the PostgreSQL half: whether the server offers TLS, the effective
+ * `statement_timeout` beside `lock_timeout`, and which layer set either timeout.
  *
  * ## Why `ssl` is read again when the reading already carries it
  *
@@ -33,8 +34,9 @@ use Throwable;
  *
  * ## Primum non nocere
  *
- * One `pg_settings` row, no locks, no writes, inside the read-only session the rest of the audit
- * uses. Nothing here can be observed by the server beyond a catalog select.
+ * Two `pg_settings` rows and one read of `pg_db_role_setting`, no locks, no writes, inside the
+ * read-only session the rest of the audit uses. Nothing here can be observed by the server beyond
+ * a catalog select.
  */
 final readonly class PgsqlSettingCrossFactCollector implements SettingCrossFactCollector
 {
@@ -44,7 +46,7 @@ final readonly class PgsqlSettingCrossFactCollector implements SettingCrossFactC
      * Aliased from the core vocabulary rather than owned here, for the same reason its MySQL
      * neighbor is: the rule that reads it lives in the core namespace, which may not name a driver,
      * so the name itself belongs to the vocabulary both sides already share. Kept as a constant here
-     * anyway so the query below reads like the ones that will join it.
+     * anyway so the query below reads like the ones beside it.
      */
     public const string TLS_OFFERED = SettingCrossFacts::TLS_OFFERED;
 

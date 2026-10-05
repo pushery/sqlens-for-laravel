@@ -19,11 +19,11 @@ use Throwable;
  *
  * ## The division of labor, and why it is not negotiable
  *
- * This class never asks whether a constraint is validated or an index is valid. Those columns have
- * exactly one reader each — {@see NotValidConstraintCheck} and {@see InvalidIndexCheck} — and a
- * second one is the same database answering differently depending on which command asked, which
- * this package treats as a defect rather than an inconsistency. The run has already asked them; the
- * objects they reported arrive here as a list.
+ * This class never asks whether a constraint is validated or an index is valid. For a debt, that
+ * question belongs to {@see NotValidConstraintCheck} and {@see InvalidIndexCheck}, and asking it a
+ * second time here is the same database answering differently depending on which command asked,
+ * which this package treats as a defect rather than an inconsistency. The run has already asked
+ * them; the objects they reported arrive here as a list.
  *
  * What is left is the question nobody has asked yet: **does the object exist at all?** That is what
  * separates "somebody finished the job" from "the table was dropped, or lives in a schema this run

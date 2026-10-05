@@ -84,10 +84,9 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
      * mean a schema change to a shipped file for a sentence only this rule reads.
      *
      * The definitive answer belongs to the audit suite, which HAS a connection and could read
-     * `TimeZone` — and that is not built here because the rule receives no server state at all
-     * (`__construct(string $projectRoot, ?PgTypeChangeMatrix)`). Handing a rule runtime state would
-     * be the first time any rule receives it, so it waits for that seam to exist rather than growing
-     * a private channel for one caveat.
+     * `TimeZone` — and that is not built here because a lint rule receives the server's VERSION on
+     * the statement it judges and no session setting. Reading `TimeZone` would need a seam that does
+     * not exist, and growing a private channel for one caveat is the wrong trade.
      *
      * Both directions, because the measurement covered both: `timestamptz -> timestamp` under a
      * UTC session is free as well, and listing only one would leave the other reporting an outage

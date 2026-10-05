@@ -19,11 +19,11 @@ use Pushery\SQLens\Deploy\DebtStanding;
  *
  * ## What an implementation must NOT do
  *
- * It must not re-derive a debt this package already reads elsewhere. The catalog columns that say
- * whether a constraint is validated or an index is valid each have exactly one reader, and a second
- * one is the same database answering differently depending on which command asked. An
- * implementation asks about the OBJECT — is it there at all — and delegates the debt question to
- * the check that owns it.
+ * It must not re-derive a debt this package already reads elsewhere. For a debt, whether a
+ * constraint is validated or an index is valid is answered by the check that owns the question,
+ * and asking it again here is the same database answering differently depending on which command
+ * asked. An implementation asks about the OBJECT — is it there at all — and delegates the debt
+ * question to the check that owns it.
  *
  * And it reads only. State and catalog views, its own session bounds, never a lock of its own.
  */

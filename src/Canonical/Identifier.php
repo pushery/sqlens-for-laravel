@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Canonical;
 
+use Pushery\SQLens\Contracts\DeclaresReservedWords;
 use Pushery\SQLens\Contracts\DriverCanonicalization;
 
 /**
@@ -180,16 +181,19 @@ final readonly class Identifier
 
     /**
      * The canonical spelling of a bare effective name: rendered without quotes when
-     * it round-trips unquoted (a valid, non-keyword identifier that a folding driver
-     * would not re-fold), otherwise wrapped in the driver's canonical quote so its
-     * exact form survives.
+     * it round-trips unquoted (a valid identifier that is neither a keyword of the
+     * canonicalizer nor a word the server reserves, and that a folding driver would
+     * not re-fold), otherwise wrapped in the driver's canonical quote so its exact
+     * form survives and still parses where a suggestion writes it.
      */
     private static function render(string $name, DriverCanonicalization $driver): string
     {
         $quote = $driver->quotingCharacter();
+        $upper = mb_strtoupper($name);
 
         $bareSafe = self::isBareIdentifier($name)
-            && ! in_array(mb_strtoupper($name), $driver->keywords(), true)
+            && ! in_array($upper, $driver->keywords(), true)
+            && (! $driver instanceof DeclaresReservedWords || ! in_array($upper, $driver->reservedWords(), true))
             && (! $driver->foldsUnquotedIdentifiersToLowerCase() || strtolower($name) === $name);
 
         return $bareSafe

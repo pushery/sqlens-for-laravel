@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Drivers\Pgsql\Rules\L9;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\DeclaresJudgedObjectTypes;
 use Pushery\SQLens\Contracts\ProvidesSchemaObjectRemediation;
+use Pushery\SQLens\Drivers\Pgsql\Rules\Support\QuotedObjectName;
 use Pushery\SQLens\Findings\NotApplicableReason;
 use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Findings\UndeterminedReason;
@@ -177,13 +178,13 @@ final class TypeImplicitCastRule extends AbstractCatalogRule implements Declares
      *
      * ## Only the narrowing integer pair, and only when it is alone on its constraint
      *
-     * This rule reports three different shapes under one id, and exactly one of them has an answer
+     * This rule reports several different shapes under one id, and exactly one of them has an answer
      * that does not depend on knowing the application: a single-column key whose referencing side
      * is a NARROWER integer than the key it points at. That one is dated -- it breaks when the
      * parent sequence crosses the child's ceiling -- and its end state is not a judgment call: the
      * child has to be as wide as what it references.
      *
-     * The other two get a considered `none` rather than a null, because this rule looked at them
+     * The others get a considered `none` rather than a null, because this rule looked at them
      * and reached a conclusion. A composite key cannot be widened one column at a time without
      * deciding an order, and the order depends on what reads the table while each exclusive lock is
      * held. A pair where the PARENT is the narrower side points the other way: matching them means
@@ -247,7 +248,7 @@ final class TypeImplicitCastRule extends AbstractCatalogRule implements Declares
         }
 
         return new RemediationPayload(
-            steps: [
+            steps: $this->filledWithTable($object, [
                 new RemediationStep(
                     order: 1,
                     kind: RemediationStepKind::SeparateMigration,
@@ -283,7 +284,7 @@ final class TypeImplicitCastRule extends AbstractCatalogRule implements Declares
                     noteKey: 'sqlens::messages.remediation.expand_contract.contract',
                     sqlTemplate: 'ALTER TABLE {{table}} DROP COLUMN {{old_column}}',
                 ),
-            ],
+            ]),
             strategy: RemediationStrategy::ExpandContract,
             ruleId: $this->id(),
             // No downtime class: a state finding has no deploy to describe, and the validator
@@ -296,6 +297,23 @@ final class TypeImplicitCastRule extends AbstractCatalogRule implements Declares
             verification: 'sqlens::messages.remediation.expand_contract.verification',
             subject: RemediationSubject::SchemaObject,
         );
+    }
+
+    /**
+     * The steps with the table filled in, quoted as PostgreSQL reads it.
+     *
+     * The table is a fact of the finding. The key's own names, its constraint, its column and the
+     * side it references, stay placeholders: the sequence is written once, for whichever of the
+     * table's mismatched keys the reader widens, and that choice is theirs.
+     *
+     * @param  list<RemediationStep>  $steps
+     * @return list<RemediationStep>
+     */
+    private function filledWithTable(SchemaObject $object, array $steps): array
+    {
+        $context = ['table' => QuotedObjectName::of($object)];
+
+        return array_map(static fn (RemediationStep $step): RemediationStep => $step->filled($context), $steps);
     }
 
     /**

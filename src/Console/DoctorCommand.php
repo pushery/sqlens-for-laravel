@@ -484,7 +484,10 @@ final class DoctorCommand extends Command
      * is absent and when it is passed without a value, so a null default would make "do not probe"
      * and "probe the default connection" the same input.
      *
-     * @return list<string>
+     * False when `--probe` names a connection that is not configured; the caller reports that as a
+     * misconfiguration and opens nothing.
+     *
+     * @return list<string>|false
      */
     private function probeScope(Repository $config, DriverManager $drivers): array|false
     {

@@ -48,7 +48,7 @@
         "symfony/process": "^7.0 || ^8.0"
     },
     "suggest": {
-        "laravel/mcp": "Serves the SQLens MCP server over stdio, so an agent can call the read-only tools directly. Without it `sqlens:mcp` reports a named undetermined and prints the install command rather than failing.",
+        "laravel/mcp": "Serves the SQLens MCP server over stdio, so an agent can call the read-only tools directly. Without it `sqlens:mcp` stops with exit 2 and prints the install command.",
         "symfony/var-dumper": "While `sqlens:mcp` runs, a forgotten dump goes to standard error instead of into the protocol stream. Used only where an application already has the dumper; without it there is no dump to divert, and nothing needs to be installed.",
         "ext-pcntl": "Lets `sqlens:mcp` finish the frame it is writing when it receives SIGTERM or SIGINT. Without it the server says so on standard error and stops abruptly instead; a session that the client ends is unaffected.",
         "ext-pdo_pgsql": "Needed to audit a PostgreSQL connection, as Laravel's pgsql driver needs it too. An application on MySQL alone does without it."

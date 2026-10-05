@@ -1,7 +1,7 @@
 {
     "schema_version": 1,
     "reference_server": "mysql 8.4",
-    "about": "How InnoDB performs a DDL operation on MySQL 8.4 — the algorithm it runs under (INSTANT, INPLACE, or COPY), whether it rewrites the whole table, whether it lets other sessions write while it runs, and the lock it holds. The rules read this to classify a migration's downtime_class without a live server. Every entry is a fact stated in our own words with a source link; it is not a copy of the MySQL manual's table. Conditions name the table- or session-level facts a static reader cannot see (a resolver leaves an operation undetermined when one is unknown); explanatory prose lives in notes. This file ships with a few reference entries and is filled out per operation group in its own tickets.",
+    "about": "How InnoDB performs a DDL operation on MySQL 8.4 — the algorithm it runs under (INSTANT, INPLACE, or COPY), whether it rewrites the whole table, whether it lets other sessions write while it runs, and the lock it holds. The rules read this to classify a migration's downtime_class without a live server. Every entry is a fact stated in our own words with a source link; it is not a copy of the MySQL manual's table. Conditions name the table- or session-level facts a static reader cannot see (a resolver leaves an operation undetermined when one is unknown); explanatory prose lives in notes.",
     "entries": [
         {
             "id": "mysql.column.add_auto_increment",

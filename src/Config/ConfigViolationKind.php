@@ -33,11 +33,12 @@ enum ConfigViolationKind: string
     /**
      * A schema key the config does not set, so the shipped default applies.
      *
-     * NOT a violation, and the distinction is the whole decision behind it. `mergeConfigFrom()` is
-     * a SHALLOW merge, so an application that published `config/sqlens.php` before a release added
-     * a nested key has that key missing for good. Treating that as fatal meant a package release
-     * could not be installed at all — every `sqlens:*` command exited on misconfiguration until
-     * somebody re-copied the file by hand.
+     * NOT a violation, and the distinction is the whole decision behind it. While a published copy
+     * was merged with Laravel's flat `mergeConfigFrom()`, an application that published
+     * `config/sqlens.php` before a release added a nested key had that key missing for good, and
+     * treating that as fatal meant a package release could not be installed at all. Published
+     * copies are merged map by map now (`PublishedConfigMerge`); a key can still be absent where a
+     * value is set at runtime, and it is answered the same way.
      *
      * The strictness that remains is ONE-SIDED and is the half that was doing the work: an UNKNOWN
      * key is still fatal, because a typo that silently enables nothing is the failure the validator

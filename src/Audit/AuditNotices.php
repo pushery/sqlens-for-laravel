@@ -706,7 +706,7 @@ final readonly class AuditNotices
     }
 
     /**
-     * Object patterns in the ignore list that matched nothing this run read.
+     * Object patterns in the ignore list that matched nothing this run read or reported.
      *
      * A notice rather than an error, because a pattern may legitimately point at a table that does
      * not exist yet — and rather than silence, because an orphaned pattern is indistinguishable
@@ -725,7 +725,7 @@ final readonly class AuditNotices
         return self::runNotice(
             AuditNotice::OrphanedIgnore->id(),
             sprintf(
-                'These ignore patterns matched nothing in the audited schema: %s. That is not an error — a '
+                'These ignore patterns matched nothing this run read or reported: %s. That is not an error — a '
                 .'pattern may point at a table that does not exist yet, or at one somebody finally dropped — '
                 .'but it is debt, and it is the kind nobody sees: an orphaned pattern and a working one '
                 .'produce the same report. Delete the line, or keep it deliberately.',

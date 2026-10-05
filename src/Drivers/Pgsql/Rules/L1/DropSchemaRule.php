@@ -12,6 +12,7 @@ use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Remediation\NoSafeSequenceTemplate;
+use Pushery\SQLens\Rules\DeclaresLimitations;
 use Pushery\SQLens\Rules\RuleDriverNotes;
 use Pushery\SQLens\Subjects\MigrationStatementView;
 use Pushery\SQLens\Subjects\SchemaObjectType;
@@ -50,7 +51,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * Detection is on the canonical form and the classified target, never Laravel's raw grammar.
  */
-final class DropSchemaRule extends AbstractPgsqlSafetyRule implements ProvidesRemediation
+final class DropSchemaRule extends AbstractPgsqlSafetyRule implements DeclaresLimitations, ProvidesRemediation
 {
     /** The considered `none` this rule hands back, built once. */
     private readonly NoSafeSequenceTemplate $template;

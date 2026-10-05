@@ -47,10 +47,9 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ## What it can fill, and what it deliberately leaves standing
  *
- * The constraint name and the columns come from the classification. The TABLE does too — but only
- * when the statement names exactly one, and a foreign key names two: the altered table and the
- * referenced one, in the classifier's alphabetical order, which cannot say which is which. Rather
- * than pick the likelier of two, the placeholder stays visible. The definition (`FOREIGN KEY (…)
+ * The constraint name and the columns come from the classification, and so does the TABLE: a
+ * foreign key names two, the altered table and the referenced one, and the classification keeps the
+ * altered one as the statement's subject. The definition (`FOREIGN KEY (…)
  * REFERENCES …`) is raw SQL that the canonical model does not carry at all, and reconstructing it
  * would be the invention this package refuses everywhere else.
  *
@@ -344,12 +343,13 @@ final readonly class NotValidThenValidateTemplate
     /**
      * The placeholder values THIS statement carries — and only the ones it carries.
      *
-     * Three deliberate absences, each of which leaves its placeholder visible rather than blank:
+     * `{{table}}` is the table the statement alters. A foreign key names two, and the classification
+     * keeps the altered one as the subject and the one after `REFERENCES` as referenced, so the
+     * placeholder is filled from the subject ({@see TouchedTables::soleSubject()}). Where the subject
+     * cannot be told, it stays standing rather than taking the first of two.
      *
-     * - `{{table}}` on a foreign key. The statement names two tables and the classification sorts
-     *   them alphabetically, so nothing here can say which one is being altered. Picking the first
-     *   would be right most of the time and silently wrong the rest, which is the worst of the
-     *   available failures.
+     * Two deliberate absences, each of which leaves its placeholder visible rather than blank:
+     *
      * - `{{definition}}`, always. `FOREIGN KEY (…) REFERENCES …` is raw SQL the canonical model does
      *   not carry, and rebuilding it from the classification would be inventing a statement.
      * - `{{index}}`, always. The index does not exist yet — its name is the reader's to choose, and
@@ -367,10 +367,10 @@ final readonly class NotValidThenValidateTemplate
             $context['constraint'] = $constraint->qualifiedName();
         }
 
-        $tables = TouchedTables::of($statement);
+        $table = TouchedTables::soleSubject($statement);
 
-        if (count($tables) === 1) {
-            $context['table'] = $tables[0]->qualifiedName();
+        if ($table instanceof StatementTarget) {
+            $context['table'] = $table->qualifiedName();
         }
 
         if ($statement->keyColumns !== []) {

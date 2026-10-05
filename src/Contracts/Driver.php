@@ -7,12 +7,11 @@ namespace Pushery\SQLens\Contracts;
 use Pushery\SQLens\Tools\Tool;
 
 /**
- * The one contract every database driver fulfills — and the only coupling between
- * the core and a driver. Everything driver-specific (PostgreSQL vs MySQL quoting,
- * catalogs, rules, readers) lives behind it, so the split from one package into
- * core + per-driver packages stays a mechanical move. The
- * contract itself carries no DB specifics — no pg_catalog, no information_schema,
- * no SQL fragments.
+ * The one contract every database driver fulfills: its key, the server version it starts at,
+ * the rules it contributes and the external tools it can lean on. The contract itself carries no
+ * DB specifics — no pg_catalog, no information_schema, no SQL fragments — so the split from one
+ * package into core + per-driver packages stays a mechanical move. The catalog readers are not
+ * part of it: they come from `CatalogReaderFactory`, where each engine registers its builder.
  *
  * The key is intentionally an open string, not a closed pgsql|mysql enum: a
  * third-party driver registers its own key through DriverRegistry::extend(). Which
@@ -24,12 +23,8 @@ interface Driver
     /** The connection driver key — `pgsql`, `mysql`, or a registered third-party key. */
     public function key(): string;
 
-    public function displayName(): string;
-
     /** The lowest server version this driver supports (a floor, not a target) — e.g. `18`, `8.4`. */
     public function minimumServerVersion(): string;
-
-    public function documentationUrl(): string;
 
     /**
      * The rules this driver contributes.
@@ -46,8 +41,8 @@ interface Driver
     public function rules(): iterable;
 
     /**
-     * The external tools this driver can lean on — the third thing a driver brings, beside its
-     * rules and its readers.
+     * The external tools this driver can lean on — the other thing a driver brings, beside its
+     * rules.
      *
      * ## Why the DRIVER declares them rather than the service provider listing them
      *

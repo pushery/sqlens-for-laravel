@@ -22,17 +22,14 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * type — so without an index over the pair each one scans the table. {@see PolymorphicPair} argues
  * the shape, why the type column has to lead, and where the detection's limit is.
  *
- * ## Why this is audit-only, and it is structural rather than a gap somebody left
+ * ## Why this reads the catalog
  *
- * The lint half would need a migration statement to say what TYPE each column it creates holds, and
- * a `CREATE TABLE` carries none: {@see MigrationStatementDigest} exposes a
- * kind, its targets and an index's key columns, and nothing else. Reading the definitions back out
- * of the canonical text with a pattern is the one shortcut available, and it is the shortcut this
- * package refuses everywhere else — a reader that half-parses a column list reports a pair nobody
- * wrote, or misses one somebody did, and neither is visible from the finding.
- *
- * So the answer is the catalog's, where both columns and every index exist at once and the question
- * is a fact rather than an inference. The classifier gap is filed rather than worked around.
+ * The question is whether ANY index on the table leads with the type column, and only the catalog
+ * holds both columns and every index at once: a migration shows what it writes, not the indexes
+ * the table already has or the one a later migration adds. There the answer is a fact rather than
+ * an inference. A statement's own column types are not the obstacle — the classifier carries them
+ * in {@see MigrationStatementDigest::$columnDefinitions} — but a pair judged from one migration
+ * would still be judged without the indexes around it.
  *
  * ## Why this engine gets one although it has no foreign-key twin
  *

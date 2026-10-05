@@ -11,6 +11,7 @@ use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Canonical\TargetRole;
 use Pushery\SQLens\Canonical\TransactionMarkers;
 use Pushery\SQLens\Contracts\CanonicalizationStage;
+use Pushery\SQLens\Contracts\DeclaresReservedWords;
 use Pushery\SQLens\Contracts\DriverCanonicalization;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
@@ -19,7 +20,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * normalization stages read. Nothing here imports the MySQL namespace; the two
  * drivers never know about each other.
  */
-final class PgsqlCanonicalization implements DriverCanonicalization
+final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanonicalization
 {
     public function quotingCharacter(): string
     {
@@ -75,6 +76,37 @@ final class PgsqlCanonicalization implements DriverCanonicalization
         'NOT', 'NULL', 'DEFAULT', 'PRIMARY', 'UNIQUE', 'REFERENCES', 'CHECK', 'CONSTRAINT',
         'COLLATE', 'IDENTITY', 'COMMENT', 'GENERATED',
     ];
+
+    /**
+     * The words PostgreSQL refuses as an unquoted table, column, index or constraint name, upper case.
+     *
+     * Read from the server rather than from memory: `pg_get_keywords()` on PostgreSQL 18, the two
+     * categories a bare name may not carry, `R` (reserved) and `T` (may name a function or a type
+     * and nothing else). A name from this list is quoted in the canonical form, so that it parses
+     * where a suggestion writes it, `CREATE INDEX … ON "group"` rather than `ON group`.
+     *
+     * @var list<string>
+     */
+    private const array RESERVED_WORDS = [
+        'ALL', 'ANALYSE', 'ANALYZE', 'AND', 'ANY', 'ARRAY', 'AS', 'ASC', 'ASYMMETRIC', 'AUTHORIZATION',
+        'BINARY', 'BOTH', 'CASE', 'CAST', 'CHECK', 'COLLATE', 'COLLATION', 'COLUMN', 'CONCURRENTLY',
+        'CONSTRAINT', 'CREATE', 'CROSS', 'CURRENT_CATALOG', 'CURRENT_DATE', 'CURRENT_ROLE',
+        'CURRENT_SCHEMA', 'CURRENT_TIME', 'CURRENT_TIMESTAMP', 'CURRENT_USER', 'DEFAULT', 'DEFERRABLE',
+        'DESC', 'DISTINCT', 'DO', 'ELSE', 'END', 'EXCEPT', 'FALSE', 'FETCH', 'FOR', 'FOREIGN',
+        'FREEZE', 'FROM', 'FULL', 'GRANT', 'GROUP', 'HAVING', 'ILIKE', 'IN', 'INITIALLY', 'INNER',
+        'INTERSECT', 'INTO', 'IS', 'ISNULL', 'JOIN', 'LATERAL', 'LEADING', 'LEFT', 'LIKE', 'LIMIT',
+        'LOCALTIME', 'LOCALTIMESTAMP', 'NATURAL', 'NOT', 'NOTNULL', 'NULL', 'OFFSET', 'ON', 'ONLY',
+        'OR', 'ORDER', 'OUTER', 'OVERLAPS', 'PLACING', 'PRIMARY', 'REFERENCES', 'RETURNING', 'RIGHT',
+        'SELECT', 'SESSION_USER', 'SIMILAR', 'SOME', 'SYMMETRIC', 'SYSTEM_USER', 'TABLE',
+        'TABLESAMPLE', 'THEN', 'TO', 'TRAILING', 'TRUE', 'UNION', 'UNIQUE', 'USER', 'USING',
+        'VARIADIC', 'VERBOSE', 'WHEN', 'WHERE', 'WINDOW', 'WITH',
+    ];
+
+    /** @return list<string> */
+    public function reservedWords(): array
+    {
+        return self::RESERVED_WORDS;
+    }
 
     /** @return list<string> */
     public function keywords(): array

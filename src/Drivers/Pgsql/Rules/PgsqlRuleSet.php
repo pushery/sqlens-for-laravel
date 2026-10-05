@@ -171,10 +171,9 @@ final readonly class PgsqlRuleSet
     }
 
     /**
-     * The rules a driver hands to a run. Empty until the rule packs land — and an empty
-     * set is an honest "no rules yet", never read as "checked, all clean": the run
-     * reports its active-rule count, and a category filter that admits nothing raises a
-     * named undetermined.
+     * The rules a driver hands to a run. A run that ends up with none is never read as
+     * "checked, all clean": the run reports its active-rule count, and a category filter
+     * that admits nothing raises a named undetermined.
      *
      * @return list<Rule>
      */

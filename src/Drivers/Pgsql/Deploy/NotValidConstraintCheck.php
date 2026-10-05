@@ -261,9 +261,9 @@ final readonly class NotValidConstraintCheck implements PreflightCheck
             context: new SubjectContext(driver: $context->driver, profile: $context->profile, strictTools: false),
             // Medium, and deliberately not higher on its own. The debt is real and it is old — a
             // finding that shouted would shout on every run of every project that ever did the safe
-            // thing and got interrupted, and a gate that always shouts stops being read. What makes
-            // a specific one urgent is a pending rewrite of that table, which needs the pending
-            // migrations this command does not carry yet.
+            // thing and got interrupted, and a gate that always shouts stops being read. What would
+            // make a specific one urgent is a pending rewrite of that table; the pending migrations
+            // are read here only to see whether one of them validates the constraint.
             severity: Severity::Medium,
         )->withDowntimeClass(
             // `online`: the unvalidated constraint locks nothing by existing. The rewrite it can

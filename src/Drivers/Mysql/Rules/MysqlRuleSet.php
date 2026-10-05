@@ -68,9 +68,7 @@ use Pushery\SQLens\Rules\Pedantic\DocumentationPolicy;
  * that gap so a later reader repairs nothing.
  *
  * **A rule is added HERE, once**, so the driver and the fixture suite see each new rule
- * without a second edit. The remaining engine packs (the no-primary-key rule, the
- * deprecated-FK-target rule, the charset and enum rules, the ALGORITHM/LOCK meta-rule)
- * land as their own tickets and join the list below.
+ * without a second edit.
  */
 final readonly class MysqlRuleSet
 {
