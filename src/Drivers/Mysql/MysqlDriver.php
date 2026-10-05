@@ -7,7 +7,6 @@ namespace Pushery\SQLens\Drivers\Mysql;
 use Pushery\SQLens\Contracts\AcceptsRunClock;
 use Pushery\SQLens\Contracts\Driver;
 use Pushery\SQLens\Contracts\Rule;
-use Pushery\SQLens\Docs\DocumentationSite;
 use Pushery\SQLens\Drivers\Mysql\Rules\MysqlRuleSet;
 use Pushery\SQLens\Rules\Convention\NamingConvention;
 use Pushery\SQLens\Rules\Lifecycle\LifecycleRuleSet;
@@ -21,8 +20,9 @@ use Pushery\SQLens\Today;
 use Pushery\SQLens\Tools\Tool;
 
 /**
- * The MySQL driver — its identity (key, name, version floor, docs) and its lint rule
- * pack. Readers (live-catalog) arrive later.
+ * The MySQL driver — its identity (key, name, version floor, docs) and its rule pack.
+ * Its live-catalog readers are built by the catalog reader factory the service provider
+ * registers, not by this class.
  *
  * Cross-import rule (enforced by an architecture test, stated here at the site of
  * temptation): nothing under Drivers\Mysql may import Drivers\Pgsql, and vice
@@ -113,19 +113,9 @@ final class MysqlDriver implements AcceptsRunClock, Driver
         return 'mysql';
     }
 
-    public function displayName(): string
-    {
-        return 'MySQL';
-    }
-
     public function minimumServerVersion(): string
     {
         return '8.4';
-    }
-
-    public function documentationUrl(): string
-    {
-        return DocumentationSite::page('drivers/mysql');
     }
 
     /**
@@ -145,11 +135,11 @@ final class MysqlDriver implements AcceptsRunClock, Driver
         return [
             ...MysqlRuleSet::shipped($this->projectRoot, $this->auditExpect, $this->moneyColumns, $this->unusedIndexMinDays, $this->naming, $this->documentation, $this->migrationsTable)->all(),
             ...LifecycleRuleSet::forProjectRoot($this->projectRoot)->all(),
-            // …and the security family, the same Core source the PostgreSQL driver composes. It is
-            // registered here even though its only rule today has nothing to say on MySQL: the rule
-            // judges a GRANT subject, MySQL has no PUBLIC pseudo-role, and so it is silent as a matter
-            // of DATA rather than of registration. That is the stronger arrangement — a per-driver
-            // list would make "silent here" a line somebody has to remember to keep true.
+            // …and the security family, the same Core source the PostgreSQL driver composes, whole.
+            // A rule of it with nothing to say on MySQL, such as one about PostgreSQL's PUBLIC
+            // pseudo-role, is silent here as a matter of DATA rather than of registration: no subject
+            // it judges ever arrives. That is the stronger arrangement — a per-driver list would make
+            // "silent here" a line somebody has to remember to keep true.
             ...SecurityRuleSet::forProjectRoot($this->projectRoot, $this->advisories, $this->today?->value, $this->environment, $this->privacyColumns)->all(),
         ];
     }

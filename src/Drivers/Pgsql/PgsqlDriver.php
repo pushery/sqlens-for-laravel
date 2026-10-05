@@ -7,7 +7,6 @@ namespace Pushery\SQLens\Drivers\Pgsql;
 use Pushery\SQLens\Contracts\AcceptsRunClock;
 use Pushery\SQLens\Contracts\Driver;
 use Pushery\SQLens\Contracts\Rule;
-use Pushery\SQLens\Docs\DocumentationSite;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L3\Support\ExpectedTimeouts;
 use Pushery\SQLens\Drivers\Pgsql\Rules\PgsqlRuleSet;
 use Pushery\SQLens\Rules\Convention\NamingConvention;
@@ -24,8 +23,9 @@ use Pushery\SQLens\Tools\Squawk\SquawkTool;
 use Pushery\SQLens\Tools\Tool;
 
 /**
- * The PostgreSQL driver — its identity (key, name, version floor, docs) and its
- * lint rule pack. Readers (live-catalog) arrive later.
+ * The PostgreSQL driver — its identity (key, name, version floor, docs) and its rule
+ * pack. Its live-catalog readers are built by the catalog reader factory the service
+ * provider registers, not by this class.
  *
  * Cross-import rule (enforced by an architecture test, stated here at the site of
  * temptation): nothing under Drivers\Pgsql may import Drivers\Mysql, and vice
@@ -112,19 +112,9 @@ final class PgsqlDriver implements AcceptsRunClock, Driver
         return 'pgsql';
     }
 
-    public function displayName(): string
-    {
-        return 'PostgreSQL';
-    }
-
     public function minimumServerVersion(): string
     {
         return '18';
-    }
-
-    public function documentationUrl(): string
-    {
-        return DocumentationSite::page('drivers/pgsql');
     }
 
     /**

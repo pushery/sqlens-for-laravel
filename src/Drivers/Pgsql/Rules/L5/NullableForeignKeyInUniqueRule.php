@@ -44,10 +44,10 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * `preview` after — at ONE named place ({@see RuleMetadataDefaults::DEFAULT_STABILITY}), so the flip
  * is one line rather than a sweep, and a machine guard holds it.
  *
- * Overriding it here would make this the single rule the guard has to except, and would put a
- * second answer to "what tier does a new rule get" in the codebase. The ticket's reason for asking
- * was false-positive risk rather than the versioning contract, and that risk is answered where it
- * belongs: in how narrowly the trigger is cut.
+ * Overriding it here would add this rule to the exceptions that guard carries, each with a reason
+ * of its own, and would put a second answer to "what tier does a new rule get" in the codebase. The
+ * ticket's reason for asking was false-positive risk rather than the versioning contract, and that
+ * risk is answered where it belongs: in how narrowly the trigger is cut.
  */
 final class NullableForeignKeyInUniqueRule extends AbstractCatalogRule implements DeclaresJudgedObjectTypes
 {

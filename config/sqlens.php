@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Pushery\SQLens\Config\EnvironmentInteger;
+
 return [
 
     /*
@@ -13,14 +15,15 @@ return [
     |
     |     php artisan vendor:publish --tag=sqlens-config
     |
-    | Drift trap — read before editing a published copy: Laravel merges a
-    | package config with mergeConfigFrom(), which is a SHALLOW array_merge, NOT
-    | a recursive merge. A nested section you do not repeat in your published
-    | copy is REPLACED wholesale by your copy, not merged with the package
-    | default — so a key added to the package in a later release silently never
-    | reaches an app that published an older copy. Keep a published config
-    | minimal (only the keys you actually override) so new package keys keep
-    | flowing through, and re-diff it against this file after every upgrade.
+    | Read before editing a published copy: the package lays your copy over
+    | this file key by key. Where this file holds a map, the two are merged
+    | level by level; where it holds a list, a scalar or null, your value
+    | replaces it whole, and an empty list in your copy means none. A key
+    | added to the package in a later release therefore still reaches an app
+    | that published an older copy. A value your copy repeats does not follow
+    | the package: it stays what you copied when the default moves. Keep a
+    | published config minimal (only the keys you actually override), and
+    | re-diff it against this file after every upgrade.
     |
     | Every key in this file is validated against a strict schema before any
     | suite runs: an unknown key, a wrong type, or an out-of-range value fails
@@ -371,12 +374,8 @@ return [
         // remove the limit. A value that is no positive integer lands on the number shipped here.
         // SQLENS_CAPTURE_STATEMENT_TIMEOUT and SQLENS_CAPTURE_LOCK_TIMEOUT, in milliseconds.
         'session' => [
-            'statement_timeout' => is_numeric($captureStatementTimeout = env('SQLENS_CAPTURE_STATEMENT_TIMEOUT')) && (int) $captureStatementTimeout >= 1
-                ? (int) $captureStatementTimeout
-                : 5000,
-            'lock_timeout' => is_numeric($captureLockTimeout = env('SQLENS_CAPTURE_LOCK_TIMEOUT')) && (int) $captureLockTimeout >= 1
-                ? (int) $captureLockTimeout
-                : 3000,
+            'statement_timeout' => EnvironmentInteger::atLeastOne(env('SQLENS_CAPTURE_STATEMENT_TIMEOUT'), 5000),
+            'lock_timeout' => EnvironmentInteger::atLeastOne(env('SQLENS_CAPTURE_LOCK_TIMEOUT'), 3000),
         ],
 
         'prescan' => [
@@ -474,9 +473,7 @@ return [
             // How many seconds the whole shadow provisioning and migration may take.
             // Positive; zero would mean "wait forever", the harm this prevents.
             // SQLENS_SHADOW_TIMEOUT sets it per environment, held to a floor of 1.
-            'timeout' => is_numeric($shadowTimeout = env('SQLENS_SHADOW_TIMEOUT')) && (int) $shadowTimeout >= 1
-                ? (int) $shadowTimeout
-                : 120,
+            'timeout' => EnvironmentInteger::atLeastOne(env('SQLENS_SHADOW_TIMEOUT'), 120),
         ],
     ],
 
@@ -517,15 +514,9 @@ return [
         // SQLENS_CATALOG_IDLE_IN_TRANSACTION_TIMEOUT set the three bounds per environment, in
         // milliseconds, read the way the capture session reads its own: typed, with a floor of 1.
         'session' => [
-            'statement_timeout' => is_numeric($catalogStatementTimeout = env('SQLENS_CATALOG_STATEMENT_TIMEOUT')) && (int) $catalogStatementTimeout >= 1
-                ? (int) $catalogStatementTimeout
-                : 5000,
-            'lock_timeout' => is_numeric($catalogLockTimeout = env('SQLENS_CATALOG_LOCK_TIMEOUT')) && (int) $catalogLockTimeout >= 1
-                ? (int) $catalogLockTimeout
-                : 1000,
-            'idle_in_transaction_timeout' => is_numeric($catalogIdleTimeout = env('SQLENS_CATALOG_IDLE_IN_TRANSACTION_TIMEOUT')) && (int) $catalogIdleTimeout >= 1
-                ? (int) $catalogIdleTimeout
-                : 5000,
+            'statement_timeout' => EnvironmentInteger::atLeastOne(env('SQLENS_CATALOG_STATEMENT_TIMEOUT'), 5000),
+            'lock_timeout' => EnvironmentInteger::atLeastOne(env('SQLENS_CATALOG_LOCK_TIMEOUT'), 1000),
+            'idle_in_transaction_timeout' => EnvironmentInteger::atLeastOne(env('SQLENS_CATALOG_IDLE_IN_TRANSACTION_TIMEOUT'), 5000),
             'application_name' => 'sqlens',
         ],
 
@@ -1558,9 +1549,7 @@ return [
              *
              * SQLENS_MCP_MAX_FINDINGS sets it per environment, held to a floor of 1.
              */
-            'max_findings' => is_numeric($mcpMaxFindings = env('SQLENS_MCP_MAX_FINDINGS')) && (int) $mcpMaxFindings >= 1
-                ? (int) $mcpMaxFindings
-                : 200,
+            'max_findings' => EnvironmentInteger::atLeastOne(env('SQLENS_MCP_MAX_FINDINGS'), 200),
 
             /*
              * Which tools the server exposes. A name that is not listed here is not a tool.
@@ -1831,9 +1820,7 @@ return [
             'path' => null,
             'enabled' => true,
             // Seconds; SQLENS_SQUAWK_TIMEOUT sets it per environment, held to a floor of 1.
-            'timeout' => is_numeric($squawkTimeout = env('SQLENS_SQUAWK_TIMEOUT')) && (int) $squawkTimeout >= 1
-                ? (int) $squawkTimeout
-                : 10,
+            'timeout' => EnvironmentInteger::atLeastOne(env('SQLENS_SQUAWK_TIMEOUT'), 10),
             'fast_path' => false,
         ],
 
@@ -1873,9 +1860,7 @@ return [
             'path' => null,
             'enabled' => true,
             // Seconds; SQLENS_PGLS_TIMEOUT sets it per environment, held to a floor of 1.
-            'timeout' => is_numeric($pglsTimeout = env('SQLENS_PGLS_TIMEOUT')) && (int) $pglsTimeout >= 1
-                ? (int) $pglsTimeout
-                : 30,
+            'timeout' => EnvironmentInteger::atLeastOne(env('SQLENS_PGLS_TIMEOUT'), 30),
         ],
 
     ],
@@ -2154,9 +2139,7 @@ return [
          *
          * Seconds; SQLENS_FORMAT_TIMEOUT sets it per environment, held to a floor of 1.
          */
-        'timeout' => is_numeric($formatTimeout = env('SQLENS_FORMAT_TIMEOUT')) && (int) $formatTimeout >= 1
-            ? (int) $formatTimeout
-            : 15,
+        'timeout' => EnvironmentInteger::atLeastOne(env('SQLENS_FORMAT_TIMEOUT'), 15),
 
         /*
          * The house style. Four options, and the fewness is deliberate: every

@@ -13,6 +13,7 @@ use Pushery\SQLens\Capture\CaptureRuleMetadata;
 use Pushery\SQLens\Catalog\Degradation\CatalogNotice;
 use Pushery\SQLens\Catalog\Security\SecurityNotice;
 use Pushery\SQLens\Contracts\Attribution;
+use Pushery\SQLens\Contracts\DeclaresSecurityPosture;
 use Pushery\SQLens\Contracts\DerivesDowntimeClass;
 use Pushery\SQLens\Contracts\Rule;
 use Pushery\SQLens\Contracts\RunNotice;
@@ -23,6 +24,7 @@ use Pushery\SQLens\Deploy\DeployCheckMetadata;
 use Pushery\SQLens\Drivers\DriverRegistry;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Lint\RunnerNotice;
+use Pushery\SQLens\Rules\DeclaresLimitations;
 use Pushery\SQLens\Rules\DocumentationPageIndex;
 use Pushery\SQLens\Rules\RuleDocumentationState;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
@@ -236,6 +238,7 @@ final readonly class RuleRegistryExport
      * the diff of a real change small — a missing key would move every line after it.
      *
      * @param  list<string>  $suites
+     * @param  list<string>|null  $limitations
      * @return array<string, mixed>
      */
     private static function row(
@@ -261,6 +264,7 @@ final readonly class RuleRegistryExport
         ?string $debtKind = null,
         bool $severityDerived = false,
         ?string $reportedIdentifier = null,
+        ?array $limitations = null,
     ): array {
         return [
             'id' => $id,
@@ -332,6 +336,12 @@ final readonly class RuleRegistryExport
             // account's own vocabulary.
             'debt_kind' => $debtKind,
             'suites' => $suites,
+            // What the rule says it does not answer, one sentence each: the security rules declare
+            // it through their contract, and the few engine and analyse rules with limits worth
+            // stating declare it too. Null where a family makes no such statement, which says
+            // something different from an empty list: empty means nothing the rule claims to cover
+            // escapes it.
+            'limitations' => $limitations,
         ];
     }
 
@@ -364,7 +374,24 @@ final readonly class RuleRegistryExport
             documentationUrl: $rule->documentationUrl(),
             downtimeClassDerived: $rule instanceof DerivesDowntimeClass,
             debtKind: $rule instanceof ProducesDebt ? $rule->debtKind() : null,
+            limitations: self::limitationsOf($rule),
         );
+    }
+
+    /**
+     * What a rule declares it does not answer, or null where it declares nothing.
+     *
+     * Two interfaces carry the slot: the public security contract, and the internal one the engine
+     * rules with stated limits implement. A rule with neither has made no statement about its
+     * limits, and null keeps that apart from an empty list.
+     *
+     * @return list<string>|null
+     */
+    private static function limitationsOf(Rule $rule): ?array
+    {
+        return $rule instanceof DeclaresSecurityPosture || $rule instanceof DeclaresLimitations
+            ? $rule->limitations()
+            : null;
     }
 
     /** @return array<string, mixed> */
@@ -463,6 +490,7 @@ final readonly class RuleRegistryExport
             attribution: Attribution::Authored,
             documentationUrl: $metadata->documentationUrl(),
             reportedIdentifier: $metadata->reportedIdentifier,
+            limitations: $metadata->limitations,
         );
     }
 

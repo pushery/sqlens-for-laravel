@@ -16,6 +16,7 @@ use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Remediation\ExpandContractTemplate;
+use Pushery\SQLens\Rules\DeclaresLimitations;
 use Pushery\SQLens\Rules\RuleVerdict;
 use Pushery\SQLens\Subjects\MigrationStatementDigest;
 use Pushery\SQLens\Subjects\MigrationStatementView;
@@ -96,7 +97,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * reports an end that is already closed. That is the fast path's standing direction of error — it
  * sees what it was given — and it is why the confidence is heuristic.
  */
-final class ExpandWithoutContractRule extends AbstractMysqlRule implements ProducesDebt, ProvidesRemediation
+final class ExpandWithoutContractRule extends AbstractMysqlRule implements DeclaresLimitations, ProducesDebt, ProvidesRemediation
 {
     /**
      * The word this debt is filed under, read from the neutral sequence rather than spelled here.

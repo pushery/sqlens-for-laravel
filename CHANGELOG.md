@@ -2,6 +2,58 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.0] - 2026-10-05
+
+### Added
+
+- **A driver canonicalization can declare the words its server reserves.** `DeclaresReservedWords` is a contract of its own beside `DriverCanonicalization`, with one method, `reservedWords()`. The PostgreSQL and MySQL canonicalizations implement it, and a canonicalization registered through the extension registry may: one that does not is read as before.
+
+- **The rule registry says what each rule does not answer.** Every row of `resources/data/rule-registry.json` has a `limitations` field: the sentences a rule declares about what it deliberately does not check, for the security rules, the analyse rules and the engine rules that state their limits, and `null` for a family that declares none. `explain_rule` returns the field with the rest of the row. The key is additive, so the registry stays at schema version 1.
+
+### Changed
+
+- **Canonical form version 8: a name the server reserves keeps its quotes.** The canonical form quoted a name only when it collided with the canonicalizer's own keyword list, and the servers reserve more than that list holds: 62 of the 101 words PostgreSQL 18 reserves and 182 of the 262 MySQL 8.4 reserves were written bare, and each of them is a syntax error bare. The form reaches suggestions and remediation material, so the `CREATE INDEX CONCURRENTLY` suggested for an index on a table called `group` read `ON group (name)` and did not parse, and on MySQL, where `GROUPS` is reserved since 8.0, the same held for a table Laravel calls `groups`. Such a name is now written `"group"` or `` `groups` ``. Only a statement that names an object with a reserved name moves; a baseline entry for a finding about one reports as new once after upgrading, so accept it again or regenerate the baseline. No keyword folds differently, and every other canonical form is unchanged.
+
+- **The console report says what a skipped area's reason means.** Its header named each area the run could not read with a reason id such as `insufficient_privilege` and a detail, while the sentence written for each reason, saying what it means and what to do about it, was printed nowhere. The header now prints that sentence, naming the object, under the first area of each reason; the areas after it carry the same reason id. The JSON envelope is unchanged.
+
+- **`config/sqlens.php` reads its timeouts and limits from the environment through one method.** Ten keys that take a whole number from the environment, such as `SQLENS_CAPTURE_STATEMENT_TIMEOUT`, did so in a three-line condition each. They now call `EnvironmentInteger::atLeastOne()`, which applies the same rule: a whole number of at least one, or the shipped default. A copy published earlier keeps working as it is.
+
+### Fixed
+
+- **`PG.L5.FK_NO_INDEX` reports a new table whose foreign key points at a table that already exists.** The lint half reported only when the migration also created the referenced table, because it could not tell which of the two tables carried the key. The classification keeps that apart now, and the rule asks only the table the `ALTER TABLE` changes: a new `order_lines` with an unindexed key on an existing `orders`, the commonest shape, was silent and is reported. Coverage is read off that table alone, and the constraint remediation fills `{{table}}` with it instead of leaving the placeholder standing.
+
+- **Two catalog remediations name the object their finding is about.** `PG.L5.COLLATION_VERSION_MISMATCH` left `{{database}}` standing for a database collation and `PG.L9.TYPE_IMPLICIT_CAST` left `{{table}}` standing, although each finding names the object, while the remediation schema says a known value is already filled in. Both are filled in now, quoted the way PostgreSQL reads an identifier, so `ALTER DATABASE "Shop-App"` and `ALTER TABLE "public"."Order Lines"` name what they say. The key-specific values of the widening sequence stay placeholders, because the sequence is written for whichever key you widen, and the schema page says so.
+
+- **The `predeploy` MCP tool and `sqlens:postdeploy` say when the preflight read through the connection that runs your migrations.** `sqlens:predeploy` prints that note, and the other two dropped it, so a run that read with `ALTER` and `DROP` rights looked exactly like one that read through a read-only role. The tool's answer carries the note in a new `advisory` field, `null` when there is nothing to say, and repeats it in `summary`; `sqlens:postdeploy` prints it on STDERR as `sqlens:predeploy` does. The note decides nothing: the verdict and the exit code are the same with it as without it.
+
+- **`CAP.L0.ORPHANED_IGNORE` no longer calls a pattern orphaned that hid a finding in the same run.** The check compared the ignore list with the catalog snapshot alone, so a pattern on an object only an external tool reports, such as an extension the Postgres Language Server names, or on a setting, role, grant or HBA line, was reported as matching nothing while it suppressed a finding, and the notice told you to delete the line that was doing the work. It now counts every object the run read and every object a finding names, and the notice says it matched nothing this run read or reported.
+
+- **The naming rules report a name their pattern gave up on as `undetermined`, instead of ending the run.** A pattern can compile and still make PCRE give up on one name, for instance one that backtracks without bound, or a name that is not valid UTF-8 under a `/u` pattern. The audit and the lint then stopped with an uncaught error saying the pattern could not be compiled. Now that object or statement is `undetermined` with the reason `naming_pattern_gave_up`, naming the identifier and PCRE's own reason, and every other name is judged. An exempt pattern that gives up on a name is reported the same way rather than read as not exempt.
+
+- **`sqlens:audit` refuses MariaDB behind the `mysql` driver even when its identity query fails.** The engine check took the server version from the identity query, a statement of its own that can fail, and a failure left the check without a version, so the audit judged the server with MySQL rules. It reads the version the connection's handshake carried now, which every connection that opened has.
+
+### Removed
+
+- **`Driver::displayName()` and `Driver::documentationUrl()` are no longer part of the driver contract.** Nothing in the package called either of them: messages name the engine in their own words, and no output links a driver's page. A method the contract declares costs a third-party driver an implementation and gives it nothing back, so both go, as `readers()` did before them. A third-party driver that keeps the two methods still satisfies the contract and needs no change. Code that called them on a resolved driver has to stop, because the two shipped drivers no longer carry them.
+
+### Documentation
+
+- **The predeploy permissions page lists the settings check's own id.** `DEPLOY.CONTEXT.SETTING` is reported, as `undetermined`, when a setting the check needs cannot be read, and the page named only the ids of the individual settings under it.
+
+- **`MY.L1.DROP_COLUMN` names every condition that takes a column drop off MySQL's instant path.** The rule page, its evidence note and the rule's own description counted four conditions and left out the commonest: an ordinary index over the column, which InnoDB gives every foreign-key column. With `ALGORITHM=INSTANT` pinned, the server refuses such a drop with error 1845. The class the rule reports was right all along, because it reads the conditions from the online-DDL matrix and stays undetermined until the live table is known.
+
+- **The `ignoreErrors` note in `extension.neon` says when PHPStan reports an exemption that stops matching.** It said such an entry is accepted in silence. PHPStan reports it as an error whenever the run's paths include a directory, which is how a project is configured, and stays silent only for a run given single files. The analyse page says the same.
+
+- **The header of the published configuration says how a published copy is merged.** It said a published `config/sqlens.php` is merged flat, so a nested section you did not repeat would be replaced wholesale and a key added in a later release would never reach an older copy. The package merges a published copy map by map: a key added later does reach it, and only a value your copy repeats stays what you copied when the default moves.
+
+- **The PGLS adapter says how many sessions `postgrestools` opens.** Against 0.25.7 a `dblint` run sends sixteen statements, none of them writing, over ten sessions that are all open at once, so a server close to `max_connections` needs ten free slots for the length of a run, and the tool has no setting that lowers the number. Each session carries the timeouts and the read-only default SQLens sets. Only the lint query runs inside a transaction; the adapter's description had put every read there.
+
+- **The `policy` note in `extension.neon` says what the bare word `off` prints.** NEON reads `off` as `false`, which the setting accepts, and the NEON that PHPStan 2.2 bundles also prints a deprecation line for it. Written in quotes, `'off'` is the same setting without that line.
+
+- **The MySQL and PostgreSQL drivers describe what they do today.** Fifteen passages in their docblocks and comments said that readers, rule packs, catalog facts or the pending migrations would arrive later, and the online DDL matrix said it ships a few reference entries; each passage now says what the code does, and the matrix's `about` text no longer promises entries it already has.
+
+- **The Boost skill says what three commands do when something is missing.** `sqlens:format` stops with exit 2 when it cannot tell the SQL dialect, where the skill said it formats with a dialect-neutral backend. `sqlens:mcp` stops with exit 2 and the install command when `laravel/mcp` is absent, where the skill and the package's `suggest` entry spoke of an `undetermined` result. Shadow mode runs only behind `--shadow`, an environment `capture.shadow.allowed_environments` lists, a connection that does not look like production, and a confirmation, where the skill said it stays off until `capture.shadow` is configured.
+
 ## [0.28.1] - 2026-10-04
 
 ### Fixed

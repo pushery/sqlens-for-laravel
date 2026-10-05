@@ -13,6 +13,7 @@ use Pushery\SQLens\Drivers\Mysql\Rules\L3\Support\MysqlTimeouts;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Levels\Level;
+use Pushery\SQLens\Rules\DeclaresLimitations;
 use Pushery\SQLens\Subjects\MigrationStatementDigest;
 use Pushery\SQLens\Subjects\MigrationStatementView;
 
@@ -39,7 +40,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  * `innodb_lock_wait_timeout` is likewise not accepted: it bounds ROW locks, which a DDL does not
  * queue for.
  */
-final class MissingLockWaitTimeoutRule extends AbstractMysqlRule implements ProvidesRemediation
+final class MissingLockWaitTimeoutRule extends AbstractMysqlRule implements DeclaresLimitations, ProvidesRemediation
 {
     private readonly TimeoutPreambleTemplate $template;
 

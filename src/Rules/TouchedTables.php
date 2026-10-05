@@ -56,6 +56,21 @@ final readonly class TouchedTables
     }
 
     /**
+     * The one table this statement ACTS on, or null when it names none or more than one.
+     *
+     * A foreign key names two tables, and the classification keeps them apart: the table the
+     * `ALTER TABLE` changes carries the key and is the subject, the one after `REFERENCES` is only
+     * pointed at ({@see StatementTarget::isSubject()}). A statement that names two subject tables
+     * leaves the question open, and the answer is null rather than the first of them.
+     */
+    public static function soleSubject(MigrationStatementView $statement): ?StatementTarget
+    {
+        $subjects = array_values(array_filter(self::of($statement), static fn (StatementTarget $table): bool => $table->isSubject()));
+
+        return count($subjects) === 1 ? $subjects[0] : null;
+    }
+
+    /**
      * Whether every table this statement names is born in this migration.
      *
      * A statement with no table target at all answers false — an unclassified statement is not one

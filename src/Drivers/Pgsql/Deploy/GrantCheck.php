@@ -328,13 +328,13 @@ final readonly class GrantCheck implements PreflightCheck
         // refusal. Answering `true` would certify a permission nobody checked, so it raises and the
         // caller reports it as unanswered.
         if (! is_object($row)) {
-            // NAMED, and unconditionally so — which is a claim about the four arms above rather
-            // than a shortcut. Only the two OWNERSHIP questions join `pg_class`, and only a join can
-            // come back with nothing; `has_schema_privilege` and `has_table_privilege` always answer
-            // with exactly one row, or they raise and never reach here. So an empty answer at this
-            // point means one thing: the OWNER could not be established, because the object went away
-            // between the existence probe and this one, or the connecting role cannot read the
-            // catalog row that names it.
+            // NAMED, and unconditionally so — which is a claim about the arms of the match above
+            // rather than a shortcut. Only the two OWNERSHIP questions join `pg_class`, and only a
+            // join can come back with nothing; `has_schema_privilege` and `has_table_privilege`
+            // always answer with exactly one row, or they raise and never reach here. So an empty
+            // answer at this point means one thing: the OWNER could not be established, because the
+            // object went away between the existence probe and this one, or the connecting role
+            // cannot read the catalog row that names it.
             //
             // A conditional here would carry a branch nothing can enter — untestable, unable to go
             // red, and load-bearing for the sentence a reader acts on.

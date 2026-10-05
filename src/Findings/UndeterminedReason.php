@@ -1018,6 +1018,16 @@ enum UndeterminedReason: string
      */
     case HostAuthRuleUnparsable = 'host_auth_rule_unparsable';
 
+    /**
+     * The naming pattern compiles, and PCRE gave up matching it against one identifier.
+     *
+     * A pattern that backtracks without bound, or a name that is not valid UTF-8 under a `/u`
+     * pattern, makes `preg_match()` answer `false` for that name alone. Read as a mismatch it would
+     * accuse a name nobody judged, and read as a match it would clear one, so the object or the
+     * statement carrying the name is reported as undetermined, and every other name is judged.
+     */
+    case NamingPatternGaveUp = 'naming_pattern_gave_up';
+
     /*
     |--------------------------------------------------------------------------
     | The deploy preflight's reasons
@@ -1318,6 +1328,7 @@ enum UndeterminedReason: string
             self::TableKeyUndetermined => 'Whether the table ends up with a usable clustered key could not be read off the statement that creates it; check the table definition on the server.',
             self::ForeignKeyTargetKeyUnknown => 'The foreign key\'s target table is not created by this migration, so which unique keys it carries could not be read; confirm it has one covering exactly the referenced columns.',
             self::HostAuthRuleUnparsable => 'The server itself rejected this line of pg_hba.conf, so what it authorizes could not be read; fix the line reported by SEC.AUTH.HBA_PARSE_ERROR and audit again.',
+            self::NamingPatternGaveUp => 'The naming pattern gave up on a name here, so whether that name keeps the convention is not known; simplify the pattern, or check how the name is encoded.',
             self::TransactionContextUnknown => 'Whether the statement runs inside a transaction could not be resolved, so a rule that reasons about the transaction boundary could not conclude.',
             self::AssumedVersionSkew => 'The assumed server version pin disagrees with the version the connected server reported, so the result reflects the pin rather than the live instance.',
             self::UnparsableMigration => 'The migration file could not be parsed, so its contents could not be inspected.',

@@ -27,7 +27,8 @@
 #       bare word `off` as boolean FALSE. Without it, the most likely thing a developer writes —
 #       the mode's own name, unquoted — is refused with a message about types rather than about the
 #       setting. `on`/`yes` is still refused, because it names no mode and both remaining ones are
-#       "on".
+#       "on". The NEON that PHPStan 2.2 bundles also prints "Neon: keyword 'off' is deprecated" for
+#       the bare word; written in quotes, `'off'` is the same setting without that line.
 #
 #   exclude_paths
 #       Paths the justification duty does not apply to; generated code is the case it exists for.
@@ -55,13 +56,11 @@
 #
 #       That removes exactly those findings and leaves every other rule reporting.
 #
-#       It is worth knowing what it does NOT do, because this list behaves the other way: an entry
-#       here that matches nothing stops the run. An ignoreErrors entry naming a file the run
-#       analyses, for a finding that file no longer produces, is accepted in silence — measured,
-#       rather than assumed from the default of `reportUnmatchedIgnoredErrors`, which does report an
-#       entry a NARROWED run never reached but not this case. So an exemption whose call site was
-#       rewritten years ago goes on sitting in a project's configuration looking like protection.
-#       Review them when the code under them moves.
+#       An entry like this one that stops matching is reported rather than ignored:
+#       `reportUnmatchedIgnoredErrors` is on by default, and PHPStan names the entry as an error
+#       whenever the run's paths include a directory, which is how a project is configured. A run
+#       given only single files reports no such entry, so a check narrowed to the changed files
+#       says nothing about the exemptions in them.
 #
 #   justification_placeholders
 #       Reasons that stop counting as reasons under `strict` — `todo`, `tbd`, whatever a team

@@ -42,8 +42,8 @@ namespace Pushery\SQLens\Drivers\Mysql\Rules\L3\Support;
  * ## What MySQL does NOT have
  *
  * There is no counterpart to `statement_timeout` for DDL. That is a property of the engine, not a
- * gap in this package, and it is named in the rule's `limitations()` rather than papered over with
- * the setting whose name is closest.
+ * gap in this package, and it is named in the rule's `limitations()`, which the rule registry and
+ * `explain_rule` carry, rather than papered over with the setting whose name is closest.
  */
 final readonly class MysqlTimeouts
 {

@@ -18,22 +18,30 @@ use Pushery\SQLens\Tools\ToolRunResult;
  *
  * ## What it does to the database, measured
  *
- * This is the one adapter in the package whose tool opens its own connection, so the question
- * "does it harm anything" could not be reasoned about — it was measured, with `log_statement='all'`
- * on a probe database. A run issues **sixteen statements, none of them mutating**: catalog reads,
- * inside one transaction, with `set local search_path = ''`.
+ * This is the one adapter in the package whose tool opens connections of its own, so the question
+ * "does it harm anything" could not be reasoned about — it was measured, by recording every message
+ * the tool sends to the server. Against 0.25.7 a run issues **sixteen statements, none of them
+ * mutating**, over **ten sessions that are all open at once**: twelve reads spread across the
+ * sessions, and on one of them a transaction of four statements — `begin`,
+ * `set local search_path = ''`, the lint query, `commit`.
  *
- * They are not free of locks, and an earlier version of this paragraph said they were. Two of them
- * call `pg_total_relation_size()` over every relation in the database, which opens each one with
- * ACCESS SHARE for the length of the call. Measured with a migration holding ACCESS EXCLUSIVE on one
- * table: the run waited out its whole timeout, and the killed tool's sessions went on waiting in the
- * lock queue, because the server does not notice a dead client while a backend waits for a lock. So
- * the tool's sessions get the bounds SQLens gives its own, through `PGOPTIONS`, which the tool
- * honors: see {@see sessionOptions()}.
+ * The reads are not free of locks. Two of them call `pg_total_relation_size()` over every relation
+ * in the database, which opens each one with ACCESS SHARE for the length of the call. Measured with a
+ * migration holding ACCESS EXCLUSIVE on one table: the run waited out its whole timeout, and the
+ * killed tool's sessions went on waiting in the lock queue, because the server does not notice a dead
+ * client while a backend waits for a lock. So the tool's sessions get the bounds SQLens gives its
+ * own, through `PGOPTIONS`, which the tool honors on every one of its ten sessions: see
+ * {@see sessionOptions()}.
+ *
+ * The session count is the other part to plan for. On a server close to `max_connections` a run
+ * takes ten slots at once, and the tool has no setting that lowers the number, so this adapter cannot
+ * lower it either.
  *
  * That measurement is what makes this adapter defensible under "primum non nocere", and it is a
- * property of somebody else's binary rather than of this code — which is exactly why the
- * real-binary lane re-measures it rather than trusting this paragraph.
+ * property of somebody else's binary rather than of this code — which is why the real-binary lane
+ * re-measures the two properties harm turns on rather than trusting this paragraph: that a run
+ * completes as a role with no write privilege, and that it gives up within its lock bound. The
+ * statement and session counts are a reading of 0.25.7 and are not re-measured there.
  *
  * ## Why it hands the tool a configuration file
  *

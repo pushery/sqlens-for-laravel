@@ -423,8 +423,8 @@ final readonly class PgsqlCatalogReader implements CatalogReader
     }
 
     /**
-     * Every relation in scope, with the two facts a later ticket needs and this one only carries:
-     * whether an extension owns it, and whether it is a partition of something.
+     * Every relation in scope, with the two facts read() places it by: whether an extension owns
+     * it, and whether it is a partition of something.
      *
      * @param  list<string>  $schemas
      * @return list<array<string, scalar|null>>

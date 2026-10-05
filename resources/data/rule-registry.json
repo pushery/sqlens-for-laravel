@@ -34,7 +34,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "AUDIT.CATALOG.UNREAD",
@@ -63,7 +64,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.AMBIGUOUS_READ_HOSTS",
@@ -92,7 +94,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.ASSUMED_VERSION_SKEW",
@@ -121,7 +124,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.BASELINE_ABSENT",
@@ -150,7 +154,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.CONNECTION_POOLED",
@@ -179,7 +184,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.DOWN_FAILED",
@@ -208,7 +214,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.DOWN_NOT_INVERTIBLE",
@@ -237,7 +244,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.INSTANCE_AMBIGUOUS",
@@ -266,7 +274,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.INSTANCE_DIVERGENCE",
@@ -295,7 +304,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.INSTANCE_SCOPE_UNANSWERABLE",
@@ -324,7 +334,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.INVALID_IGNORE_LIST",
@@ -353,7 +364,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.MIGRATE_ERROR",
@@ -382,7 +394,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.MISSING_TOOL",
@@ -411,7 +424,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.NOT_CAPTURABLE",
@@ -440,7 +454,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.NO_ACTIVE_RULES",
@@ -469,7 +484,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.NO_BASELINE_TO_IGNORE",
@@ -498,7 +514,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.ORPHANED_IGNORE",
@@ -527,7 +544,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.PINNED_HOST_DIVERGED",
@@ -556,7 +574,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.PINNED_HOST_UNVERIFIED",
@@ -585,7 +604,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.PRETEND_ERROR",
@@ -614,7 +634,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.RULE_WITHHELD_BY_DEPRECATION",
@@ -643,7 +664,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.RULE_WITHHELD_BY_VERSION",
@@ -672,7 +694,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.SERVER_BELOW_FLOOR",
@@ -701,7 +724,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.SERVER_UNREACHABLE",
@@ -730,7 +754,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.SETTINGS_UNREADABLE",
@@ -759,7 +784,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.TENANCY_NOT_DECLARED",
@@ -788,7 +814,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.TENANCY_REFERENCE_MISSING",
@@ -817,7 +844,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.UNDETERMINED_CAPTURE",
@@ -846,7 +874,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.UNOFFERED_HOST",
@@ -875,7 +904,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.L0.UNSUPPORTED_ENGINE",
@@ -904,7 +934,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.PRESCAN.DYNAMIC_CALL",
@@ -933,7 +964,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.PRESCAN.INDIRECT_CALL",
@@ -962,7 +994,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.PRESCAN.INTROSPECTION_GUARD",
@@ -991,7 +1024,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.PRESCAN.RESULT_DEPENDENT",
@@ -1020,7 +1054,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "CAP.PRESCAN.SIDE_EFFECT",
@@ -1049,7 +1084,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEBT.LEDGER_MISSING",
@@ -1079,7 +1115,8 @@
             "suites": [
                 "audit",
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEBT.LEDGER_UNREADABLE",
@@ -1109,7 +1146,8 @@
             "suites": [
                 "audit",
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEBT.OBJECT_NOT_FOUND",
@@ -1139,7 +1177,8 @@
             "suites": [
                 "audit",
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEBT.RESOLVED",
@@ -1169,7 +1208,8 @@
             "suites": [
                 "audit",
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEBT.STANDING_UNKNOWN",
@@ -1199,7 +1239,8 @@
             "suites": [
                 "audit",
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEBT.STILL_OPEN",
@@ -1229,7 +1270,8 @@
             "suites": [
                 "audit",
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEBT.UNRECORDED",
@@ -1259,7 +1301,8 @@
             "suites": [
                 "audit",
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.CONTEXT.GRANT.OWNERSHIP_MISSING",
@@ -1288,7 +1331,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.CONTEXT.READ_ONLY_TARGET",
@@ -1317,7 +1361,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.CONTEXT.SESSION_DEFENSE_NOT_APPLIED",
@@ -1346,7 +1391,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.CONTEXT.SETTING",
@@ -1375,7 +1421,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.CONTEXT.VERSION_SKEW",
@@ -1404,7 +1451,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.DRIFT.DIVERGENT",
@@ -1433,7 +1481,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.DRIFT.MISSING_IN_DATABASE",
@@ -1462,7 +1511,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.DRIFT.UNCOMPARED",
@@ -1491,7 +1541,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.DRIFT.UNEXPECTED_IN_DATABASE",
@@ -1520,7 +1571,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.LEGACY.CONSTRAINT_NOT_ENFORCED",
@@ -1549,7 +1601,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.LEGACY.CONSTRAINT_NOT_VALIDATED",
@@ -1578,7 +1631,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.LEGACY.INVALID_INDEX",
@@ -1607,7 +1661,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.LEGACY.INVALID_INDEX_NAME_COLLISION",
@@ -1636,7 +1691,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.LEGACY.ORPHAN_TRANSITION_OBJECT",
@@ -1665,7 +1721,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.LEGACY.OSC_ARTIFACT",
@@ -1694,7 +1751,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.PREFLIGHT.AUTOVACUUM_DISABLED",
@@ -1723,7 +1781,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.PREFLIGHT.CONCURRENT_INDEX_BLOCKER",
@@ -1752,7 +1811,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.PREFLIGHT.DISK_HEADROOM",
@@ -1781,7 +1841,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.PREFLIGHT.FREEZE_HORIZON",
@@ -1810,7 +1871,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.PREFLIGHT.INACTIVE_REPLICATION_SLOT",
@@ -1839,7 +1901,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.PREFLIGHT.LOCK_BLOCKER",
@@ -1868,7 +1931,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.PREFLIGHT.METADATA_LOCK_BLOCKER",
@@ -1897,7 +1961,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.PREFLIGHT.MISSING_PRIVILEGE",
@@ -1926,7 +1991,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.PREFLIGHT.REPLICATION_LAG",
@@ -1955,7 +2021,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.PREFLIGHT.STATISTICS_UNREAD",
@@ -1984,7 +2051,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "DEPLOY.RUN.TIME_BUDGET_EXCEEDED",
@@ -2013,7 +2081,8 @@
             "debt_kind": null,
             "suites": [
                 "deploy"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "GEN.L1.DML_WITHOUT_WHERE",
@@ -2042,7 +2111,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "GEN.L1.DOWN_MORE_DESTRUCTIVE",
@@ -2071,7 +2141,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "GEN.L3.DML_ON_SCHEMA_CHANGED_TABLE",
@@ -2100,7 +2171,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "GEN.L4.DOWN_MISSING",
@@ -2129,7 +2201,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "LINT.ANNOTATION_UNKNOWN_RULE",
@@ -2158,7 +2231,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "LINT.BASELINE.ABSENT",
@@ -2187,7 +2261,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "LINT.DEBT.ACKNOWLEDGED_GONE",
@@ -2216,7 +2291,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "LINT.DEBT.ACKNOWLEDGMENT_EXPIRED",
@@ -2245,7 +2321,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "LINT.DEBT.LEDGER_UNREADABLE",
@@ -2274,7 +2351,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "LINT.DEBT.NOT_RECORDABLE",
@@ -2303,7 +2381,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "LINT.DEBT.STALE_ENTRY",
@@ -2332,7 +2411,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "LINT.DEBT.UNRECORDED",
@@ -2361,7 +2441,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "LINT.INVALID_CONFIG_REFERENCE",
@@ -2390,7 +2471,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "LINT.NO_ACTIVE_RULES",
@@ -2419,7 +2501,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "LINT.NO_MIGRATIONS_READ",
@@ -2448,7 +2531,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "LINT.SERVER_BELOW_FLOOR",
@@ -2477,7 +2561,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "LINT.SHADOW.ORPHANS",
@@ -2506,7 +2591,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "LINT.SKIPPED",
@@ -2535,7 +2621,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "LINT.SKIPPED.MISSING_TOOL",
@@ -2564,7 +2651,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "LINT.SUPPRESSION_DEPRECATED_RULE",
@@ -2593,7 +2681,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "LINT.SUPPRESSION_TOOL_RULE_UNDESCRIBED",
@@ -2622,7 +2711,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "LINT.VERSION_PIN_UNREADABLE",
@@ -2651,7 +2741,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "LINT.VERSION_SKEW",
@@ -2680,7 +2771,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L1.DROP_COLUMN",
@@ -2709,7 +2801,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L1.DROP_TABLE",
@@ -2738,7 +2831,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L1.TRUNCATE",
@@ -2767,7 +2861,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L2.COPY_ALTER_CHARSET",
@@ -2796,7 +2891,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L2.COPY_ALTER_TYPE",
@@ -2825,7 +2921,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L2.FK_TARGET_NON_UNIQUE",
@@ -2854,7 +2951,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L2.NO_PRIMARY_KEY",
@@ -2884,7 +2982,8 @@
             "suites": [
                 "lint",
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L3.ALGORITHM_LOCK_UNEXPRESSIBLE",
@@ -2913,7 +3012,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L3.EXCHANGE_PARTITION_CLAUSE_IGNORED",
@@ -2942,7 +3042,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L3.MISSING_LOCK_WAIT_TIMEOUT",
@@ -2971,6 +3072,11 @@
             "debt_kind": null,
             "suites": [
                 "lint"
+            ],
+            "limitations": [
+                "reads the migration's OWN statements. A project that sets `lock_wait_timeout` outside the migration — in the connection options, a server default, or a listener — is bounded and still reported here, because a static reader cannot see any of those",
+                "says nothing about how long the statement RUNS once it has the lock. MySQL has no DDL counterpart to a statement timeout: `max_execution_time` is milliseconds and applies to read-only SELECTs, measured — the same work ran 612 seconds uninterrupted as a non-SELECT under a 200 ms limit. So a bounded wait is not a bounded operation, and this rule only claims the first",
+                "does not accept `innodb_lock_wait_timeout` in place of `lock_wait_timeout`. They bound different locks — row versus metadata — and a migration that set only the former has not bounded what its DDL waits for"
             ]
         },
         {
@@ -3000,7 +3106,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L4.DROP_WITHOUT_DEPLOY_WINDOW",
@@ -3029,7 +3136,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L4.ENUM_CHANGE",
@@ -3058,7 +3166,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L4.EXPAND_WITHOUT_CONTRACT",
@@ -3087,6 +3196,11 @@
             "debt_kind": "expand_without_contract",
             "suites": [
                 "lint"
+            ],
+            "limitations": [
+                "a back-fill that runs in a queued job or a separate script instead of the migration is not seen, so the pair reads as an ordinary column addition and nothing is reported — the rule would rather stay silent than guess which additions were replacements",
+                "the REPLACED column is never named: it sits inside the expression on the right of the assignment, and reading it would mean parsing expressions in the layer that exists to be free of grammar. The finding names the column that was added",
+                "a contract step in a migration this run did not capture — the single-file fast path, or a drop that happened in an earlier release — reads as missing, which is the same direction of error the fast path carries everywhere"
             ]
         },
         {
@@ -3116,7 +3230,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L5.COLLATION_MIXED",
@@ -3145,7 +3260,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L5.FK_NULLABLE_IN_UNIQUE",
@@ -3174,7 +3290,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L5.FLOAT_MONEY",
@@ -3203,7 +3320,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L5.MORPHS_NO_INDEX",
@@ -3232,7 +3350,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L5.SQL_MODE_DIVISION_BY_ZERO_SILENT",
@@ -3261,7 +3380,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L5.SQL_MODE_NOT_STRICT",
@@ -3290,7 +3410,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L6.CHARACTER_SET_SERVER_NOT_UTF8MB4",
@@ -3319,7 +3440,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L6.CHARSET_NOT_UTF8MB4",
@@ -3348,7 +3470,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L6.COLLATION_LEGACY",
@@ -3377,7 +3500,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L6.DEFAULT_STORAGE_ENGINE_NOT_INNODB",
@@ -3406,7 +3530,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L6.EXPLICIT_DEFAULTS_FOR_TIMESTAMP_OFF",
@@ -3435,7 +3560,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L6.INNODB_ROW_FORMAT_NOT_DYNAMIC",
@@ -3464,7 +3590,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L6.LOWER_CASE_TABLE_NAMES_RISK",
@@ -3493,7 +3620,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L6.PK_NOT_BIGINT",
@@ -3522,7 +3650,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L6.SQL_MODE_ENGINE_SUBSTITUTION",
@@ -3551,7 +3680,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L6.SQL_MODE_LOOSE_GROUP_BY",
@@ -3580,7 +3710,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L6.TIME_ZONE_NOT_UTC",
@@ -3609,7 +3740,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L6.TIME_ZONE_TABLES_EMPTY",
@@ -3638,7 +3770,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L7.INDEX_REDUNDANT",
@@ -3667,7 +3800,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L7.INDEX_UNUSED",
@@ -3696,7 +3830,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L7.UNBATCHED_MASS_DML",
@@ -3725,7 +3860,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L8.FK_ID_SUFFIX",
@@ -3755,7 +3891,8 @@
             "suites": [
                 "lint",
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L8.NAMING_SNAKE_CASE",
@@ -3785,7 +3922,8 @@
             "suites": [
                 "lint",
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L9.DOC_MISSING_COMMENT",
@@ -3814,7 +3952,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L9.TYPE_IMPLICIT_CAST",
@@ -3843,7 +3982,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "MY.L9.VIEW_SELECT_STAR",
@@ -3873,7 +4013,8 @@
             "suites": [
                 "lint",
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L1.DROP_COLUMN",
@@ -3902,7 +4043,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L1.DROP_SCHEMA",
@@ -3931,6 +4073,10 @@
             "debt_kind": null,
             "suites": [
                 "lint"
+            ],
+            "limitations": [
+                "a schema this same migration created is reported like any other: CREATE SCHEMA is not captured as its own statement kind, so the migration context cannot tell a scratch namespace from a live one",
+                "what the schema CONTAINED is not read — this is a statement-level rule, so the finding names the reach of the statement rather than the rows actually lost"
             ]
         },
         {
@@ -3960,7 +4106,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L1.TRUNCATE",
@@ -3989,7 +4136,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L2.CONSTRAINT_NOT_VALIDATED",
@@ -4018,7 +4166,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L2.DROP_INDEX_NOT_CONCURRENT",
@@ -4047,7 +4196,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L2.INDEX_NOT_CONCURRENT",
@@ -4076,7 +4226,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L2.SET_NOT_NULL_SCAN",
@@ -4105,7 +4256,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L2.TYPE_CHANGE_REWRITE",
@@ -4134,7 +4286,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L3.CONCURRENTLY_IN_TRANSACTION",
@@ -4163,7 +4316,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L3.LOCK_TIMEOUT_INEFFECTIVE",
@@ -4192,7 +4346,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L3.MISSING_LOCK_TIMEOUT",
@@ -4221,7 +4376,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L3.MISSING_STATEMENT_TIMEOUT",
@@ -4250,7 +4406,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L3.RISKY_OPS_SINGLE_TX",
@@ -4279,7 +4436,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L4.CHECK_ENUM_CHANGE",
@@ -4308,7 +4466,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L4.CONSTRAINT_VALIDATION_PENDING",
@@ -4337,7 +4496,8 @@
             "debt_kind": "not_valid_constraint",
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L4.DROP_WITHOUT_DEPLOY_WINDOW",
@@ -4366,7 +4526,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L4.ENUM_ADD_VALUE",
@@ -4395,7 +4556,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L4.ENUM_VALUE_REMOVED",
@@ -4424,7 +4586,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L4.EXPAND_WITHOUT_CONTRACT",
@@ -4453,6 +4616,11 @@
             "debt_kind": "expand_without_contract",
             "suites": [
                 "lint"
+            ],
+            "limitations": [
+                "a back-fill that runs in a queued job or a separate script instead of the migration is not seen, so the pair reads as an ordinary column addition and nothing is reported — the rule would rather stay silent than guess which additions were replacements",
+                "the REPLACED column is never named: it sits inside the expression on the right of the assignment, and reading it would mean parsing expressions in the layer that exists to be free of grammar. The finding names the column that was added",
+                "a contract step in a migration this run did not capture — the single-file fast path, or a drop that happened in an earlier release — reads as missing, which is the same direction of error the fast path carries everywhere"
             ]
         },
         {
@@ -4482,7 +4650,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L4.TYPE_NARROWING",
@@ -4511,7 +4680,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L5.COLLATION_VERSION_MISMATCH",
@@ -4540,7 +4710,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L5.FK_NO_INDEX",
@@ -4570,7 +4741,8 @@
             "suites": [
                 "lint",
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L5.FK_NULLABLE_IN_UNIQUE",
@@ -4599,7 +4771,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L5.FLOAT_MONEY",
@@ -4628,7 +4801,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L5.MONEY_TYPE",
@@ -4657,7 +4831,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L5.MORPHS_NO_INDEX",
@@ -4686,7 +4861,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L5.NO_PRIMARY_KEY",
@@ -4715,7 +4891,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L6.DEFAULT_TRANSACTION_ISOLATION_DRIFT",
@@ -4744,7 +4921,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L6.DEFAULT_TRANSACTION_READ_ONLY",
@@ -4773,7 +4951,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L6.JSON_NOT_JSONB",
@@ -4802,7 +4981,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L6.PK_NOT_BIGINT",
@@ -4831,7 +5011,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L6.PK_UUID_V4",
@@ -4860,7 +5041,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L6.SERIAL_NOT_IDENTITY",
@@ -4889,7 +5071,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L6.STANDARD_CONFORMING_STRINGS_OFF",
@@ -4918,7 +5101,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L6.TIMESTAMP_NO_TZ",
@@ -4947,7 +5131,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L6.TIMEZONE_NOT_UTC",
@@ -4976,7 +5161,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L7.AUTOVACUUM_DISABLED",
@@ -5005,7 +5191,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L7.DATA_CHECKSUMS_DISABLED",
@@ -5034,7 +5221,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L7.INDEX_REDUNDANT",
@@ -5063,7 +5251,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L7.INDEX_UNUSED",
@@ -5092,7 +5281,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L7.UNBATCHED_MASS_DML",
@@ -5121,7 +5311,8 @@
             "debt_kind": null,
             "suites": [
                 "lint"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L8.FK_ID_SUFFIX",
@@ -5151,7 +5342,8 @@
             "suites": [
                 "lint",
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L8.NAMING_SNAKE_CASE",
@@ -5181,7 +5373,8 @@
             "suites": [
                 "lint",
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L8.UNIQUE_CASE_FOLDED",
@@ -5210,7 +5403,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L9.DOC_MISSING_COMMENT",
@@ -5239,7 +5433,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L9.TYPE_IMPLICIT_CAST",
@@ -5268,7 +5463,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "PG.L9.VIEW_SELECT_STAR",
@@ -5298,7 +5494,8 @@
             "suites": [
                 "lint",
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "SEC.AUTH.HBA_CLEARTEXT",
@@ -5327,6 +5524,11 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "judges each line on its own, and `pg_hba.conf` is FIRST-MATCH-WINS: a line reported here may sit below one that already matches every connection it would have accepted, in which case nothing ever reaches it. Reading the file as an ordered decision table is a different question",
+                "reads the FILE as it is on disk, through the server's own parse of it, which is not necessarily what the server has loaded: an edit that has not been reloaded is judged as if it were in force, and a reload the server refused leaves its previous rules running where this reading cannot see them",
+                "judges the auth METHOD. Whether the password actually crosses the wire in the clear also depends on the line type and on the server's TLS being both enabled and required — three facts, of which this rule reads one"
             ]
         },
         {
@@ -5356,6 +5558,11 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "judges each line on its own, and `pg_hba.conf` is FIRST-MATCH-WINS: a line reported here may sit below one that already matches every connection it would have accepted, in which case nothing ever reaches it. Reading the file as an ordered decision table is a different question",
+                "reads the FILE as it is on disk, through the server's own parse of it, which is not necessarily what the server has loaded: an edit that has not been reloaded is judged as if it were in force, and a reload the server refused leaves its previous rules running where this reading cannot see them",
+                "the method a line names and the method a connection ends up using are not always the same: a role whose stored verifier is SCRAM does not authenticate with md5 regardless of what this line says, so a project mid-migration may be safer than this reads"
             ]
         },
         {
@@ -5385,6 +5592,11 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "judges each line on its own, and `pg_hba.conf` is FIRST-MATCH-WINS: a line reported here may sit below one that already matches every connection it would have accepted, in which case nothing ever reaches it. Reading the file as an ordered decision table is a different question",
+                "reads the FILE as it is on disk, through the server's own parse of it, which is not necessarily what the server has loaded: an edit that has not been reloaded is judged as if it were in force, and a reload the server refused leaves its previous rules running where this reading cannot see them",
+                "an address range is not reachability. `0.0.0.0/0` behind a private subnet accepts nothing from outside it, and where the server actually sits is not something a catalog read can answer"
             ]
         },
         {
@@ -5414,6 +5626,11 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the FILE as it is on disk, through the server's own parse of it, which is not necessarily what the server has loaded: an edit that has not been reloaded is judged as if it were in force, and a reload the server refused leaves its previous rules running where this reading cannot see them",
+                "cannot say what the broken line INTENDED, and deliberately does not guess. What it does say is the thing that matters either way: whatever restriction was meant is not in force, because the server did not load it",
+                "the line is reported, never its content. A malformed line frequently contains the thing somebody was in the middle of writing, and echoing it into a report would publish it further"
             ]
         },
         {
@@ -5443,6 +5660,11 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "judges each line on its own, and `pg_hba.conf` is FIRST-MATCH-WINS: a line reported here may sit below one that already matches every connection it would have accepted, in which case nothing ever reaches it. Reading the file as an ordered decision table is a different question",
+                "reads the FILE as it is on disk, through the server's own parse of it, which is not necessarily what the server has loaded: an edit that has not been reloaded is judged as if it were in force, and a reload the server refused leaves its previous rules running where this reading cannot see them",
+                "says nothing about what stands in front of the server. A `trust` line on an address range that no network route reaches is not an open door, and neither the routing nor the firewall is visible from the catalog"
             ]
         },
         {
@@ -5472,6 +5694,11 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "judges each line on its own, and `pg_hba.conf` is FIRST-MATCH-WINS: a line reported here may sit below one that already matches every connection it would have accepted, in which case nothing ever reaches it. Reading the file as an ordered decision table is a different question",
+                "reads the FILE as it is on disk, through the server's own parse of it, which is not necessarily what the server has loaded: an edit that has not been reloaded is judged as if it were in force, and a reload the server refused leaves its previous rules running where this reading cannot see them",
+                "a `local` line is the unix socket, so the exposure is exactly the set of accounts with shell access to the database host — which is an operations fact this rule cannot read, and the reason this case is graded apart from its `host` sibling"
             ]
         },
         {
@@ -5502,6 +5729,12 @@
             "suites": [
                 "lint",
                 "security"
+            ],
+            "limitations": [
+                "reads the statement, not the repository: a password committed once and removed in a later migration is still in the history, and this rule sees only the migration it is looking at",
+                "cannot tell a real credential from a placeholder. A migration that sets a throwaway password for a role it drops three statements later is reported the same way, because the statement does not say which one it is",
+                "says nothing about a password supplied through a binding or an environment variable — which is the recommended shape, and is invisible here precisely because the value never becomes part of the statement",
+                "stays quiet about a literal that shares its statement with a binding. The value-origin marker answers per STATEMENT, not per value, so `… PASSWORD 'x' … WHERE id = ?` reads as bound. That is the deliberate direction to be wrong in: a false alarm on the shape this rule recommends would get the whole id silenced, taking the true findings with it"
             ]
         },
         {
@@ -5531,6 +5764,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the account catalog, not the connections: an account that exists and nothing ever authenticates as is the same rows as one in daily use, and which is which is a deployment fact",
+                "an anonymous account is reachable by anyone who can reach the server at all, so what it can DO decides how much this matters — and that is the privilege rules' question, deliberately not answered twice here"
             ]
         },
         {
@@ -5560,6 +5797,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the account catalog, not the connections: an account that exists and nothing ever authenticates as is the same rows as one in daily use, and which is which is a deployment fact",
+                "reports the account, never an attempt: whether anything has actually connected through it is in the server's logs rather than its catalog, and this package reads catalogs"
             ]
         },
         {
@@ -5589,6 +5830,11 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the account catalog, not the connections: an account that exists and nothing ever authenticates as is the same rows as one in daily use, and which is which is a deployment fact",
+                "the verifier is what the password was stored WITH, not what it is worth. A long random password under a weak hash is a different exposure from a short one, and the strength of the secret is not something a catalog can be asked",
+                "cannot say whether the plugin that wrote this verifier is still the server's default — a project mid-migration has both kinds stored at once, and only the ones not yet rewritten are reported"
             ]
         },
         {
@@ -5618,6 +5864,11 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the account catalog, not the connections: an account that exists and nothing ever authenticates as is the same rows as one in daily use, and which is which is a deployment fact",
+                "the locked/unlocked split is the whole reason this id is separate from its sibling, and it rests on the server's own flag. An account locked by something OUTSIDE the server — a network rule, a proxy refusing it — reads as usable here",
+                "a locked account keeps its verifier, so unlocking it later restores exactly the weakness reported here — which is why this is a finding at all rather than a state to ignore"
             ]
         },
         {
@@ -5647,6 +5898,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the account catalog, not the connections: an account that exists and nothing ever authenticates as is the same rows as one in daily use, and which is which is a deployment fact",
+                "no password in the catalog does not always mean no authentication: an account may authenticate through a plugin that keeps its secret elsewhere, and the catalog shows the empty verifier either way"
             ]
         },
         {
@@ -5676,6 +5931,11 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the account catalog, not the connections: an account that exists and nothing ever authenticates as is the same rows as one in daily use, and which is which is a deployment fact",
+                "the locked/unlocked split is the whole reason this id is separate from its sibling, and it rests on the server's own flag. An account locked by something OUTSIDE the server — a network rule, a proxy refusing it — reads as usable here",
+                "unlocking restores the account exactly as it is — with no password. The finding is about what the account WOULD be, which is the only useful thing to say about a state somebody can undo with one statement"
             ]
         },
         {
@@ -5705,6 +5965,11 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the account catalog, not the connections: an account that exists and nothing ever authenticates as is the same rows as one in daily use, and which is which is a deployment fact",
+                "an address pattern is not reachability. An account with `%` behind a private subnet accepts nothing from outside it, and where the server sits is not a catalog fact",
+                "cannot know what the deployment can name instead: a container platform without a stable client address has no narrower host to write, which is a real reason to accept this id rather than a reason to narrow the rule"
             ]
         },
         {
@@ -5734,6 +5999,11 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the account catalog, not the connections: an account that exists and nothing ever authenticates as is the same rows as one in daily use, and which is which is a deployment fact",
+                "both halves are read from the catalog and neither is read from the network: this is the account that would be worst to lose, not evidence that anything has reached it",
+                "the privilege half follows grants the server records, not memberships resolved through a chain of roles — an account privileged only by inheritance is the sibling rule's subject"
             ]
         },
         {
@@ -5763,6 +6033,11 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the RUNNING value, not the file: a setting changed on disk and not yet reloaded is invisible here, and one changed only for this session would be read as the server's",
+                "reads the DESTINATION (`log_output`) but not what happens to it. A file that ships to an aggregator and one that never leaves the host are the same `FILE` here, and who may read the `mysql.general_log` table is a grant question this rule does not ask",
+                "says nothing about what is IN the statements. A project whose queries are fully parameterized still writes the parameters to this log, which is the part people are surprised by"
             ]
         },
         {
@@ -5792,7 +6067,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "SEC.CFG.LOCAL_INFILE",
@@ -5821,6 +6097,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the RUNNING value, not the file: a setting changed on disk and not yet reloaded is invisible here, and one changed only for this session would be read as the server's",
+                "judges the server's willingness, not any client's use of it. `local_infile` on with no client that asks for it exposes nothing today; it is the client somebody adds later that this exists to get ahead of"
             ]
         },
         {
@@ -5850,6 +6130,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the RUNNING value, not the file: a setting changed on disk and not yet reloaded is invisible here, and one changed only for this session would be read as the server's",
+                "reads the setting and the grant, and cannot tell whether the account holding the grant is one anything actually connects as — a provisioning account that exists and is never used carries the same catalog rows as one in daily use"
             ]
         },
         {
@@ -5879,6 +6163,11 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the RUNNING value, not the file: a setting changed on disk and not yet reloaded is invisible here, and one changed only for this session would be read as the server's",
+                "governs only passwords set FROM NOW ON. Every verifier already stored keeps the algorithm it was written with, so changing this setting fixes nothing retroactively — which is exactly why the finding matters before the next password is set rather than after",
+                "cannot see which verifiers are already stored: that is the role-attribute rules' question, and answering it here would report the same fact twice"
             ]
         },
         {
@@ -5908,6 +6197,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "compares a version against shipped end-of-life data, so it is only as current as that data. A series whose support window closed after this package's copy was written is not reported until the data is refreshed — which is why the artifact carries its own age",
+                "a vendor-supported build can outlive its upstream series. A distribution or managed provider backporting fixes is not visible in a version banner, and this rule reads the banner"
             ]
         },
         {
@@ -5937,6 +6230,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the RUNNING value, not the file: a setting changed on disk and not yet reloaded is invisible here, and one changed only for this session would be read as the server's",
+                "says the server ACCEPTS unencrypted connections, not that anything makes one. A deployment where every client is configured to require TLS is not transmitting in the clear today — it is one misconfigured client away from doing so, which is the distinction this rule is about"
             ]
         },
         {
@@ -5966,6 +6263,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the RUNNING value, not the file: a setting changed on disk and not yet reloaded is invisible here, and one changed only for this session would be read as the server's",
+                "reads the directory the setting names, never its contents or its permissions. A restricted path that anyone can write to is as reachable as an unrestricted one, and that is a filesystem fact outside this run"
             ]
         },
         {
@@ -5995,7 +6296,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "SEC.CFG.STATEMENT_LOGGING_SECRETS",
@@ -6024,6 +6326,13 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the RUNNING value, not the file: a setting changed in postgresql.conf and not yet reloaded is invisible here, and one changed only for this session would be read as the server's",
+                "cannot see where the log GOES. Statements written to a file only root can read are a different exposure from ones shipped to an aggregator a whole team queries, and the destination — not this switch — decides how far a credential travels",
+                "says nothing about what is IN the statements. A project that binds every value still writes those values to this log, because the server logs the statement it executed, not the one the application wrote",
+                "judges only `log_statement`. PostgreSQL can put statement text into a log through other settings — `log_min_duration_statement` logs slow queries in full, and the auto_explain module logs them with their parameters — and neither is read here, so a quiet verdict from this rule is not a statement about the server's logging as a whole",
+                "is silent at `ddl`, and `ddl` is not free of credentials. It writes every schema change verbatim, so a password typed into `CREATE ROLE`, `ALTER ROLE`, `CREATE USER MAPPING` or a `CREATE SUBSCRIPTION` connection string reaches the log there as well. Whether one is typed is not visible in the switch: psql's `\\password` sends a SCRAM verifier instead. A migration that sets a role password from a literal is reported by `SEC.AUTH.PASSWORD_LITERAL_IN_MIGRATION`"
             ]
         },
         {
@@ -6053,6 +6362,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the RUNNING value, not the file: a setting changed on disk and not yet reloaded is invisible here, and one changed only for this session would be read as the server's",
+                "describes the SERVER's offer. A connection reaching it through a proxy or a service mesh that terminates TLS elsewhere may still be encrypted on the wire that matters; whether a pooler is in the path is established and reported beside this finding, but what any proxy negotiates with a client is not visible from the catalog"
             ]
         },
         {
@@ -6082,6 +6395,11 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the RUNNING value, not the file: a setting changed on disk and not yet reloaded is invisible here, and one changed only for this session would be read as the server's",
+                "says what the server will ACCEPT, not what anybody negotiates. A deployment whose clients all insist on TLS 1.3 is never exposed to the older version this reports, and nothing about the clients is visible from the catalog",
+                "cannot read the TLS policy of anything standing in front of the server. Whether a pooler is in the path is established and reported beside this finding; what it negotiates with a client is not, so a proxy that terminates or re-negotiates TLS may put this parameter out of reach while the parameter reads the same either way"
             ]
         },
         {
@@ -6111,6 +6429,12 @@
             "debt_kind": null,
             "suites": [
                 "analyse"
+            ],
+            "limitations": [
+                "a syntactic pattern rather than taint analysis: it reports that the request is VISIBLE in the expression, and makes no claim about whether the value is reachable from an attacker or what it contains",
+                "sees one expression in one scope — an allowlist applied in another method is invisible, and the result is reported as undetermined with a named reason rather than as a pass",
+                "validated input still counts: validation checks a value SHAPE, and an identifier's danger is not its shape",
+                "the *Raw methods are deliberately not collected here — orderByRaw() is a raw-SQL fragment and belongs to the interpolation rule, so one call never produces two findings under two ids"
             ]
         },
         {
@@ -6140,6 +6464,12 @@
             "debt_kind": null,
             "suites": [
                 "analyse"
+            ],
+            "limitations": [
+                "a syntactic pattern rather than taint analysis: it reports that a runtime value reached the statement TEXT, and makes no claim about whether that value is attacker-controlled or reachable from a request",
+                "never quotes the query: a finding travels into CI logs, SARIF files and agent artifacts, and a reproduced fragment would be a second copy of whatever the statement touched",
+                "sees exactly one call site — a value assembled unsafely in another method is reported as undetermined by the classifier and is deliberately NOT reported here, because doubt raised as a high-severity finding teaches a team to ignore the rule",
+                "a placeholder count that disagrees with the bindings array degrades to undetermined rather than reporting: the text is still constant, so nothing can be injected through it"
             ]
         },
         {
@@ -6169,6 +6499,13 @@
             "debt_kind": null,
             "suites": [
                 "analyse"
+            ],
+            "limitations": [
+                "never reads the query text and performs no taint analysis: it reports that an annotation covers no raw SQL any more, which is a bookkeeping fact about the attribute rather than any claim about the code under it",
+                "counts a justification as live if ANY raw-SQL call site this suite collects is attributed to it — including a fragment or a dynamic identifier, which the policy rule itself does not report, because a reason covering one of those is doing its job",
+                "syntactic detection only, the same limit its sibling has: a call reached through a variable or a container binding is invisible, so an annotation covering only such a call reads as stale",
+                "a class-level annotation is kept alive by a raw statement in ANY of its methods, so the coarse form is also the one least likely to be reported as stale",
+                "says nothing under policy off or inside an excluded path: a project that switched the duty off must not get findings about the annotations it wrote while it was on"
             ]
         },
         {
@@ -6198,6 +6535,12 @@
             "debt_kind": null,
             "suites": [
                 "analyse"
+            ],
+            "limitations": [
+                "never reads the query text: this rule reports a MISSING REASON, never an unsafe statement, and SQLens performs no taint analysis at any point",
+                "syntactic detection only: a call reached through a variable, a callable string or a container binding is invisible to it, and it reports what it saw rather than claiming the rest is clean",
+                "a class-level #[RawSql] covers every call in that class, so one reasoned raw statement and one careless one are excused together — the method-level form exists to avoid exactly that",
+                "a suppression whose rule ids are not literal strings does not suppress, because resolving them would mean evaluating project code during analysis; the finding stays visible, which is the safe direction"
             ]
         },
         {
@@ -6228,7 +6571,8 @@
             "suites": [
                 "audit",
                 "security"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "SEC.PRIV.CONNECTIONS_UNSEPARATED",
@@ -6257,6 +6601,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the project's CONFIGURATION, not its behavior: a project that names one connection and uses two roles through it is separated in practice and reported here anyway",
+                "cannot tell an unset value from a deliberate decision that one connection is right — a small application with a single role is a legitimate shape, and this finding is the prompt to say so rather than a verdict that it is wrong"
             ]
         },
         {
@@ -6287,6 +6635,11 @@
             "suites": [
                 "lint",
                 "security"
+            ],
+            "limitations": [
+                "reads the privilege list of one statement: a privilege the account already holds, or one it inherits through a role, is invisible here — that is the audit suite's subject",
+                "cannot tell an application account from an operations account. A backup or replication user legitimately needs several of these, and the statement does not say which kind of account this is",
+                "judges the names the shipped artifact carries. A privilege MySQL adds in a later version is not reported until that artifact is updated, which is why the artifact is reconciled against a real server rather than maintained by hand"
             ]
         },
         {
@@ -6316,6 +6669,11 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the catalog, not the connections: a privilege held by an account nothing ever authenticates as is the same rows as one in daily use",
+                "follows the privileges the server records for this account, not the ones it reaches through membership in another role — an account privileged only by inheritance is a separate question the audit answers elsewhere",
+                "cannot tell an over-grant from an account that is SUPPOSED to hold everything: an owner, a migration account, a backup role. The difference is in what the account is for, which lives outside the catalog"
             ]
         },
         {
@@ -6346,6 +6704,11 @@
             "suites": [
                 "lint",
                 "security"
+            ],
+            "limitations": [
+                "cannot tell an over-grant from a role that is SUPPOSED to hold everything: a migration owner and an extension install script both grant broadly by design, and the difference lives in what the role is for rather than in the statement",
+                "reads the statement, not the server: a privilege this migration revokes again later is still reported, and a privilege the role already held is not",
+                "sees the grantee as a name, not as a role: it cannot know that the named role is itself a member of something broader"
             ]
         },
         {
@@ -6375,6 +6738,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the catalog, not the connections: a privilege held by an account nothing ever authenticates as is the same rows as one in daily use",
+                "the exposure depends on what else can reach this account. FILE turns a SQL injection into filesystem access, so its weight is decided by the application in front of the database — which this package does not read"
             ]
         },
         {
@@ -6404,6 +6771,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the catalog, not the connections: a privilege held by an account nothing ever authenticates as is the same rows as one in daily use",
+                "reports the ability to hand the privilege on, not any use of it: whether anything HAS been granted onward is a second question, and the catalog answers it only for grants that already happened"
             ]
         },
         {
@@ -6433,6 +6804,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the catalog, not the connections: a privilege held by an account nothing ever authenticates as is the same rows as one in daily use",
+                "the structural half is graded apart because schema change is not data access, and the two are silenced separately on purpose — a project accepting one is not accepting the other"
             ]
         },
         {
@@ -6462,6 +6837,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the catalog, not the connections: a privilege held by an account nothing ever authenticates as is the same rows as one in daily use",
+                "what PROCESS exposes depends on what other sessions actually run. On a server whose statements are fully parameterized it still shows the parameters, which is the part people are surprised by"
             ]
         },
         {
@@ -6491,6 +6870,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "PUBLIC reaches roles that do not exist yet, so this finding is about the future as much as the present — and how much it matters depends on who will be able to create a role, which is a separate rule's subject",
+                "cannot tell a deliberate PUBLIC grant from an inherited one: an extension's install script grants to PUBLIC by design, and the catalog does not record who granted what"
             ]
         },
         {
@@ -6521,6 +6904,10 @@
             "suites": [
                 "lint",
                 "security"
+            ],
+            "limitations": [
+                "reads the statement, not the server: a grant this migration removes again a few statements later is still reported, because the intent at the time of writing is what the reader is being asked about",
+                "says nothing about grants that already exist in the database — a live catalog is the audit suite's subject, not a migration's"
             ]
         },
         {
@@ -6551,6 +6938,10 @@
             "suites": [
                 "lint",
                 "security"
+            ],
+            "limitations": [
+                "cannot tell a deliberate database-wide grant from an accidental one: a read-only analytics account over a reporting database is a legitimate use of `ON db.*`, and the statement does not say which one this is",
+                "reads the statement, not the server: a scope this migration narrows again later is still reported, and privileges the account already held are not"
             ]
         },
         {
@@ -6580,6 +6971,11 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the catalog, not the connections: a privilege held by an account nothing ever authenticates as is the same rows as one in daily use",
+                "follows the privileges the server records for this account, not the ones it reaches through membership in another role — an account privileged only by inheritance is a separate question the audit answers elsewhere",
+                "judges the names the shipped artifact carries. A privilege the engine adds in a later version is not reported until that artifact is refreshed, which is why it is reconciled against a real server rather than maintained by hand"
             ]
         },
         {
@@ -6610,6 +7006,11 @@
             "suites": [
                 "lint",
                 "security"
+            ],
+            "limitations": [
+                "cannot know what the network already prevents: an account reachable only through a private subnet or a proxy may be perfectly safe with `%`, and the statement says nothing about what is in front of the server",
+                "reads the grant, not the account: a host restriction applied by a separate CREATE USER or RENAME USER statement is invisible to this one",
+                "a containerized or serverless deployment often has no stable client address to name, which is a real reason to accept this id rather than a reason to narrow the rule"
             ]
         },
         {
@@ -6640,6 +7041,12 @@
             "suites": [
                 "lint",
                 "security"
+            ],
+            "limitations": [
+                "recognizes an administrative TARGET by name: the `mysql.` prefix the server uses for its own accounts, and `root`. An arbitrary privileged account -- `admin@%` and the like -- is invisible here, because a statement does not say what an account holds; that question needs the catalog",
+                "`root` is a CONVENTION, not a reserved name. An installation that renamed it is not reported, and one whose `root` was replaced by an unprivileged placeholder is reported anyway -- the name is what a statement offers",
+                "reads one statement. A proxy granted outside a migration, or one already sitting in `mysql.proxies_priv`, is not this rule's subject",
+                "does not vary its severity with the target. `mysql.infoschema` holds no `SUPER` and `mysql.session` does; both report at High, because a project account should be impersonating neither"
             ]
         },
         {
@@ -6669,6 +7076,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the catalog, not the connections: a privilege held by an account nothing ever authenticates as is the same rows as one in daily use",
+                "BYPASSRLS matters exactly as much as the policies it bypasses: on a database with no row-level security it changes nothing, and whether the tables that need it have it is the RLS family's question"
             ]
         },
         {
@@ -6698,6 +7109,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the catalog, not the connections: a privilege held by an account nothing ever authenticates as is the same rows as one in daily use",
+                "an account that may create roles may create one for itself with different privileges, so this is reported as a path rather than as a state. Whether anybody has walked it is in the server's logs, not its catalog"
             ]
         },
         {
@@ -6727,6 +7142,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the catalog, not the connections: a privilege held by an account nothing ever authenticates as is the same rows as one in daily use",
+                "covers the attribute and the one SET ROLE away from it. A path longer than one step — a chain of memberships ending at a superuser — is not followed here, and a project with deep role nesting should read this as a floor rather than as the whole answer"
             ]
         },
         {
@@ -6756,6 +7175,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the routine's SIGNATURE and its declared path, never its body. A routine whose every reference is already schema-qualified is safe in practice and is still reported, because whether the next edit stays qualified is not something the catalog can promise",
+                "reports a routine that is CORRECT, on purpose: a definer routine is a deliberate escalation boundary, and the finding exists so somebody confirms it was deliberate. Silencing it with a reason is the expected outcome rather than a failure"
             ]
         },
         {
@@ -6785,6 +7208,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the routine's SIGNATURE and its declared path, never its body. A routine whose every reference is already schema-qualified is safe in practice and is still reported, because whether the next edit stays qualified is not something the catalog can promise",
+                "a mutable path is only exploitable by somebody who can create an object in a schema the caller reaches — which is a privilege question, and one the grant rules answer separately"
             ]
         },
         {
@@ -6815,6 +7242,11 @@
             "suites": [
                 "lint",
                 "security"
+            ],
+            "limitations": [
+                "reads the statement, not the body: a routine whose every reference is already schema-qualified is safe in practice and is still reported, because whether the next edit stays qualified is not something the statement can promise",
+                "does not judge the path that IS pinned — a routine that names a writable schema satisfies this rule and is the subject of SEC.PRIV.ROUTINE_DEFINER_UNSAFE_PATH",
+                "says nothing about routines that already exist in the database; a live catalog is the audit suite's subject"
             ]
         },
         {
@@ -6844,6 +7276,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the routine's SIGNATURE and its declared path, never its body. A routine whose every reference is already schema-qualified is safe in practice and is still reported, because whether the next edit stays qualified is not something the catalog can promise",
+                "judges who can WRITE to the schemas the path names, from the catalog's grants. A schema writable through a role membership rather than a direct grant is not seen here"
             ]
         },
         {
@@ -6873,6 +7309,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "compares the project's configured runtime connection against the catalog: a project that has not told SQLens which connection is the runtime one gets no answer here rather than a guessed one",
+                "reads the privilege, not its use. A runtime role that CAN create objects and never does is reported the same way, because the finding is about what a compromise of that role would reach"
             ]
         },
         {
@@ -6902,6 +7342,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "judges the WRITE path only, and a write nobody is granted is not reachable however permissive the check is — the grant half of the question belongs to the privilege rules",
+                "cannot evaluate a check that depends on a runtime value, for the same reason its read-path sibling cannot: the expression is text here and a decision only at execution time"
             ]
         },
         {
@@ -6931,6 +7375,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the catalog, not the application: row-level security is a BACKSTOP, and a project whose every query filters by tenant is not exposed today. What it is exposed to is the query somebody writes next month without that filter, which this rule cannot see either",
+                "judges the tables the project LISTED as tenant data, or the schema it named — a table nobody declared is invisible here, and the rule cannot tell an omission from a deliberate exclusion"
             ]
         },
         {
@@ -6960,6 +7408,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "FORCE only changes anything for the table's OWNER, so a project whose application never connects as the owner is not exposed by its absence — and which role the application uses is not something a catalog read can answer",
+                "reads the flag, not the connection: it cannot say whether the role this audit ran as is the same one the application uses, and the two are frequently different by design"
             ]
         },
         {
@@ -6989,6 +7441,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "cannot tell a fail-closed accident from a deliberate lockout. A table with security on and no policy returns nothing to anybody, which is sometimes exactly what a project wants for a table it has stopped using",
+                "says nothing about whether the rows would have been correctly separated once a policy exists — that is what the policy-expression rules ask, and they need a policy to ask it of"
             ]
         },
         {
@@ -7018,6 +7474,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "the exposure depends on WHO connects, and the catalog does not record that. An owner-unrestricted table is only reachable if something actually connects as the owner — which is a deployment fact, not a schema fact",
+                "cannot see a role's memberships in full: a role that inherits ownership through a group is the owner for this purpose, and following that chain is the audit suite's separate question"
             ]
         },
         {
@@ -7047,6 +7507,10 @@
             "debt_kind": null,
             "suites": [
                 "audit"
+            ],
+            "limitations": [
+                "reads the policy EXPRESSION as text, and an expression that looks unconditional may be sitting on a table whose access is already restricted by grants — the two mechanisms compose, and this rule sees one of them",
+                "cannot evaluate a policy that depends on a runtime value. `current_setting('app.tenant')` is restrictive or vacuous depending on what the session sets, and no catalog read decides that"
             ]
         },
         {
@@ -7076,7 +7540,8 @@
             "debt_kind": null,
             "suites": [
                 "audit"
-            ]
+            ],
+            "limitations": null
         },
         {
             "id": "SEC.SKIPPED.NOTHING_CHECKED",
@@ -7105,7 +7570,8 @@
             "debt_kind": null,
             "suites": [
                 "security"
-            ]
+            ],
+            "limitations": null
         }
     ]
 }

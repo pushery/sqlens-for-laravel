@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Drivers\Pgsql\Rules\L5;
 
 use Pushery\SQLens\Canonical\StatementKind;
+use Pushery\SQLens\Canonical\StatementTarget;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\DeclaresJudgedObjectTypes;
 use Pushery\SQLens\Contracts\JudgesMigrationStatements;
@@ -71,22 +72,18 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * one, and the multi-table create migration this branch exists for is exactly where that happens.
  * That mistake is the silent kind: a genuinely unindexed key reported as clean.
  *
- * **"Created here" means EVERY table the statement touches** — the same predicate
- * {@see ConstraintNotValidatedRule} uses, from the same {@see TouchedTables}, though for a
- * different reason: there it is about what MATTERS (a key from a new table to a live one still
- * locks the live one), here about what can be KNOWN. A foreign key names two tables and the
- * classifier sorts a statement's targets for determinism, so which of the two CARRIES the key is
- * not recoverable from the projection a rule sees. With both tables born in this migration the
- * referencing one certainly was; with only one of them born here it could be either, and firing
- * would report a table whose index history this run never read. So the sound condition is both —
- * which under-reports the new-child-referencing-an-existing-parent shape, and under-reporting is
- * the direction this rule is allowed to be wrong in, because the audit suite still answers it in
- * full against the catalog.
+ * **"Created here" means the table that CARRIES the key.** A foreign key names two tables, and the
+ * classification keeps them apart: the table the `ALTER TABLE` changes is the statement's subject,
+ * the one after `REFERENCES` is only pointed at ({@see TouchedTables::soleSubject()}). The key and
+ * its columns sit on the subject, so its index history is the one this branch has to have read in
+ * full, and only it has to be born in this migration. The referenced table may be live: a new
+ * child table pointing at an existing parent is the commonest shape this branch exists for.
+ * {@see ConstraintNotValidatedRule} asks a different question of the same statement, whether a
+ * lock matters, and there the live parent still counts.
  *
- * The same ambiguity governs coverage: the key is on one of the two tables and nobody knows which,
- * so the finding is withheld unless NEITHER of them is covered and BOTH of their histories could
- * be read. An index on the referenced table rarely leads with the referencing column, so this
- * costs little in practice — and what it costs, it costs in silence.
+ * Coverage is asked of the same table, for the same reason: a DELETE or UPDATE on the parent
+ * searches the child by the referencing columns, and no index on the parent serves that lookup.
+ * A statement whose subject cannot be told, none or two of them, is left alone.
  *
  * **Coverage is decided by {@see ForeignKeyIndexCoverage::isCovered()}, the same left-prefix test
  * the catalog half runs, over a candidate set held to the same standard as the catalog's
@@ -256,19 +253,19 @@ final class ForeignKeyWithoutIndexRule extends AbstractCatalogRule implements De
             return null;
         }
 
-        if (! TouchedTables::allCreatedHere($statement)) {
+        // The key and its columns sit on the table the statement alters, its subject. Only that
+        // table has to be born here for this branch to have read its whole index history, and only
+        // its indexes can serve the lookup a DELETE or UPDATE on the parent makes.
+        $table = TouchedTables::soleSubject($statement);
+
+        if (! $table instanceof StatementTarget || ! $statement->migration->createsTable($table->qualifiedName())) {
             return null;
         }
 
-        // The key sits on ONE of the tables this statement names and the projection cannot say
-        // which, so every one of them has to come out uncovered AND fully readable before the
-        // absence is something this branch may assert.
-        foreach (TouchedTables::of($statement) as $table) {
-            $indexes = $this->indexesOn($table->qualifiedName(), $statement->migration->runStatements);
+        $indexes = $this->indexesOn($table->qualifiedName(), $statement->migration->runStatements);
 
-            if ($indexes === null || ForeignKeyIndexCoverage::isCovered($columns, $indexes)) {
-                return null;
-            }
+        if ($indexes === null || ForeignKeyIndexCoverage::isCovered($columns, $indexes)) {
+            return null;
         }
 
         // The columns appear twice on purpose — once as the fact and once inside the advice. The

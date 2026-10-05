@@ -11,16 +11,16 @@ use Pushery\SQLens\Config\ConfigSchema;
  *
  * ## Why absence is answered here rather than by the config merge
  *
- * `mergeConfigFrom()` is a shallow merge, so a project that published `config/sqlens.php` before a
- * release added a tool has no entry for it — not `false`, absent. Somewhere has to decide what
- * that means, and the decision is asymmetric on purpose:
+ * A published `config/sqlens.php` is merged over the shipped one map by map (`PublishedConfigMerge`),
+ * so a tool a later release adds reaches an older published copy with its shipped default, and
+ * every mutating tool ships `false`. The map this policy reads can still lack a tool: a value set
+ * at runtime replaces the whole map, and a caller can hand the policy a map of its own. Somewhere
+ * has to decide what absence means, and the decision is asymmetric on purpose:
  *
  * - a **read-only** tool absent from the map takes the shipped default, which is on. It reads and
  *   never writes; a project that upgraded should get the new reader without editing a file.
  * - a **mutating** tool absent from the map is **off**, always. "Not mentioned" must never mean
- *   "allowed": a release that added `predeploy` would otherwise switch it on in every project
- *   whose config predates it, and the first anybody heard of it would be a deploy gate they never
- *   enabled.
+ *   "allowed": a mutating tool that its absence switched on would be a deploy gate nobody enabled.
  *
  * That is why {@see ConfigSchema::MCP_MUTATING_TOOLS} is a declared list rather than something
  * derived from the shipped defaults. The defaults live in a file a project edits; which tools are

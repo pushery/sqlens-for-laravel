@@ -32,9 +32,20 @@ final readonly class ReportedSkip
         public string $reason,
         /** What sharpens it: the object, the privilege, the error code. */
         public ?string $detail = null,
+        /**
+         * What the reason means for this area, and what to do about it, as a sentence for a person.
+         *
+         * Null where the producer has no sentence for its reason.
+         */
+        public ?string $explanation = null,
     ) {}
 
     /**
+     * The three fields a machine matches on.
+     *
+     * The explanation is left out on purpose: it is prose for the console, and the envelope keeps
+     * the reason id, which is what a consumer branches on.
+     *
      * @return array{area: string, reason: string, detail: string|null}
      */
     public function toArray(): array

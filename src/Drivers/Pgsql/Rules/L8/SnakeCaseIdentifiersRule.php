@@ -7,6 +7,8 @@ namespace Pushery\SQLens\Drivers\Pgsql\Rules\L8;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\DeclaresJudgedObjectTypes;
 use Pushery\SQLens\Contracts\JudgesMigrationStatements;
+use Pushery\SQLens\Exceptions\NamingPatternGaveUp;
+use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\AbstractCatalogRule;
 use Pushery\SQLens\Rules\Convention\NamingConvention;
@@ -95,6 +97,58 @@ final class SnakeCaseIdentifiersRule extends AbstractCatalogRule implements Decl
         // then its members. Speaking once per object is this repository's convention for a catalog
         // rule and is held by an architecture test; a finding per member would also report the same
         // column twice on a reading that carries the table and its columns both.
+        try {
+            $offenders = $this->offendersOn($object);
+        } catch (NamingPatternGaveUp $gaveUp) {
+            // One name the pattern cannot judge leaves the object's answer unknown, and neither a
+            // pass nor a list of the other offenders would say so.
+            return [RuleVerdict::undetermined($gaveUp->getMessage(), UndeterminedReason::NamingPatternGaveUp)];
+        }
+
+        return $offenders === []
+            ? []
+            : [RuleVerdict::flag(implode(' ', $offenders), $object->qualifiedName, $object->type)];
+    }
+
+    public function judgeStatement(MigrationStatementView $statement): ?RuleVerdict
+    {
+        // One verdict per statement, not one per name: the contract says a second verdict for the
+        // same statement is deduplicated away by rule id and location, so a statement that creates
+        // three badly-named columns would report one of them and drop two WITHOUT SAYING SO. The
+        // names are gathered and reported together instead.
+        try {
+            $offending = $this->offendingTargets($statement);
+        } catch (NamingPatternGaveUp $gaveUp) {
+            return RuleVerdict::undetermined($gaveUp->getMessage(), UndeterminedReason::NamingPatternGaveUp);
+        }
+
+        if ($offending === []) {
+            return null;
+        }
+
+        ksort($offending);
+
+        $named = [];
+
+        foreach ($offending as $name => $type) {
+            $named[] = $this->sentence($type, $name);
+        }
+
+        return RuleVerdict::flag(implode(' ', $named));
+    }
+
+    /**
+     * The sentence for every offender on the object: its own name first, then its members.
+     *
+     * Kept out of the `try` in judgeSchemaObject() so that the block holds a call and no branch:
+     * the coverage floor counts a branch inside a `try` as covered whether it ran or not.
+     *
+     * @return list<string>
+     *
+     * @throws NamingPatternGaveUp when PCRE gives up on one of the names
+     */
+    private function offendersOn(SchemaObject $object): array
+    {
         $offenders = [];
 
         $own = SnakeCaseIdentifiers::bareName($object->qualifiedName);
@@ -111,17 +165,20 @@ final class SnakeCaseIdentifiersRule extends AbstractCatalogRule implements Decl
             $offenders[] = $this->sentence($kind, $name);
         }
 
-        return $offenders === []
-            ? []
-            : [RuleVerdict::flag(implode(' ', $offenders), $object->qualifiedName, $object->type)];
+        return $offenders;
     }
 
-    public function judgeStatement(MigrationStatementView $statement): ?RuleVerdict
+    /**
+     * Every offending name the statement introduces, with the type of the object it names.
+     *
+     * Kept out of the `try` in judgeStatement() for the same reason as offendersOn().
+     *
+     * @return array<string, string>
+     *
+     * @throws NamingPatternGaveUp when PCRE gives up on one of the names
+     */
+    private function offendingTargets(MigrationStatementView $statement): array
     {
-        // One verdict per statement, not one per name: the contract says a second verdict for the
-        // same statement is deduplicated away by rule id and location, so a statement that creates
-        // three badly-named columns would report one of them and drop two WITHOUT SAYING SO. The
-        // names are gathered and reported together instead.
         $offending = [];
 
         foreach ($statement->targets as $target) {
@@ -136,19 +193,7 @@ final class SnakeCaseIdentifiersRule extends AbstractCatalogRule implements Decl
             }
         }
 
-        if ($offending === []) {
-            return null;
-        }
-
-        ksort($offending);
-
-        $named = [];
-
-        foreach ($offending as $name => $type) {
-            $named[] = $this->sentence($type, $name);
-        }
-
-        return RuleVerdict::flag(implode(' ', $named));
+        return $offending;
     }
 
     private function sentence(string $type, string $name): string

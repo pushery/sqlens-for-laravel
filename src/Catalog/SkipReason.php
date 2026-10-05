@@ -240,7 +240,10 @@ enum SkipReason: string
         };
     }
 
-    /** The translation key for this reason's human-facing sentence. */
+    /**
+     * The translation key for this reason's human-facing sentence, inside the package's
+     * `sqlens::messages` file. {@see SkipSentence} resolves it for a report.
+     */
     public function translationKey(): string
     {
         return 'catalog.skip.'.$this->value;

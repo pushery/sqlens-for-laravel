@@ -45,7 +45,7 @@
                 "type": "doc",
                 "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
                 "applies_to": "MySQL 8.4",
-                "note": "Dropping a column is INSTANT with no lock, but only while none of four conditions applies: a functional index over the column, a table out of instant row-version budget (where the statement is refused outright rather than falling back), ROW_FORMAT=COMPRESSED, or a FULLTEXT index on the table. A static reader cannot see which, so the class is undetermined rather than optimistic."
+                "note": "Dropping a column is INSTANT with no lock, but only while none of these applies: a functional or an ordinary index over the column, a table out of instant row-version budget (where the statement is refused outright rather than falling back), ROW_FORMAT=COMPRESSED, or a FULLTEXT index on the table. A static reader cannot see which, so the class is undetermined rather than optimistic."
             }
         ],
         "MY.L1.DROP_TABLE": [

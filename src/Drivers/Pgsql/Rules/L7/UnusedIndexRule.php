@@ -20,18 +20,18 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
 /**
  * An index nobody has read — as far as counters that can be reset are able to say.
  *
- * ## Why this one is EXPERIMENTAL when every other rule before 1.0 is stable
+ * ## Why this one is EXPERIMENTAL rather than stable
  *
- * Not maturity. Every other rule in this package answers from the schema, and the schema does not
- * move while you look at it. This one answers from counters, and its verdict therefore depends on
- * WHEN it is asked — which is a direct tension with the package's third governing principle, that
- * the same state produces the same result.
+ * Not maturity. This rule answers from usage counters, which move with every query the database
+ * serves and can be reset by anybody with the privilege, so its verdict depends on WHEN it is asked
+ * and on what the application did in between — a direct tension with the package's third governing
+ * principle, that the same state produces the same result.
  *
  * The tier is what keeps that tension out of everybody else's run. `experimental` is not admitted by
  * default, so a project that has not asked for this rule gets an audit whose determinism is intact.
  * A project that HAS asked for it has accepted a time-bounded question, knowingly.
  *
- * That is a deliberate, named exception to the pre-1.0 rule that every shipped rule is `stable`, and
+ * That is a deliberate, named exception to the pre-1.0 default that a shipped rule is `stable`, and
  * the guard holding that rule carries this id with the reason beside it rather than being loosened.
  *
  * ## The window is the whole difficulty

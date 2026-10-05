@@ -24,7 +24,7 @@ use Pushery\SQLens\Rules\ServerVersion;
  *
  * It builds no classifier of its own. Everything it needs already exists and has an owner: the
  * operation key comes from {@see OperationKeyMapper}, the matrix entry from {@see MatrixResolver},
- * and the entry's four axes become a class through {@see DowntimeClassMapper}. This is the wiring
+ * and the entry's axes become a class through {@see DowntimeClassMapper}. This is the wiring
  * between them, and the reason it is a class rather than three calls repeated per rule: a second
  * copy of that chain is a second answer waiting to disagree with the first.
  *
@@ -132,7 +132,7 @@ final readonly class MysqlDowntimeClassSource
         return $resolver->resolve($operation, $version, $context ?? MatrixContext::blind());
     }
 
-    /** One operation through the matrix and the four-axis classifier — the shared lookup. */
+    /** One operation through the matrix and the axis classifier — the shared lookup. */
     private function forOperation(string $operation, ResolvedServerVersion $version, MatrixContext $context): DowntimeClassMapping
     {
         return $this->downtimeClasses->map($this->resolutionFor($operation, $version, $context));

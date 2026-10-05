@@ -255,9 +255,9 @@ final readonly class MysqlSecurityReader implements SecurityReader
         // zero). A reading built on the second would report "no grants" for a locked door, which is the
         // one answer this package must never give.
         //
-        // Three tables in one statement, because a database grant, a table grant and a global dynamic
-        // privilege are the same fact at three scopes, and a reader that took them in three round trips
-        // could see an account gain a grant between the first and the third.
+        // Every grant table in one statement, because a global, a database, a table, a column and
+        // a routine grant are the same fact at different scopes, and a reader that took them in
+        // separate round trips could see an account gain a grant between the first and the last.
         $static = MysqlStaticPrivileges::bundled();
         $ddl = MysqlDdlPrivileges::bundled();
 

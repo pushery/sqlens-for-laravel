@@ -7,14 +7,14 @@ namespace Pushery\SQLens\Format;
 /**
  * What `dialect=auto` resolved to — a dialect, or a NAMED reason there is none.
  *
- * Three outcomes rather than a nullable enum, because the two absences mean opposite things and lead
- * to opposite behavior:
+ * Three outcomes rather than a nullable enum, because the two absences mean different things and
+ * are refused with different reasons:
  *
  * - **unsupported** — the connection names an engine this package has declared a non-goal. Mapping
  *   it onto the nearest dialect would produce advice about another product, confidently.
- * - **unknown** — there is no connection to ask, or it names no driver. That is not an error at all:
- *   `sqlens:format` with no database is the north-star this suite is built around, and the
- *   dialect-neutral core formats perfectly well without one.
+ * - **unknown** — there is no connection to ask, or it names no driver. `sqlens:format` needs no
+ *   database, only the dialect stated once with `--dialect` or `sqlens.format.dialect`, so the
+ *   refusal names those two ways rather than guessing one.
  */
 final readonly class DialectResolution
 {

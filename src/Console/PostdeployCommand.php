@@ -12,6 +12,7 @@ use Pushery\SQLens\Audit\ProjectManifest;
 use Pushery\SQLens\Capture\PendingSkipReason;
 use Pushery\SQLens\Catalog\CatalogReaderFactory;
 use Pushery\SQLens\Catalog\CatalogRequest;
+use Pushery\SQLens\Catalog\CatalogSkip;
 use Pushery\SQLens\Catalog\PreflightConnection;
 use Pushery\SQLens\Catalog\ReaderConnectionFactory;
 use Pushery\SQLens\Catalog\ReaderSession;
@@ -318,6 +319,14 @@ final class PostdeployCommand extends Command
                 ->withExpectation($expectation->block()),
             $this->getOutput()->getOutput(),
         );
+
+        // The note `sqlens:predeploy` prints in the same place: this run read through the connection
+        // that runs the migrations, so it held ALTER and DROP rights it never needed. The reading is
+        // complete and the verdict is unchanged, which is why the note is a line and not a finding,
+        // and why it has to be said: nothing else about the run would show it.
+        if ($preflight->advisory instanceof CatalogSkip) {
+            $this->outputErrorLine((string) $preflight->advisory->detail);
+        }
 
         foreach ($report->undetermined() as $result) {
             $this->outputErrorLine($result->checkId.': '.$result->reason);

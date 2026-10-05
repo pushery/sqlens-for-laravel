@@ -69,11 +69,8 @@ final readonly class ConsoleReporter implements Reporter
         /**
          * Whether `--show-remediation` was passed.
          *
-         * A constructor flag rather than a config key, and that is a deliberate avoidance: a new
-         * key inside the nested `reporting` section would be missing from every consuming app that
-         * has already published its config, and `mergeConfigFrom()` merges only the top level. This
-         * is a per-RUN choice anyway — somebody at a terminal asking to see more, once — so config
-         * would have been the wrong home even without that.
+         * A constructor flag rather than a config key: it is a per-RUN choice, somebody at a
+         * terminal asking to see more, once, so the configuration would be the wrong home for it.
          */
         private bool $showRemediationSteps = false,
     ) {}
@@ -373,10 +370,21 @@ final readonly class ConsoleReporter implements Reporter
         // What could not be read, each with its reason, at the TOP. A run that skipped half the
         // catalog and one that found nothing to say produce the same clean summary, and only the
         // header can tell them apart before somebody acts on it.
+        $explained = [];
+
         foreach ($context->sortedSkips() as $skip) {
             // The skip renders itself. Formatting it a second time here would put the same three
             // fields together in two places, and the two would drift the first time a field moved.
             ReportText::line($out, '  skipped '.$skip->describe());
+
+            // What the reason means, once per reason, under the first area that carries it. A run
+            // that could not understand sixteen indexes has one thing to learn, and sixteen copies
+            // of the same sentence would push the findings off the screen. The areas after it
+            // carry the same reason id, which is what ties them to it.
+            if ($skip->explanation !== null && ! array_key_exists($skip->reason, $explained)) {
+                ReportText::line($out, '    '.$skip->explanation);
+                $explained[$skip->reason] = true;
+            }
         }
 
         // Stated even at zero. "0 hidden" and a header that never mentions hiding read the same to

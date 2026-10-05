@@ -27,6 +27,7 @@ use Pushery\SQLens\Catalog\SettingCrossFacts;
 use Pushery\SQLens\Catalog\SettingsReading;
 use Pushery\SQLens\Catalog\SettingSubjects;
 use Pushery\SQLens\Catalog\SkipReason;
+use Pushery\SQLens\Catalog\SkipSentence;
 use Pushery\SQLens\Catalog\UnsealedReaderSession;
 use Pushery\SQLens\Catalog\Usage\IndexUsageProjection;
 use Pushery\SQLens\Categories\Category;
@@ -91,6 +92,7 @@ use Pushery\SQLens\Rules\ServerVersion;
 use Pushery\SQLens\Rules\StabilityGate;
 use Pushery\SQLens\Rules\Suite;
 use Pushery\SQLens\Security\Privacy\PrivacyPack;
+use Pushery\SQLens\ServerVersion as ServerBanner;
 use Pushery\SQLens\Severity\Severity;
 use Pushery\SQLens\Subjects\SchemaObject;
 use Pushery\SQLens\Subjects\SchemaObjectType;
@@ -195,6 +197,12 @@ final readonly class AuditRunner implements AuditRuns
          * one kind of read: two readings of one fact are two chances to disagree.
          */
         private ReadsSessionBounds $sessionBounds,
+        /**
+         * The sentence each skipped area carries into the console header, saying what its reason
+         * means. Built here, where the whole skip and the driver are still in hand; the header
+         * keeps only the area, the reason id and the detail.
+         */
+        private SkipSentence $skipSentences,
     ) {}
 
     public function run(
@@ -278,6 +286,13 @@ final readonly class AuditRunner implements AuditRuns
             return $this->unreachable($target, $context, $error, $activeLevel, $overrides, $activeCategories, $today);
         }
 
+        // The banner the handshake just carried, read once, here, and threaded to the engine check
+        // below. The handshake is the one source ServerVersion names for "which server is this";
+        // the identity read is a query of its own that can fail on a server it does not expect,
+        // and a check resting on it would let exactly that server through. Read right after the
+        // connect because the steps between here and the check may replace the handle.
+        $banner = ServerBanner::bannerOf($session);
+
         $readers = $this->readers->for($target->driver, $session, $this->connections->budget(), $context);
 
         // The identity FIRST, and the catalog second. Which instance answered is part of what the
@@ -332,7 +347,7 @@ final readonly class AuditRunner implements AuditRuns
         //
         // MariaDB answers Laravel's `mysql` driver without sharing MySQL 8.4 semantics, so
         // every rule below this line would judge it against a contract it never made. The
-        // banner comes from the identity read that already happened — this opens nothing.
+        // banner comes from the handshake read above — this opens nothing and runs no query.
         $engineDriver = $this->drivers->resolve($target->driver);
 
         // The run's day, to the driver whose rules actually JUDGE. The other three
@@ -343,14 +358,11 @@ final readonly class AuditRunner implements AuditRuns
             $engineDriver = $engineDriver->withRunClock($today);
         }
 
-        // Only when the instance actually NAMED a version. `check()` answers
+        // Only when the handshake actually NAMED a version. `check()` answers
         // `unverifiedEngineIdentity` for a null banner, and turning that into a refusal here would
-        // reject a perfectly ordinary MySQL whose version reading degraded — while the run already
-        // names that gap through the identity reader. Found by the wiring proof, which refused a
-        // healthy instance on its first run; the same trap the floor unit was rebuilt to make
-        // unmakeable, arriving through the caller instead of the unit.
-        $banner = $target->identity?->serverVersion;
-
+        // reject a perfectly ordinary MySQL whose driver reported none. Found by the wiring proof,
+        // which refused a healthy instance on its first run; the same trap the floor unit was
+        // rebuilt to make unmakeable, arriving through the caller instead of the unit.
         $engine = $engineDriver instanceof Driver && is_string($banner) && $banner !== ''
             ? new EngineIdentity()->check($engineDriver, $banner)
             : null;
@@ -467,11 +479,12 @@ final readonly class AuditRunner implements AuditRuns
         // Kept as its own value rather than spread inline below, because this run has TWO answers
         // to report and only one of them is a finding: which rules were asked is a fact about the
         // run, and it has to survive into the header even when nothing came back.
-        $judged = $this->judge($answerable, [
+        $subjects = [
             ...$snapshot->objects,
             ...SettingSubjects::fromReading($settings, $context, $crossFacts, $pooler),
             ...$security,
-        ]);
+        ];
+        $judged = $this->judge($answerable, $subjects);
 
         $findings = [
             ...$this->pinFindings($target, $context),
@@ -481,7 +494,6 @@ final readonly class AuditRunner implements AuditRuns
             ...$this->securitySkipFindings($securitySkips, $target, $context),
             ...$this->versionSkewFindings($target, $context),
             ...$this->belowFloorFindings($target, $context),
-            ...$this->orphanedIgnoreFindings($snapshot, $target, $activeCategories, $overrides, $today),
             // Only when the flag was given AND there was genuinely nothing to bypass. Before the
             // audit could read a baseline at all this fired on every such run, which was honest
             // then and would be a lie now: a project with a real baseline would be told its
@@ -564,7 +576,7 @@ final readonly class AuditRunner implements AuditRuns
             $activeCategories,
             $today,
             misconfigured: $rules === [],
-            skips: [...$this->reportedSkips($snapshot), ...$this->reportedSecuritySkips($securitySkips)],
+            skips: [...$this->reportedSkips($snapshot, $target->driver), ...$this->reportedSecuritySkips($securitySkips, $target->driver)],
             // The switch is applied HERE, where it was read, and never inside the reader or the
             // outcome: those two answer "what does the project have" and "what did this run see",
             // and folding a flag into either makes one of them unable to answer its own question.
@@ -578,31 +590,27 @@ final readonly class AuditRunner implements AuditRuns
             askedRules: $answerable,
             // A scope that admits no rule read the catalog and asked nothing about it.
             examined: $rules !== [],
+            readPaths: $this->readPaths($subjects),
         );
     }
 
     /**
-     * Ignore patterns that matched nothing in what this run actually read.
+     * The object paths this run read: every subject it judged, under each spelling a report uses.
      *
-     * Compared against the SNAPSHOT rather than against the catalog at large: the answer has to be
-     * about the objects this audit looked at, or a pattern scoped to a schema the run did not
-     * cover would be reported as rotten every time.
+     * Every subject, not only the catalog's: a role, a grant, a setting and an HBA line are read
+     * by their own readers and never enter the snapshot, and a pattern naming one of them names
+     * something this run looked at. Compared against what was READ rather than against the catalog
+     * at large, so a pattern scoped to a schema the run did not cover is not reported as rotten
+     * every time.
      *
-     * @param  list<string>  $activeCategories
-     * @return list<Finding>
+     * @param  list<SchemaObject>  $subjects
+     * @return list<string>
      */
-    private function orphanedIgnoreFindings(CatalogSnapshot $snapshot, InstanceTarget $target, array $activeCategories, RunOverrides $overrides, Today $today): array
+    private function readPaths(array $subjects): array
     {
-        $ignore = IgnoreList::fromConfig(
-            $this->config->get('sqlens.audit.ignore'),
-            is_string($prefix = $this->config->get('database.connections.'.$target->connection.'.prefix')) ? $prefix : '',
-        );
-
-        // The snapshot's objects are already schema objects — PHPStan says so, and a defensive
-        // filter here would be a branch nothing can reach.
         $paths = [];
 
-        foreach ($snapshot->objects as $object) {
+        foreach ($subjects as $object) {
             $paths[] = $object->qualifiedName;
 
             // …and a ROUTINE gets a second spelling, because it has two and a user only ever sees
@@ -623,6 +631,40 @@ final readonly class AuditRunner implements AuditRuns
             // overload and not the other.
             if ($object->type === SchemaObjectType::Routine && ($parenthesis = strpos($object->qualifiedName, '(')) !== false) {
                 $paths[] = substr($object->qualifiedName, 0, $parenthesis);
+            }
+        }
+
+        return $paths;
+    }
+
+    /**
+     * Ignore patterns that matched nothing this run read or reported.
+     *
+     * Reported as well as read, because an external tool names objects no reader holds: PGLS
+     * reports an extension the catalog leaves out. A pattern that hides that finding matches no
+     * subject, and judged on subjects alone the same line would hide the finding AND be called
+     * orphaned in one run, with the second statement telling somebody to delete the first.
+     *
+     * The object a finding names is the path suppression matches it on, so a pattern that hid a
+     * finding is never orphaned here.
+     *
+     * @param  list<string>  $readPaths
+     * @param  list<Finding>  $findings  every finding of the run, before suppression
+     * @param  list<string>  $activeCategories
+     * @return list<Finding>
+     */
+    private function orphanedIgnoreFindings(array $readPaths, array $findings, InstanceTarget $target, array $activeCategories, RunOverrides $overrides, Today $today): array
+    {
+        $ignore = IgnoreList::fromConfig(
+            $this->config->get('sqlens.audit.ignore'),
+            is_string($prefix = $this->config->get('database.connections.'.$target->connection.'.prefix')) ? $prefix : '',
+        );
+
+        $paths = $readPaths;
+
+        foreach ($findings as $finding) {
+            if ($finding->location->objectName !== null) {
+                $paths[] = $finding->location->objectName;
             }
         }
 
@@ -715,13 +757,15 @@ final readonly class AuditRunner implements AuditRuns
      *
      * @return list<ReportedSkip>
      */
-    private function reportedSkips(CatalogSnapshot $snapshot): array
+    private function reportedSkips(CatalogSnapshot $snapshot, string $driver): array
     {
         $unread = array_values(array_filter(
             $snapshot->skips,
             // The two reasons AuditNotices::skipped() reports as not applicable, and no others.
             static fn (CatalogSkip $skip): bool => ! in_array($skip->reason, [SkipReason::NotComparable, SkipReason::ExcludedByConfig], true),
         ));
+
+        $sentences = $this->skipSentences;
 
         return array_map(
             static fn (CatalogSkip $skip): ReportedSkip => new ReportedSkip(
@@ -730,6 +774,7 @@ final readonly class AuditRunner implements AuditRuns
                 // The error code sharpens an unexpected failure; for the ordinary reasons there is
                 // none, and the reader's own words are the better detail.
                 detail: $skip->errorCode ?? $skip->detail,
+                explanation: $sentences->for($skip, $driver),
             ),
             $unread,
         );
@@ -1022,13 +1067,16 @@ final readonly class AuditRunner implements AuditRuns
      * @param  list<CatalogSkip>  $skips
      * @return list<ReportedSkip>
      */
-    private function reportedSecuritySkips(array $skips): array
+    private function reportedSecuritySkips(array $skips, string $driver): array
     {
+        $sentences = $this->skipSentences;
+
         return array_map(
             static fn (CatalogSkip $skip): ReportedSkip => new ReportedSkip(
                 $skip->reference,
                 $skip->reason->value,
                 $skip->detail,
+                $sentences->for($skip, $driver),
             ),
             $skips,
         );
@@ -1624,6 +1672,7 @@ final readonly class AuditRunner implements AuditRuns
      * @param  array<string, int|null>|null  $sessionTimeouts  the bounds the session read back; null where it could not say
      * @param  list<Rule>  $askedRules  the rules this run applied once its gates had spoken; none on a path that refused before judging
      * @param  bool  $examined  whether the run read the instance and asked its rules about it
+     * @param  list<string>|null  $readPaths  the object paths the run read; null on a path that read nothing, where no ignore pattern is judged
      */
     private function outcome(
         InstanceTarget $target,
@@ -1642,6 +1691,7 @@ final readonly class AuditRunner implements AuditRuns
         ?array $sessionTimeouts = null,
         array $askedRules = [],
         bool $examined = false,
+        ?array $readPaths = null,
     ): AuditOutcome {
         // Sorted by the pair a reader navigates with — where it is, then which rule said it. The
         // rule id breaks ties inside one object so two runs cannot swap two findings on one table.
@@ -1706,6 +1756,13 @@ final readonly class AuditRunner implements AuditRuns
 
             $findings = $contribution->contribute($findings, $diagnostic, $target->connection, $subjectContext, $target->pinnedHost, $toolGate);
             $unaskedToolIds = [...$unaskedToolIds, ...$contribution->unaskedIds($toolGate)];
+        }
+
+        // The ignore list is judged once every finding is in, the tools' included, and before
+        // suppression hides any of them: a pattern counts as used when it covers an object this
+        // run read or reported.
+        if ($readPaths !== null) {
+            $findings = [...$findings, ...$this->orphanedIgnoreFindings($readPaths, $findings, $target, $activeCategories, $overrides, $today)];
         }
 
         // Under a strict profile a FIXABLE absence is an error rather than a degradation — and

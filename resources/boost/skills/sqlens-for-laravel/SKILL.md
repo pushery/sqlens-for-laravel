@@ -48,7 +48,9 @@ fails the run).
 Shadow mode (the truth mode that runs migrations for real against a disposable
 database) is opt-in and needs more than read-only access — a dedicated `CREATEDB`
 role, kept separate from your runtime and migration roles. It stays off unless you
-configure `capture.shadow` and pass the production guard. See the
+pass `--shadow`, and then it runs only in an environment `capture.shadow.allowed_environments`
+lists (`local` and `testing` by default), never against a connection that looks like production,
+and only once you confirm it; `--force` answers the confirmation and nothing else. See the
 [shadow-mode guide](https://docs.pushery.com/sqlens-for-laravel/shadow-mode/)
 before enabling it.
 
@@ -375,9 +377,9 @@ php artisan sqlens:mcp
 ```
 
 `laravel/mcp` is optional and deliberately not a dependency — it carries a server runtime that
-every run without the MCP server never uses. Without it `sqlens:mcp` reports a named
-`undetermined` and prints that install command rather than failing, so nothing else in this
-skill is affected by skipping this step.
+every run without the MCP server never uses. Without it `sqlens:mcp` stops with exit 2 and prints
+that install command instead of a stack trace. Nothing else in this skill needs it, so skipping
+this step leaves the rest working.
 
 `sqlens:mcp` starts a Model Context Protocol server over stdio. Point an agent's MCP
 configuration at that command and it can ask the same engine `sqlens:lint` runs — same
@@ -455,8 +457,11 @@ does not format the SQL inside its heredoc — it reads PHP as SQL and rewrites 
 scanner refuses a `.php` path even when you name it explicitly, and generated `database/schema/*.sql`
 dumps are left alone.
 
-It runs with **no database**: where the dialect cannot be resolved from your connection, the run
-says so and formats with the dialect-neutral built-in backend. Nothing to install.
+It runs with **no database**: the dialect comes from `--dialect=pgsql|mysql` or
+`sqlens.format.dialect`, and otherwise from the driver your connection is configured with, which
+is read and never opened. A run that cannot tell the dialect stops with exit 2 and names both ways
+to state it rather than guessing, because comment syntax and keyword case differ per dialect and a
+guess rewrites the file for the wrong engine. Nothing to install.
 
 Three backends sit behind one seam — `pgformatter`, `sqlfluff`, and the built-in `php` core. `auto`
 picks the best **installed** one. Naming one is a promise that it is installed: a named backend that

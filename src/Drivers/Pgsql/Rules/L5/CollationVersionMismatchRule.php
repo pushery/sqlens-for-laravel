@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Drivers\Pgsql\Rules\L5;
 
 use Pushery\SQLens\Agent\Remediation\RemediationValidator;
-use Pushery\SQLens\Canonical\QuotedIdentifier;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\DeclaresJudgedObjectTypes;
 use Pushery\SQLens\Contracts\ProvidesSchemaObjectRemediation;
+use Pushery\SQLens\Drivers\Pgsql\Rules\Support\QuotedObjectName;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Findings\UndeterminedReason;
@@ -206,7 +206,8 @@ final class CollationVersionMismatchRule extends AbstractCatalogRule implements 
      *
      * That name is filled in, quoted, because the collation is a fact of the finding and not a choice
      * of the reader. The collations PostgreSQL imports from ICU carry upper case and dashes, and
-     * `'pg_catalog.de-DE-x-icu'::regcollation` is read as `de-de-x-icu`, which does not exist.
+     * `'pg_catalog.de-DE-x-icu'::regcollation` is read as `de-de-x-icu`, which does not exist. The
+     * database collation is named by its database, and that name is filled in the same way.
      */
     public function remediationForObject(SchemaObject $object): ?RemediationPayload
     {
@@ -248,10 +249,10 @@ final class CollationVersionMismatchRule extends AbstractCatalogRule implements 
             ),
         ];
 
-        if (! $database) {
-            $context = ['collation' => $this->quotedCollation($object)];
-            $steps = array_map(static fn (RemediationStep $step): RemediationStep => $step->filled($context), $steps);
-        }
+        // The database collation is named after the database, which the catalog reads as
+        // `current_database()` and hands over as it stands, so it is quoted the same way.
+        $context = [$database ? 'database' : 'collation' => QuotedObjectName::of($object)];
+        $steps = array_map(static fn (RemediationStep $step): RemediationStep => $step->filled($context), $steps);
 
         return new RemediationPayload(
             steps: $steps,
@@ -264,21 +265,6 @@ final class CollationVersionMismatchRule extends AbstractCatalogRule implements 
             verification: 'sqlens::messages.remediation.reindex_before_refresh.verification',
             subject: RemediationSubject::SchemaObject,
         );
-    }
-
-    /** The collation the finding names, schema-qualified and quoted part by part. */
-    private function quotedCollation(SchemaObject $object): string
-    {
-        $schema = (string) $object->parent;
-        $name = $object->qualifiedName;
-
-        // An if, not a three-line ternary: the coverage driver never marks the else line of one
-        // as run, so the floor would fail over formatting rather than over a missing test.
-        if ($schema !== '' && str_starts_with($name, $schema.'.')) {
-            $name = substr($name, strlen($schema) + 1);
-        }
-
-        return QuotedIdentifier::of('"', $schema, $name);
     }
 
     /** The query that lists the indexes sorted under the collation, for either kind of collation. */

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Canonical;
 
+use Pushery\SQLens\Contracts\DeclaresReservedWords;
+
 /**
  * The canonical form is a versioned contract, not an implementation detail —
  * kin to the baseline / debt-ledger formats. The version travels with every
@@ -119,8 +121,26 @@ final readonly class CanonicalFormVersion
      * The first is now a dropped constraint rather than a dropped column. The second keeps its quotes
      * because the name collides with a keyword, which is what tells it apart from the keyword. The
      * PostgreSQL list already carried the word, so none of its forms moved.
+     *
+     * Went to 8 for the words the server reserves. A name was quoted only when it collided with the
+     * canonicalizer's own keyword list, and the server reserves more than that list holds: 62 of
+     * PostgreSQL 18's 101 reserved words and 182 of MySQL 8.4's 262 were written bare, and every one
+     * of them is a syntax error bare. The form reaches suggestions, so a remediation over a table
+     * called `group` did not parse. A driver now declares its server's reserved set
+     * ({@see DeclaresReservedWords}), and a name from it keeps its quotes.
+     * The keyword lists did not change, so no keyword folds differently. Measured before and after:
+     *
+     *     create index "group_name_index" on "group" ("name")
+     *       form 7 -> CREATE INDEX group_name_index ON group (name)
+     *       form 8 -> CREATE INDEX group_name_index ON "group" (name)
+     *
+     *     alter table `players` add `rank` int not null
+     *       form 7 -> ALTER TABLE players ADD rank INT NOT NULL
+     *       form 8 -> ALTER TABLE players ADD `rank` INT NOT NULL
+     *
+     * Only a statement that names such an object moves; `CREATE TABLE orders` reads as it did.
      */
-    public const int CURRENT = 7;
+    public const int CURRENT = 8;
 
     public function __construct(public int $version) {}
 

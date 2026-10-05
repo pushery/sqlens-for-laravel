@@ -316,8 +316,8 @@ final readonly class InvalidIndexCheck implements PreflightCheck
             context: new SubjectContext(driver: $context->driver, profile: $context->profile, strictTools: false),
             // Medium rather than high on its own: an invalid index costs write throughput and is a
             // certain failure only when the deploy re-creates that exact name. The name-collision
-            // branch is where that certainty gets its own, louder finding — and it needs the pending
-            // migrations, which this command does not carry yet.
+            // branch is where that certainty gets its own, louder finding, read off the pending
+            // migrations (COLLISION_ID).
             severity: Severity::Medium,
         )->withDowntimeClass(
             // `online`, and the axis keeps meaning what it says: the invalid index locks nothing and
