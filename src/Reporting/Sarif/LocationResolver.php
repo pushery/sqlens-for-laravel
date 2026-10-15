@@ -54,6 +54,9 @@ final readonly class LocationResolver
     /** The file an alert about a live database is anchored to when a project configures none. */
     public const string DEFAULT_ANCHOR = 'config/sqlens.php';
 
+    /** How a location names an external tool instead of a file: `tool:pgls`, `tool:squawk`. */
+    private const string TOOL_SCHEME = 'tool:';
+
     public function __construct(private string $anchorFile = self::DEFAULT_ANCHOR) {}
 
     /**
@@ -69,6 +72,27 @@ final readonly class LocationResolver
     {
         $location = $finding->location;
 
+        if ($location->kind !== LocationKind::Catalog && str_starts_with((string) $location->file, self::TOOL_SCHEME)) {
+            // A finding about an external tool rather than a file: a tool that is missing, or a squawk
+            // finding no statement carries. Its location names the tool as `tool:<name>`, which is no
+            // file in the repository, and line 0, which SARIF refuses as a region (`startLine` has a
+            // minimum of 1), so a code scanning upload rejected the whole document. It is anchored the
+            // way a catalog finding without a migration is, with the tool as its logical location.
+            return [[
+                'physicalLocation' => [
+                    'artifactLocation' => ['uri' => $this->anchorFile],
+                ],
+                'logicalLocations' => [[
+                    'name' => substr((string) $location->file, strlen(self::TOOL_SCHEME)),
+                    'kind' => 'tool',
+                ]],
+                'properties' => [
+                    'sqlens-anchored' => true,
+                    'sqlens-anchor-kind' => 'configured',
+                ],
+            ]];
+        }
+
         if ($location->kind !== LocationKind::Catalog) {
             // A migration or callsite finding. The file is already repo-relative — `Location` does
             // that at construction — and the region is omitted rather than defaulted when the
@@ -77,7 +101,7 @@ final readonly class LocationResolver
             return [[
                 'physicalLocation' => [
                     'artifactLocation' => ['uri' => (string) $location->file],
-                    ...($location->line === null ? [] : ['region' => ['startLine' => $location->line]]),
+                    ...($location->line === null || $location->line < 1 ? [] : ['region' => ['startLine' => $location->line]]),
                 ],
             ]];
         }

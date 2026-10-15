@@ -2,6 +2,12 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.1] - 2026-10-15
+
+### Fixed
+
+- **A SARIF report stays valid when an external tool is missing.** A finding about a tool rather than a file, `CAP.L0.MISSING_TOOL`, `LINT.SKIPPED.MISSING_TOOL` and a squawk finding no statement carries, was written with the tool as its URI, such as `tool:pgls`, and line 0, which the SARIF 2.1.0 schema refuses, so a code scanning upload rejected the whole document. Such a finding is now anchored the way a catalog finding without a migration is: on `config/sqlens.php`, or the anchor a project configures, without a region, and with the tool as its logical location.
+
 ## [0.29.0] - 2026-10-05
 
 ### Added
