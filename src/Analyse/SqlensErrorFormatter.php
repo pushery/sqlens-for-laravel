@@ -18,8 +18,9 @@ use stdClass;
  * anything that reads one reads the other. Two things differ. Each message carries its message,
  * line, whether it can be ignored and its identifier, but not PHPStan's tip, which is formatted
  * for a terminal. And under {@see AnalyseResultTrace::KEY} it carries what {@see AnalyseResultTrace}
- * describes: the format's version, and the message of every internal error PHPStan hit while it
- * analyzed.
+ * describes: the format's version, and the message of every internal error the result hands over.
+ * PHPStan 2 hands over none and writes their messages into `errors` instead, which the class says
+ * more about.
  *
  * The exit code is PHPStan's own, so a pipeline step that fails on errors keeps failing on them.
  */

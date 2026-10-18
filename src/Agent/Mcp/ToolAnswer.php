@@ -102,7 +102,23 @@ final readonly class ToolAnswer
     /** The answer as the protocol carries it. */
     public function toResponse(): Response
     {
-        return Response::json($this->toArray());
+        return self::json($this->toArray());
+    }
+
+    /**
+     * A structure as the protocol carries it, encoded the way the JSON report is.
+     *
+     * The SDK's `Response::json()` encodes with `JSON_THROW_ON_ERROR` alone. Captured SQL and a
+     * migration's identifiers can hold bytes that are not UTF-8, a latin1 name or a cut multibyte
+     * sequence, and one such byte turned the whole answer into an internal error with no finding and no
+     * reason, while `sqlens:lint --format=json` reports the same run with the byte as U+FFFD. Every
+     * answer of this layer is encoded here, with the report's flags.
+     *
+     * @param  array<array-key, mixed>  $payload
+     */
+    public static function json(array $payload): Response
+    {
+        return Response::text(self::encode($payload));
     }
 
     /**
@@ -115,6 +131,17 @@ final readonly class ToolAnswer
      */
     public function toErrorResponse(): Response
     {
-        return Response::error(json_encode($this->toArray(), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        return Response::error(self::encode($this->toArray()));
+    }
+
+    /**
+     * A structure encoded with the flags of the JSON report: a byte that is not UTF-8 becomes U+FFFD
+     * rather than aborting the answer, and a structural fault still throws.
+     *
+     * @param  array<array-key, mixed>  $payload
+     */
+    private static function encode(array $payload): string
+    {
+        return json_encode($payload, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 }

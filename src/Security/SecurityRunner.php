@@ -13,6 +13,7 @@ use Pushery\SQLens\Drivers\DriverResolutionReason;
 use Pushery\SQLens\Exceptions\UnreadableBaseline;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Result;
+use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Lint\LintOutcome;
 use Pushery\SQLens\Lint\LintRuns;
 use Pushery\SQLens\Reporting\RunContext;
@@ -266,8 +267,8 @@ final readonly class SecurityRunner
     private function unsupported(string $half, DriverResolutionFailure $failure, string $connection): SecuritySubRun
     {
         return $failure->reason === DriverResolutionReason::ConnectionNotFound
-            ? SecuritySubRun::misconfigured(SecurityRunNotices::subRunCrashed($half, $failure->detail))
-            : SecuritySubRun::failed(SecurityRunNotices::subRunUnsupported($half, $connection));
+            ? SecuritySubRun::misconfigured(SecurityRunNotices::subRunCrashed($half, $failure->detail, $failure->undeterminedReason()))
+            : SecuritySubRun::failed(SecurityRunNotices::subRunUnsupported($half, $connection, $failure->detail, $failure->undeterminedReason()));
     }
 
     /** The same question for the migration half, asked of its own outcome. */
@@ -344,7 +345,11 @@ final readonly class SecurityRunner
 
         return $reading->reason === null
             ? SecuritySubRun::reached($reading->findings, $context)
-            : SecuritySubRun::failed(SecurityRunNotices::subRunNotConfigured('analyse', $reading->reason));
+            : SecuritySubRun::failed(SecurityRunNotices::subRunReadNothing(
+                'analyse',
+                $reading->reason,
+                $reading->cause ?? UndeterminedReason::NotConfigured,
+            ));
     }
 
     /**

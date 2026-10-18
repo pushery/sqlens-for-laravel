@@ -46,6 +46,10 @@ final readonly class CanonicalFormVersion
      *       form 2 -> CREATE TABLE schema (id BIGINT)
      *       form 3 -> CREATE TABLE "schema" (id BIGINT)
      *
+     * Both lines are the casing stage's output. Through the whole pipeline the first statement is
+     * not classified today: the unquoted column `schema` reads as the keyword, and it ends as an
+     * `ambiguous_target` failure.
+     *
      * Both are more correct — an identifier colliding with a keyword keeps its quotes, which is
      * what makes it unambiguous — and both change the STRING, which is all a fingerprint compares.
      * A project with a column named `schema` would otherwise have seen its ledger report drift that
@@ -139,8 +143,25 @@ final readonly class CanonicalFormVersion
      *       form 8 -> ALTER TABLE players ADD `rank` INT NOT NULL
      *
      * Only a statement that names such an object moves; `CREATE TABLE orders` reads as it did.
+     *
+     * Went to 9 for `ANALYZE`, added to both keyword lists so that the statement leads with a keyword
+     * and reaches the lead fallback, which reads it as {@see StatementKind::Unknown}. Before, it had
+     * no canonical form at all and made its whole migration undetermined. Both servers reserve the
+     * word, so a name spelled with it kept its quotes already; what moves is the word where it is
+     * syntax:
+     *
+     *     analyze orders
+     *       form 8 -> no canonical form (unrecognized_statement_form)
+     *       form 9 -> ANALYZE orders
+     *
+     *     alter table `orders` analyze partition p0
+     *       form 8 -> ALTER TABLE orders analyze partition p0
+     *       form 9 -> ALTER TABLE orders ANALYZE partition p0
+     *
+     * The second is MySQL's partition maintenance. A `VACUUM` and MySQL's `OPTIMIZE TABLE` stay out
+     * on purpose, for the reason {@see StatementKind} gives.
      */
-    public const int CURRENT = 8;
+    public const int CURRENT = 9;
 
     public function __construct(public int $version) {}
 

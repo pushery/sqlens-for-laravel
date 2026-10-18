@@ -19,8 +19,8 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  * names the instant it is measuring against — which is also what makes a frozen clock a test
  * detail rather than a framework dependency.
  *
- * (The ticket suggested a `Clock` binding or Carbon's test helpers. Neither is used, because the
- * package's existing answer is stronger: there is nothing to forget to inject.)
+ * (A `Clock` binding or Carbon's test helpers would be the usual answer. Neither is used, because
+ * the package's existing answer is stronger: there is nothing to forget to inject.)
  *
  * ## Calendar days, not 86400-second blocks
  *

@@ -553,8 +553,8 @@ final readonly class LintRunner implements LintRuns
         // Handed on whole rather than flattened to SQL. A `CapturedStatement` already carries
         // `canonicalSql`, `statementKind` and `targets` — so a caller asking "which tables need an
         // exclusive lock" reads the answer this run produced instead of parsing the SQL again and
-        // risking a different one. Flattening here would throw that away and force the second
-        // parser this ticket's guardrail forbids.
+        // risking a different one. Flattening here would throw that away and force a second
+        // parser over the same SQL, which the single canonicalization exists to rule out.
         $pendingStatements = $run->statements();
         // Complete when every pending migration's `up()` was captured, the only case in which the
         // statements above are all the deploy will run.
@@ -1842,9 +1842,8 @@ final readonly class LintRunner implements LintRuns
     /**
      * The header's version string, marked when the run reasons from an unsupported version.
      *
-     * Loud on purpose. The owner's instruction was Option B "mit deutlichen hinweisen" — a
-     * notice a reader scrolls past defeats the whole point, because acting on the report is
-     * exactly what this warns against.
+     * Loud on purpose: a notice a reader scrolls past defeats the whole point, because acting
+     * on the report is exactly what this warns against.
      */
     private function headerVersion(ResolvedServerVersion $resolvedVersion, ?DriverResolutionFailure $floorFailure): string
     {

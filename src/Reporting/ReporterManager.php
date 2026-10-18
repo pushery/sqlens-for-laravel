@@ -19,7 +19,7 @@ use Pushery\SQLens\Reporting\Sarif\LocationResolver;
 use Pushery\SQLens\Reporting\Sarif\SarifReporter;
 
 /**
- * Resolves a format name to a reporter — the Laravel Manager idiom the fleet uses
+ * Resolves a format name to a reporter — the Laravel Manager idiom the framework uses
  * for cache and queue drivers. `console`, `json`, `github`, `agent` and `sarif` are built in — FIVE,
  * and this sentence named four until `agent` had shipped for months, omitting the one format the
  * README recommends to an agent. Later reporters register through the inherited extend() point (an

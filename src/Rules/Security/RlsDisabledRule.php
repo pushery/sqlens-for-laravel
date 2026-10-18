@@ -68,7 +68,7 @@ final class RlsDisabledRule extends AbstractSchemaObjectSecurityRule implements 
     }
 
     /**
-     * `SEC.RLS.DISABLED`, not the `SEC.PG.RLS.DISABLED` of the plan's ticket.
+     * `SEC.RLS.DISABLED`, not an engine-qualified `SEC.PG.RLS.DISABLED`.
      *
      * The scheme is `<AREA>.L<n>.<NAME>` and machine-enforced; `SEC` is the area for the security
      * family, which is also why the rule lives in Core rather than under the PostgreSQL pack — that
@@ -128,7 +128,9 @@ final class RlsDisabledRule extends AbstractSchemaObjectSecurityRule implements 
         }
 
         if ($object->getBool('rls_enabled') === true) {
-            return [];
+            $exposed = $object->getString('rls_exposed_partitions') ?? '';
+
+            return $exposed === '' ? [] : [RuleVerdict::flag($this->partitionMessage($object, $exposed))];
         }
 
         return [RuleVerdict::flag($this->message($object))];
@@ -269,6 +271,32 @@ final class RlsDisabledRule extends AbstractSchemaObjectSecurityRule implements 
             $bypassing,
             str_contains($bypassing, ',') ? 'bypass' : 'bypasses',
             str_contains($bypassing, ',') ? 'those accounts' : 'that account',
+        );
+    }
+
+    /**
+     * The table has row-level security, and partitions a role can query directly do not.
+     *
+     * A query against a partition applies that partition's own setting, which is off unless somebody
+     * switched it on, so the table's policies never see it: measured on PostgreSQL 18.0, a role read 2
+     * of 2 rows from the partition and 1 of 2 through the table. Enabling it on the partition without a
+     * policy of its own denies every row to a direct query and leaves the queries through the table to
+     * the table's policies, measured the same way: 0 rows directly, still 1 through the table.
+     */
+    private function partitionMessage(SchemaObject $object, string $exposed): string
+    {
+        return sprintf(
+            'row-level security is enabled on %s but not on its partitions %s, and the roles named beside '
+            .'each hold a privilege on that partition directly: a query against a partition applies the '
+            .'partition\'s own row-level security and none of the policies on %s, so those roles read every '
+            .'row of it. Enable it on each such partition, for example with %s, which denies every row to a '
+            .'direct query and leaves the queries through %s to its policies, or revoke the direct grants '
+            .'so the partitions are reachable only through the table.',
+            $object->qualifiedName,
+            $exposed,
+            $object->qualifiedName,
+            StatementSpan::naming('ALTER TABLE %s ENABLE ROW LEVEL SECURITY;', $object->getString('rls_exposed_partition_statement') ?? ''),
+            $object->qualifiedName,
         );
     }
 

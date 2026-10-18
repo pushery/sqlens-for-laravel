@@ -182,8 +182,7 @@ final readonly class AnalyseRuleCatalog
      * project did the thing that was asked, and the code moved afterwards. Rating it any higher
      * would mean a tidy-up item arriving at the same weight as a missing one.
      *
-     * **It is still worth a finding, and that is the argument the ticket behind it makes better than
-     * this docblock could.** An exemption that outlives its reason reads for years as a decision
+     * **It is still worth a finding.** An exemption that outlives its reason reads for years as a decision
      * somebody weighed, and the next reader trusts it. A consuming project had built the two-way
      * check by hand and could not retire it in favor of this package, because trading a two-way
      * check for a one-way one is not adoption.

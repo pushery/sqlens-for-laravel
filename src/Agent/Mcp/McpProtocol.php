@@ -9,11 +9,15 @@ namespace Pushery\SQLens\Agent\Mcp;
  *
  * ## Why a pin and not a range
  *
- * The SDK's default is every revision it knows — four of them — and a server that offers all four
- * speaks whichever one the client happens to ask for. That makes the protocol a second thing that
- * can differ between two runs over an unchanged database, and determinism is one of this package's
- * three principles: the same state must produce the same answer on a developer's machine and in
- * CI, whichever agent happens to be driving.
+ * Left to itself, the SDK answers the `initialize` handshake in whichever of its two revisions,
+ * `2025-11-25` and `2025-06-18`, the client asks for, and in `2025-11-25` when the client asks for
+ * any other; its newer discovery handshake offers its `LATEST`, `2026-07-28`. The revision a session
+ * speaks would then depend on the client and on the SDK release installed. That makes the protocol
+ * a second thing that can differ between two runs over an unchanged database, and determinism is
+ * one of this package's three principles: the same state must produce the same answer on a
+ * developer's machine and in CI, whichever agent happens to be driving.
+ *
+ * The revisions named here are those of `laravel/mcp` 1.0.
  *
  * A client asking for another revision is answered with this one, as the protocol's version
  * negotiation requires, and decides itself whether to continue. It is never answered in a revision
@@ -22,9 +26,10 @@ namespace Pushery\SQLens\Agent\Mcp;
  *
  * ## Why this revision
  *
- * `2025-06-18` is what the ecosystem's clients actually speak today; the SDK's own `LATEST` is
- * newer. Raising it is a deliberate change with a measured transcript behind it, not a version
- * bump — see the SDK spike note for what such a measurement looks like.
+ * `2025-06-18` is what the ecosystem's clients actually speak today; the SDK's own `LATEST` and the
+ * newest revision its `initialize` knows are both newer. Raising it is a deliberate change with a
+ * measured transcript behind it, not a version bump — see the SDK spike note for what such a
+ * measurement looks like.
  */
 final readonly class McpProtocol
 {

@@ -72,13 +72,24 @@ final readonly class QueryWatcher implements RuntimeGuard
             static fn (QueryInspector $inspector): bool => $inspector->appliesTo($profile),
         ));
 
-        $this->events->listen(QueryExecuted::class, static function (QueryExecuted $query) use ($active, $profile): void {
-            if (! $profile->watches($query->connectionName)) {
+        // A statement an inspection causes is not inspected itself. The one way an inspection reaches
+        // the database is its report: a log channel that writes to a watched connection runs a
+        // statement, and judged again, a slow write is reported and that report writes again, as deep
+        // as the stack goes. A handler that writes its row as unbound SQL would not even need to be slow.
+        /** @var bool $inspecting set while the listener below inspects, and read by the call that re-enters it */
+        $inspecting = false;
+
+        $this->events->listen(QueryExecuted::class, static function (QueryExecuted $query) use ($active, $profile, &$inspecting): void {
+            if ($inspecting || ! $profile->watches($query->connectionName)) {
                 return;
             }
 
-            foreach ($active as $inspector) {
-                $inspector->inspect($query, $profile);
+            $inspecting = true;
+
+            try {
+                self::inspectWithEach($active, $query, $profile);
+            } finally {
+                $inspecting = false;
             }
         });
 
@@ -97,6 +108,18 @@ final readonly class QueryWatcher implements RuntimeGuard
                     $inspector->startWindow();
                 }
             });
+        }
+    }
+
+    /**
+     * Hands one statement to every inspector the profile wants, in their order.
+     *
+     * @param  list<QueryInspector>  $active
+     */
+    private static function inspectWithEach(array $active, QueryExecuted $query, GuardProfile $profile): void
+    {
+        foreach ($active as $inspector) {
+            $inspector->inspect($query, $profile);
         }
     }
 }

@@ -54,16 +54,32 @@ final readonly class RlsState
          * second statement, and PostgreSQL folds an unquoted `Orders` to another table.
          */
         public string $statementName,
+        /**
+         * The partitions a role can read around this table's policies: partition => how a statement
+         * names it and the roles that hold a privilege on it directly.
+         *
+         * Row-level security is a property of each table and is not inherited. A query through the
+         * partitioned table applies its policies, a query against a partition applies that
+         * partition's own setting, and a partition is created with it off. So a role holding a
+         * privilege on the partition itself reads every row of it. Empty for a table that is not
+         * partitioned, and for one whose partitions only its owner and roles that pass every policy
+         * anyway can reach.
+         *
+         * @var array<string, array{statement: string, roles: list<string>}>
+         */
+        public array $exposedPartitions = [],
     ) {}
 
     /**
      * @param  list<RlsPolicy>  $policies
+     * @param  array<string, array{statement: string, roles: list<string>}>  $exposedPartitions
      */
-    public static function of(string $table, bool $enabled, bool $forced, array $policies, Readability $readability, string $owner = '', string $statementName = ''): self
+    public static function of(string $table, bool $enabled, bool $forced, array $policies, Readability $readability, string $owner = '', string $statementName = '', array $exposedPartitions = []): self
     {
         usort($policies, static fn (RlsPolicy $a, RlsPolicy $b): int => $a->name <=> $b->name);
+        ksort($exposedPartitions);
 
-        return new self(trim($table), $enabled, $forced, $policies, $readability, trim($owner), $statementName);
+        return new self(trim($table), $enabled, $forced, $policies, $readability, trim($owner), $statementName, $exposedPartitions);
     }
 
     /** RLS is on and NOTHING may pass — the fail-closed accident, which reads as a working setup. */

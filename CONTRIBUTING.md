@@ -1,6 +1,7 @@
 # Contributing
 
-Thanks for considering a contribution — issues and pull requests are both welcome.
+Thanks for considering a contribution. Issues and pull requests are both welcome, and the
+section on pull requests says how a change sent here reaches a release.
 
 ## Reporting an issue
 
@@ -240,13 +241,13 @@ sign-off.
 **So the squash button is switched off for this repository, and that is the decision rather
 than a note about one.** `allow_squash_merge` is `false` here since 2026-09-09. The paragraph
 above explains a failure that can only be met by choosing an option this repository has no use
-for: the fleet's branch model merges, the DCO check's range is built for a merge commit, and a
+for: its branch model merges, the DCO check's range is built for a merge commit, and a
 squash produces a commit the repository's own gate then refuses. Leaving the button there and
 writing "please do not press it" is the shape that gets pressed anyway, at the end of a long
 day, by whoever did not read this far.
 
-⚠️ **It is off HERE and nowhere else, deliberately.** Squash merging is not harmful in general
-and the rest of the fleet keeps it; this is the one repository with a DCO gate, so it is the one
+**It is off here and nowhere else, deliberately.** Squash merging is not harmful in general
+and other repositories keep it; this is the one repository with a DCO gate, so it is the one
 repository where that button produces a commit its own CI rejects.
 
 The two heavier remedies stay unbuilt on purpose. Aligning `git config user.email` with the

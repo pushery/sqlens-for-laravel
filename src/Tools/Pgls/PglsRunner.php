@@ -80,6 +80,17 @@ final readonly class PglsRunner
     /** The variable libpq and the tool read server settings for a new session from. */
     public const string OPTIONS_VARIABLE = 'PGOPTIONS';
 
+    /**
+     * How often the server checks, while a statement of the tool runs, that the tool is still there.
+     *
+     * A run that hits its timeout stops the tool, and a statement already on the server does not
+     * notice: it runs on until it finishes or next writes to the closed connection. Measured on
+     * PostgreSQL 18.0, the statement of a client killed two seconds in was still active three
+     * seconds later without the check and gone with it. One second keeps that tail short and costs
+     * the server one poll per second of a running statement.
+     */
+    public const int CLIENT_CONNECTION_CHECK_INTERVAL_MS = 1000;
+
     public function __construct(private ProcessRunner $runner, private string $packageRoot) {}
 
     /**
@@ -145,12 +156,13 @@ final readonly class PglsRunner
     /**
      * The settings every session of the tool starts with.
      *
-     * The bounds SQLens's own reader sessions run under, and two more. The statement bound is the
-     * run's own timeout, so no statement outlives the run that started it. The sessions are
-     * read-only, which the tool never needs to be anything else, and they carry the configured
-     * application name with `-pgls` appended: measured without it, the tool's ten sessions showed
-     * an empty name in `pg_stat_activity`. A space in the name is escaped, because the server
-     * splits this value on whitespace.
+     * The bounds SQLens's own reader sessions run under, and three more. The statement bound is the
+     * run's own timeout, and the client check ends a statement whose run was stopped within a
+     * second ({@see self::CLIENT_CONNECTION_CHECK_INTERVAL_MS}). The sessions are read-only, which
+     * the tool never needs to be anything else, and they carry the configured application name with
+     * `-pgls` appended: measured without it, the tool's ten sessions showed an empty name in
+     * `pg_stat_activity`. A space in the name is escaped, because the server splits this value on
+     * whitespace.
      */
     private function sessionOptions(PglsInvocation $invocation): string
     {
@@ -162,6 +174,7 @@ final readonly class PglsRunner
             '-c lock_timeout='.$session->lockTimeoutMs.'ms',
             '-c statement_timeout='.(int) ceil($invocation->timeoutSeconds * 1000).'ms',
             '-c idle_in_transaction_session_timeout='.$session->idleInTransactionTimeoutMs.'ms',
+            '-c client_connection_check_interval='.self::CLIENT_CONNECTION_CHECK_INTERVAL_MS.'ms',
         ]);
     }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Reporting;
 
+use Pushery\SQLens\Deploy\UndeterminedWaiver;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Outcome;
 use Pushery\SQLens\Findings\Result;
@@ -25,8 +26,8 @@ use Pushery\SQLens\Findings\Result;
  *   from a genuine fail, so a later exit-code mapping can tell them apart.
  *
  * The `--allow-undetermined` escape hatch (a pre-deploy override that tolerates
- * undetermined even under strict mode) is only a contract here — its wiring lands
- * with the deploy lifecycle, and this policy is where it will attach.
+ * undetermined even under strict mode) is not part of this policy: the deploy
+ * commands apply it through {@see UndeterminedWaiver}.
  *
  * What it does NOT escalate is decided upstream, by the outcome, and never here by a
  * list of rule ids: a `not_applicable` result is a check with nothing to run against,

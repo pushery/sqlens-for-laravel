@@ -91,6 +91,7 @@ final readonly class AuditNotices
                 .'sqlens.host.',
                 implode(', ', $hosts),
             ),
+            UndeterminedReason::NotConfigured,
             $runContext,
         );
     }
@@ -114,6 +115,7 @@ final readonly class AuditNotices
                 $pinned,
                 $offered === [] ? '' : ' — it offers '.implode(', ', $offered),
             ),
+            UndeterminedReason::NotConfigured,
             $runContext,
         );
     }
@@ -313,7 +315,7 @@ final readonly class AuditNotices
                 $target->connection,
                 implode('; ', $parts),
             ),
-            UndeterminedReason::ConnectionNotConfigured,
+            UndeterminedReason::InstanceDiverged,
             $target,
             $context,
         );
@@ -343,7 +345,7 @@ final readonly class AuditNotices
                 $target->pinnedHost ?? '',
                 $identity instanceof InstanceIdentity ? $identity->host ?? '' : '',
             ),
-            UndeterminedReason::ConnectionNotConfigured,
+            UndeterminedReason::PinnedHostDiverged,
             $target,
             $context,
         );
@@ -531,6 +533,7 @@ final readonly class AuditNotices
                 .'--connection, or set sqlens.connection.',
                 implode(', ', $candidates),
             ),
+            UndeterminedReason::NotConfigured,
             $runContext,
         );
     }
@@ -542,14 +545,18 @@ final readonly class AuditNotices
      * no instance was resolved, so they cannot use {@see self::notice()} — and three hand-built
      * copies of the same eleven arguments is three places for the location shape or the level to
      * drift apart, invisibly, because each reads correct on its own.
+     *
+     * The reason comes from the caller, because a consumer branches on it: one fixed reason for every
+     * run notice sent a reader looking at a connection definition when the notice was about a
+     * baseline, an ignore list or a tenancy declaration.
      */
-    private static function runNotice(string $ruleId, string $message, RunContext $runContext): Finding
+    private static function runNotice(string $ruleId, string $message, UndeterminedReason $reason, RunContext $runContext): Finding
     {
         return Finding::undetermined(
             $ruleId,
             self::PREFIX,
             $message,
-            UndeterminedReason::ConnectionNotConfigured,
+            $reason,
             Location::inCatalog('unknown', 'unresolved', 'connection', SchemaObjectType::Table),
             Category::Safety,
             Level::Capturable,
@@ -618,7 +625,10 @@ final readonly class AuditNotices
                     .'this server.',
                     $failure->detail,
                 ),
-                UndeterminedReason::UnknownServerVersion,
+                // The failure's own reason: another engine behind the driver is an unsupported
+                // engine, an engine nobody confirmed is an unknown version, and the reader acts on
+                // which of the two it was.
+                $failure->undeterminedReason(),
                 $target,
                 $context,
             );
@@ -701,6 +711,7 @@ final readonly class AuditNotices
             $violation->message().' Nothing was audited: an ignore list that names a rule which does '
                 .'not exist would silence nothing while looking set, and a rule believed to be off but '
                 .'still firing is read past for months.',
+            UndeterminedReason::IgnoreListInvalid,
             $runContext,
         );
     }
@@ -720,9 +731,9 @@ final readonly class AuditNotices
      *
      * @param  list<string>  $patterns
      */
-    public static function orphanedIgnorePatterns(array $patterns, RunContext $runContext): Finding
+    public static function orphanedIgnorePatterns(array $patterns, InstanceTarget $target, SubjectContext $context): Finding
     {
-        return self::runNotice(
+        return self::notice(
             AuditNotice::OrphanedIgnore->id(),
             sprintf(
                 'These ignore patterns matched nothing this run read or reported: %s. That is not an error — a '
@@ -731,7 +742,9 @@ final readonly class AuditNotices
                 .'produce the same report. Delete the line, or keep it deliberately.',
                 implode(', ', $patterns),
             ),
-            $runContext,
+            UndeterminedReason::IgnorePatternMatchedNothing,
+            $target,
+            $context,
         );
     }
 
@@ -745,9 +758,9 @@ final readonly class AuditNotices
      * Not an error, because `sqlens:baseline` has to be runnable before the file exists — that is
      * how a project creates one. The run continues and says what it could not find.
      */
-    public static function baselineConfiguredButAbsent(string $path, RunContext $runContext): Finding
+    public static function baselineConfiguredButAbsent(string $path, InstanceTarget $target, SubjectContext $context): Finding
     {
-        return self::runNotice(
+        return self::notice(
             AuditNotice::BaselineAbsent->id(),
             sprintf(
                 'A baseline is configured at "%s" and no file is there, so this run accepted nothing — which '
@@ -756,32 +769,34 @@ final readonly class AuditNotices
                 .'been created yet, sqlens:baseline creates it and this goes away.',
                 $path,
             ),
-            $runContext,
+            UndeterminedReason::BaselineAbsent,
+            $target,
+            $context,
         );
     }
 
     /**
-     * The run was told to bypass the baseline, and this suite applies none.
+     * The run was told to bypass the baseline, and the baseline holds nothing to bypass.
      *
      * Reported rather than silently accepted, which is the whole difference between a flag and a
-     * promise. `--ignore-baseline` says "show me everything the baseline is hiding"; a suite with
-     * no baseline hides nothing, so the flag changes not one finding — and a report that came back
-     * unchanged reads as "there was nothing hidden" rather than "nothing could have been". Those
-     * are the same output and opposite facts.
-     *
-     * It goes away when the audit gains a baseline. Until then this is the honest shape: the
-     * instruction was accepted, it had no effect, and the operator is told which of the two it was.
+     * promise. `--ignore-baseline` says "show me everything the baseline is hiding"; a baseline
+     * without entries hides nothing, so the flag changes not one finding — and a report that came
+     * back unchanged reads as "there was nothing hidden" rather than "nothing could have been".
+     * Those are the same output and opposite facts. So the operator is told the instruction was
+     * accepted and had no effect.
      */
-    public static function baselineBypassHadNothingToBypass(RunContext $runContext): Finding
+    public static function baselineBypassHadNothingToBypass(InstanceTarget $target, SubjectContext $context): Finding
     {
-        return self::runNotice(
+        return self::notice(
             AuditNotice::NoBaselineToIgnore->id(),
             'This run was asked to ignore the baseline, and no baseline was in force — so the flag '
                 .'changed nothing rather than revealing nothing. The two look identical in a report, which '
                 .'is why this says so. Either sqlens.baseline.path names no file, or the file it names is '
                 .'missing or unreadable. Suppression from sqlens.audit.ignore is unaffected either way: '
                 .'--ignore-baseline deliberately does not touch it.',
-            $runContext,
+            UndeterminedReason::BaselineAbsent,
+            $target,
+            $context,
         );
     }
 
@@ -811,6 +826,7 @@ final readonly class AuditNotices
                 .'answer.',
                 $signals,
             ),
+            UndeterminedReason::NotConfigured,
             $runContext,
         );
     }
@@ -830,6 +846,7 @@ final readonly class AuditNotices
                 .'tenant databases is not a single statement, so this run needs to know which tenant it is '
                 .'about — the report says so in its header, and a finding that did not name its tenant would '
                 .'be read as applying to all of them.',
+            UndeterminedReason::NotConfigured,
             $runContext,
         );
     }

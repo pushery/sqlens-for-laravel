@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Reporting\Suppression;
 
+use Pushery\SQLens\Config\RuleIdValidator;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Rules\Suite;
 
@@ -16,7 +17,8 @@ use Pushery\SQLens\Rules\Suite;
  * means either the finding is long fixed (delete the entry) or the entry never
  * worked at all (fix it). Both are worth knowing, and neither is visible if the
  * list is only ever read and never accounted for. A typo'd rule id is a harder
- * error still, and has its own ticket.
+ * error still: {@see RuleIdValidator} refuses it, naming the spot it was
+ * written.
  *
  * The list's SHAPE — and that `reason` is mandatory — is the config schema's
  * business; it has already validated the entries before this source sees them.

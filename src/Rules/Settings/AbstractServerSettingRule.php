@@ -37,7 +37,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * 3. The server named it and withheld the value.
  * 4. The variable is worth reading but deliberately not worth judging.
  *
- * Seventeen rules each writing that ladder is seventeen chances to collapse one rung into "looks
+ * Every rule writing that ladder for itself would be one more chance to collapse a rung into "looks
  * fine". Written once, a subclass cannot skip it: the only thing it is handed is a value the base
  * has already established is real and judgeable.
  *
@@ -438,10 +438,10 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
      *
      * ## The reason is DERIVED from the change cost, not written per rule
      *
-     * Twelve rules reach this base and they have three distinct answers between them, because the
-     * fact that differs is the cost axis rather than the variable. Writing twelve reasons would be
-     * writing the same three sentences four times each, and the fourth copy is the one that stops
-     * agreeing with the other three.
+     * The rules that reach this base differ in what a change costs rather than in their variable,
+     * so their reasons are one sentence per change cost, chosen below. A reason written per rule
+     * would copy those sentences again and again, and a later copy is the one that stops agreeing
+     * with the others.
      *
      * No downtime class. There is no deploy here at all — the change happens in a configuration
      * file, and what it costs is stated in the reason rather than in an axis about migrations. The

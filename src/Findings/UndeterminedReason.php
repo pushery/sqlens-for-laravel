@@ -363,6 +363,22 @@ enum UndeterminedReason: string
      */
     case ConfiguredPrefixMatchedNothing = 'configured_prefix_matched_nothing';
 
+    /**
+     * The ignore list names a rule this build does not know.
+     *
+     * Nothing was audited: an entry that silences nothing would read as set, and a rule believed to
+     * be off but still firing is read past for months.
+     */
+    case IgnoreListInvalid = 'ignore_list_invalid';
+
+    /**
+     * An ignore pattern matched nothing the run read or reported.
+     *
+     * Not an error: the pattern may name a table that does not exist yet, or one that was dropped.
+     * But an orphaned pattern and a working one produce the same report, so the run says which.
+     */
+    case IgnorePatternMatchedNothing = 'ignore_pattern_matched_nothing';
+
     /** The host application defines no connection under the requested name. */
     case ConnectionNotConfigured = 'connection_not_configured';
 
@@ -388,6 +404,14 @@ enum UndeterminedReason: string
     case ConnectionIdentityUnresolved = 'connection_identity_unresolved';
 
     /**
+     * The connection describes another server than the one that answered.
+     *
+     * Reported rather than reconciled: the run cannot know which side is right, and the findings are
+     * about the server that answered, not about the configuration.
+     */
+    case InstanceDiverged = 'instance_diverged';
+
+    /**
      * A pinned host could not be checked against the one the server named.
      *
      * The pin took effect at the driver — that much is certain, it was written onto the connection
@@ -399,6 +423,14 @@ enum UndeterminedReason: string
      * happily produce identical findings, and the reader has to be able to tell them apart.
      */
     case PinnedHostUnverifiable = 'pinned_host_unverifiable';
+
+    /**
+     * The host the run pinned is not the host the server named.
+     *
+     * The pin did not take effect, so the audit stopped: every finding after it would describe a
+     * database nobody chose.
+     */
+    case PinnedHostDiverged = 'pinned_host_diverged';
 
     /**
      * A setting was read through a connection that multiplexes statements across server backends.
@@ -1272,11 +1304,33 @@ enum UndeterminedReason: string
      */
     case NotApplicableOnThisEngine = 'not_applicable_on_this_engine';
 
+    /**
+     * A part of a run that was asked to happen did not: it failed, or it refused before it looked.
+     *
+     * The run that owns the part reports it as undetermined rather than failing, because its other
+     * parts may have examined plenty. Distinct from {@see self::NotConfigured}, which is a part
+     * nobody asked for: this one tried and could not, and the finding's message says why, such as
+     * the error it failed with or the refusal it stopped on. One is a thing to fix, the other a
+     * thing to decide.
+     */
+    case SubRunFailed = 'sub_run_failed';
+
+    /**
+     * A replica streams and still has WAL to replay, and the server reports no lag time for it.
+     *
+     * PostgreSQL reports no replay lag once a standby has caught up and nothing is written, and none at all for a
+     * logical consumer whose output plugin sends no tracking messages. The WAL still to replay tells the two apart:
+     * with none the replica has caught up, with some it is behind by a distance this run cannot put in seconds.
+     */
+    case ReplicaLagUnreported = 'replica_lag_unreported';
+
     /** A one-line English explanation of why the check could not conclude. */
     public function description(): string
     {
         return match ($this) {
             self::ConnectionNotConfigured => 'The application defines no connection under the requested name.',
+            self::SubRunFailed => 'A part of the run that was asked to happen failed or refused before it looked; the finding says why.',
+            self::ReplicaLagUnreported => 'A replica streams with WAL still to replay and the server reports no lag time for it, so how far behind it is in seconds is unknown.',
             self::ActivityUnreadable => 'The run has no activity reader, so what is holding a lock could not be read — which is not the same as nothing holding one.',
             self::MysqlInstrumentationUnavailable => 'This MySQL server does not provide the instrumentation these readings come from, so the metadata-lock holders could not be listed.',
             self::SettingUnreadable => 'A server setting this check judges could not be read back.',
@@ -1304,9 +1358,11 @@ enum UndeterminedReason: string
             self::ValueOriginUnknown => 'The run could not tell whether a value in this statement was written into the file or supplied at the call site, and the two are the same text by the time a rule reads them.',
             self::NotConfigured => 'The check needs a setting this project has not made, and guessing it would name the wrong thing.',
             self::ConnectionIdentityUnresolved => 'Both connections are named, and who they authenticate as could not be read in this run, so whether they are one identity or two is unknown — no setting is missing.',
+            self::InstanceDiverged => 'The connection describes another server than the one that answered, so the findings are about the server that answered, not about the configuration.',
             self::TransactionPooled => 'The connection multiplexes statements across server backends, so a reading cannot be attributed to one server.',
             self::SettingChangePendingRestart => 'The server carries a change to this setting that applies at the next restart, so the value judged is the running one and this answer expires when it is restarted; the decided value is in the configuration file rather than in the catalog.',
             self::PinnedHostUnverifiable => 'The pinned host and the host the server named cannot be compared, so the identity of the audited instance is unconfirmed.',
+            self::PinnedHostDiverged => 'The host the run pinned is not the host the server named, so the audit stopped before it reported on a database nobody chose.',
             self::OnlineDdlMatrixUnavailable => 'The online-DDL matrix could not be read, so no operation could be classified; check the configured matrix path.',
             self::AdvisoryDataUnavailable => 'The end-of-life data could not be read, so the server version was compared against nothing; the reason names which file was tried.',
             self::DebtLedgerSchemaUnsupported => 'The debt ledger declares a schema version this build cannot act on, so it was not read at all; upgrade SQLens or migrate the file.',
@@ -1374,6 +1430,8 @@ enum UndeterminedReason: string
             self::CatalogReadingImplausible => 'The catalog answered without refusing, and what it returned cannot describe the server that answered, so the reading itself is suspect; confirm what the server loaded.',
             self::ObjectStatisticsUnread => 'The statistics reading came back without this object, so the finding about it could not be weighed against its size. A table nobody has run ANALYZE on is the commonest cause; the verdict itself stands exactly as a run without a database would have reported it.',
             self::ConfiguredPrefixMatchedNothing => 'A table prefix is configured and no object in the audited schemas carries it, so the audit examined nothing.',
+            self::IgnoreListInvalid => 'The ignore list names a rule this build does not know, so nothing was audited: an entry that silences nothing would read as set.',
+            self::IgnorePatternMatchedNothing => 'An ignore pattern matched nothing this run read or reported, so it hides nothing; an orphaned pattern and a working one produce the same report.',
             self::MissingPrivilege => 'The connecting role lacks the privilege the check needs.',
             self::ServerUnreachable => 'The target server could not be reached.',
             self::UnknownServerVersion => 'The real server version could not be determined.',

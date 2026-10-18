@@ -73,13 +73,10 @@ final class UnencryptedColumnRule extends AbstractCatalogRule implements Declare
 
     /**
      * The evaluator is injectable so a test can hand in a dictionary and a model set built for the
-     * case under test, and lazily defaulted so the ordinary registration keeps the one-argument
-     * shape every other rule in {@see SecurityRuleSet} uses.
+     * case under test, and {@see SecurityRuleSet} passes the one its caller built for the run.
      *
-     * Lazy for a second, measured reason: building it DISCOVERS MODELS off the filesystem and reads
-     * the dictionary artifact. Every rule is constructed on every run, and the privacy pack is off
-     * by default — paying for a directory walk on construction would charge every run for a rule
-     * that is usually not even admitted.
+     * Without one the rule judges nothing: it reports once, as undetermined, that the column reading
+     * was not wired into the run, so such a run never reads as one where every column is encrypted.
      */
     public function __construct(string $projectRoot, private readonly ?UnencryptedColumnEvaluator $evaluator = null)
     {

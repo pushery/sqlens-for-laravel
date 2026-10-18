@@ -28,15 +28,28 @@ final class CredentialRedactor
     public function redact(string $text): string
     {
         // host=… port=… user=… password=… dbname=… — a libpq/DSN key/value pair.
+        //
+        // libpq also takes a value in single quotes, with a backslash escaping a quote or a backslash inside
+        // it, so `password='S3cr@t PW'` is a password like an unquoted one. A quoted value is read to its
+        // closing quote, or to the end of the text where an excerpt was cut inside it.
         $text = preg_replace(
-            '/\b(password|passwd|pwd|pgpassword|host|hostaddr|port|user|username|dbname|dsn)\s*=\s*[^\s;,)"\']+/i',
+            '/\b(password|passwd|pwd|pgpassword|host|hostaddr|port|user|username|dbname|dsn)\s*=\s*'
+                .'(?:\'(?:[^\'\\\\]|\\\\.?)*+(?:\'|$)|"(?:[^"\\\\]|\\\\.?)*+(?:"|$)|[^\s;,)"\']+)/i',
             '$1='.self::REDACTED,
             $text,
         ) ?? $text;
 
         // scheme://user:pass@host — credentials embedded in a connection URL.
+        //
+        // The user information runs to the LAST `@` before the host, the way PHP's parse_url() and Laravel's
+        // URL parser read it: a password with an unencoded `@` is common, and a host never holds one. Cut at
+        // the first `@`, the rest of such a password stayed in the text while the `:` that SecretLiteralMask
+        // anchors on went, so on the capture path neither pass took it. A pair with an empty
+        // user (`redis://:…@cache`), a user alone and a token alone are taken whole as well. The run stops
+        // where a URL's authority ends, and at a double quote, a backtick or an angle bracket, which no URL
+        // holds unencoded, so a URL quoted in a message does not run on into the text after it.
         $text = preg_replace(
-            '#([a-z][a-z0-9+.\-]*://)[^:@/\s]+:[^@/\s]+@#i',
+            '#([a-z][a-z0-9+.\-]*://)[^\s/?\#"`<>]+@#i',
             '$1'.self::REDACTED.'@',
             $text,
         ) ?? $text;
@@ -51,7 +64,7 @@ final class CredentialRedactor
             $text,
         ) ?? $text;
 
-        // THE HOSTNAME THAT DOES NOT RESOLVE, in both drivers' own prose — and the most common
+        // The hostname that does not resolve, in both drivers' own prose — and the most common
         // misconfiguration there is, a wrong `DB_HOST`.
         //
         // Neither shape is reachable by anything above it: there is no `host=` pair, no libpq
@@ -84,6 +97,29 @@ final class CredentialRedactor
         $text = preg_replace(
             '/\bconnection to server on socket\s+"[^"]*"/i',
             'connection to server on socket "'.self::REDACTED.'"',
+            $text,
+        ) ?? $text;
+
+        // A certificate that does not carry the name the connection asked for, in the words of the two
+        // client libraries. Both quote the name the certificate holds and the configured host, and the
+        // patterns above reach neither:
+        //
+        //   libpq     server certificate for "…" (and 2 other names) does not match host name "…"
+        //   PHP       Peer certificate CN=`…' did not match expected CN=`…'
+        //   PHP       Peer certificate subjectAltName did not match expected name `…'
+        //   PHP       Peer certificate CN=`…' is malformed
+        //
+        // Read from libpq 18 as Homebrew builds it and from ext/openssl/xp_ssl.c of PHP 8.4 and 8.5, the
+        // library MySQL connections go through. Each pattern takes the quoted name and nothing else.
+        $text = preg_replace(
+            ['/(\bserver certificate for\s+)"[^"]*"/i', '/(\bdoes not match host name\s+)"[^"]*"/i'],
+            '$1"'.self::REDACTED.'"',
+            $text,
+        ) ?? $text;
+
+        $text = preg_replace(
+            ['/(\bPeer certificate CN=)`[^\']*\'/i', '/(\bexpected CN=)`[^\']*\'/i', '/(\bdid not match expected name\s+)`[^\']*\'/i'],
+            '$1`'.self::REDACTED."'",
             $text,
         ) ?? $text;
 
@@ -146,8 +182,8 @@ final class CredentialRedactor
      *
      * A source that authenticates in its URL has nowhere else to carry the credential than before
      * the `@`, as `user:token` or a token alone, or in the query, as `?private_token=…`. The URL
-     * pattern in redact() knows only the `user:password@` form. Text that is not a URL comes back
-     * unchanged, a question mark in it included.
+     * pattern in redact() takes the user information in each of these forms, and leaves the query. Text
+     * that is not a URL comes back unchanged, a question mark in it included.
      */
     public function url(string $text): string
     {

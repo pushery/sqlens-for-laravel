@@ -21,11 +21,31 @@ namespace Pushery\SQLens\Tools\Pgls;
  * environment, and only there: an argument list is readable by every user on the machine through
  * `ps`, for as long as the process lives. That is not a theoretical exposure — it is the standard
  * way credentials leak out of tooling, and it costs nothing to avoid.
+ *
+ * ## The connection's TLS settings go the same way
+ *
+ * `sslmode`, `sslrootcert`, `sslcert` and `sslkey`, the keys Laravel's PostgreSQL connector hands to
+ * the driver, travel as the `PGSSL*` variables the tool's client reads. Without them the tool used
+ * its own default, `prefer`: it spoke plaintext to a server that allows it and took any certificate
+ * from one that does not, where the application connects with `verify-full`. Measured against a
+ * server without TLS, the tool connects with no `PGSSLMODE` and refuses with `require`.
  */
 final readonly class PglsConnection
 {
     /** What PostgreSQL's own client libraries read a password from. */
     public const string PASSWORD_VARIABLE = 'PGPASSWORD';
+
+    /**
+     * The variables the client reads the TLS settings from, by the connection key that carries each.
+     *
+     * @var array<string, string>
+     */
+    public const array TLS_VARIABLES = [
+        'sslmode' => 'PGSSLMODE',
+        'sslrootcert' => 'PGSSLROOTCERT',
+        'sslcert' => 'PGSSLCERT',
+        'sslkey' => 'PGSSLKEY',
+    ];
 
     public function __construct(
         public string $host,
@@ -34,6 +54,12 @@ final readonly class PglsConnection
         public string $username,
         /** Null when the connection genuinely has none — a trust or peer-authenticated setup. */
         public ?string $password = null,
+        /**
+         * The TLS settings the connection sets, by their key in {@see self::TLS_VARIABLES}.
+         *
+         * @var array<string, string>
+         */
+        public array $tls = [],
     ) {}
 
     /**
@@ -62,12 +88,22 @@ final readonly class PglsConnection
         $port = is_numeric($port) ? (int) $port : 5432;
 
         $password = $config['password'] ?? null;
+        $tls = [];
 
-        return new self($host, $port, $database, $username, is_string($password) && $password !== '' ? $password : null);
+        foreach (array_keys(self::TLS_VARIABLES) as $key) {
+            $value = $config[$key] ?? null;
+
+            if (is_string($value) && $value !== '') {
+                $tls[$key] = $value;
+            }
+        }
+
+        return new self($host, $port, $database, $username, is_string($password) && $password !== '' ? $password : null, $tls);
     }
 
     /**
-     * The environment this connection contributes to the child — the password, when there is one.
+     * The environment this connection contributes to the child: the password, when there is one, and
+     * the TLS settings it sets.
      *
      * An empty array when there is none, rather than an empty `PGPASSWORD`: the two are different
      * to libpq, and an empty value is a password attempt that fails rather than an absent one that
@@ -77,6 +113,14 @@ final readonly class PglsConnection
      */
     public function environment(): array
     {
-        return $this->password === null ? [] : [self::PASSWORD_VARIABLE => $this->password];
+        $environment = $this->password === null ? [] : [self::PASSWORD_VARIABLE => $this->password];
+
+        foreach (self::TLS_VARIABLES as $key => $variable) {
+            if (isset($this->tls[$key])) {
+                $environment[$variable] = $this->tls[$key];
+            }
+        }
+
+        return $environment;
     }
 }

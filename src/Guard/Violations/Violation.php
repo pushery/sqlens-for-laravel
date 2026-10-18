@@ -31,10 +31,9 @@ use Pushery\SQLens\Severity\Severity;
  *
  * ## There is no `occurred_at`
  *
- * Deliberately, and it is the one place this type departs from its ticket. The logging stack stamps
- * every record already, and a timestamp inside the context would make two identical violations
- * produce two different context arrays — which the same ticket's determinism line forbids. A field
- * that breaks a promise the ticket also makes is a field that does not belong.
+ * Deliberately. The logging stack stamps every record already, and a timestamp inside the context
+ * would make two identical violations produce two different context arrays, which breaks the
+ * determinism this type promises. A field that breaks a promise of its own type does not belong.
  */
 final readonly class Violation
 {

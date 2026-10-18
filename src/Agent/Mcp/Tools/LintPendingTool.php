@@ -10,6 +10,7 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Name;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 use Override;
 use Pushery\SQLens\Agent\Mcp\McpConnection;
 use Pushery\SQLens\Agent\Mcp\ProfileRefusal;
@@ -47,6 +48,7 @@ use Pushery\SQLens\Subjects\CaptureMode;
  * form a caller over a protocol can act on.
  */
 #[Name('lint_pending')]
+#[IsReadOnly]
 final class LintPendingTool extends SqlensTool
 {
     protected string $description = 'Lints the migrations a project has not run yet and returns structured findings — the same engine, rules and output as the sqlens:lint command. Runs in pretend mode: nothing is executed against the database.';
@@ -68,7 +70,7 @@ final class LintPendingTool extends SqlensTool
         $profile = $profiles->select(is_string($validated['profile'] ?? null) ? $validated['profile'] : null);
 
         if (! $profile->isValid()) {
-            return Response::json(ProfileRefusal::forLint((string) $profile->rejectedValue, $profile->source));
+            return ToolAnswer::json(ProfileRefusal::forLint((string) $profile->rejectedValue, $profile->source));
         }
 
         // Applied for this call and put back afterwards, because the next call is answered in the
@@ -100,7 +102,7 @@ final class LintPendingTool extends SqlensTool
         $envelope = JsonEnvelope::for($outcome->result, $outcome->context)->toArray();
         $findings = $envelope['findings'];
 
-        $page = ReportPage::of($findings, 0, null, $this->ceiling($config));
+        $page = ReportPage::of($findings, 0, null, ReportPage::ceiling($config));
         $summary = trim($this->summary($outcome->connectionName, $page).($outcome->staleBaselineBreaks ? ' '.$outcome->gateMeaning() : ''));
 
         // A run the engine never performed can only be undetermined, whatever the findings list
@@ -111,7 +113,7 @@ final class LintPendingTool extends SqlensTool
             ?? RunUnresolved::in($envelope, $summary)
             ?? ToolAnswer::of([], $summary);
 
-        return Response::json([
+        return ToolAnswer::json([
             ...$answer->toArray(),
             'connection' => $outcome->connectionName,
             // The gate decision as DATA. The CLI turns this into an exit status; a caller over a
@@ -198,12 +200,5 @@ final class LintPendingTool extends SqlensTool
             count($page->rows),
             $page->truncated ? 'The list is CUT: '.$page->reason.'.' : 'Nothing was left out.',
         );
-    }
-
-    private function ceiling(Repository $config): int
-    {
-        $configured = $config->get('sqlens.agent.mcp.max_findings');
-
-        return is_int($configured) && $configured >= 1 ? $configured : 200;
     }
 }

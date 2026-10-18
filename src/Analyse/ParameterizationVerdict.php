@@ -14,10 +14,10 @@ use Pushery\SQLens\Subjects\ParametrizationSignal;
  * ## It reuses the package's vocabulary rather than minting a parallel one
  *
  * {@see ParametrizationSignal} and {@see FragmentOrigin} have existed since the `RawSql` subject was
- * defined, and they say exactly what a classifier of this kind has to say. The planning ticket
- * speaks of `safe` / `unsafe` / `undetermined`; those are the same three values under different
- * names, and a second enum spelling them differently is how one component comes to have two
- * vocabularies that are free to drift. The names here are the ones already shipped.
+ * defined, and they say exactly what a classifier of this kind has to say. Such a classifier is
+ * usually described as `safe` / `unsafe` / `undetermined`; those are the same three values under
+ * different names, and a second enum spelling them differently is how one component comes to have
+ * two vocabularies that are free to drift. The names here are the ones already shipped.
  *
  * The choice of `Parametrized` / `Interpolated` over `safe` / `unsafe` is also load-bearing rather
  * than cosmetic. This is a SYNTACTIC observation, not a security verdict: "the text is fully known

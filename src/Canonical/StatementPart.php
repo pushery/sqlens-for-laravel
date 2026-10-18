@@ -13,7 +13,7 @@ use Pushery\SQLens\Canonical\Stages\StatementSplitter;
  *
  * {@see StatementSplitter::split()} answers the question the canonicalization asks — "which
  * statements are in this batch" — and a client directive is noise there. A formatter asks a
- * different question: it has to WRITE THE FILE BACK, so a directive it drops is a line the user
+ * different question: it has to write the file back, so a directive it drops is a line the user
  * loses.
  *
  * Both answers come from one walk over the batch. Two walks would be two tokenizers, free to

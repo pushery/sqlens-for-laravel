@@ -51,25 +51,34 @@ final readonly class SecurityRunNotices
      * Not at {@see Finding}, which would be a filter rather than a sink: the shape redactor removes
      * `role "…"`, `user "…"` and `database "…"`, and that is precisely what a security finding
      * about a role or a database is made of. This field carries error text and nothing else.
+     *
+     * The reason is the failure's own where it has one, such as `connection_not_configured` for a
+     * connection nothing defines, and `sub_run_failed` otherwise.
      */
-    public static function subRunCrashed(string $half, string $detail): Finding
+    public static function subRunCrashed(string $half, string $detail, UndeterminedReason $reason = UndeterminedReason::SubRunFailed): Finding
     {
-        return self::halfDidNotRun($half, sprintf('it failed with: %s', new CredentialRedactor()->redact($detail)));
+        return self::halfDidNotRun($half, sprintf('it failed with: %s', new CredentialRedactor()->redact($detail)), $reason);
     }
 
     /**
-     * One half met a driver this package does not support.
+     * One half met a connection this package cannot examine.
      *
      * Not an error and not a clean result. SQLite is the ordinary case — a test suite, a local
      * scratch database — and a run that returned nothing there would report an unexamined connection
      * as an examined one.
+     *
+     * The resolver's own sentence and reason travel with it. A driver this package does not support,
+     * a connection without a driver key and a server below the supported floor are different
+     * things to fix, so each keeps the sentence and the reason that name it. The runner reads both
+     * off the resolver's failure, so the notices need nothing from the driver layer.
      */
-    public static function subRunUnsupported(string $half, string $connection): Finding
+    public static function subRunUnsupported(string $half, string $connection, string $detail, UndeterminedReason $reason): Finding
     {
         return self::halfDidNotRun($half, sprintf(
-            'the connection "%s" uses a driver this package does not support, so that half examined nothing',
+            'the connection "%s" is not one this package can examine: %s',
             $connection,
-        ));
+            $detail,
+        ), $reason);
     }
 
     /**
@@ -80,15 +89,26 @@ final readonly class SecurityRunNotices
      * refusal it was — and a summary here would be a second, worse spelling of a sentence that
      * exists.
      *
+     * The reason is the one the first refusal carries, and `sub_run_failed` where none carries one.
+     *
      * @param  list<Finding>  $refusals
      */
     public static function subRunRefused(string $half, array $refusals): Finding
     {
         $reasons = array_map(static fn (Finding $finding): string => $finding->ruleId, $refusals);
+        $reason = UndeterminedReason::SubRunFailed;
+
+        foreach ($refusals as $refusal) {
+            if ($refusal->status->reason instanceof UndeterminedReason) {
+                $reason = $refusal->status->reason;
+
+                break;
+            }
+        }
 
         return self::halfDidNotRun($half, $reasons === []
             ? 'it stopped on a misconfiguration before reading anything'
-            : sprintf('it stopped before reading anything (%s)', implode(', ', array_unique($reasons))));
+            : sprintf('it stopped before reading anything (%s)', implode(', ', array_unique($reasons))), $reason);
     }
 
     /**
@@ -101,17 +121,28 @@ final readonly class SecurityRunNotices
      */
     public static function subRunNotConfigured(string $half, string $because): Finding
     {
-        return self::halfDidNotRun($half, $because);
+        return self::halfDidNotRun($half, $because, UndeterminedReason::NotConfigured);
     }
 
     /**
-     * The shared sentence, written once for all three reasons.
+     * A half that reads a result somebody else produced, and read nothing.
+     *
+     * The reading knows which of the two kinds above it is: `not_configured` where nothing set the
+     * half up to read a result, `sub_run_failed` where it could not read the one it was pointed at.
+     */
+    public static function subRunReadNothing(string $half, string $because, UndeterminedReason $reason): Finding
+    {
+        return self::halfDidNotRun($half, $because, $reason);
+    }
+
+    /**
+     * The shared sentence, written once for every factory, with the reason each one knows.
      *
      * `undetermined` rather than a failure: the OTHER half may have found plenty, and turning an
      * unreachable sub-run into a failing run is a decision this layer does not get to make —
      * `strict_undetermined` is where a project makes it.
      */
-    private static function halfDidNotRun(string $half, string $because): Finding
+    private static function halfDidNotRun(string $half, string $because, UndeterminedReason $reason): Finding
     {
         return Finding::undetermined(
             SecurityNotice::NothingChecked->id(),
@@ -122,7 +153,7 @@ final readonly class SecurityRunNotices
                 $half,
                 $because,
             ),
-            UndeterminedReason::NotConfigured,
+            $reason,
             Location::inCatalog('unknown', $half, $half, SchemaObjectType::Database),
             Category::Security,
             Level::Capturable,

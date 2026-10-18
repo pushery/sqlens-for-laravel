@@ -327,7 +327,7 @@ final class SecurityCommand extends Command
     private function findings(SecurityOutcome $outcome, RunContext $context, string $connection): array
     {
         return $outcome->examinedNothing()
-            ? [...$outcome->findings, $this->nothingChecked($context, $connection)]
+            ? [...$outcome->findings, $this->nothingChecked($context, $connection, $outcome->findings)]
             : $outcome->findings;
     }
 
@@ -338,8 +338,10 @@ final class SecurityCommand extends Command
      * gate, a baseline and a report diff, and all three have to see that nothing was checked — a
      * console sentence beside an empty result set would tell the person one thing and every machine
      * the opposite.
+     *
+     * @param  list<Finding>  $findings  the run's findings, among them each half's own notice
      */
-    private function nothingChecked(RunContext $context, string $connection): Finding
+    private function nothingChecked(RunContext $context, string $connection, array $findings): Finding
     {
         return Finding::undetermined(
             SecurityNotice::NothingChecked->id(),
@@ -347,7 +349,7 @@ final class SecurityCommand extends Command
             'No security check ran: neither the live-catalog half nor the migration half of this run '
             .'could happen, so nothing about this connection was examined. This is not a clean '
             .'result — each half names its own reason above.',
-            UndeterminedReason::NotConfigured,
+            $this->reasonOfTheHalves($findings),
             // The connection, named as the subject: what was NOT examined is the thing a reader
             // needs, and an unnamed subject would leave the finding true of nothing in particular.
             Location::inCatalog(
@@ -366,6 +368,37 @@ final class SecurityCommand extends Command
                 strictTools: $context->strictTools,
             ),
         );
+    }
+
+    /**
+     * The reason the halves that tried gave for examining nothing.
+     *
+     * The run-level notice repeats a fact each half already states, so it takes their reason rather
+     * than one of its own: theirs where they agree, `sub_run_failed` where they disagree, and
+     * `not_configured` only where no half was asked to run at all. A half nobody wired, as the
+     * injection half often is, does not outvote the halves that tried.
+     *
+     * @param  list<Finding>  $findings
+     */
+    private function reasonOfTheHalves(array $findings): UndeterminedReason
+    {
+        $agreed = null;
+
+        foreach ($findings as $finding) {
+            $reason = $finding->status->reason;
+
+            if ($finding->ruleId !== SecurityNotice::NothingChecked->id() || ! $reason instanceof UndeterminedReason || $reason === UndeterminedReason::NotConfigured) {
+                continue;
+            }
+
+            if ($agreed instanceof UndeterminedReason && $agreed !== $reason) {
+                return UndeterminedReason::SubRunFailed;
+            }
+
+            $agreed = $reason;
+        }
+
+        return $agreed ?? UndeterminedReason::NotConfigured;
     }
 
     /**

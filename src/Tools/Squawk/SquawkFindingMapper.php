@@ -52,7 +52,7 @@ final readonly class SquawkFindingMapper
      * The tool's rule set moves on its own schedule, and its wording changes with it. Calling
      * that stable would be promising something this package does not control.
      */
-    private const StabilityTier STABILITY = StabilityTier::Preview;
+    public const StabilityTier STABILITY = StabilityTier::Preview;
 
     public function __construct(
         private SquawkRuleMap $map,
@@ -185,7 +185,7 @@ final readonly class SquawkFindingMapper
             $mapping->category ?? Category::Safety,
             $mapping->level ?? Level::Capturable,
             self::STABILITY,
-            $this->documentationUrl($mapping),
+            $mapping->documentationUrl(),
             $context,
             $mapping->severity,
         );
@@ -203,7 +203,7 @@ final readonly class SquawkFindingMapper
             $mapping->category ?? Category::Safety,
             $mapping->level ?? Level::Capturable,
             self::STABILITY,
-            $this->documentationUrl($mapping),
+            $mapping->documentationUrl(),
             $context,
             $mapping->severity,
         );
@@ -218,21 +218,6 @@ final readonly class SquawkFindingMapper
         return $mapping->downtimeClass instanceof DowntimeClass
             ? $finding->withDowntimeClass($mapping->downtimeClass)
             : $finding;
-    }
-
-    /**
-     * The page a reader is sent to.
-     *
-     * Our own rule page when the map names a SQLens rule that covers the same ground — the
-     * reader wants the explanation, and ours is the one written for this report. Otherwise the
-     * rule upstream, because sending them to a page this package has never written would be a
-     * dead link dressed as documentation.
-     */
-    private function documentationUrl(SquawkRuleMapping $mapping): string
-    {
-        return $mapping->sqlensRule === null
-            ? $mapping->sourceUrl
-            : DocumentationSite::page('rules/'.strtolower(str_replace(['.', '_'], '-', $mapping->sqlensRule)));
     }
 
     /** The tool's own callsite, for a finding that could not be placed on a statement. */

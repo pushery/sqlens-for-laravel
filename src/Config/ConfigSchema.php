@@ -417,7 +417,7 @@ final readonly class ConfigSchema
             $tool = substr($relativePath, strlen('agent.mcp.tools.'));
 
             return in_array($tool, self::MCP_MUTATING_TOOLS, true)
-                ? 'true or false — whether the MCP server exposes `'.$tool.'`. It CHANGES something, so it ships false and is turned on for itself alone; there is no switch that enables the mutating tools together'
+                ? 'true or false — whether the MCP server exposes `'.$tool.'`. It ships false, because enabling it is a decision a project makes by name: lint_shadow creates and drops throwaway databases, and predeploy reads the production database before a deploy. It is turned on for itself alone; there is no switch that enables the mutating tools together'
                 : 'true or false — whether the MCP server exposes `'.$tool.'`. It only reads, and it ships true';
         }
 

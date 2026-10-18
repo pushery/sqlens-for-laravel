@@ -71,6 +71,7 @@ use Symfony\Component\Console\Output\ConsoleOutputInterface;
  */
 final class FormatCommand extends Command
 {
+    use ResolvesProfile;
     use ResolvesStrictTools;
     use ValidatesConfig;
 
@@ -103,6 +104,7 @@ final class FormatCommand extends Command
         {--diff : Print a unified diff of what WOULD change and write nothing. Informational: it does not set the exit code — combine with --check for that}
         {--strict-tools : Treat a backend this run could not use as an error, not a degradation (overrides the configured strict_tools)}
         {--no-strict-tools : Treat a backend this run could not use as a degradation (overrides the configured strict_tools)}
+        {--profile= : The environment profile — local, ci or predeploy. Overrides SQLENS_PROFILE and the configured profile, and sets strict_tools for a run that names neither strict flag}
         {--backend= : auto, php, pgformatter or sqlfluff. Overrides the configured backend}
         {--dialect= : auto, pgsql or mysql. Overrides the configured dialect}';
 
@@ -133,6 +135,17 @@ final class FormatCommand extends Command
                 is_scalar($format) ? (string) $format : get_debug_type($format),
                 implode(', ', self::FORMATS),
             ));
+
+            return ExitCode::Misconfiguration->value;
+        }
+
+        // With the other up-front refusals, and before `strict_tools` is read below: for a run that
+        // names neither strict flag the profile decides it, and the shipped `ci` profile turns it on.
+        // Unset, the profile is `local`, after a flag, SQLENS_PROFILE and a configured profile.
+        $profile = $this->resolveProfile($config);
+
+        if ($profile->profile === null) {
+            $this->report($this->profileRejectionMessage($profile));
 
             return ExitCode::Misconfiguration->value;
         }

@@ -10,10 +10,14 @@ use Pushery\SQLens\Exceptions\UnreadableSarifSchema;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Outcome;
 use Pushery\SQLens\Findings\Result;
+use Pushery\SQLens\Generation\ShippedRuleMetadata;
 use Pushery\SQLens\Levels\Level;
+use Pushery\SQLens\Reporting\Agent\MarkdownText;
 use Pushery\SQLens\Reporting\Baseline\FindingFingerprint;
+use Pushery\SQLens\Reporting\RuleLimitations;
 use Pushery\SQLens\Reporting\RunContext;
 use Pushery\SQLens\Severity\GateDecision;
+use Pushery\SQLens\Severity\Severity;
 use Pushery\SQLens\Severity\SeverityGate;
 
 /**
@@ -33,13 +37,11 @@ use Pushery\SQLens\Severity\SeverityGate;
  * meaningfully — versions, mode, profile, the gate thresholds — are all in `invocation.properties`,
  * from the same {@see RunContext} the console header prints. One value type, two serializations.
  *
- * **No `securitySeverity`, and `level` from the OUTCOME rather than the severity axis.** The
- * severity mapping is its own change and its own decision (`level` versus GitHub's
- * `security-severity` property, and how the two axes divide) — mapping it halfway here would put a
- * number in a published artifact that nobody argued for. What is emitted instead is exactly what the
- * three-valued model already says: a `fail` is an `error`, an `undetermined` a `warning`, and a
- * `pass` or a structural `not_applicable` is `none` — SARIF's own value for "this does not indicate
- * a problem". No finding is dropped by that, and none is weighted by a rule nobody wrote.
+ * **`level` and `kind` from the outcome, the weight only on the risk axis.** {@see SeverityMapper} owns
+ * the mapping: a pass or a structural not-applicable is `level: none` with the matching `kind`, an
+ * undetermined is a `note`, and only a finding on the risk axis carries `security-severity`. Its rule is
+ * tagged `security`, because GitHub weighs that property only on a rule with the tag. No finding is
+ * dropped by any of it.
  *
  * **No invented location, and no missing one either.** A catalog or server finding has no file and no
  * line, and both obvious answers are wrong: an empty `locations` array validates and makes GitHub pin
@@ -142,7 +144,7 @@ final readonly class SarifDocument
                         'name' => 'SQLens',
                         'informationUri' => self::informationUri(),
                         'version' => $this->context->sqlensVersion,
-                        'rules' => $this->rules($findings),
+                        'rules' => $this->rules($findings, ShippedRuleMetadata::shipped(), RuleLimitations::shipped()),
                     ],
                 ],
                 // PLURAL, and an array. The spec's `run` object has `invocations`, and it sets
@@ -151,7 +153,7 @@ final readonly class SarifDocument
                 // schema arm on its first run, which is the entire reason that arm
                 // exists: the output had been eyeballed, and it looked right.
                 'invocations' => [$this->invocation()],
-                'results' => array_map($this->result(...), $findings),
+                'results' => $this->results($findings),
             ]],
         ];
     }
@@ -163,10 +165,15 @@ final readonly class SarifDocument
      * rule already carries the stable one, and a second construction of the same address is a second
      * chance for the two to disagree — which shows up as a 404 in somebody's security tab.
      *
+     * GitHub shows `fullDescription` and `help` beside every alert of the rule, so both come from the catalog that
+     * ships: what the rule checks, and in the help what it does not check and where its page is. A rule the catalog
+     * does not name on its own, a member of a family, falls back to its id, as the short description does.
+     *
      * @param  list<Finding>  $findings
+     * @param  array<string, array<array-key, mixed>>  $catalog
      * @return list<array<string, mixed>>
      */
-    private function rules(array $findings): array
+    private function rules(array $findings, array $catalog, RuleLimitations $limitations): array
     {
         $rules = [];
 
@@ -178,8 +185,17 @@ final readonly class SarifDocument
                 // step with the documentation page.
                 'name' => $finding->ruleId,
                 'shortDescription' => ['text' => $finding->ruleId],
+                'fullDescription' => ['text' => $this->summaryOf($catalog, $finding->ruleId) ?? $finding->ruleId],
                 'helpUri' => $finding->documentationUrl,
+                'help' => $this->help(
+                    $this->summaryOf($catalog, $finding->ruleId) ?? $finding->ruleId,
+                    $limitations->of($finding->ruleId) ?? [],
+                    $finding->documentationUrl,
+                ),
                 'properties' => [
+                    // GitHub filters alerts by tag. A rule on the risk axis is tagged `security` as well, the one tag
+                    // under which GitHub reads `security-severity` below; without it the weight arrives and is ignored.
+                    'tags' => $this->tags($finding),
                     'category' => $finding->category->value,
                     'level' => $finding->level->value,
                     'stability' => $finding->stability->value,
@@ -199,6 +215,58 @@ final readonly class SarifDocument
         ksort($rules, SORT_STRING);
 
         return array_values($rules);
+    }
+
+    /**
+     * What the catalog says the rule checks, or null where it does not name the rule on its own.
+     *
+     * @param  array<string, array<array-key, mixed>>  $catalog
+     */
+    private function summaryOf(array $catalog, string $ruleId): ?string
+    {
+        $summary = $catalog[$ruleId]['summary'] ?? null;
+
+        return is_string($summary) && $summary !== '' ? $summary : null;
+    }
+
+    /**
+     * The help of a rule, in the two forms SARIF has: what it checks, what it does not check, where its page is.
+     *
+     * @param  list<string>  $limitations
+     * @return array{text: string, markdown: string}
+     */
+    private function help(string $summary, array $limitations, string $documentationUrl): array
+    {
+        $text = $summary;
+        $markdown = MarkdownText::inline($summary);
+
+        if ($limitations !== []) {
+            $text .= "\n\nWhat this rule does not check:";
+            $markdown .= "\n\n**What this rule does not check**\n";
+
+            foreach ($limitations as $limitation) {
+                $text .= "\n- ".$limitation;
+                $markdown .= "\n- ".MarkdownText::inline($limitation);
+            }
+        }
+
+        return [
+            'text' => $text."\n\nDocumentation: ".$documentationUrl,
+            'markdown' => $markdown."\n\n[Documentation](".$documentationUrl.')',
+        ];
+    }
+
+    /**
+     * The tags of a rule: its category, and `security` for a rule on the risk axis.
+     *
+     * @return list<string>
+     */
+    private function tags(Finding $finding): array
+    {
+        return array_values(array_unique([
+            $finding->category->value,
+            ...($finding->severity instanceof Severity ? ['security'] : []),
+        ]));
     }
 
     /**
@@ -227,15 +295,41 @@ final readonly class SarifDocument
     }
 
     /**
+     * One result per finding, each with its place among the findings that share its identity.
+     *
+     * Counted in the order the document lists them, which is the order the runners count in when they write the
+     * baseline: the same statement twice in one migration is one fingerprint and two entries there, numbered from 0.
+     *
+     * @param  list<Finding>  $findings
+     * @return list<array<string, mixed>>
+     */
+    private function results(array $findings): array
+    {
+        $occurrences = [];
+        $results = [];
+
+        foreach ($findings as $finding) {
+            $fingerprint = FindingFingerprint::ofFinding($finding)->value;
+            $occurrence = $occurrences[$fingerprint] ?? 0;
+            $occurrences[$fingerprint] = $occurrence + 1;
+
+            $results[] = $this->result($finding, $fingerprint, $occurrence);
+        }
+
+        return $results;
+    }
+
+    /**
      * One result per finding.
      *
      * @return array<string, mixed>
      */
-    private function result(Finding $finding): array
+    private function result(Finding $finding, string $fingerprint, int $occurrence): array
     {
         $result = [
             'ruleId' => $finding->ruleId,
             'level' => SeverityMapper::level($finding, $this->decision($finding)),
+            ...SeverityMapper::kind($finding),
             'message' => ['text' => $this->locations->message($finding)],
             // Never empty, for any finding. A result SARIF would reject for want of a location is a
             // finding that vanished between the run and the report, and the count arm in
@@ -246,7 +340,12 @@ final readonly class SarifDocument
             // that has accepted a finding in its baseline and a security tab that keeps reopening it
             // would be two answers to one question.
             'partialFingerprints' => [
-                'sqlensFindingFingerprint/v1' => FindingFingerprint::ofFinding($finding)->value,
+                'sqlensFindingFingerprint/v1' => $fingerprint,
+                // The same finding twice, such as one statement written twice in a migration, shares that
+                // fingerprint, and GitHub would read the two results as one. From the second occurrence on, the
+                // number tells them apart, as the ordinal does in the baseline. The first carries none, so an
+                // alert a previous upload opened keeps matching it.
+                ...($occurrence > 0 ? ['sqlensOccurrence/v1' => (string) $occurrence] : []),
             ],
             'properties' => [
                 'status' => $finding->status->outcome->value,
@@ -291,7 +390,7 @@ final readonly class SarifDocument
             $result['properties']['object'] = $object;
         }
 
-        // ⛔ NO `fixes` KEY HERE, DELIBERATELY — and this is the place somebody would add one.
+        // No `fixes` key here, on purpose, and this is the place somebody would add one.
         //
         // A finding may carry a full remediation payload, and SARIF has a `fixes` array made for
         // exactly that. Filling it is still refused, because of what the CONSUMER does with it:

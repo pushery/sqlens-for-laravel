@@ -77,7 +77,7 @@ final class PredeployCommand extends Command
         // configured profile -- with `predeploy` underneath as this command's own default rather
         // than as an option default.
         //
-        // AS AN OPTION DEFAULT IT WAS ALWAYS THE FLAG, and that had two consequences. The
+        // As an option default it was always the flag, and that had two consequences. The
         // environment could not speak: `SQLENS_PROFILE=ci sqlens:predeploy` ran as predeploy, with
         // nothing saying so. And the name never became the SETTINGS: this command did not resolve
         // a profile at all, so the run announced `profile=predeploy` in its header while gating

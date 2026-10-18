@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Deploy;
 
+use Pushery\SQLens\Exceptions\UnreadableShippedArtifact;
+use Pushery\SQLens\Resources\ShippedJson;
 use Pushery\SQLens\Severity\Severity;
 
 /**
@@ -38,18 +40,19 @@ final readonly class EscalationThresholds
     /**
      * Load the shipped artifact, with any project overrides folded in.
      *
+     * An artifact that is missing, unreadable, malformed or without operations is refused by name. An
+     * empty set would raise no severity anywhere, and the report would read like a run over small
+     * tables, with nothing saying the thresholds were gone.
+     *
      * @param  array<string, mixed>  $overrides  from `sqlens.preflight.thresholds`
      *
      * @throws UnknownEscalationOperation
+     * @throws UnreadableShippedArtifact
      */
     public static function load(array $overrides = [], ?string $path = null): self
     {
-        $raw = json_decode(
-            (string) file_get_contents($path ?? __DIR__.'/../../resources/data/escalation-thresholds.json'),
-            true,
-        );
-
-        $operations = is_array($raw) && is_array($raw['operations'] ?? null) ? $raw['operations'] : [];
+        $raw = ShippedJson::decode($path ?? __DIR__.'/../../resources/data/escalation-thresholds.json', 'operations');
+        $operations = is_array($raw['operations'] ?? null) ? $raw['operations'] : [];
         $parsed = [];
 
         foreach ($operations as $name => $definition) {

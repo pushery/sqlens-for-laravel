@@ -21,7 +21,7 @@ use Pushery\SQLens\Generation\RuleCatalogSnapshot;
  * has its own file available. The path-scoped file is scoped by `applyTo`, has no stated cap, and
  * is ours.
  *
- * That also settles a question the ticket left the other way round: because this file is ours, it
+ * That also settles a question that was left the other way round: because this file is ours, it
  * needs no marker mechanic. Only the Claude target writes into somebody else's document.
  *
  * ## Compact, and what compact is not

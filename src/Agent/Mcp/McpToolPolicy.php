@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Agent\Mcp;
 
+use Illuminate\Contracts\Config\Repository;
+use Illuminate\Contracts\Container\Container;
 use Pushery\SQLens\Config\ConfigSchema;
 
 /**
@@ -90,6 +92,29 @@ final readonly class McpToolPolicy
         }
 
         return new self($switches);
+    }
+
+    /**
+     * The policy of one server session: the one already bound, or the configuration plus the tools
+     * this run enabled by name, bound for the rest of the session.
+     *
+     * `sqlens:mcp` binds its policy before it serves, and the `tools/call` handler resolves the bound
+     * one. Read back rather than rebuilt, so the listing and the handler decide with one object; a
+     * second policy would be a second answer about which tools this session exposes. A host that
+     * serves without the command gets the policy built here, bound the same way.
+     *
+     * @param  list<string>  $sessionEnables
+     */
+    public static function forSession(Container $container, Repository $config, array $sessionEnables): self
+    {
+        if ($container->bound(self::class)) {
+            return $container->make(self::class);
+        }
+
+        $policy = self::fromConfig($config->get('sqlens.agent.mcp.tools'))->alsoEnabling($sessionEnables);
+        $container->instance(self::class, $policy);
+
+        return $policy;
     }
 
     /**

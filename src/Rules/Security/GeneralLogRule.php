@@ -17,10 +17,11 @@ use Pushery\SQLens\Subjects\SchemaObject;
 /**
  * The general query log is on — every statement is being written down, verbatim.
  *
- * Including the ones nobody would put in a log on purpose. `CREATE USER … IDENTIFIED BY 'secret'`
- * goes in with the password. So does an `UPDATE` that sets a token, and any value interpolated into
- * SQL rather than bound. The log does not redact, because it is a debugging tool: it records what
- * was sent.
+ * Including the ones nobody would put in a log on purpose. An `UPDATE` that sets a token goes in
+ * with the token, and so does any value interpolated into SQL rather than bound. The server rewrites
+ * one kind of secret, the password of `CREATE USER`, `ALTER USER` and `SET PASSWORD`, which it writes
+ * as `<secret>` unless `log_raw` is on (measured on MySQL 8.0). Everything else it records as it was
+ * sent, because the log is a debugging tool.
  *
  * That turns a file — often world-readable, usually outside whatever protects the database itself,
  * and routinely swept into log shipping — into a copy of the data the database was guarding. The
@@ -129,10 +130,11 @@ final class GeneralLogRule extends AbstractSettingSecurityRule
 
         return sprintf(
             'general_log is %s, so every statement this server receives is being written down '
-            .'VERBATIM — including the ones nobody would log on purpose. CREATE USER … IDENTIFIED BY '
-            .'goes in with the password; so does an UPDATE that sets a token, and any value '
-            .'interpolated into SQL rather than bound. The log does not redact, because it is a '
-            .'debugging tool: it records what was sent. The result is a file — often world-readable, '
+            .'VERBATIM — including the ones nobody would log on purpose. An UPDATE that sets a token '
+            .'goes in with the token, and so does any value interpolated into SQL rather than bound. '
+            .'The server rewrites the password of CREATE USER, ALTER USER and SET PASSWORD as <secret> '
+            .'unless log_raw is on, and nothing else: the log is a debugging tool and records what was '
+            .'sent. The result is a file — often world-readable, '
             .'usually outside whatever protects the database itself, and routinely swept into log '
             .'shipping — holding a copy of what the database was guarding. Credentials in it stay '
             .'valid until somebody rotates them, and nobody rotates what they do not know leaked. '

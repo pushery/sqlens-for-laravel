@@ -29,8 +29,9 @@ use Pushery\SQLens\Config\ConfigSchema;
  * ## The configuration FILTERS, it never extends
  *
  * `agent.mcp.tools` can turn a declared tool off, and can turn a declared MUTATING tool on. It
- * cannot bring a tool into existence: a name the configuration knows and this class does not is
- * refused by the config validator, and would be ignored here even if it were not.
+ * cannot bring a tool into existence: the config validator accepts the names in
+ * {@see ConfigSchema::MCP_TOOL_NAMES}, and a name there without a class here is never exposed,
+ * because only declared tools are built.
  *
  * ## Why the listing is sorted
  *
@@ -43,11 +44,10 @@ final readonly class ToolRegistry
     /**
      * Every tool this build knows how to expose, by class.
      *
-     * Shorter than {@see ConfigSchema::MCP_TOOL_NAMES} while the remaining tools are each still
-     * their own piece of work, and the gap is visible rather than papered over. A shell that
-     * answered nothing would be a tool an agent could call and get silence from, which is worse
-     * than a tool that is honestly not there yet — so a name is configurable before it is real,
-     * and the registry is what decides whether it exists.
+     * Every name in {@see ConfigSchema::MCP_TOOL_NAMES} has its class here. A name may be
+     * configurable before its tool is real, and then it stays absent rather than answering with a
+     * shell: a tool an agent can call and get silence from is worse than one that is honestly not
+     * there. The registry is what decides whether a tool exists.
      *
      * @var list<class-string<SqlensTool>>
      */

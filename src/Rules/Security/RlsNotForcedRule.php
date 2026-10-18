@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Rules\Security;
 
 use Override;
+use Pushery\SQLens\Audit\RuleEvaluation;
 use Pushery\SQLens\Contracts\DeclaresJudgedObjectTypes;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleVerdict;
@@ -30,8 +31,8 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ## Why this is the case that gets its own rule and its own severity
  *
- * Because it is the normal Laravel arrangement, not the textbook one. The guardrail on the ticket says
- * it plainly: migration and runtime role are often identical and are also the owner. A rule that only
+ * Because it is the normal Laravel arrangement, not the textbook one: migration and runtime role
+ * are often identical and are also the owner. A rule that only
  * reported the missing `FORCE` in the abstract would rate the everyday, dangerous case the same as the
  * theoretical one — so the everyday case is this rule, at `high`, and the other one is
  * {@see RlsOwnerUnrestrictedRule} at `medium`. Severity is metadata on the RULE; two rules is what
@@ -50,7 +51,7 @@ final class RlsNotForcedRule extends AbstractSchemaObjectSecurityRule implements
      *
      * Its narrowing lives one layer down, in {@see RlsForceScope::applies()}, so the regex that made
      * its five siblings declare found nothing here and asked nothing of it. The result was the exact
-     * shape {@see \\Pushery\\SQLens\\Audit\\RuleEvaluation} calls harmful: with no declaration it counted as
+     * shape {@see RuleEvaluation} calls harmful: with no declaration it counted as
      * evaluated by any subject at all, so a run that read one role and zero tables still reported
      * this check as having run.
      *

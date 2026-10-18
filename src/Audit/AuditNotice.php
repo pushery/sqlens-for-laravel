@@ -92,8 +92,9 @@ enum AuditNotice: string implements RunNotice
      *
      * Without it a deprecation is invisible from the outside. The rule stops producing findings, the
      * report gets shorter, and every remaining finding is still true — which is exactly what a clean
-     * run looks like. `GOVERNANCE.md` promises a deprecated rule "stops producing findings and says
-     * so"; this id is the "says so".
+     * run looks like. The governance policy promises a deprecated rule "stops producing findings and
+     * says so"; this id is the "says so". The policy:
+     * https://github.com/pushery/sqlens-for-laravel/blob/main/GOVERNANCE.md
      */
     case RuleWithheldByDeprecation = 'CAP.L0.RULE_WITHHELD_BY_DEPRECATION';
 

@@ -329,7 +329,7 @@ final class StatementSplitter
      * anywhere it is not inside a literal — including after a semicolon on the same line. The two
      * ways to be wrong here are not symmetric: reading a directive as SQL is what happens today and
      * costs a bad split, while reading SQL as a directive silently DELETES a statement from the
-     * batch. So the stricter rule wins, and it is the one the ticket asked for: after optional
+     * batch. So the stricter rule wins, and it is the one specified: after optional
      * whitespace, at the start of a line.
      */
     private function atLineStart(string $batch, int $at): bool

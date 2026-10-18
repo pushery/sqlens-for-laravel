@@ -115,7 +115,7 @@ final readonly class RuleExampleEntry
     }
 
     /**
-     * The declared language, validated against the two this package knows.
+     * The declared language, validated against the languages this package knows.
      *
      * An unknown value is an error rather than a silent fallback to PHP: a typo'd `sqll` would
      * otherwise send a SQL snippet through the PHP parser, fail, and read as a broken example

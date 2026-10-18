@@ -36,7 +36,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * So it judges only what the reader marked as a PROJECT decision. The reader reads that from
  * `pg_init_privs` — PostgreSQL's own record of the ACL an object had when initdb finished or when the
  * extension that owns it was installed — rather than from a list of names this rule would have to keep
- * in step with the server. That is also what settles the version question the ticket raises: the
+ * in step with the server. That is also what settles the version question: the
  * `public` schema's `CREATE` grant was withdrawn in PostgreSQL 15, and on any server this rule runs
  * against, whatever that server shipped is exactly what its own catalog says it shipped. Nothing here
  * needs to know which version changed what.
@@ -62,7 +62,7 @@ final class PublicGrantRule extends AbstractSchemaObjectSecurityRule implements 
     }
 
     /**
-     * `SEC.PRIV.GRANT_PUBLIC`, and not the `SEC.PG.GRANT.PUBLIC` the plan's ticket writes.
+     * `SEC.PRIV.GRANT_PUBLIC`, and not an engine-qualified `SEC.PG.GRANT.PUBLIC`.
      *
      * The scheme was fixed before the first rule existed and is machine-enforced
      * ({@see RuleIdFormat}): `<AREA>.L<n>.<NAME>`. `SEC` is the area for the security family, which is

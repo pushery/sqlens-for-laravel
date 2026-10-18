@@ -968,9 +968,11 @@ final readonly class StatementClassifier implements CanonicalizationStage
      * The name a token gives where a statement names an object: an identifier, or a keyword the
      * server accepts there unquoted, such as `type` or `comment`. Null for anything else.
      *
-     * A keyword arrives upper case, because the casing stage runs first. Lower case is what both
-     * engines resolve the unquoted word to: PostgreSQL folds it, and MySQL compares column names
-     * without regard to case.
+     * A keyword arrives upper case, because the casing stage runs first, and is read in lower case:
+     * PostgreSQL folds the unquoted word to it, and MySQL compares column names without regard to
+     * case. A MySQL table name keeps its case on a server with `lower_case_table_names = 0`, so a
+     * bare `User` names another table there than the one read; the casing stage keeps no original
+     * spelling to tell.
      *
      * @param  list<string>  $unreservedNames
      */

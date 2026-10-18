@@ -25,13 +25,17 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  * `CREATE TABLE` in a schema the caller controls and a call to a function that was never told where
  * to look.
  *
- * ## High, and the only rule of this family that is
+ * ## High, one step below the catalog rule for the same state
  *
- * Its catalog siblings — {@see RoutineDefinerRule}, {@see RoutineDefinerMutablePathRule},
- * {@see RoutineDefinerUnsafePathRule} — are Medium: they find a routine that already exists and ask
- * increasingly specific questions about the path it pinned. This one finds the moment the routine is
- * WRITTEN with no path at all, which is both the sharpest form and the only one that is still a
- * decision somebody can change by editing a file.
+ * The catalog siblings read a routine that already exists. {@see RoutineDefinerRule} is Low: the
+ * routine pins its path, which is the right construction and a fact a reviewer needs. The
+ * {@see RoutineDefinerUnsafePathRule} is Medium: the pinned path still names a schema somebody else
+ * can write. {@see RoutineDefinerMutablePathRule} is Critical: no path is pinned, on a live server,
+ * and anyone holding EXECUTE runs code as the owner today.
+ *
+ * This rule finds that last state one step earlier, in the migration that would create it. High
+ * rather than Critical, because nothing is exposed yet: the migration has not run, and the fix is an
+ * edit to the file before it does. Once it has run, the catalog rule reports the routine at Critical.
  *
  * ## Silent on MySQL by DATA, not by a driver check
  *

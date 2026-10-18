@@ -15,9 +15,9 @@ namespace Pushery\SQLens\Corpus;
  *
  * This class is the format and nothing else: what a collection looks like, which manifest fields are
  * mandatory, and which three verdicts an expectation may carry. The LOADER that reads collections
- * and refuses an incomplete one is the corpus tickets; the measurement that classifies findings against
- * these expectations is the corpus tickets. Keeping them apart is what stops the loader from inventing a
- * second, slightly different idea of what a manifest is.
+ * and refuses an incomplete one is {@see CorpusLoader}; the measurement that classifies findings
+ * against these expectations is {@see CorpusClassifier}. Keeping them apart is what stops the loader
+ * from inventing a second, slightly different idea of what a manifest is.
  *
  * ## The three-valued expectation is the load-bearing part
  *
@@ -139,7 +139,7 @@ final readonly class CorpusFormat
             }
 
             if (! isset($entry['rule_id']) || ! is_string($entry['rule_id']) || trim($entry['rule_id']) === '') {
-                // The one the ticket names by hand, because it is the one that produces a silent
+                // Named on its own, because it is the one that produces a silent
                 // pass: an expectation with no rule id matches nothing, so the finding it was
                 // supposed to describe is simply never compared.
                 $violations[] = "{$where} carries no `rule_id`, so it can never be matched against a finding and the case measures nothing";

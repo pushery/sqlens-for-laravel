@@ -79,7 +79,7 @@ final class TimeZoneTablesEmptyRule extends AbstractServerSettingRule
         if (! $this->isNamedZone($serverValue)) {
             // An offset carries no dependency on the tables, and SYSTEM defers to the host rather
             // than to them. Reporting either would be noise about a server that cannot have this
-            // problem — the FP discipline the ticket asks for.
+            // problem, and every rule here keeps that false-positive discipline.
             return null;
         }
 

@@ -33,12 +33,12 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * There is a second consequence: with no second mode, the question is always decidable on MySQL.
  * This rule never answers undetermined, and its PostgreSQL sister sometimes must.
  *
- * ## The ticket asked for `preview`; it ships STABLE
+ * ## Specified as `preview`; it ships STABLE
  *
  * The same reasoning as its PostgreSQL sister carries here: before 1.0 there is no published
  * pipeline for the preview tier to protect, the default lives at one named place so the flip at 1.0
- * is a single line, and a machine guard holds that. The false-positive risk the ticket was worried
- * about is answered by how narrowly the trigger is cut, not by hiding the rule.
+ * is a single line, and a machine guard holds that. The false-positive risk that argued for
+ * `preview` is answered by how narrowly the trigger is cut, not by hiding the rule.
  */
 final class NullableForeignKeyInUniqueRule extends AbstractCatalogRule implements DeclaresJudgedObjectTypes
 {

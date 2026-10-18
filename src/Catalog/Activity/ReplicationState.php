@@ -63,10 +63,22 @@ final readonly class ReplicationState
         return $this->state === null;
     }
 
-    /** The stable sort key. */
+    /**
+     * The stable sort key: the name first, then every other field.
+     *
+     * The name alone is not enough. Every standby without an `application_name` of its own reports the cluster name or
+     * `walreceiver`, and the server lists them in no promised order, so two of them sorted by the name kept whatever order
+     * the rows arrived in. A missing measure sorts before every reported one and apart from zero, and two replicas that
+     * agree on every field read the same in either order.
+     */
     public function sortKey(): string
     {
-        return $this->replica;
+        return implode("\x1f", [
+            $this->replica,
+            $this->state ?? '',
+            $this->lagBytes === null ? '' : sprintf('%020d', $this->lagBytes),
+            $this->lagMs === null ? '' : sprintf('%020d', $this->lagMs),
+        ]);
     }
 
     /** @return array{replica: string, state: string|null, lag_bytes: int|null, lag_ms: int|null} */

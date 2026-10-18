@@ -27,9 +27,14 @@ use Pushery\SQLens\Guard\Violations\Violation;
  * ## Migrations are excluded by the ARTISAN CONTEXT, not by the statement
  *
  * A `CREATE TABLE` from `php artisan migrate` and one from a controller are the same statement, so
- * no amount of SQL reading separates them. What separates them is that one runs in a console
- * process and the other does not — and this guard is a runtime guard: an application serving a
- * request has no business issuing DDL, whatever the statement says.
+ * no amount of SQL reading separates them. What separates them is the command the process runs:
+ * `migrate` is an Artisan command, and a controller runs in a request — and this guard is a runtime
+ * guard: an application serving a request has no business issuing DDL, whatever the statement says.
+ *
+ * A queue worker and the scheduler are Artisan commands as well, but what they run is the
+ * application's own code, a job or a scheduled closure, so they are watched like a request
+ * ({@see self::APPLICATION_COMMANDS}). Under Octane a worker is no console process at all: Octane's
+ * bootstrap sets `APP_RUNNING_IN_CONSOLE` to false, so every request there is watched too.
  */
 final readonly class RuntimeDdlGuard implements QueryInspector
 {
@@ -59,7 +64,23 @@ final readonly class RuntimeDdlGuard implements QueryInspector
      */
     private const array DDL_KEYWORDS = ['create', 'alter', 'drop', 'truncate', 'rename', 'comment'];
 
-    public function __construct(private ViolationLogger $logger, private bool $inConsole = false) {}
+    /**
+     * The Artisan commands that run the application's own code: the queue workers and the scheduler.
+     *
+     * A job and a scheduled closure are application code, where DDL is as out of place as in a request.
+     * Every other command is exempt, because migrations, seeders and maintenance commands issue DDL
+     * legitimately. A command the scheduler starts runs in a process of its own and is judged by its
+     * own name.
+     *
+     * @var list<string>
+     */
+    public const array APPLICATION_COMMANDS = ['queue:work', 'queue:listen', 'horizon:work', 'schedule:run', 'schedule:work'];
+
+    /**
+     * @param  bool  $exempt  true in a console process that runs any other Artisan command, which is where
+     *                        migrations, seeders and maintenance commands run
+     */
+    public function __construct(private ViolationLogger $logger, private bool $exempt = false) {}
 
     public function appliesTo(GuardProfile $profile): bool
     {
@@ -68,10 +89,10 @@ final readonly class RuntimeDdlGuard implements QueryInspector
 
     public function inspect(QueryExecuted $query, GuardProfile $profile): void
     {
-        // A console process is where migrations, seeders and maintenance commands live, and all
-        // three legitimately issue DDL. Reporting them would produce a violation on every deploy,
-        // which is how a guardrail gets switched off in its first week.
-        if ($this->inConsole) {
+        // Migrations, seeders and maintenance commands legitimately issue DDL. Reporting them would
+        // produce a violation on every deploy, which is how a guardrail gets switched off in its
+        // first week. A queue worker and the scheduler are not exempt (see APPLICATION_COMMANDS).
+        if ($this->exempt) {
             return;
         }
 

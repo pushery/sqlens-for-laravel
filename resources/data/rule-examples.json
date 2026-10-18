@@ -706,7 +706,7 @@
             "bad": "# my.cnf: every statement written down, verbatim and unredacted.\ngeneral_log = ON",
             "good": "# Off is the vendor default, and where a server should be between debugging sessions.\ngeneral_log = OFF",
             "language": "ini",
-            "note": "The log does not redact, because it is a debugging tool: it records what was sent. CREATE USER ... IDENTIFIED BY goes in with the password, and so does any value interpolated into SQL rather than bound. MySQL does rewrite passwords before logging -- in the ERROR log and the slow log, not here -- which is why a reader who has heard that MySQL redacts has heard something true about a different log.",
+            "note": "The log is a debugging tool and records what was sent: an UPDATE that sets a token goes in with the token, and so does any value interpolated into SQL rather than bound. The one secret the server rewrites is the password of CREATE USER, ALTER USER and SET PASSWORD, written as <secret> unless log_raw is on, measured on MySQL 8.0.",
             "false_positives": "A server with it deliberately on while somebody is debugging is the legitimate case, and it is measured in minutes. Nothing here can tell that apart from a switch somebody forgot, which is the point: the cost is silent and grows with uptime. What this cannot see is where the log goes or who can read it -- those are questions about the host, not the catalog."
         },
         "SEC.CFG.GENERAL_LOG_PERSONAL_DATA": {

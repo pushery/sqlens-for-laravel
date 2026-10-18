@@ -8,10 +8,13 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Name;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 use Override;
 use Pushery\SQLens\Agent\Mcp\RuleCatalog;
 use Pushery\SQLens\Agent\Mcp\ToolAnswer;
 use Pushery\SQLens\Catalog\RuleExampleCatalog;
+use Pushery\SQLens\Exceptions\UnreadableShippedArtifact;
+use Pushery\SQLens\Tools\ToolRuleCards;
 
 /**
  * `explain_rule` — what a rule is, so an agent understands it before it tries to work around one.
@@ -27,6 +30,9 @@ use Pushery\SQLens\Catalog\RuleExampleCatalog;
  * each is held to the rule objects by its own guard; joining them here is what makes an explanation
  * complete instead of making it a third description.
  *
+ * A rule of an external tool is the tool's, and the registry carries none of them. Its id is the tool's
+ * rule name behind the tool's prefix, and the card this package ships for the tool answers it.
+ *
  * ## An unknown id is an ERROR
  *
  * Never an empty object. An agent handed `{}` for a rule id that does not exist will explain the
@@ -40,6 +46,7 @@ use Pushery\SQLens\Catalog\RuleExampleCatalog;
  * no route out, and would make the same question answerable differently depending on the network.
  */
 #[Name('explain_rule')]
+#[IsReadOnly]
 final class ExplainRuleTool extends SqlensTool
 {
     /**
@@ -74,7 +81,10 @@ final class ExplainRuleTool extends SqlensTool
 
     private ?RuleExampleCatalog $examples = null;
 
-    public function __construct(private readonly RuleCatalog $catalog = new RuleCatalog) {}
+    public function __construct(
+        private readonly RuleCatalog $catalog = new RuleCatalog,
+        private readonly ToolRuleCards $tools = new ToolRuleCards,
+    ) {}
 
     #[Override]
     public function description(): string
@@ -96,7 +106,26 @@ final class ExplainRuleTool extends SqlensTool
         $validated = $this->validated($request);
 
         $ruleId = is_string($validated['rule_id'] ?? null) ? $validated['rule_id'] : '';
-        $rule = $this->catalog->find($ruleId);
+
+        try {
+            $rule = $this->catalog->find($ruleId);
+        } catch (UnreadableShippedArtifact $broken) {
+            // A broken installation is named as one. "No rule is registered" for every id would send an
+            // agent looking for a typo in the id it took from a finding.
+            return ToolAnswer::undetermined(
+                'the rule registry this build ships could not be read, so no rule can be explained. '.$broken->getMessage(),
+                ['rule_id' => $ruleId],
+            )->toErrorResponse();
+        }
+
+        if ($rule === null && is_array($card = $this->tools->explain($ruleId))) {
+            $card['examples'] = [
+                'registered' => false,
+                'reason' => 'this is a rule of an external tool, and the tool\'s own page at source_url shows its examples',
+            ];
+
+            return ToolAnswer::of(['rule' => $card], 'Rule '.$ruleId.' explained from the card this package ships for its tool.')->toResponse();
+        }
 
         if ($rule === null) {
             $suggestions = $this->catalog->closestTo($ruleId);
@@ -192,10 +221,14 @@ final class ExplainRuleTool extends SqlensTool
      */
     public function rules(): array
     {
-        // Patterned, not merely bounded. A rule id is uppercase letters, digits, dots and
-        // underscores — 120 characters of anything else is still anything else, and the parameter
-        // allowlist is right to refuse a string whose shape nobody stated.
-        return ['rule_id' => ['required', 'string', 'max:120', 'regex:/^[A-Z0-9._]+$/']];
+        // Patterned, not merely bounded. This package's own ids are uppercase letters, digits, dots and
+        // underscores, and a tool's finding carries the tool's rule name behind the tool's prefix,
+        // `SQUAWK.ban-char-field` or `PGLS.extensionInPublic`, which is the only place a lowercase
+        // letter or a hyphen belongs. So an id of this package in the wrong case is refused as a value
+        // of the wrong shape, as it was before the tools' ids were admitted. 120 characters of anything
+        // else is still anything else, and the parameter allowlist is right to refuse a string whose
+        // shape nobody stated.
+        return ['rule_id' => ['required', 'string', 'max:120', 'regex:/^(?:[A-Z0-9._]+|(?:SQUAWK|PGLS)\.[A-Za-z0-9-]+)$/']];
     }
 
     /**

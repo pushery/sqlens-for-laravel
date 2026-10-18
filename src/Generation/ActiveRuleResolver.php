@@ -25,6 +25,7 @@ use Pushery\SQLens\Rules\ServerVersion;
 use Pushery\SQLens\Rules\StabilityGate;
 use Pushery\SQLens\Rules\StabilityTier;
 use Pushery\SQLens\Rules\VersionRuleGate;
+use Pushery\SQLens\Security\Privacy\PrivacyPack;
 use Pushery\SQLens\Severity\Severity;
 
 /**
@@ -103,7 +104,10 @@ final readonly class ActiveRuleResolver
         // less bound by an audit rule than by a lint one. Each entry carries its suites, so a
         // renderer that wants one can filter — from data, rather than from a decision taken here
         // that no reader could see.
-        $registry = RuleRegistry::fromRules([...$driver->rules()]);
+        //
+        // The privacy pack's switch is applied where the audit applies it, while the set is
+        // assembled: switched off, its rules never reach a run, so they are not guidance either.
+        $registry = RuleRegistry::fromRules(new PrivacyPack($this->config)->admitted(array_values([...$driver->rules()])));
 
         // The runner's order, deliberately: level, then category over what level admitted, then
         // stability over what category kept, then version last. The axes are not commutative —

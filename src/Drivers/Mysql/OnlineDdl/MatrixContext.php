@@ -11,8 +11,10 @@ namespace Pushery\SQLens\Drivers\Mysql\OnlineDdl;
  *
  * The single-file fast path knows nothing about a live table, so its context is {@see blind()}
  * — every predicate undecided, which is exactly why a plain ADD COLUMN resolves to undetermined
- * rather than a silent "instant". A richer capture (a live audit) supplies the facts it can read
- * with {@see with()}, and only then can a conditional entry resolve.
+ * rather than a silent "instant". Every shipped caller passes the blind context today, a run
+ * with a live connection included. {@see with()} is how a caller that has read the live table
+ * supplies the facts it decided, and only then can a conditional entry resolve; no shipped caller
+ * does yet.
  */
 final readonly class MatrixContext
 {

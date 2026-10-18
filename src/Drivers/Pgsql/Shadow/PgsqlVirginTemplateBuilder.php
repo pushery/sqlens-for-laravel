@@ -8,6 +8,7 @@ use Closure;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Database\Connection;
 use Illuminate\Database\DatabaseManager;
+use PDOException;
 use Pushery\SQLens\Attributes\RawSql;
 use Pushery\SQLens\Capture\Shadow\ShadowConnectionLatch;
 use Pushery\SQLens\Capture\Shadow\VirginTemplate;
@@ -127,8 +128,21 @@ final readonly class PgsqlVirginTemplateBuilder
                 throw $failure;
             }
 
-            throw new ShadowProvisioningUndetermined(UndeterminedReason::ShadowTemplateBuildFailed);
+            throw new ShadowProvisioningUndetermined(UndeterminedReason::ShadowTemplateBuildFailed, $this->replayFailureDetail($failure));
         }
+    }
+
+    /**
+     * What a refused dump statement tells the operator: the SQLSTATE PostgreSQL answered with.
+     *
+     * Never the server's message, which quotes the statement or a value from it, and a report does
+     * not repeat what a dump holds.
+     */
+    private function replayFailureDetail(Throwable $failure): ?string
+    {
+        $state = $failure instanceof PDOException ? ($failure->errorInfo[0] ?? null) : null;
+
+        return is_string($state) && $state !== '' ? sprintf('PostgreSQL refused a statement with SQLSTATE %s.', $state) : null;
     }
 
     /** Release and drop a template — called with the clone's teardown. */

@@ -39,7 +39,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ## Lint only, and that is structural rather than a gap
  *
- * An over-long identifier NEVER REACHES THE CATALOG. PostgreSQL truncated it on the way in — so by the time an audit
+ * An over-long identifier never reaches the catalog. PostgreSQL truncated it on the way in — so by the time an audit
  * reads the schema there is nothing over the limit to find. An audit half here would be a check that
  * cannot fail, which this package treats as worse than an absent one: it reports a clean result over
  * a question it never asked.

@@ -32,9 +32,14 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * lives in the core. It runs AFTER identifier normalization, which keeps a
  * keyword-named identifier in quotes when it was written quoted (`"key"` stays
  * `"key"`). A BARE word matching a keyword is folded as the keyword even where it
- * names a column: telling the two apart needs the grammar position, which only the
- * classifier knows, and folding it is harmless on both engines (PostgreSQL folds it
- * anyway; MySQL requires a keyword-named identifier to be quoted). Any
+ * names an object: telling the two apart needs the grammar position, which only the
+ * classifier knows. Both engines accept a word they do not reserve as a bare name
+ * (`user`, `date`, `text` on MySQL), so the classifier reads a keyword in a name
+ * position back in lower case ({@see StatementClassifier}). That is the name
+ * PostgreSQL folds the word to, and MySQL's for a column, which it compares without
+ * regard to case. A MySQL table named by such a word in another spelling, a bare
+ * `User`, is read as `user`, which on a server with `lower_case_table_names = 0` is
+ * another table: this stage keeps no original spelling to tell. Any
  * keyword-looking word inside a string literal, a comment, or a dollar-quoted body
  * survives byte-exact.
  *

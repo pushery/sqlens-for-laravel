@@ -12,10 +12,11 @@ use Illuminate\Filesystem\Filesystem;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Name;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 use Override;
+use Pushery\SQLens\Agent\Mcp\ReportPage;
 use Pushery\SQLens\Agent\Mcp\ToolAnswer;
 use Pushery\SQLens\Audit\ProjectManifest;
-use Pushery\SQLens\Config\ConfigSchema;
 use Pushery\SQLens\Deploy\DebtAge;
 use Pushery\SQLens\Deploy\DebtEntry;
 use Pushery\SQLens\Deploy\DebtLedger;
@@ -48,6 +49,7 @@ use Pushery\SQLens\Deploy\DebtLedgerRefusal;
  * frame, because nothing failed.
  */
 #[Name('get_debt_ledger')]
+#[IsReadOnly]
 final class GetDebtLedgerTool extends SqlensTool
 {
     protected string $description = 'Lists the migration debts a project has recorded: what was left half-done, when it was first seen, and how old it is. Reads the committed ledger file — no database, no writes.';
@@ -76,15 +78,12 @@ final class GetDebtLedgerTool extends SqlensTool
         $path = is_string($configured) && $configured !== '' ? $configured : DebtLedger::DEFAULT_PATH;
         $ledger = DebtLedger::load($files, $manifest->root().'/'.$path);
 
-        if (! $ledger->isUsable()) {
+        // A ledger that cannot be acted on is one that carries a refusal, so the refusal is asked for
+        // directly and its detail is the reason.
+        if ($ledger->refusal instanceof DebtLedgerRefusal) {
             // Present and unreadable is a CONTENT problem in a specific line, and it is a different
             // thing to go and fix from an absent file. Both are undetermined; neither is "no debts".
-            return ToolAnswer::undetermined(
-                $ledger->refusal instanceof DebtLedgerRefusal
-                    ? $ledger->refusal->detail
-                    : 'the debt account could not be read',
-                ['path' => $path],
-            )->toResponse();
+            return ToolAnswer::undetermined($ledger->refusal->detail, ['path' => $path])->toResponse();
         }
 
         if (! $ledger->wasPresent()) {
@@ -112,27 +111,27 @@ final class GetDebtLedgerTool extends SqlensTool
         usort($rows, static fn (array $a, array $b): int => ($b['age'] ?? -1) <=> ($a['age'] ?? -1)
             ?: strcmp($a['entry']->id, $b['entry']->id));
 
-        $total = count($rows);
-        $offset = is_int($validated['offset'] ?? null) ? $validated['offset'] : 0;
-        $limit = is_int($validated['limit'] ?? null) ? $validated['limit'] : $this->maxFindings($config);
-        $page = array_slice($rows, $offset, $limit);
+        // Paged the way every tool pages: the project's ceiling caps a caller's limit, and a cut
+        // answer says whether the request or the ceiling cut it. A quiet truncation reads exactly
+        // like a project with fewer open ends than it has.
+        $page = ReportPage::of(
+            array_map(
+                // An age that could not be established says why, beside the null.
+                static fn (array $row): array => [...$row['entry']->toArray(), 'age_days' => $row['age'], 'age_unknown' => $row['unknown']],
+                $rows,
+            ),
+            is_int($validated['offset'] ?? null) ? $validated['offset'] : 0,
+            is_int($validated['limit'] ?? null) ? $validated['limit'] : null,
+            ReportPage::ceiling($config),
+        );
 
         return ToolAnswer::of([
             'path' => $path,
             // The date the ages were counted from, always. Without it "94 days" is a number nobody
             // can reproduce.
             'as_of' => $asOf,
-            'total' => $total,
-            'returned' => count($page),
-            // Crossing the ceiling is REPORTED. A quiet truncation reads exactly like a project
-            // with fewer open ends than it has.
-            'truncated' => $offset + count($page) < $total,
-            'debts' => array_map(
-                // An age that could not be established says why, beside the null.
-                static fn (array $row): array => [...$row['entry']->toArray(), 'age_days' => $row['age'], 'age_unknown' => $row['unknown']],
-                $page,
-            ),
-        ], sprintf('%d debt(s) recorded, %d returned, counted from %s.', $total, count($page), $asOf))->toResponse();
+            ...$page->toArray('debts'),
+        ], sprintf('%d debt(s) recorded, %d returned, counted from %s.', $page->total, count($page->rows), $asOf))->toResponse();
     }
 
     /** @return array<string, list<string>> */
@@ -160,7 +159,7 @@ final class GetDebtLedgerTool extends SqlensTool
             'min_age_days' => $schema->integer()->description('Only debts at least this many days old.'),
             'kind' => $schema->string()->description('Only debts of this kind, for example "not_valid_constraint".'),
             'as_of' => $schema->string()->description('The UTC date (YYYY-MM-DD) ages are counted from. Defaults to the newest entry in the ledger, never to the current time, so two runs over one file agree.'),
-            'limit' => $schema->integer()->description('At most this many debts in one answer.'),
+            'limit' => $schema->integer()->description('At most this many debts in one answer. The project\'s own ceiling still applies, and a capped answer says so.'),
             'offset' => $schema->integer()->description('Skip this many debts, for paging through a long account.'),
         ];
     }
@@ -222,15 +221,5 @@ final class GetDebtLedgerTool extends SqlensTool
 
             return ! is_string($kind) || $row['entry']->kind === $kind;
         }));
-    }
-
-    /** The project's ceiling on how much one answer may carry. */
-    private function maxFindings(Repository $config): int
-    {
-        $configured = $config->get('sqlens.agent.mcp.max_findings');
-
-        return is_int($configured) && $configured >= 1 && $configured <= ConfigSchema::MCP_MAX_FINDINGS_CEILING
-            ? $configured
-            : 200;
     }
 }

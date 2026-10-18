@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Agent\Mcp;
 
+use Illuminate\Contracts\Config\Repository;
+use Pushery\SQLens\Config\ConfigSchema;
+
 /**
  * One page of a long answer, and the one shape every tool uses to say it is a page.
  *
@@ -31,6 +34,9 @@ final readonly class ReportPage
     public const string BY_CEILING = 'capped at the project ceiling (agent.mcp.max_findings)';
 
     public const string COMPLETE = 'nothing was left out';
+
+    /** What one answer carries when the project sets no ceiling, or one the configuration refuses. */
+    public const int DEFAULT_CEILING = 200;
 
     /**
      * @param  list<array<mixed>>  $rows
@@ -71,8 +77,26 @@ final readonly class ReportPage
         );
     }
 
-    /** @return array<string, mixed> */
-    public function toArray(): array
+    /**
+     * The project's ceiling on how much one answer may carry, read here for every tool.
+     *
+     * A value the configuration schema refuses, below 1 or above
+     * {@see ConfigSchema::MCP_MAX_FINDINGS_CEILING}, is not used, and the default applies.
+     */
+    public static function ceiling(Repository $config): int
+    {
+        $configured = $config->get('sqlens.agent.mcp.max_findings');
+
+        return is_int($configured) && $configured >= 1 && $configured <= ConfigSchema::MCP_MAX_FINDINGS_CEILING
+            ? $configured
+            : self::DEFAULT_CEILING;
+    }
+
+    /**
+     * @param  string  $key  the key the rows go under: `findings`, or `debts` for the debt ledger
+     * @return array<string, mixed>
+     */
+    public function toArray(string $key = 'findings'): array
     {
         return [
             'total' => $this->total,
@@ -80,7 +104,7 @@ final readonly class ReportPage
             'offset' => $this->offset,
             'truncated' => $this->truncated,
             'truncation_reason' => $this->reason,
-            'findings' => $this->rows,
+            $key => $this->rows,
         ];
     }
 }

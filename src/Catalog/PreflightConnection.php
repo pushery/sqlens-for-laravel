@@ -64,7 +64,7 @@ final readonly class PreflightConnection
      * 2. `sqlens.connection` — the audit connection, when one is configured. A project that already
      *    told this package which connection to read has answered the question once.
      * 3. Nothing. NOT `database.default`, and that is the whole point: falling through to it is
-     *    exactly the silent use of the migration connection this ticket exists to prevent.
+     *    exactly the silent use of the migration connection this resolution exists to prevent.
      */
     public static function resolve(Repository $config): self
     {

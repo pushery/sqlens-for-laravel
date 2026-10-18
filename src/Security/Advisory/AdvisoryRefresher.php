@@ -148,7 +148,7 @@ final readonly class AdvisoryRefresher
      */
     private function replace(string $target, string $body): AdvisoryRefreshOutcome
     {
-        $fetched = EolRepository::forDocument($body, 'the advisory source');
+        $fetched = EolRepository::forDocument($body, 'the response');
 
         if (! $fetched->data instanceof EolData) {
             return AdvisoryRefreshOutcome::refused(sprintf(

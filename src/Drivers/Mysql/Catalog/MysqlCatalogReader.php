@@ -943,9 +943,6 @@ final readonly class MysqlCatalogReader implements CatalogReader
                    c.CONSTRAINT_NAME    AS `name`,
                    c.CONSTRAINT_TYPE    AS constraint_type,
                    c.ENFORCED           AS enforced,
-                   r.UPDATE_RULE        AS on_update,
-                   r.DELETE_RULE        AS on_delete,
-                   r.REFERENCED_TABLE_NAME AS referenced_table,
                    -- The constraint's own columns, in the order it declares them. A foreign key is
                    -- covered only by an index whose LEFT PREFIX is this list, so the order is the
                    -- fact rather than a detail — hence ORDER BY ORDINAL_POSITION and not by name.
@@ -963,18 +960,17 @@ final readonly class MysqlCatalogReader implements CatalogReader
                      WHERE u.CONSTRAINT_SCHEMA = c.CONSTRAINT_SCHEMA
                        AND u.CONSTRAINT_NAME = c.CONSTRAINT_NAME
                        AND u.TABLE_NAME = c.TABLE_NAME
-                       AND u.REFERENCED_COLUMN_NAME IS NOT NULL) AS referenced_columns,
-                   r.UNIQUE_CONSTRAINT_SCHEMA AS referenced_schema
+                       AND u.REFERENCED_COLUMN_NAME IS NOT NULL) AS referenced_columns
             FROM information_schema.TABLE_CONSTRAINTS c
-            LEFT JOIN information_schema.REFERENTIAL_CONSTRAINTS r
-                   ON r.CONSTRAINT_SCHEMA = c.CONSTRAINT_SCHEMA
-                  AND r.CONSTRAINT_NAME = c.CONSTRAINT_NAME
-                  AND r.TABLE_NAME = c.TABLE_NAME
             WHERE c.CONSTRAINT_SCHEMA IN (SCHEMA_LIST)
             ORDER BY c.CONSTRAINT_SCHEMA, c.TABLE_NAME, c.CONSTRAINT_NAME
             SQL, $schemas);
 
-        return array_map(function (array $row) use ($canonicalizer): SchemaObject {
+        $referential = $this->referentialHalves($reader, $schemas);
+
+        return array_map(function (array $row) use ($canonicalizer, $referential): SchemaObject {
+            // A foreign key's actions and target, read apart; any other kind of constraint has none.
+            $row += $referential[$this->constraintKey($row)] ?? [];
             $relation = $canonicalizer->qualified($this->str($row, 'schema'), $this->str($row, 'relation'));
 
             return new SchemaObject(
@@ -1005,6 +1001,56 @@ final readonly class MysqlCatalogReader implements CatalogReader
                 $this->subjectContext,
             );
         }, $rows);
+    }
+
+    /**
+     * The referential half of every foreign key in scope, keyed like {@see constraintKey()}.
+     *
+     * Read apart from the constraints and attached by key, because joined to `TABLE_CONSTRAINTS`
+     * MySQL evaluates this view again for every constraint. Measured on MySQL 8.0.36: the joined
+     * query took 1.0 s over 1 000 tables and 8.9 s over 3 000, past the five seconds a catalog
+     * statement may run, while the two reads apart took 0.09 s and 0.2 s for the same rows.
+     *
+     * @param  list<string>  $schemas
+     * @return array<string, array<string, scalar|null>>
+     */
+    private function referentialHalves(Connection $reader, array $schemas): array
+    {
+        $rows = $this->rows($reader, <<<'SQL'
+            SELECT CONSTRAINT_SCHEMA        AS `schema`,
+                   TABLE_NAME               AS relation,
+                   CONSTRAINT_NAME          AS `name`,
+                   UPDATE_RULE              AS on_update,
+                   DELETE_RULE              AS on_delete,
+                   REFERENCED_TABLE_NAME    AS referenced_table,
+                   UNIQUE_CONSTRAINT_SCHEMA AS referenced_schema
+            FROM information_schema.REFERENTIAL_CONSTRAINTS
+            WHERE CONSTRAINT_SCHEMA IN (SCHEMA_LIST)
+            SQL, $schemas);
+
+        $halves = [];
+
+        foreach ($rows as $row) {
+            $halves[$this->constraintKey($row)] = [
+                'on_update' => $row['on_update'] ?? null,
+                'on_delete' => $row['on_delete'] ?? null,
+                'referenced_table' => $row['referenced_table'] ?? null,
+                'referenced_schema' => $row['referenced_schema'] ?? null,
+            ];
+        }
+
+        return $halves;
+    }
+
+    /**
+     * A constraint's identity across the two reads: schema, table and name, which MySQL keeps
+     * unique together, since every primary key is called `PRIMARY`.
+     *
+     * @param  array<string, scalar|null>  $row
+     */
+    private function constraintKey(array $row): string
+    {
+        return $this->str($row, 'schema')."\0".$this->str($row, 'relation')."\0".$this->str($row, 'name');
     }
 
     /**

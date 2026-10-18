@@ -137,8 +137,8 @@ final class UnresolvableRuleCatalog extends RuntimeException
             .$joined,
         );
 
-        // The one refusal the localization ticket names by hand, and the pattern the rest follow
-        // when they are keyed: the violation text is passed through as a replacement rather than
+        // The one refusal that carries a translation key, and the pattern the rest follow when
+        // they are keyed: the violation text is passed through as a replacement rather than
         // translated, because it names a rule id and a config path — coordinates, not prose.
         $refusal->translationKey = 'agent_rules_unknown_ignore_rule';
         $refusal->replacements = ['violations' => $joined];

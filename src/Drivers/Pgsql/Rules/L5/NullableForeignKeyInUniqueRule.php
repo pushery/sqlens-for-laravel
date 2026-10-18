@@ -36,7 +36,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * reasoning for each lives in {@see NullableKeyMember}; the short version is that a key made
  * entirely of foreign keys is a RELATIONSHIP, and a relationship with a missing side is not one.
  *
- * ## The ticket asked for `preview`; it ships STABLE, and that is not a slip
+ * ## Stable rather than `preview`, and that is not a slip
  *
  * The preview tier exists so a rule added in a release cannot start failing somebody's pipeline
  * over code nobody touched. Before 1.0 a new rule arrives in a minor, which a `^0.N` constraint
@@ -46,7 +46,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * Overriding it here would add this rule to the exceptions that guard carries, each with a reason
  * of its own, and would put a second answer to "what tier does a new rule get" in the codebase. The
- * ticket's reason for asking was false-positive risk rather than the versioning contract, and that
+ * case for `preview` here would be false-positive risk rather than the versioning contract, and that
  * risk is answered where it belongs: in how narrowly the trigger is cut.
  */
 final class NullableForeignKeyInUniqueRule extends AbstractCatalogRule implements DeclaresJudgedObjectTypes
@@ -73,7 +73,7 @@ final class NullableForeignKeyInUniqueRule extends AbstractCatalogRule implement
     }
 
     /**
-     * Idiom, as the ticket specifies, and the counter-argument is worth recording rather than
+     * Idiom, as specified, and the counter-argument is worth recording rather than
      * silently overruling: what this reports is a constraint that does not constrain, which reads
      * more like safety than like appetite. It stays `idiom` because the finding is about a schema
      * SHAPE somebody may have chosen deliberately, and because a preview rule gates on opt-in

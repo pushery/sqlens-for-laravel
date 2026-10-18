@@ -455,8 +455,10 @@ return [
              *
              * A value BELOW an hour is raised to an hour rather than honored. Lowering it trades a
              * disk-space annoyance for the one mistake this path must never make.
+             *
+             * SQLENS_SHADOW_ORPHAN_AFTER_SECONDS sets it from the environment, like the other bounds.
              */
-            'orphan_after_seconds' => 3600,
+            'orphan_after_seconds' => EnvironmentInteger::atLeastOne(env('SQLENS_SHADOW_ORPHAN_AFTER_SECONDS'), 3600),
 
             // The prefix of the throwaway database name. Only [a-z0-9_].
             'database_prefix' => 'sqlens_shadow_',
@@ -1536,6 +1538,10 @@ return [
              * It READS an artifact a previous run wrote; it never runs the checks again. An agent
              * asking "what did the last run find" must not be able to start a database run by
              * asking, and a second run would answer about a different moment anyway.
+             *
+             * The report is written by `sqlens:lint --format=json --output=<this path>`, or by
+             * `sqlens:audit` and `sqlens:security` with `--output`. `lint_pending` answers with a
+             * fresh run and writes nothing.
              */
             'findings_path' => 'sqlens-report.json',
 

@@ -100,7 +100,8 @@ final readonly class UndeterminedCaptureRule implements CaptureRule
             Location::inMigration(
                 $result->file,
                 $result->migrationClass,
-                0,
+                // The statement that made the migration undetermined, where one did.
+                $result->failureStatementIndex ?? 0,
                 $result->section->direction(),
                 $projectRoot,
             ),

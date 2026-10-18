@@ -133,10 +133,18 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
             foreach ($statements as [$each, $substituted]) {
                 // Numbered as they come: an entry that held three statements moves every later one
                 // along, so a sequence stays a statement's place in what the migration runs.
-                $rendered = $this->canonicalizeStatement($result, $each->withSequence(count($canonicalized)), $substituted);
+                $sequence = count($canonicalized);
+                $rendered = $this->canonicalizeStatement($result, $each->withSequence($sequence), $substituted);
 
-                if (! $rendered instanceof CapturedStatement) {
-                    return $this->undetermined($result, $rendered);
+                // Which statement, and why: "a statement could not be canonicalized" for a migration of
+                // twenty leaves the reader to guess at both.
+                if ($rendered instanceof CanonicalizationFailure) {
+                    return $this->undetermined(
+                        $result,
+                        UndeterminedReason::UncanonicalizableStatement,
+                        sprintf('statement %d could not be canonicalized (%s): %s', $sequence + 1, $rendered->reason->value, $rendered->detail),
+                        $sequence,
+                    );
                 }
 
                 $canonicalized[] = $rendered;
@@ -161,7 +169,7 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
      * The whole migration as undetermined, for the reason one of its statements could not be rendered,
      * and what this run learned about it when there is something to say.
      */
-    private function undetermined(CaptureResult $result, UndeterminedReason $reason, ?string $detail = null): CaptureResult
+    private function undetermined(CaptureResult $result, UndeterminedReason $reason, ?string $detail = null, ?int $statementIndex = null): CaptureResult
     {
         return CaptureResult::undetermined(
             $result->file,
@@ -171,6 +179,7 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
             $reason,
             annotationClass: $result->annotationClass,
             detail: $detail,
+            statementIndex: $statementIndex,
         );
     }
 
@@ -226,7 +235,7 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
      * The text travels beside the statement as a string rather than being read back off its nullable
      * field, so there is never raw grammar output with placeholders in it to fall back to.
      */
-    private function canonicalizeStatement(CaptureResult $result, CapturedStatement $statement, string $substituted): CapturedStatement|UndeterminedReason
+    private function canonicalizeStatement(CaptureResult $result, CapturedStatement $statement, string $substituted): CapturedStatement|CanonicalizationFailure
     {
         $raw = new RawStatement(
             sql: $substituted,
@@ -242,7 +251,7 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
         $canonical = $this->canonicalizer->canonicalizeRaw($raw, $this->context);
 
         if (! $canonical instanceof CanonicalStatement) {
-            return UndeterminedReason::UncanonicalizableStatement;
+            return $canonical;
         }
 
         $enriched = $statement

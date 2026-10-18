@@ -102,19 +102,23 @@ final readonly class ServerVersion
         return sprintf('%d.%d.%d', $this->major, $this->minor, $this->patch);
     }
 
-    /** Numeric comparison key: major, minor and patch each get four digits so 18.10 sorts above 18.9. */
-    private function comparable(): int
+    /**
+     * The order against another version: major first, then minor, then patch, each compared as a
+     * number. So 18.10 sorts above 18.9, and no minor or patch, however many digits a pin gives it,
+     * reaches the next major.
+     */
+    private function compareTo(self $other): int
     {
-        return ($this->major * 1_000_000) + ($this->minor * 1_000) + $this->patch;
+        return $this->major <=> $other->major ?: $this->minor <=> $other->minor ?: $this->patch <=> $other->patch;
     }
 
     public function atLeast(self $other): bool
     {
-        return $this->comparable() >= $other->comparable();
+        return $this->compareTo($other) >= 0;
     }
 
     public function isBelow(self $other): bool
     {
-        return $this->comparable() < $other->comparable();
+        return $this->compareTo($other) < 0;
     }
 }

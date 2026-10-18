@@ -26,9 +26,10 @@ use Pushery\SQLens\Agent\Mcp\McpProtocol;
  *
  * ## Why this class exists at all
  *
- * The SDK negotiates too, but against every revision IT knows: asked for a newer one it recognizes,
- * it answers with that one, from a build that implements `2025-06-18`. The client would get a
- * message shape it did not ask for and has no reason to doubt. So the SDK is handed the revision
+ * The SDK negotiates too, but against the two revisions its own `initialize` knows, `2025-11-25` and
+ * `2025-06-18`: asked for one of them it answers with that one, and asked for any other it answers
+ * with `2025-11-25`, from a build that implements `2025-06-18`. The client would get a message shape
+ * it did not ask for and has no reason to doubt. So the SDK is handed the revision
  * this server chose, and what it answers is checked against that choice.
  *
  * ## Two refusals, and neither is about a revision the client prefers

@@ -75,6 +75,12 @@ final readonly class CaptureResult
          * @var array<string, string>
          */
         public array $declaredEmptyOn = [],
+        /**
+         * The 0-based place, in what the migration runs, of the statement that made an undetermined
+         * result undetermined, where one statement did. Null where the reason is about the whole
+         * migration.
+         */
+        public ?int $failureStatementIndex = null,
     ) {}
 
     /**
@@ -102,6 +108,7 @@ final readonly class CaptureResult
             $clone->downMethodState,
             $downLeg,
             $clone->declaredEmptyOn,
+            $clone->failureStatementIndex,
         );
     }
 
@@ -130,6 +137,7 @@ final readonly class CaptureResult
             $state,
             $clone->downLeg,
             $clone->declaredEmptyOn,
+            $clone->failureStatementIndex,
         );
     }
 
@@ -160,6 +168,7 @@ final readonly class CaptureResult
             $clone->downMethodState,
             $clone->downLeg,
             $declaredEmptyOn,
+            $clone->failureStatementIndex,
         );
     }
 
@@ -230,8 +239,9 @@ final readonly class CaptureResult
         array $preScanHits = [],
         ?string $annotationClass = null,
         ?string $detail = null,
+        ?int $statementIndex = null,
     ): self {
-        return new self($file, $migrationClass, [], $section, $mode, Outcome::Undetermined, $reason, $detail, $preScanHits, $annotationClass);
+        return new self($file, $migrationClass, [], $section, $mode, Outcome::Undetermined, $reason, $detail, $preScanHits, $annotationClass, failureStatementIndex: $statementIndex);
     }
 
     public function isPass(): bool

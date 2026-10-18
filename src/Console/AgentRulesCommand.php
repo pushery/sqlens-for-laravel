@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Console;
 
 use Illuminate\Console\Command;
+use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Translation\Translator;
 use Illuminate\Filesystem\Filesystem;
@@ -60,6 +61,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 final class AgentRulesCommand extends Command
 {
+    use ResolvesProfile;
     use ValidatesConfig;
 
     /**
@@ -77,7 +79,8 @@ final class AgentRulesCommand extends Command
         {--target=all : Which agent context to write — claude, cursor, copilot, or all}
         {--output= : Write the artifact to this path instead of the target’s default; only with a single --target}
         {--check : Report whether every artifact is current, write nothing, and exit non-zero on a deviation}
-        {--dry-run : Print what would be written without touching a file}';
+        {--dry-run : Print what would be written without touching a file}
+        {--profile= : The environment profile — local, ci or predeploy — whose settings the artifacts describe. Overrides SQLENS_PROFILE and the configured profile}';
 
     /** @var string */
     protected $description = 'Write the active rule set into this project’s coding-agent context files';
@@ -89,6 +92,7 @@ final class AgentRulesCommand extends Command
         Translator $translator,
         Application $app,
         Redactor $redactor,
+        Repository $config,
     ): int {
         // FIRST, before the reporter, before the profile, before anything opens a connection. A
         // misconfiguration that surfaces after twenty seconds of catalog reading is one people
@@ -97,10 +101,21 @@ final class AgentRulesCommand extends Command
             return ExitCode::Misconfiguration->value;
         }
 
+        // The artifacts describe what a run applies, and a run applies its profile's settings: a
+        // `ci` that raises the level has to raise it here too, or the guidance names fewer rules
+        // than the pipeline enforces. The resolver reads the settings once they are applied.
+        $profile = $this->resolveProfile($config);
+
+        if ($profile->profile === null) {
+            $this->stderr()->writeln($this->profileRejectionMessage($profile));
+
+            return ExitCode::Misconfiguration->value;
+        }
+
         $targets = $this->targets();
 
         if ($targets === null) {
-            $this->stderr()->writeln($this->translate($translator, 'agent_rules_unknown_target', [
+            $this->stderr()->writeln($this->sentence($translator, 'agent_rules_unknown_target', [
                 'target' => (string) $this->option('target'),
                 'known' => 'claude, cursor, copilot, all',
             ]));
@@ -113,7 +128,7 @@ final class AgentRulesCommand extends Command
         if ($override !== null && count($targets) > 1) {
             // One path cannot hold three artifacts, and picking one silently would write two of
             // them nowhere. Named, because the person who typed it meant something specific.
-            $this->stderr()->writeln($this->translate($translator, 'agent_rules_output_needs_one_target'));
+            $this->stderr()->writeln($this->sentence($translator, 'agent_rules_output_needs_one_target'));
 
             return ExitCode::Misconfiguration->value;
         }
@@ -127,7 +142,7 @@ final class AgentRulesCommand extends Command
             // printing its English sentence is better than printing an unresolved key at somebody.
             $this->stderr()->writeln(
                 $refusal instanceof UnresolvableRuleCatalog && $refusal->translationKey !== null
-                    ? $this->translate($translator, $refusal->translationKey, $refusal->replacements ?? [])
+                    ? $this->sentence($translator, $refusal->translationKey, $refusal->replacements ?? [])
                     : $refusal->getMessage(),
             );
 
@@ -171,7 +186,7 @@ final class AgentRulesCommand extends Command
         ));
 
         foreach ($escaping as $relative) {
-            $this->stderr()->writeln($this->translate($translator, 'agent_rules_outside_project', ['path' => $relative]));
+            $this->stderr()->writeln($this->sentence($translator, 'agent_rules_outside_project', ['path' => $relative]));
         }
 
         if ($escaping !== []) {
@@ -193,7 +208,7 @@ final class AgentRulesCommand extends Command
             if ($check) {
                 if ($desired !== $existing) {
                     $deviations++;
-                    $this->stderr()->writeln($this->translate($translator, $existing === null
+                    $this->stderr()->writeln($this->sentence($translator, $existing === null
                         ? 'agent_rules_check_missing'
                         : 'agent_rules_check_stale', ['path' => $relative]));
                 }
@@ -202,7 +217,7 @@ final class AgentRulesCommand extends Command
             }
 
             ArtifactWriting::write($files, $absolute, $desired);
-            $this->line($this->translate($translator, 'agent_rules_written', ['path' => $relative]));
+            $this->line($this->sentence($translator, 'agent_rules_written', ['path' => $relative]));
         }
 
         if ($check) {
@@ -244,7 +259,7 @@ final class AgentRulesCommand extends Command
     /** The clean `--check` result, said out loud rather than left as an empty success. */
     private function reportCurrent(Translator $translator, int $count): int
     {
-        $this->line($this->translate($translator, 'agent_rules_check_current', ['count' => $count]));
+        $this->line($this->sentence($translator, 'agent_rules_check_current', ['count' => $count]));
 
         return ExitCode::Clean->value;
     }
@@ -330,7 +345,7 @@ final class AgentRulesCommand extends Command
     }
 
     /** @param  array<string, int|string>  $replace */
-    private function translate(Translator $translator, string $key, array $replace = []): string
+    private function sentence(Translator $translator, string $key, array $replace = []): string
     {
         $line = $translator->get('sqlens::messages.commands.'.$key, $replace, ShippedLocale::CODE);
 

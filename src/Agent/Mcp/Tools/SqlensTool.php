@@ -11,12 +11,19 @@ use Override;
 /**
  * Every SQLens MCP tool, and the two things the SDK does not give one.
  *
- * ## 1. It declares whether it changes anything
+ * ## 1. It declares whether it ships off
  *
- * `mutating()` is abstract, so a tool cannot be written without answering. The registry reads it to
- * decide what ships on; the configuration reads the same answer to decide what a project may turn
- * on. A flag that could be inferred — from a name, from a base class — would be a guess about the
- * one property that decides whether an agent can alter a database.
+ * `mutating()` is abstract, so a tool cannot be written without answering. The answer is stated
+ * twice on purpose: here, by the tool that knows, and in `ConfigSchema::MCP_MUTATING_TOOLS`, which
+ * the policy and the configuration read, because which tools are dangerous must not depend on
+ * loading the tool classes. `ToolRegistryTest` holds the two together. A flag that could be
+ * inferred — from a name, from a base class — would be a guess about the one property that decides
+ * whether an agent can reach a database a project did not hand it.
+ *
+ * What a tool does to its world reaches the client separately, as the MCP annotations each tool
+ * class carries: read-only for every tool that writes nothing, destructive for the one that
+ * creates and drops databases. Mutating is about reach as well as writes, so the two differ for
+ * `predeploy`, which writes nothing and reads the production database.
  *
  * ## 2. Its published schema is CLOSED
  *
@@ -40,10 +47,11 @@ use Override;
 abstract class SqlensTool extends Tool
 {
     /**
-     * Whether calling this tool can change anything — a database, a file, a deployment.
+     * Whether this tool ships off and is enabled by name: it changes something, a database, a file or a
+     * deployment, or it reaches a database a project decides on by name.
      *
-     * The registry ships a mutating tool OFF and requires it to be enabled by name. Nothing infers
-     * this: it is stated by the tool that knows.
+     * Nothing infers this: it is stated by the tool that knows, and `ConfigSchema::MCP_MUTATING_TOOLS`
+     * states the same set for the policy and the configuration.
      */
     abstract public function mutating(): bool;
 
@@ -127,6 +135,10 @@ abstract class SqlensTool extends Tool
      * of six words — so an honest client cannot tell what to send, and the schema promises more
      * freedom than the tool allows. One source, projected into both places.
      *
+     * Projected: `in:` as an enum, `min:` and `max:` as bounds, a plain `regex:` as a pattern and
+     * `date_format:Y-m-d` as the date format. `not_regex:` stays a rule only, because a pattern
+     * cannot say what a value must not contain.
+     *
      * @param  array<string, mixed>  $properties
      * @return array<string, mixed>
      */
@@ -153,9 +165,32 @@ abstract class SqlensTool extends Tool
                 if (str_starts_with($rule, 'min:') && ($properties[$parameter]['type'] ?? null) === 'integer') {
                     $properties[$parameter]['minimum'] = (int) substr($rule, 4);
                 }
+
+                $pattern = str_starts_with($rule, 'regex:') ? $this->schemaPattern(substr($rule, 6)) : null;
+
+                if ($pattern !== null && ($properties[$parameter]['type'] ?? null) === 'string') {
+                    $properties[$parameter]['pattern'] = $pattern;
+                }
+
+                if ($rule === 'date_format:Y-m-d' && ($properties[$parameter]['type'] ?? null) === 'string') {
+                    $properties[$parameter]['format'] = 'date';
+                }
             }
         }
 
         return $properties;
+    }
+
+    /**
+     * A validation regex as a JSON Schema `pattern`, or null where it cannot be one.
+     *
+     * Only the plain form is carried: an expression between slashes with no modifier, built from the
+     * anchors, character classes and alternatives the tools use, which the ECMAScript dialect of JSON
+     * Schema reads the same way. A modifier would change the meaning of the body, so such a rule stays a
+     * rule only.
+     */
+    private function schemaPattern(string $regex): ?string
+    {
+        return preg_match('#^/(.+)/$#s', $regex, $body) === 1 ? $body[1] : null;
     }
 }

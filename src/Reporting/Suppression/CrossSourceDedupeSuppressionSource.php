@@ -60,7 +60,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ## And why this suppresses rather than merges
  *
- * The ticket asked for a merged finding carrying `sources: [lint, audit]`. That is a second model for
+ * The other option was a merged finding carrying `sources: [lint, audit]`. That is a second model for
  * a problem this package already answers: a duplicate is suppressed and SHOWN as suppressed, with
  * the rule that owns it named — the promise the published optional-analyzers page makes for foreign
  * tools, made here for our own two halves. It keeps both records intact instead of synthesizing a

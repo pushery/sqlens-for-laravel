@@ -89,11 +89,13 @@ use Symfony\Component\Console\Output\ConsoleOutputInterface;
  */
 final class DriftCommand extends Command
 {
+    use ResolvesProfile;
     use ValidatesConfig;
 
     protected $signature = 'sqlens:drift
         {--connection= : The connection to compare; the application default when omitted}
         {--format= : The report format — console, json, github, sarif, or agent (defaults to the configured format)}
+        {--profile= : The environment profile — local, ci or predeploy. Unset, this command uses ci: it belongs in CI, outside the deploy window. SQLENS_PROFILE and a configured profile still win over that}
         {--fail-on-drift : Exit non-zero when the two sides disagree — off unless named}
         {--allow-undetermined : In gate mode, exit clean when the ONLY thing blocking is what could not be read}
         {--exclude-file= : The differences this project has accepted; the configured path when omitted}
@@ -142,6 +144,22 @@ final class DriftCommand extends Command
 
             return ExitCode::Misconfiguration->value;
         }
+
+        // Resolved with the other up-front refusals, before anything reaches a database. Unset, the
+        // profile is `ci`: this command belongs in CI or beside it, outside the deploy window. A flag,
+        // SQLENS_PROFILE or a configured profile outranks that default, and the run header and the
+        // findings both read the one name resolved here, with that profile's settings applied.
+        $profile = $this->resolveProfile($config, 'ci');
+
+        // Narrowed on the property rather than through `isValid()`: a method returning bool tells the
+        // analyzer nothing about the nullable property the context below reads.
+        if ($profile->profile === null) {
+            $this->outputErrorLine($this->profileRejectionMessage($profile));
+
+            return ExitCode::Misconfiguration->value;
+        }
+
+        $profileName = $profile->profile;
 
         $builder = $captors->shadowReference($connectionName, $connections, $readers);
 
@@ -199,7 +217,7 @@ final class DriftCommand extends Command
         // Found by the first test that ran this command against a real database.
         $context = new SubjectContext(
             driver: $this->driver($config, $connectionName),
-            profile: $this->profile($config),
+            profile: $profileName,
             strictTools: false,
         );
 
@@ -503,13 +521,6 @@ final class DriftCommand extends Command
         $driver = EffectiveConnectionConfig::driverForConnection($config, $connectionName);
 
         return is_string($driver) ? $driver : '';
-    }
-
-    private function profile(Repository $config): string
-    {
-        $profile = $config->get('sqlens.profile');
-
-        return is_string($profile) ? $profile : 'ci';
     }
 
     private function outputErrorLine(string $message): void

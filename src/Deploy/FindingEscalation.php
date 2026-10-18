@@ -80,20 +80,26 @@ final readonly class FindingEscalation
             return new EscalationOutcome($findings);
         }
 
+        // The budget the run has LEFT, not a fresh one. A preflight holds one deadline across every
+        // check, and a read that started its own would let the escalation overrun a bound the rest
+        // of the run is honoring, in front of a deploy.
+        $budget = $context->remainingBudgetMs();
+
+        // Spent by the checks before this one, and a request with nothing left cannot be built. The
+        // objects go unweighed, and the run says why: those checks all finished in time, so none of
+        // them reports anything about it.
+        if ($budget <= 0) {
+            return new EscalationOutcome($findings, [$this->unreadFinding($objects, $context, UndeterminedReason::RunTimeBudgetExhausted)]);
+        }
+
         try {
-            $snapshot = $context->statistics->read(new StatisticsRequest(
-                objects: $objects,
-                // The budget the run has LEFT, not a fresh one. A preflight holds one deadline across
-                // every check, and a read that started its own would let the escalation overrun a
-                // bound the rest of the run is honoring, in front of a deploy.
-                budgetMilliseconds: $context->remainingBudgetMs(),
-            ));
+            $snapshot = $context->statistics->read(new StatisticsRequest(objects: $objects, budgetMilliseconds: $budget));
         } catch (Throwable) {
             // Unreadable statistics are not a reason to fail a deploy gate: the findings stand at the
             // severity lint gave them, which is what a run without a database would have reported
-            // anyway. The catalog checks report their own inability separately and by name, so the
-            // absence is still visible — once, rather than twice as two problems.
-            return new EscalationOutcome($findings);
+            // anyway. They are not a reason to say nothing either: every object the reading was asked
+            // about goes unweighed, and a reader has to be able to tell that from a small table.
+            return new EscalationOutcome($findings, [$this->unreadFinding($objects, $context, UndeterminedReason::ObjectStatisticsUnread, readFailed: true)]);
         }
 
         $weighed = array_map(
@@ -139,27 +145,45 @@ final readonly class FindingEscalation
      * saying the same sentence about twelve tables is the shape people switch off; one that names
      * twelve tables is the shape they act on.
      *
+     * Three causes, and the first words of the message say which: the reading came back without
+     * an object, the reading failed, or the run's time budget was spent before it could start.
+     *
      * @param  list<string>  $objects
      */
-    private function unreadFinding(array $objects, PreflightContext $context): Finding
-    {
+    private function unreadFinding(
+        array $objects,
+        PreflightContext $context,
+        UndeterminedReason $reason = UndeterminedReason::ObjectStatisticsUnread,
+        bool $readFailed = false,
+    ): Finding {
         sort($objects);
+
+        $what = count($objects) === 1 ? 'one object' : count($objects).' objects';
+        $cause = match (true) {
+            $reason === UndeterminedReason::RunTimeBudgetExhausted => "The run's time budget was spent before the statistics reading could ask about {$what}",
+            $readFailed => "The statistics reading failed before it answered for {$what}",
+            default => "The statistics reading came back without {$what}",
+        };
+        // The ANALYZE advice fits an object the reading came back without, and only that.
+        $remedy = $reason === UndeterminedReason::ObjectStatisticsUnread && ! $readFailed
+            ? ' A table nobody has run ANALYZE on is the commonest cause, and running it is the fix.'
+            : '';
 
         return Finding::undetermined(
             self::UNREAD_ID,
             DeployNotice::MESSAGE_PREFIX,
             sprintf(
-                'The statistics reading came back without %s, so the findings about %s could not be '
-                .'weighed against %s size: %s. Every verdict still stands exactly as `sqlens:lint` '
-                .'produced it — what is missing is only the raise a large object would have earned, '
-                .'which means a real problem here can be reported quieter than it deserves. A table '
-                .'nobody has run ANALYZE on is the commonest cause, and running it is the fix.',
-                count($objects) === 1 ? 'one object' : count($objects).' objects',
+                '%s, so the findings about %s could not be weighed against %s size: %s. Every verdict '
+                .'still stands exactly as `sqlens:lint` produced it — what is missing is only the raise '
+                .'a large object would have earned, which means a real problem here can be reported '
+                .'quieter than it deserves.%s',
+                $cause,
                 count($objects) === 1 ? 'it' : 'them',
                 count($objects) === 1 ? 'its' : 'their',
                 implode(', ', $objects),
+                $remedy,
             ),
-            UndeterminedReason::ObjectStatisticsUnread,
+            $reason,
             Location::inCatalog($context->driver, $context->connection, $objects[0], SchemaObjectType::Table),
             Category::Safety,
             Level::Capturable,

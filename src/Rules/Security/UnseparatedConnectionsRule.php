@@ -97,7 +97,7 @@ final class UnseparatedConnectionsRule extends AbstractSchemaObjectSecurityRule 
             ))];
         }
 
-        // ── TWO NAMES ARE NOT TWO IDENTITIES ────────────────────────────────────────────────────
+        // Two names are not two identities.
         //
         // Everything above compares the names a project filed its connections under. A second entry
         // in config/database.php pointing at the same user, host and database is a separation that

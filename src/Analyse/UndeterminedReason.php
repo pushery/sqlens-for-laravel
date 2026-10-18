@@ -14,9 +14,9 @@ namespace Pushery\SQLens\Analyse;
  *
  * ## Two reasons, and the two that are deliberately NOT here
  *
- * The planning ticket sketched four names. Two of them turned out to describe things this component
- * cannot or should not say, and inventing a case for them would have produced vocabulary that never
- * fires — the shape this package treats as a defect rather than as harmless spare capacity:
+ * Four names suggest themselves. Two of them describe things this component cannot or should not
+ * say, and a case for them would be vocabulary that never fires — the shape this package treats as
+ * a defect rather than as harmless spare capacity:
  *
  * - **`binding-array-dynamic`** — "the bindings array was built at runtime, so its size is unknown".
  *   Measured against the design, this is not doubt at all: when the SQL TEXT is constant, nothing

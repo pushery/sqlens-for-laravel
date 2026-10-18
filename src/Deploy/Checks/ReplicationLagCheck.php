@@ -16,6 +16,7 @@ use Pushery\SQLens\Findings\CredentialRedactor;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
+use Pushery\SQLens\Findings\Outcome;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
@@ -148,19 +149,42 @@ final readonly class ReplicationLagCheck implements PreflightCheck
             );
         }
 
-        $findings = [];
+        $failed = [];
+        $unreported = [];
 
         foreach ($snapshot->replication as $replica) {
             $finding = $this->judge($context, $replica);
 
-            if ($finding instanceof Finding) {
-                $findings[] = $finding;
+            if (! $finding instanceof Finding) {
+                continue;
+            }
+
+            if ($finding->status->outcome === Outcome::Undetermined) {
+                $unreported[] = $finding;
+            } else {
+                $failed[] = $finding;
             }
         }
 
-        return $findings === []
-            ? CheckResult::pass(self::ID)
-            : CheckResult::fail(self::ID, $findings);
+        // A replica that is behind or not streaming stops the deploy, and one whose lag is unreported travels with it.
+        if ($failed !== []) {
+            return CheckResult::fail(self::ID, [...$failed, ...$unreported]);
+        }
+
+        if ($unreported !== []) {
+            return CheckResult::undetermined(
+                self::ID,
+                UndeterminedReason::ReplicaLagUnreported,
+                sprintf(
+                    '%d replica(s) stream with WAL still to replay and the server reports no lag time for them, so '
+                    .'how far behind they are in seconds is unknown.',
+                    count($unreported),
+                ),
+                $unreported,
+            );
+        }
+
+        return CheckResult::pass(self::ID);
     }
 
     /**
@@ -209,7 +233,16 @@ final readonly class ReplicationLagCheck implements PreflightCheck
             );
         }
 
-        if ($replica->lagMs === null || $replica->lagMs <= $context->replicationLagMs) {
+        // PostgreSQL reports no replay lag once a standby has caught up and nothing is written, and none at all for a
+        // logical consumer whose output plugin sends no tracking messages. The WAL still to replay tells the two apart:
+        // none is caught up, and any is a distance this run cannot put in seconds.
+        if ($replica->lagMs === null) {
+            return $replica->lagBytes !== null && $replica->lagBytes > 0
+                ? $this->unreported($context, $replica->replica, $replica->lagBytes)
+                : null;
+        }
+
+        if ($replica->lagMs <= $context->replicationLagMs) {
             return null;
         }
 
@@ -231,6 +264,36 @@ final readonly class ReplicationLagCheck implements PreflightCheck
             // gets the same severity for the opposite reason — there, nothing is catching up.
             Severity::High,
         );
+    }
+
+    /**
+     * A streaming replica that still has WAL to replay and no lag time the server reports.
+     *
+     * Undetermined rather than behind or caught up: the bytes say it has work left, and nothing says how long that
+     * takes, so the run states the distance it can read and names what it cannot.
+     */
+    private function unreported(PreflightContext $context, string $replica, int $bytes): Finding
+    {
+        return Finding::undetermined(
+            ruleId: self::ID,
+            messagePrefix: DeployNotice::MESSAGE_PREFIX,
+            message: sprintf(
+                'The replica `%s` streams and still has %d bytes of WAL to replay, and the server reports no lag '
+                .'time for it, so how far behind it is in seconds is unknown. PostgreSQL reports none for a logical '
+                .'consumer whose output plugin sends no tracking messages, and none for a moment after a standby '
+                .'connects. Read the distance on the replica before the deploy adds to it.',
+                $replica,
+                $bytes,
+            ),
+            reason: UndeterminedReason::ReplicaLagUnreported,
+            location: Location::inCatalog($context->driver, $context->connection, $replica, SchemaObjectType::Setting),
+            category: Category::Safety,
+            level: Level::Capturable,
+            stability: StabilityTier::Stable,
+            documentationUrl: RuleDocumentationUrl::for(self::ID),
+            context: new SubjectContext(driver: $context->driver, profile: $context->profile, strictTools: false),
+            severity: Severity::High,
+        )->withDowntimeClass(DowntimeClass::Online);
     }
 
     private function finding(PreflightContext $context, string $replica, string $message, Severity $severity): Finding

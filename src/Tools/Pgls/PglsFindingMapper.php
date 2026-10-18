@@ -21,8 +21,8 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * ## It translates; it does not map onto SQLens rules
  *
  * A PGLS rule keeps its own identity under this package's prefix. It is deliberately NOT resolved
- * to the SQLens rule that says a similar thing — that correspondence is de-duplication, it belongs
- * to its own ticket, and doing it here would mean two mechanisms deciding what a finding is.
+ * to the SQLens rule that says a similar thing — that correspondence is de-duplication, a concern
+ * of its own, and doing it here would mean two mechanisms deciding what a finding is.
  *
  * ## Why the documentation link stays ours
  *
@@ -58,12 +58,15 @@ final readonly class PglsFindingMapper
      */
     public const Level LEVEL = Level::Capturable;
 
+    /** The page of this package every finding of the adapter links to, the one that describes the tool. */
+    public const string DOCUMENTATION_PAGE = 'tools/pgls';
+
     /**
      * Preview, like the Squawk adapter's findings and for the same reason: the identity of these
      * ids follows a tool this package does not control, so promising them at the stable tier would
      * be promising something on somebody else's behalf.
      */
-    private const StabilityTier STABILITY = StabilityTier::Preview;
+    public const StabilityTier STABILITY = StabilityTier::Preview;
 
     /**
      * The tool's severities, translated once.
@@ -75,7 +78,7 @@ final readonly class PglsFindingMapper
      * stand behind. Deferring to another tool's top rank for that would let an upstream re-rating
      * fail a build nobody changed.
      */
-    private const array SEVERITIES = [
+    public const array SEVERITIES = [
         PglsSeverity::Error->value => Severity::High,
         PglsSeverity::Warn->value => Severity::Medium,
         PglsSeverity::Info->value => Severity::Low,
@@ -112,7 +115,7 @@ final readonly class PglsFindingMapper
             self::CATEGORY,
             self::LEVEL,
             self::STABILITY,
-            DocumentationSite::page('tools/pgls'),
+            DocumentationSite::page(self::DOCUMENTATION_PAGE),
             $context,
             self::SEVERITIES[$rule->severity->value],
         );
@@ -145,7 +148,7 @@ final readonly class PglsFindingMapper
             self::CATEGORY,
             self::LEVEL,
             self::STABILITY,
-            DocumentationSite::page('tools/pgls'),
+            DocumentationSite::page(self::DOCUMENTATION_PAGE),
             $context,
         );
     }
@@ -167,7 +170,7 @@ final readonly class PglsFindingMapper
             self::CATEGORY,
             self::LEVEL,
             self::STABILITY,
-            DocumentationSite::page('tools/pgls'),
+            DocumentationSite::page(self::DOCUMENTATION_PAGE),
             $context,
         );
     }

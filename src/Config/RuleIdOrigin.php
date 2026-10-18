@@ -22,8 +22,8 @@ enum RuleIdOrigin: string
      *
      * They are different files' worth of decisions about different subjects, and a message that
      * called both "the ignore list" would send somebody to the wrong block. A lint rule id written
-     * into the audit list is one of the mistakes this ticket exists to catch, so the two must be
-     * distinguishable in the very message that reports it.
+     * into the audit list is one of the mistakes this distinction exists to catch, so the two must
+     * be distinguishable in the very message that reports it.
      */
     case AuditIgnore = 'audit_ignore';
 

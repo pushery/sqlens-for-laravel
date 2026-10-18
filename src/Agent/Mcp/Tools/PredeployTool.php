@@ -10,6 +10,7 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Name;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 use Override;
 use Pushery\SQLens\Agent\Mcp\McpConnection;
 use Pushery\SQLens\Agent\Mcp\ProfileRefusal;
@@ -48,26 +49,27 @@ use Pushery\SQLens\Reporting\RunContext;
  * ## `allow_undetermined` is a parameter, and it is VISIBLE
  *
  * Unlike the shadow tool's consent, this one belongs to the caller: it does not grant reach, it
- * decides what to do about a gate that could not answer, which is a per-run judgment a deploy
- * pipeline legitimately makes. What it must never be is invisible — so it is echoed in the answer
- * whether or not it changed anything, and a run that used it says so beside the verdict it produced.
+ * decides what to do about a gate that could not answer. What it must never be is invisible — so it
+ * is echoed in the answer whether or not it changed anything, and a run that used it says so beside
+ * the verdict it produced.
  *
- * ## Leaving the parameter out falls back to the project's declaration, and that is the whole point
+ * ## The project's declaration bounds the caller
  *
- * The parameter is the counterpart of the command's `--allow-undetermined` flag: a person watching
- * this run decide to proceed, all-or-nothing on both sides. It is not the counterpart of the config
- * key, which is a project deciding in advance which questions it can deploy without and naming
- * them. So an explicit parameter wins in both directions, and its absence reads
- * `sqlens.deploy.predeploy.allow_undetermined` — the same source, through the same
- * {@see UndeterminedWaiver}, as the `sqlens:predeploy` console command.
+ * `sqlens.deploy.predeploy.allow_undetermined` is a project deciding in advance which questions it
+ * can deploy without, and naming them. A client of this tool is an agent that reaches production,
+ * so it may shut that hatch for one run and never open it wider, the way `ReportPage` reads
+ * `sqlens.agent.mcp.max_findings` as a ceiling the caller cannot lift: `true` asks for what the
+ * project declared, `false` keeps this run shut, and leaving the parameter out is the declaration
+ * itself, read through the same {@see UndeterminedWaiver} as the `sqlens:predeploy` console command.
  *
  * That command is named in prose and not as a `{@see}`, which is not a style choice. A
  * fully-qualified reference in a docblock is rewritten into a real `use` statement by the
  * formatter, and an import out of `Console\` is a coupling this layer is built not to have.
  *
- * Absence does not mean `false`: a project that has named the reasons it can deploy past gets them
- * honored here exactly as on the command line, for the same run — {@see gate()} below promises in as
- * many words that the two paths cannot disagree.
+ * Its `--allow-undetermined` flag has no counterpart here: that is a person at the deploy deciding to
+ * proceed past every unanswered question. With the flag left out, the two paths read the same
+ * declaration for the same run, and {@see gate()} below promises in as many words that they cannot
+ * disagree.
  *
  * ## The budget and the session defense are the service's
  *
@@ -76,6 +78,7 @@ use Pushery\SQLens\Reporting\RunContext;
  * cannot relax them, and — the part that matters — cannot accidentally diverge from them.
  */
 #[Name('predeploy')]
+#[IsReadOnly]
 final class PredeployTool extends SqlensTool
 {
     protected string $description = 'Runs the predeploy gate against the target database immediately before a deploy: read-only, time-bounded, fail-closed. Returns the pending migrations and the instance checks as one verdict, each finding carrying its downtime class. Disabled by default, because it reaches a real named database.';
@@ -90,11 +93,10 @@ final class PredeployTool extends SqlensTool
     {
         $validated = $this->validated($request);
 
-        // Two ways in, one door — the same join the command makes, for the same reason. The
-        // parameter decides it either way when it is present; leaving it out is what falls back to
-        // what the project declared.
-        $waiver = array_key_exists('allow_undetermined', $validated)
-            ? ($validated['allow_undetermined'] === true ? UndeterminedWaiver::everyReason() : UndeterminedWaiver::closed())
+        // The project's declaration, which the caller can shut for this run and never widen: `true`
+        // and leaving the parameter out both read it, `false` closes it.
+        $waiver = ($validated['allow_undetermined'] ?? null) === false
+            ? UndeterminedWaiver::closed()
             : UndeterminedWaiver::fromConfig($config->get('sqlens.deploy.predeploy.allow_undetermined'));
 
         // The fact a deploy log needs even when nothing went unanswered: was the hatch open at all.
@@ -110,7 +112,7 @@ final class PredeployTool extends SqlensTool
         $profile = $profiles->select(null, 'predeploy');
 
         if (! $profile->isValid()) {
-            return Response::json([
+            return ToolAnswer::json([
                 ...ProfileRefusal::answer((string) $profile->rejectedValue, $profile->source)->toArray(),
                 // Blocks, as a gate that could not run blocks: nothing about this deploy was
                 // established.
@@ -144,7 +146,7 @@ final class PredeployTool extends SqlensTool
             // Nothing was learned about the database. Fail-closed means this can never read as a
             // pass, so it is undetermined with the service's own reason — and the gate block says
             // it blocks, because a deploy must not proceed on a gate that could not run.
-            return Response::json([
+            return ToolAnswer::json([
                 ...ToolAnswer::undetermined((string) $outcome->refusal, [
                     'refusal' => ['id' => 'preflight_unavailable', 'connection' => $outcome->connection],
                 ])->toArray(),
@@ -172,7 +174,7 @@ final class PredeployTool extends SqlensTool
             $outcome->result,
             $outcome->context->withUndeterminedWaiver($verdict->waived(), $verdict->waivedReasons),
         )->toArray();
-        $page = ReportPage::of($envelope['findings'], 0, null, $this->ceiling($config));
+        $page = ReportPage::of($envelope['findings'], 0, null, ReportPage::ceiling($config));
 
         // Both halves. An undetermined finding about a pending migration is a question this run left
         // open as much as an unanswered check is, and `status` is where an agent reads that — even
@@ -187,7 +189,7 @@ final class PredeployTool extends SqlensTool
                 $this->summary($outcome, $page),
             );
 
-        return Response::json([
+        return ToolAnswer::json([
             ...$answer->toArray(),
             'connection' => $outcome->connection,
             'gate' => $this->gate($verdict),
@@ -236,7 +238,7 @@ final class PredeployTool extends SqlensTool
     {
         return [
             'connection' => $schema->string()->description('The name of a connection this application has configured, and only the one sqlens.agent.mcp.connection names when it is set. Never a connection string.'),
-            'allow_undetermined' => $schema->boolean()->description('Proceed when the ONLY blockers are checks that could not answer. Leave it out to use what the project declared in sqlens.deploy.predeploy.allow_undetermined, which may name individual reasons; passing it decides this run either way, all-or-nothing. A real failure still blocks, and whichever applied is recorded in the answer.'),
+            'allow_undetermined' => $schema->boolean()->description('Proceed when the ONLY blockers are checks that could not answer, as far as the project declared in sqlens.deploy.predeploy.allow_undetermined, which may name individual reasons. true asks for that declaration and opens nothing beyond it, false keeps this run shut, and leaving it out is the declaration. A real failure still blocks, and whether the hatch was open is recorded in the answer.'),
         ];
     }
 
@@ -289,12 +291,5 @@ final class PredeployTool extends SqlensTool
         }
 
         return $summary;
-    }
-
-    private function ceiling(Repository $config): int
-    {
-        $configured = $config->get('sqlens.agent.mcp.max_findings');
-
-        return is_int($configured) && $configured >= 1 ? $configured : 200;
     }
 }

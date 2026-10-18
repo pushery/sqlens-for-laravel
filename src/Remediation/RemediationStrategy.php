@@ -52,12 +52,12 @@ enum RemediationStrategy: string
      * Give each strong lock its own migration, so each is released before the next is taken.
      *
      * Added after the original enumeration rather than with it, and the reason is worth recording
-     * because this list was deliberately written in one go: it was drawn from the twelve TEMPLATE
-     * tickets, and the rule this serves — a migration bundling strong locks on several tables into
-     * one transaction — was not among them. Its absence was an oversight in that enumeration, not a
-     * decision that no such strategy exists.
+     * because this list was deliberately written in one go: the rule this serves — a migration
+     * bundling strong locks on several tables into one transaction — was missing from the cases the
+     * enumeration was drawn from. Its absence was an oversight in that enumeration, not a decision
+     * that no such strategy exists.
      *
-     * It is set now, before any release, which is exactly when the enum's own rule says a value
+     * It is set before 1.0, which is exactly when the enum's own rule says a value
      * belongs: a strategy added after 1.0 would be a schema change on a published contract. And it
      * duplicates nothing — none of the ten values above describes splitting a transaction.
      */

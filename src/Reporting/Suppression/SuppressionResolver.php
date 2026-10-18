@@ -174,7 +174,7 @@ final readonly class SuppressionResolver
         // Computed once, from the candidate list that is already complete, and needed by exactly one
         // layer: the paired-view dedupe, which may only hide a privacy view when its hardening
         // partner genuinely reported something in this run.
-        $reportedIds = $this->reportedIds($candidates);
+        $reported = $this->reportedIdsByOutcome($candidates);
 
         // Beside it, and for the same reason: entitlement to hide a migration finding depends on
         // what the catalog half reported in this run, which cannot be answered one finding at a time.
@@ -192,7 +192,7 @@ final readonly class SuppressionResolver
 
         foreach ($candidates as $candidate) {
             $contradiction = null;
-            $suppression = $this->firstCovering($candidate, $suite, $matchedBaselineKeys, $usedIgnoreIndices, $reportedIds, $catalogIdentities, $contradiction);
+            $suppression = $this->firstCovering($candidate, $suite, $matchedBaselineKeys, $usedIgnoreIndices, $this->reportedAtLeastAs($reported, $candidate->finding), $catalogIdentities, $contradiction);
 
             if ($suppression instanceof Suppression) {
                 $suppressed[] = new SuppressedFinding($candidate->finding, $suppression);
@@ -217,26 +217,51 @@ final readonly class SuppressionResolver
     }
 
     /**
-     * The rule ids that REPORTED something in this run.
+     * The rule ids that REPORTED something in this run, by the outcome they reported.
      *
      * A pass is deliberately not "reported": a rule that looked and found nothing wrong has produced
      * no problem for a second view to be part of. Counting it would let a silent hardening view hide
      * a real privacy one — the exact inversion this layer exists to prevent.
      *
      * @param  list<SuppressionCandidate>  $candidates
-     * @return list<string>
+     * @return array<string, list<string>>
      */
-    private function reportedIds(array $candidates): array
+    private function reportedIdsByOutcome(array $candidates): array
     {
         $ids = [];
 
         foreach ($candidates as $candidate) {
-            if ($candidate->finding->status->outcome !== Outcome::Pass) {
-                $ids[$candidate->finding->ruleId] = true;
+            $outcome = $candidate->finding->status->outcome;
+
+            if ($outcome !== Outcome::Pass) {
+                $ids[$outcome->value][$candidate->finding->ruleId] = true;
             }
         }
 
-        return array_keys($ids);
+        return array_map(array_keys(...), $ids);
+    }
+
+    /**
+     * The rule ids that may stand in for this finding: those that failed, and those that came to the
+     * outcome it came to.
+     *
+     * A privacy view is hidden behind its hardening partner only where the partner says at least as
+     * much. A partner that could not look stands in for a privacy view that could not look either,
+     * and for nothing more: a privacy view that FAILED beside it is the one finding of the pair that
+     * established something, and hiding it would leave an undetermined in the report where a
+     * failure was found. The same holds for a partner that does not apply.
+     *
+     * @param  array<string, list<string>>  $reported
+     * @return list<string>
+     */
+    private function reportedAtLeastAs(array $reported, Finding $finding): array
+    {
+        $outcome = $finding->status->outcome;
+
+        return array_values(array_unique([
+            ...($reported[Outcome::Fail->value] ?? []),
+            ...($outcome === Outcome::Fail ? [] : $reported[$outcome->value] ?? []),
+        ]));
     }
 
     /**

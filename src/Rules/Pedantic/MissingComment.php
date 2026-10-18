@@ -17,8 +17,8 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * cannot act on. Without the default exemption this rule reports double digits on a brand-new
  * application, which is the fastest way to have it switched off along with everything around it.
  *
- * So the framework set is exempt BY DEFAULT and the exemption is a prefix list a project can
- * replace. It is the rule's own, deliberately: extension-owned objects are already filtered out of
+ * So the framework set is exempt BY DEFAULT and the exemption is a list of whole names a project
+ * can replace. It is the rule's own, deliberately: extension-owned objects are already filtered out of
  * the object stream by the catalog reader, and re-implementing that here would be a second answer
  * to a question already answered. This one is different — it is a judgment about what a TEAM
  * documents, not about what the catalog owns.

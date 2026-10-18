@@ -104,7 +104,7 @@ final readonly class IndexPredicate
      * the partial index of a multi-tenant schema: measured on a real server, it prints `(tenant_id = 1)`
      * and came back unread.
      *
-     * A RANGE TEST STAYS REFUSED, and that is the line this must not cross. `qty > 0` and the pair a
+     * A range test stays refused, and that is the line this must not cross. `qty > 0` and the pair a
      * `BETWEEN` prints are named in the docblock as shapes this class does not read, and they still are
      * -- only `=` and `<>` and their set forms take a number.
      *

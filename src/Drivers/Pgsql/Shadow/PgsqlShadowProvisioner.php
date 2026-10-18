@@ -51,7 +51,7 @@ use Throwable;
  * connection to the clone registered. Encoding, collation, and locale are inherited
  * from the template, which carries the ones of the database the shadow stands in for.
  *
- * WHAT THE TEMPLATE MAY BE is the load-bearing part. `CREATE DATABASE … TEMPLATE`
+ * What the template may be is the load-bearing part. `CREATE DATABASE … TEMPLATE`
  * copies its source byte for byte — every row of it — and none of the three checks
  * above asks about rows, because none of them can. The safety therefore does not
  * live in this class at all: the template arrives as a {@see VirginTemplate}, a
