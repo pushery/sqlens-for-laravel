@@ -43,9 +43,10 @@ use Throwable;
  *
  * ## Why the deploy gate is the right place to say so
  *
- * The debt is invisible in normal operation and expensive at exactly one moment: a rewrite of that
- * table. PostgreSQL validates a `NOT VALID` constraint as part of a rewrite, so a migration that
- * looked like a quick `ALTER` turns into a full scan nobody planned for, inside the window.
+ * The debt is invisible in normal operation, and nothing finishes it by itself, not even a rewrite of
+ * the table: measured on PostgreSQL 18, `ALTER COLUMN … TYPE` rewrites the table and carries a
+ * `NOT VALID` check or foreign key over still unvalidated, with every row it never checked. The deploy
+ * gate is the one recurring moment somebody reads the schema with intent, so the open half is named there.
  *
  * ## Why nothing is validated here
  *
@@ -68,7 +69,7 @@ final readonly class NotValidConstraintCheck implements PreflightCheck
     {
         // PostgreSQL only. MySQL has no `NOT VALID`: a foreign key is validated when it is added or
         // it is not added at all, so there is no half-finished state to find. That is an absence of
-        // the concept rather than a gap in this check, which is why there is no MySQL sibling ticket.
+        // the concept rather than a gap in this check, which is why there is no MySQL counterpart.
         return $driver === 'pgsql';
     }
 
@@ -240,10 +241,9 @@ final readonly class NotValidConstraintCheck implements PreflightCheck
             messagePrefix: DeployNotice::MESSAGE_PREFIX,
             message: sprintf(
                 'The constraint `%s` on `%s` was added `NOT VALID` and never validated — %s. Nothing '
-                .'about this is broken or slow today, which is exactly why it survives. It becomes '
-                .'expensive at one moment: PostgreSQL validates a NOT VALID constraint as part of a '
-                .'table REWRITE, so a migration that looked like a quick ALTER turns into a full '
-                .'scan nobody planned for, inside the window. Finish it as its own short step '
+                .'about this is broken or slow today, which is exactly why it survives, and nothing '
+                .'finishes it by itself: even a rewrite of the table carries it over unvalidated, with '
+                .'every row it never checked. Finish it as its own short step '
                 .'OUTSIDE the deploy: `ALTER TABLE %s VALIDATE CONSTRAINT %s;` — it takes a SHARE '
                 .'UPDATE EXCLUSIVE lock and scans the table, which is why this command will not run '
                 .'it for you.',
@@ -261,13 +261,12 @@ final readonly class NotValidConstraintCheck implements PreflightCheck
             context: new SubjectContext(driver: $context->driver, profile: $context->profile, strictTools: false),
             // Medium, and deliberately not higher on its own. The debt is real and it is old — a
             // finding that shouted would shout on every run of every project that ever did the safe
-            // thing and got interrupted, and a gate that always shouts stops being read. What would
-            // make a specific one urgent is a pending rewrite of that table; the pending migrations
-            // are read here only to see whether one of them validates the constraint.
+            // thing and got interrupted, and a gate that always shouts stops being read. The pending
+            // migrations are read here only to see whether one of them validates the constraint.
             severity: Severity::Medium,
         )->withDowntimeClass(
-            // `online`: the unvalidated constraint locks nothing by existing. The rewrite it can
-            // silently lengthen is somebody else's finding, on the statement that does the rewrite.
+            // `online`: the unvalidated constraint locks nothing by existing, and a rewrite of its
+            // table does not scan for it.
             DowntimeClass::Online,
         );
     }

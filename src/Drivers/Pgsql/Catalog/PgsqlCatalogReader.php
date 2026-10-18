@@ -145,7 +145,14 @@ final readonly class PgsqlCatalogReader implements CatalogReader
     {
         $startedAt = hrtime(true);
 
-        return $this->session->read(function (Connection $reader) use ($request, $startedAt): CatalogSnapshot {
+        // Only the queries run inside the read transaction. What follows the last one is PHP over rows
+        // already read, and on a large schema it outlasts the session's idle-in-transaction budget:
+        // measured with the real reader, 20 000 tables of 12 columns spent 5 064 ms between the last
+        // query and the rollback, over the default budget of 5 000 ms. The server ends a transaction
+        // left idle that long, and the reading it had finished went with it. Ended first, the
+        // transaction also holds no snapshot open while the objects are folded, classified and sorted.
+        /** @var array{CatalogContext, list<SchemaObject>, list<CatalogSkip>, array<string, string>|null} $reading */
+        $reading = $this->session->read(function (Connection $reader) use ($request): array {
             $schemas = new SchemaScope($request->schemas, self::SYSTEM_SCHEMAS)
                 ->apply($this->defaultSchemas($reader), $this->existingSchemas($reader));
 
@@ -164,6 +171,10 @@ final readonly class PgsqlCatalogReader implements CatalogReader
             // reading can succeed and still be a statement about nothing, and by then an empty
             // result is indistinguishable from a clean schema.
             $skips = new PrivilegeProbe($this->privileges)->run($reader, $schemas);
+
+            if ($request->schemas === []) {
+                $skips = [...$skips, ...$this->schemasTheUserEntryLeftOut($reader, $schemas)];
+            }
             /** @var array<string, true> $excludedRelations */
             $excludedRelations = [];
 
@@ -236,8 +247,16 @@ final readonly class PgsqlCatalogReader implements CatalogReader
 
                 // A battery that fails becomes a named skip and the reading continues; the shared
                 // helper is what keeps the two drivers from drifting apart on that.
+                //
+                // Under a savepoint of its own, because the whole reading is one transaction and PostgreSQL
+                // aborts a transaction at its first error: every statement after it fails with 25P02 until
+                // the block ends. Without it, a column battery the role may not run took the index and
+                // constraint batteries with it, each named for the abort instead of read. The nested
+                // transaction is Laravel's savepoint, rolled back before the error reaches the helper.
+                /** @var list<SchemaObject> $read */
                 $read = DatabaseErrorTranslator::attempt(
-                    static fn (): array => $query($reader, $schemas),
+                    /** @return list<SchemaObject> */
+                    static fn (): array => $reader->transaction(static fn (): array => $query($reader, $schemas)),
                     $type,
                     $type->value.'s',
                     $skips,
@@ -279,41 +298,46 @@ final readonly class PgsqlCatalogReader implements CatalogReader
                 }
             }
 
-            // Folded LAST, on the finished object list: the fold needs to see a partition's own
-            // indexes to spot a divergent one, and those only exist once every query has run.
-            if (! $request->reportPartitionsIndividually) {
-                $objects = new PartitionResolver($this->partitionParents($reader, $schemas))->fold($objects);
-            }
-
-            // After the fold, because a partition's own object is gone by then: applying the prefix
-            // first would name each partition in a skip for a table the fold was about to absorb.
-            $objects = new TablePrefix($request->tablePrefix, $request->prefixScope)->applyTo($objects, $skips);
-
-            // Last, on what the reading actually reports: an index excluded by the prefix scope or
-            // absorbed by the fold must not leave an undetermined behind for an object nobody will
-            // see in the snapshot.
-            $objects = IndexComprehension::classify($objects, $skips);
-
-            // LAST, because it reads the comprehension verdict the line above writes: a rule asking
-            // which indexes could cover a foreign key must not be handed one nobody can compare.
-            $objects = TableMembers::attachTo($objects);
-
-            // The whole-reading budget, checked once at the end. Exceeding it is a NAMED
-            // undetermined and not an abort: the objects already read are worth having, and killing
-            // the run would throw them away to report a problem the run itself caused.
-            $elapsedMs = (int) ((hrtime(true) - $startedAt) / 1_000_000);
-
-            if ($elapsedMs > $this->session->readBudgetMs()) {
-                $skips[] = CatalogSkip::for(
-                    SchemaObjectType::Table,
-                    'the catalog reading',
-                    SkipReason::BudgetExceeded,
-                    sprintf('the reading took %dms, over the %dms budget', $elapsedMs, $this->session->readBudgetMs()),
-                );
-            }
-
-            return new CatalogSnapshot($context, $objects, $skips);
+            // The last query, while the transaction is still open: the partition tree the fold below needs.
+            return [$context, $objects, $skips, $request->reportPartitionsIndividually ? null : $this->partitionParents($reader, $schemas)];
         });
+
+        [$context, $objects, $skips, $partitionParents] = $reading;
+
+        // Folded LAST, on the finished object list: the fold needs to see a partition's own
+        // indexes to spot a divergent one, and those only exist once every query has run.
+        if ($partitionParents !== null) {
+            $objects = new PartitionResolver($partitionParents)->fold($objects);
+        }
+
+        // After the fold, because a partition's own object is gone by then: applying the prefix
+        // first would name each partition in a skip for a table the fold was about to absorb.
+        $objects = new TablePrefix($request->tablePrefix, $request->prefixScope)->applyTo($objects, $skips);
+
+        // Last, on what the reading actually reports: an index excluded by the prefix scope or
+        // absorbed by the fold must not leave an undetermined behind for an object nobody will
+        // see in the snapshot.
+        $objects = IndexComprehension::classify($objects, $skips);
+
+        // LAST, because it reads the comprehension verdict the line above writes: a rule asking
+        // which indexes could cover a foreign key must not be handed one nobody can compare.
+        $objects = TableMembers::attachTo($objects);
+
+        // The whole-reading budget, checked once at the end. Exceeding it is a NAMED
+        // undetermined and not an abort: the objects already read are worth having, and killing
+        // the run would throw them away to report a problem the run itself caused.
+        $elapsedMs = (int) ((hrtime(true) - $startedAt) / 1_000_000);
+
+        if ($elapsedMs > $this->session->readBudgetMs()) {
+            $skips[] = CatalogSkip::for(
+                SchemaObjectType::Table,
+                'the catalog reading',
+                SkipReason::BudgetExceeded,
+                sprintf('the reading took %dms, over the %dms budget', $elapsedMs, $this->session->readBudgetMs()),
+            );
+        }
+
+        return new CatalogSnapshot($context, $objects, $skips);
     }
 
     /**
@@ -382,6 +406,54 @@ final readonly class PgsqlCatalogReader implements CatalogReader
         );
 
         return array_map(fn (array $row): string => $this->str($row, 'nspname'), $rows);
+    }
+
+    /**
+     * The schemas `"$user"` on the path finds for another role, left out of a default scope that
+     * resolved it as the reading role.
+     *
+     * PostgreSQL resolves `"$user"` to the schema named after the role of each session. A reading
+     * that runs as an account of its own, the one the audit-role page recommends, resolves it to
+     * that account's schema, usually none, so the schema the application's role reaches that way is
+     * not on the path it reads, and `USAGE` on it does not change that. Measured on PostgreSQL 18.0
+     * with `"$user", public`: the application's role resolved its own schema and `public`, an
+     * account with `USAGE` on that schema resolved `public` alone.
+     *
+     * Named only where that is what happened: the path names `"$user"`, the reading role has no
+     * schema of its own, and a schema named after another role lies outside the scope. A reading
+     * that runs as the application's own role finds its schema in scope and names nothing.
+     *
+     * @param  list<string>  $scope
+     * @return list<CatalogSkip>
+     */
+    private function schemasTheUserEntryLeftOut(Connection $reader, array $scope): array
+    {
+        $rows = $this->rows(
+            $reader,
+            'SELECT n.nspname, current_user AS reader FROM pg_namespace n'
+            .' JOIN pg_roles r ON r.rolname = n.nspname'
+            .' WHERE '.ApplicationSearchPath::namesTheUser()
+            .' AND NOT EXISTS (SELECT 1 FROM pg_namespace own WHERE own.nspname = current_user)'
+            .' AND n.nspname <> ALL (?)'
+            .' ORDER BY n.nspname',
+            [$this->arrayLiteral($scope)],
+        );
+
+        return array_map(
+            fn (array $row): CatalogSkip => CatalogSkip::for(
+                SchemaObjectType::Schema,
+                $this->str($row, 'nspname'),
+                SkipReason::ExcludedByConfig,
+                sprintf(
+                    'outside the default scope: the search_path names "$user", which this reading resolves as its own role %s, '
+                    .'and this is the schema it finds for the role %s; name it in sqlens.catalog.schemas to read it, '
+                    .'because USAGE on it does not put it on the reading role\'s path',
+                    $this->str($row, 'reader'),
+                    $this->str($row, 'nspname'),
+                ),
+            ),
+            $rows,
+        );
     }
 
     /**

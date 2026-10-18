@@ -39,6 +39,12 @@ use Pushery\SQLens\Drivers\Mysql\Canonical\MysqlCanonicalization;
  *     A conditional comment that only PREFIXES further SQL (a dumped view or trigger:
  *     `/*!50003 CREATE*​/ … TRIGGER … *​/`) is not a whole-statement directive and
  *     stays executable.
+ *   - The `DEFINER` clause in the head of a view, trigger, routine or event is left out, so
+ *     the object belongs to the account that replays it. mysqldump writes the account that
+ *     made the dump there, and naming another account takes the global `SET_ANY_DEFINER`
+ *     (`SET_USER_ID` on MySQL 8.0), which a role holding only the throwaway databases does not
+ *     have. `SQL SECURITY` stays, and the catalog comparison reads that and never the account.
+ *     Laravel's PostgreSQL dump leaves the owners out the same way, with `--no-owner`.
  *
  * ## What is replayed at all
  *
@@ -98,6 +104,18 @@ final readonly class MysqlSchemaDumpReader
         '/^SET\s+(?:GLOBAL|PERSIST|PERSIST_ONLY)\b|@@(?:GLOBAL|PERSIST|PERSIST_ONLY)\./i' => 'changes the configuration of the whole server',
         '/^(?:GRANT|REVOKE)\b|^(?:CREATE|ALTER|DROP|RENAME)\s+(?:USER|ROLE)\b|^SET\s+(?:PASSWORD|DEFAULT\s+ROLE)\b/i' => 'changes accounts or their privileges',
     ];
+
+    /** One part of an account name: quoted with backticks, single or double quotes, or bare. */
+    private const string ACCOUNT_PART = '(?:`(?:[^`]|``)*`|\'(?:[^\'\\\\]|\\\\.)*\'|"(?:[^"\\\\]|\\\\.)*"|[\w$.%-]+)';
+
+    /**
+     * The head of a CREATE up to its `DEFINER` clause, which group 1 keeps: the clauses SHOW CREATE
+     * puts in front of it, and the version comments mysqldump wraps around the parts of a view, a
+     * trigger or an event (`/*!50017 DEFINER=… *​/`). Anchored at the start, so a `DEFINER=` in a
+     * body, a string literal in a view for instance, is never read.
+     */
+    private const string HEAD_DEFINER = '/\A((?:\s|\/\*!\d*|\*\/)*CREATE(?:(?:\s|\/\*!\d*|\*\/)+(?:OR\s+REPLACE|ALGORITHM\s*=\s*\w+))*(?:\s|\/\*!\d*|\*\/)+)'
+        .'DEFINER\s*=\s*(?:CURRENT_USER(?:\s*\(\s*\))?|'.self::ACCOUNT_PART.'(?:\s*@\s*'.self::ACCOUNT_PART.')?)\s*/i';
 
     /**
      * A replayable statement whose object is named with a database in front of it, `app`.`users`:
@@ -162,7 +180,7 @@ final readonly class MysqlSchemaDumpReader
                 return DumpFailure::refused($refusal[0], $refusal[1], $this->lineOf($dump, $statement));
             }
 
-            $statements[] = $statement;
+            $statements[] = $this->withoutDefiner($statement);
         }
 
         return new SchemaDumpPlan($statements, $skipped);
@@ -285,6 +303,16 @@ final readonly class MysqlSchemaDumpReader
         }
 
         return str_starts_with($statement, '--') && (strlen($statement) === 2 || ctype_space($statement[2]));
+    }
+
+    /**
+     * The statement without the `DEFINER` clause of its head. Measured on MySQL 8.0.36 with the dump
+     * mysqldump 8.4.10 writes: an account holding ALL on the shadow database is refused each object
+     * with a definer (error 1227), and replays all of them without the clause, as their definer.
+     */
+    private function withoutDefiner(string $statement): string
+    {
+        return preg_replace(self::HEAD_DEFINER, '$1', $statement, 1) ?? $statement;
     }
 
     /** What a whole-statement directive says: the text between `/*!` and its version, and `*​/`. */

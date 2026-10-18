@@ -111,6 +111,7 @@ use Pushery\SQLens\Drivers\Pgsql\Deploy\PostdeployInvalidIndexCheck;
 use Pushery\SQLens\Drivers\Pgsql\Deploy\PostdeployNotValidConstraintCheck;
 use Pushery\SQLens\Drivers\Pgsql\Deploy\ReplicationSlotCheck;
 use Pushery\SQLens\Drivers\Pgsql\Deploy\ServerSettingsCheck;
+use Pushery\SQLens\Exceptions\InvalidGuardProfile;
 use Pushery\SQLens\Findings\CompositeCredentialRedactor;
 use Pushery\SQLens\Format\DialectResolver;
 use Pushery\SQLens\Format\FormatConfig;
@@ -318,10 +319,6 @@ final class SQLensServiceProvider extends ServiceProvider
             ),
         );
 
-        // The external-tool machinery. The process runner is the real one; the known
-        // set is EMPTY until an adapter (Squawk first) registers — the strict-tool
-        // wiring is ready, with nothing yet to be strict about. Both are singletons so
-        // a test can rebind them (a fake runner, a fake tool) for the whole run.
         // The one place a driver key is mapped to its catalog readers. It lives here, in the
         // composition root, rather than in src/Catalog: core must not import a driver, and a match
         // naming PgsqlCatalogReader would be exactly that coupling moved into a string.
@@ -452,6 +449,200 @@ final class SQLensServiceProvider extends ServiceProvider
         // driving the old one. The command used to resolve them per `handle()` call, and this keeps
         // that.
         $this->app->bind(PreflightRuns::class, PreflightService::class);
+
+        // The registries a run is built from, and the session-bounds reader, are bound here for every
+        // process rather than behind the console check in `boot()`. Each registry takes its list as an
+        // optional constructor argument, so a process that resolved one unbound would get the
+        // container's empty default instead of an error: a preflight or post-deploy run that checks
+        // nothing and reports nothing open, or a formatter registry with no backend. A web request
+        // reaches them through the seams above, and so does an Octane worker: Laravel reads
+        // `APP_RUNNING_IN_CONSOLE` before the SAPI, and Octane sets it to false.
+        $this->app->singleton(PostdeployVerifier::class, static fn (Application $app): PostdeployVerifier => new PostdeployVerifier([
+            // The post-deploy registry. Each entry ADAPTS a check that already owns its catalog
+            // reading — never a second implementation of one, because the same catalog
+            // answering differently depending on which command asked is the determinism break
+            // this package treats as a defect.
+            new PostdeployInvalidIndexCheck,
+            new PostdeployNotValidConstraintCheck,
+            // …and the one that owns its own reading, because there is no predeploy twin to
+            // adapt: what a NAME suggests is a question only worth asking after the deploy,
+            // when the objects it left behind exist. Its pattern list is built here for the
+            // reason every other policy is — a check that read configuration would have a
+            // verdict its own tests cannot see.
+            new OrphanTransitionObjectCheck(
+                TransitionObjectPatterns::fromConfig(
+                    $app->make(Repository::class)->get('sqlens.deploy.postdeploy.transition_patterns'),
+                ),
+            ),
+            // The MySQL side. Both entries are registered unconditionally and each declares the
+            // driver it answers for — the verifier asks, so a run against PostgreSQL never sees
+            // these and a run against MySQL never sees the PostgreSQL ones.
+            new MysqlOrphanTransitionObjectCheck,
+            // …and the one that exists to answer NOT APPLICABLE out loud. A missing check and a
+            // clean result print the same on this engine, and a reader comparing two databases
+            // is exactly who would be misled by that.
+            new MysqlInvalidIndexCheck,
+            // The MySQL counterpart to PostgreSQL's NOT VALID constraint — a different catalog
+            // semantic, not a second spelling of the same one, so it shares no line with it.
+            new UnenforcedConstraintCheck,
+        ]));
+
+        // The formatter registry. An explicit LIST rather than discovery, for the reason the
+        // deploy registries state: an order that depended on which adapter registered first
+        // would make two identical projects format differently, and the output is committed.
+        $this->app->singleton(FormatterRegistry::class, static function (Application $app): FormatterRegistry {
+            $settings = FormatConfig::from($app->make(Repository::class));
+
+            // WRAPPED, and the wrapper is the whole reason a repository-wide run is affordable.
+            // Both external backends resolve their binary and probe its version inside
+            // `format()`, so an unwrapped runner paid a `$PATH` walk AND a process spawn for
+            // every `.sql` file — measured at 25 of each for 25 files. Neither answer can change
+            // between two files of one run. See MemoizingProcessRunner.
+            //
+            // One wrapper for BOTH backends on purpose: they are different binaries, the cache
+            // is keyed by name, and sharing it means a run that falls back from one to the other
+            // does not re-ask about the first.
+            $processes = new MemoizingProcessRunner($app->make(ProcessRunner::class));
+
+            // A backend this project switched off is not REGISTERED, rather than registered
+            // and skipped later. That keeps `auto` honest for free: an absent candidate never
+            // reaches the passed-over list, so a decision is never reported as a loss and strict
+            // tool mode never fails over it. The names travel separately so a NAMED disabled
+            // backend can still be refused with the true reason.
+            $backends = [];
+
+            if (! in_array('pgformatter', $settings->disabledBackends, true)) {
+                $backends[] = new PgFormatterBackend($processes, $settings->pgFormatterPath ?? 'pg_format', $settings->timeout);
+            }
+
+            if (! in_array('sqlfluff', $settings->disabledBackends, true)) {
+                $backends[] = new SqlFluffBackend($processes, $settings->sqlFluffPath ?? 'sqlfluff', $settings->timeout, $app->basePath());
+            }
+
+            // Last, and always present — and never switchable off. The two above are better at
+            // the job and are not installed on the machine of somebody who just ran
+            // `composer require`; this one is what makes `sqlens:format` work with no binaries
+            // at all, so a project that could turn it off could turn the suite into nothing.
+            $backends[] = new PhpSqlFormatter;
+
+            return new FormatterRegistry($backends, $settings->disabledBackends);
+        });
+
+        $this->app->singleton(DialectResolver::class, static fn (Application $app): DialectResolver => new DialectResolver($app->make(Repository::class)));
+
+        // The run header reads the session bounds back through this seam, and the command
+        // takes the INTERFACE — so a test can substitute a reader that refuses, which is the
+        // only way the header's silent-rather-than-optimistic path can be proved. The check
+        // itself is `final readonly` and cannot be doubled.
+        //
+        // Built rather than auto-resolved: the check needs its driver capabilities, and a
+        // container-constructed one would get an empty map and throw for every engine. The
+        // capabilities are the same two the preflight runner is given below — named here
+        // because this provider is the composition root.
+        $this->app->bind(ReadsSessionBounds::class, static fn (): SessionDefenseAppliedCheck => new SessionDefenseAppliedCheck([
+            'pgsql' => new PgsqlSessionDefenseState,
+            'mysql' => new MysqlSessionDefenseState,
+        ]));
+
+        $this->app->singleton(PreflightRunner::class,
+            // The order is DECLARED here and nowhere else. Two runs against an unchanged database
+            // must produce byte-identical reports, and a registry the container discovered would
+            // iterate in whatever order it happened to build.
+            //
+            // Context-truth first, and that is not alphabetical: every later check reasons about a
+            // server, and a run whose version is wrong has already answered every one of them
+            // against the wrong world.
+            static fn (Application $app): PreflightRunner => new PreflightRunner([
+                // Without a pin: the runner is built before a command applies its profile, so the
+                // pin a run compares arrives with its context instead.
+                new ServerVersionSkewCheck,
+                // Second, and after the version rather than before it for a reason: a run whose
+                // version is wrong has already answered every later question against the wrong
+                // world, so context truth comes first. Within context truth, "can this instance
+                // accept writes at all" decides whether the deploy can happen — everything
+                // after it is about how badly it might go.
+                new ReadOnlyTargetCheck([
+                    // The composition root names both engines, which is what a composition root
+                    // is for. The check itself no longer can — see ReadsWriteAcceptance.
+                    'pgsql' => new PgsqlWriteAcceptance,
+                    'mysql' => new MysqlWriteAcceptance,
+                ]),
+                // Third, and last among the context checks. It answers a question about THIS
+                // RUN rather than about the database, so it belongs after the two that decide
+                // whether the run means anything at all — but before any check that reasons
+                // about load, because those are the ones a missing timeout would let hang.
+                new SessionDefenseAppliedCheck([
+                    'pgsql' => new PgsqlSessionDefenseState,
+                    'mysql' => new MysqlSessionDefenseState,
+                ]),
+                // Fourth, and deliberately AFTER the session defense rather than beside the
+                // other context checks: this one reads ~400 rows from `pg_settings`, which is
+                // the first thing in the run that could hang, and the check before it is the
+                // one that establishes there is a bound on hanging.
+                //
+                // Driver-specific, and that is why it is named here. The runner asks
+                // `appliesTo()` before running anything, so a MySQL target skips it without
+                // opening a session for it — and this provider is the composition root, the one
+                // place allowed to know both engines by name.
+                new ServerSettingsCheck,
+                // The MySQL half of the same question. Two classes rather than one with a
+                // `match`, because they share almost no substance: different hazards, different
+                // shipped defaults, and different ways of withholding a value. Only one of them
+                // ever runs — `appliesTo()` decides before either opens anything.
+                new MysqlServerSettingsCheck,
+                // Last among the context checks, and last for a reason: it reads the index
+                // catalog, which is the widest read in the registry. Everything that decides
+                // whether the run means anything at all has already answered by here.
+                new InvalidIndexCheck,
+                // Beside it, and for the same reason: both answer "is there wreckage from last
+                // time", both read only the catalog, and neither can be answered from the
+                // instance state the earlier checks look at.
+                new NotValidConstraintCheck,
+                // Last, and the only one that reads LIVE state rather than the catalog: a lag
+                // measured before the slower questions would be a lag from a moment that has
+                // already passed by the time the report is written.
+                new ReplicationLagCheck,
+                // Last of all, and the only one that needs BOTH halves of the run: the pending
+                // migrations to know which locks are coming, and the live activity to know what
+                // holds them. It runs after everything that could refuse the run outright.
+                new LockBlockerCheck,
+                // Immediately after it, and about the other half of the same question: the lock
+                // check finds a holder it can NAME, and an anti-wraparound autovacuum is the one
+                // that blocks without being nameable that way — a background worker that does
+                // not yield, behind which the ALTER waits looking like a lock nobody holds.
+                new FreezeHorizonCheck,
+                // Immediately after it, about how the table GOT near that horizon — and
+                // about the other consequence, which is one this report makes rather than
+                // finds: a table without autovacuum keeps its dead rows, so its size and
+                // its row estimate are the two least trustworthy numbers in the report,
+                // and everything stated about its duration is derived from them.
+                new AutovacuumDisabledCheck,
+                // Its MySQL counterpart. Same question, different lock vocabulary — and a
+                // different way of going quiet: `performance_schema` can be off, and an empty
+                // reading then means nothing rather than nothing-found.
+                new MetadataLockCheck,
+                // Immediately BEFORE the headroom question, because it answers the half of it
+                // a managed database cannot: free capacity is not exposed there, so
+                // `DiskHeadroomCheck` reports undetermined on most instances — and a retained
+                // slot is the commonest reason the answer would have been no, visible from
+                // inside the database.
+                new ReplicationSlotCheck,
+                // Last, and driver-neutral: it asks about SIZE, and both engines answer that
+                // through the same reader. It runs after the lock checks because a deploy that
+                // cannot start is a more urgent thing to hear about than one that might fill up.
+                // The operator's own headroom figure is injected rather than read inside the
+                // check, for the reason every other policy is: a check that read configuration
+                // would carry a verdict its own tests cannot see.
+                new DiskHeadroomCheck(self::declaredDiskBytes($app)),
+                // Last, and the most consequential when it fires: a role that may not do what
+                // the migration asks stops `migrate --force` HALFWAY, with the application
+                // already deployed against the other half.
+                new GrantCheck,
+                // Its MySQL counterpart. Same question, and an asymmetric answer: PostgreSQL can
+                // resolve another role's inheritance, MySQL cannot — so that one withholds a
+                // finding where this one emits it.
+                new MysqlGrantCheck,
+            ]));
 
         // The escalation table, built ONCE per run from the shipped artifact plus whatever the
         // project overrode. A singleton because `load()` reads a file and parses it, and because two
@@ -599,101 +790,6 @@ final class SQLensServiceProvider extends ServiceProvider
         $this->armGuard();
 
         if ($this->app->runningInConsole()) {
-            // The runner is bound with an EMPTY registry, deliberately. Checks arrive in their own
-            // changes and register themselves here; a runner that discovered them would iterate in
-            // whatever order the container built, and two runs against an unchanged database would
-            // report the same findings in a different sequence — which a diff reads as a change.
-            // The run header reads the session bounds back through this seam, and the command
-            // takes the INTERFACE — so a test can substitute a reader that refuses, which is the
-            // only way the header's silent-rather-than-optimistic path can be proved. The check
-            // itself is `final readonly` and cannot be doubled.
-            // Registered with an EMPTY check list, deliberately, and it is not a placeholder: a
-            // verifier that checked nothing must still be a complete, honest run — it reports what
-            // it ran (nothing), exits clean, and does not claim to have verified anything. The
-            // post-deploy checks are hung on it one ticket at a time, and until then the command is
-            // the shell being proved rather than the checks.
-            $this->app->singleton(PostdeployVerifier::class, static fn (Application $app): PostdeployVerifier => new PostdeployVerifier([
-                // The post-deploy registry. Each entry ADAPTS a check that already owns its catalog
-                // reading — never a second implementation of one, because the same catalog
-                // answering differently depending on which command asked is the determinism break
-                // this package treats as a defect.
-                new PostdeployInvalidIndexCheck,
-                new PostdeployNotValidConstraintCheck,
-                // …and the one that owns its own reading, because there is no predeploy twin to
-                // adapt: what a NAME suggests is a question only worth asking after the deploy,
-                // when the objects it left behind exist. Its pattern list is built here for the
-                // reason every other policy is — a check that read configuration would have a
-                // verdict its own tests cannot see.
-                new OrphanTransitionObjectCheck(
-                    TransitionObjectPatterns::fromConfig(
-                        $app->make(Repository::class)->get('sqlens.deploy.postdeploy.transition_patterns'),
-                    ),
-                ),
-                // The MySQL side. Both entries are registered unconditionally and each declares the
-                // driver it answers for — the verifier asks, so a run against PostgreSQL never sees
-                // these and a run against MySQL never sees the PostgreSQL ones.
-                new MysqlOrphanTransitionObjectCheck,
-                // …and the one that exists to answer NOT APPLICABLE out loud. A missing check and a
-                // clean result print the same on this engine, and a reader comparing two databases
-                // is exactly who would be misled by that.
-                new MysqlInvalidIndexCheck,
-                // The MySQL counterpart to PostgreSQL's NOT VALID constraint — a different catalog
-                // semantic, not a second spelling of the same one, so it shares no line with it.
-                new UnenforcedConstraintCheck,
-            ]));
-
-            // The formatter registry. An explicit LIST rather than discovery, for the reason the
-            // deploy registries state: an order that depended on which adapter registered first
-            // would make two identical projects format differently, and the output is committed.
-            $this->app->singleton(FormatterRegistry::class, static function (Application $app): FormatterRegistry {
-                $settings = FormatConfig::from($app->make(Repository::class));
-
-                // WRAPPED, and the wrapper is the whole reason a repository-wide run is affordable.
-                // Both external backends resolve their binary and probe its version inside
-                // `format()`, so an unwrapped runner paid a `$PATH` walk AND a process spawn for
-                // every `.sql` file — measured at 25 of each for 25 files. Neither answer can change
-                // between two files of one run. See MemoizingProcessRunner.
-                //
-                // One wrapper for BOTH backends on purpose: they are different binaries, the cache
-                // is keyed by name, and sharing it means a run that falls back from one to the other
-                // does not re-ask about the first.
-                $processes = new MemoizingProcessRunner($app->make(ProcessRunner::class));
-
-                // A backend this project switched off is not REGISTERED, rather than registered
-                // and skipped later. That keeps `auto` honest for free: an absent candidate never
-                // reaches the passed-over list, so a decision is never reported as a loss and strict
-                // tool mode never fails over it. The names travel separately so a NAMED disabled
-                // backend can still be refused with the true reason.
-                $backends = [];
-
-                if (! in_array('pgformatter', $settings->disabledBackends, true)) {
-                    $backends[] = new PgFormatterBackend($processes, $settings->pgFormatterPath ?? 'pg_format', $settings->timeout);
-                }
-
-                if (! in_array('sqlfluff', $settings->disabledBackends, true)) {
-                    $backends[] = new SqlFluffBackend($processes, $settings->sqlFluffPath ?? 'sqlfluff', $settings->timeout, $app->basePath());
-                }
-
-                // Last, and always present — and never switchable off. The two above are better at
-                // the job and are not installed on the machine of somebody who just ran
-                // `composer require`; this one is what makes `sqlens:format` work with no binaries
-                // at all, so a project that could turn it off could turn the suite into nothing.
-                $backends[] = new PhpSqlFormatter;
-
-                return new FormatterRegistry($backends, $settings->disabledBackends);
-            });
-
-            $this->app->singleton(DialectResolver::class, static fn (Application $app): DialectResolver => new DialectResolver($app->make(Repository::class)));
-
-            // Built rather than auto-resolved: the check needs its driver capabilities, and a
-            // container-constructed one would get an empty map and throw for every engine. The
-            // capabilities are the same two the preflight runner is given below — named here
-            // because this provider is the composition root.
-            $this->app->bind(ReadsSessionBounds::class, static fn (): SessionDefenseAppliedCheck => new SessionDefenseAppliedCheck([
-                'pgsql' => new PgsqlSessionDefenseState,
-                'mysql' => new MysqlSessionDefenseState,
-            ]));
-
             // The MCP conversation loop, bound rather than constructed in the command so a test can
             // put a double in its place — the real one takes over this process's STDIN, which no
             // in-process test can hand over and get back.
@@ -736,106 +832,6 @@ final class SQLensServiceProvider extends ServiceProvider
             if (class_exists(McpServiceProvider::class)) {
                 $this->app->register(McpServiceProvider::class);
             }
-
-            $this->app->singleton(PreflightRunner::class,
-                // The order is DECLARED here and nowhere else. Two runs against an unchanged database
-                // must produce byte-identical reports, and a registry the container discovered would
-                // iterate in whatever order it happened to build.
-                //
-                // Context-truth first, and that is not alphabetical: every later check reasons about a
-                // server, and a run whose version is wrong has already answered every one of them
-                // against the wrong world.
-                static fn (Application $app): PreflightRunner => new PreflightRunner([
-                    // Without a pin: the runner is built before a command applies its profile, so the
-                    // pin a run compares arrives with its context instead.
-                    new ServerVersionSkewCheck,
-                    // Second, and after the version rather than before it for a reason: a run whose
-                    // version is wrong has already answered every later question against the wrong
-                    // world, so context truth comes first. Within context truth, "can this instance
-                    // accept writes at all" decides whether the deploy can happen — everything
-                    // after it is about how badly it might go.
-                    new ReadOnlyTargetCheck([
-                        // The composition root names both engines, which is what a composition root
-                        // is for. The check itself no longer can — see ReadsWriteAcceptance.
-                        'pgsql' => new PgsqlWriteAcceptance,
-                        'mysql' => new MysqlWriteAcceptance,
-                    ]),
-                    // Third, and last among the context checks. It answers a question about THIS
-                    // RUN rather than about the database, so it belongs after the two that decide
-                    // whether the run means anything at all — but before any check that reasons
-                    // about load, because those are the ones a missing timeout would let hang.
-                    new SessionDefenseAppliedCheck([
-                        'pgsql' => new PgsqlSessionDefenseState,
-                        'mysql' => new MysqlSessionDefenseState,
-                    ]),
-                    // Fourth, and deliberately AFTER the session defense rather than beside the
-                    // other context checks: this one reads ~400 rows from `pg_settings`, which is
-                    // the first thing in the run that could hang, and the check before it is the
-                    // one that establishes there is a bound on hanging.
-                    //
-                    // Driver-specific, and that is why it is named here. The runner asks
-                    // `appliesTo()` before running anything, so a MySQL target skips it without
-                    // opening a session for it — and this provider is the composition root, the one
-                    // place allowed to know both engines by name.
-                    new ServerSettingsCheck,
-                    // The MySQL half of the same question. Two classes rather than one with a
-                    // `match`, because they share almost no substance: different hazards, different
-                    // shipped defaults, and different ways of withholding a value. Only one of them
-                    // ever runs — `appliesTo()` decides before either opens anything.
-                    new MysqlServerSettingsCheck,
-                    // Last among the context checks, and last for a reason: it reads the index
-                    // catalog, which is the widest read in the registry. Everything that decides
-                    // whether the run means anything at all has already answered by here.
-                    new InvalidIndexCheck,
-                    // Beside it, and for the same reason: both answer "is there wreckage from last
-                    // time", both read only the catalog, and neither can be answered from the
-                    // instance state the earlier checks look at.
-                    new NotValidConstraintCheck,
-                    // Last, and the only one that reads LIVE state rather than the catalog: a lag
-                    // measured before the slower questions would be a lag from a moment that has
-                    // already passed by the time the report is written.
-                    new ReplicationLagCheck,
-                    // Last of all, and the only one that needs BOTH halves of the run: the pending
-                    // migrations to know which locks are coming, and the live activity to know what
-                    // holds them. It runs after everything that could refuse the run outright.
-                    new LockBlockerCheck,
-                    // Immediately after it, and about the other half of the same question: the lock
-                    // check finds a holder it can NAME, and an anti-wraparound autovacuum is the one
-                    // that blocks without being nameable that way — a background worker that does
-                    // not yield, behind which the ALTER waits looking like a lock nobody holds.
-                    new FreezeHorizonCheck,
-                    // Immediately after it, about how the table GOT near that horizon — and
-                    // about the other consequence, which is one this report makes rather than
-                    // finds: a table without autovacuum keeps its dead rows, so its size and
-                    // its row estimate are the two least trustworthy numbers in the report,
-                    // and everything stated about its duration is derived from them.
-                    new AutovacuumDisabledCheck,
-                    // Its MySQL counterpart. Same question, different lock vocabulary — and a
-                    // different way of going quiet: `performance_schema` can be off, and an empty
-                    // reading then means nothing rather than nothing-found.
-                    new MetadataLockCheck,
-                    // Immediately BEFORE the headroom question, because it answers the half of it
-                    // a managed database cannot: free capacity is not exposed there, so
-                    // `DiskHeadroomCheck` reports undetermined on most instances — and a retained
-                    // slot is the commonest reason the answer would have been no, visible from
-                    // inside the database.
-                    new ReplicationSlotCheck,
-                    // Last, and driver-neutral: it asks about SIZE, and both engines answer that
-                    // through the same reader. It runs after the lock checks because a deploy that
-                    // cannot start is a more urgent thing to hear about than one that might fill up.
-                    // The operator's own headroom figure is injected rather than read inside the
-                    // check, for the reason every other policy is: a check that read configuration
-                    // would carry a verdict its own tests cannot see.
-                    new DiskHeadroomCheck(self::declaredDiskBytes($app)),
-                    // Last, and the most consequential when it fires: a role that may not do what
-                    // the migration asks stops `migrate --force` HALFWAY, with the application
-                    // already deployed against the other half.
-                    new GrantCheck,
-                    // Its MySQL counterpart. Same question, and an asymmetric answer: PostgreSQL can
-                    // resolve another role's inheritance, MySQL cannot — so that one withholds a
-                    // finding where this one emits it.
-                    new MysqlGrantCheck,
-                ]));
 
             // `sqlens:mcp` is registered unconditionally, and that is deliberate rather than an
             // oversight. Its SDK is a `suggest`, so it may genuinely be absent — and a command
@@ -964,6 +960,10 @@ final class SQLensServiceProvider extends ServiceProvider
      * Deliberately at boot rather than at the first query: a name nothing defines would otherwise
      * disable every guardrail in the application while the configuration still reads as though they
      * are on, and nothing would ever say so.
+     *
+     * One command boots past it: `sqlens:doctor`, whose job is to describe a broken setup. It runs
+     * with the guard unarmed and reports the same refusal by name, so the refusal still reaches the
+     * reader, from the one command that can say more than the exception.
      */
     private function armGuard(): void
     {
@@ -981,11 +981,19 @@ final class SQLensServiceProvider extends ServiceProvider
         // What the early return bought was skipping two config reads on a boot with no guardrail.
         // That is `database.connections` and `logging.channels`, both already resolved by the time
         // any provider boots, and it is not worth a branch nothing can enter.
-        $profile = GuardProfile::resolve(
-            $guard,
-            array_map(strval(...), array_keys(is_array($connections = $config->get('database.connections')) ? $connections : [])),
-            array_map(strval(...), array_keys(is_array($channels = $config->get('logging.channels')) ? $channels : [])),
-        );
+        try {
+            $profile = GuardProfile::resolve(
+                $guard,
+                array_map(strval(...), array_keys(is_array($connections = $config->get('database.connections')) ? $connections : [])),
+                array_map(strval(...), array_keys(is_array($channels = $config->get('logging.channels')) ? $channels : [])),
+            );
+        } catch (InvalidGuardProfile $refusal) {
+            if ($this->app->runningConsoleCommand('sqlens:doctor')) {
+                return;
+            }
+
+            throw $refusal;
+        }
 
         // No profile named: every guardrail is off, which is the default and the common case.
         // Everything below — the logger, the manager, the inspectors — exists only because a
@@ -1008,7 +1016,7 @@ final class SQLensServiceProvider extends ServiceProvider
             // closures on the hot path of every query an application runs.
             new QueryWatcher($this->app->make(Dispatcher::class), [
                 new SlowQueryGuard($logger),
-                new RuntimeDdlGuard($logger, $this->app->runningInConsole()),
+                new RuntimeDdlGuard($logger, $this->app->runningInConsole() && ! $this->app->runningConsoleCommand(RuntimeDdlGuard::APPLICATION_COMMANDS)),
                 new UnboundRawSqlGuard($logger, $grammars),
             ]),
         ])->arm($profile);

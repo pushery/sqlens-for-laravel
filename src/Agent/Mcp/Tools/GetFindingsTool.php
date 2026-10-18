@@ -10,6 +10,7 @@ use Illuminate\Filesystem\Filesystem;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Name;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 use Override;
 use Pushery\SQLens\Agent\Mcp\ReportPage;
 use Pushery\SQLens\Agent\Mcp\ToolAnswer;
@@ -42,6 +43,7 @@ use Pushery\SQLens\Severity\Severity;
  * reason and with the tool to call instead.
  */
 #[Name('get_findings')]
+#[IsReadOnly]
 final class GetFindingsTool extends SqlensTool
 {
     protected string $description = 'Reads the findings of the last SQLens run from its report file: filter by severity, category or level, and page through them. Never runs anything and never opens a database.';
@@ -63,7 +65,8 @@ final class GetFindingsTool extends SqlensTool
         if (! $files->isFile($absolute)) {
             return ToolAnswer::undetermined(
                 'no report exists at '.$path.' — that is not the same as a run with no findings. '
-                .'Call lint_pending to produce one.',
+                .'Produce one with php artisan sqlens:lint --format=json --output='.$path.'. lint_pending answers '
+                .'with a fresh run and writes no report.',
                 ['path' => $path],
             )->toResponse();
         }
@@ -103,7 +106,7 @@ final class GetFindingsTool extends SqlensTool
             $findings,
             is_int($validated['offset'] ?? null) ? $validated['offset'] : 0,
             is_int($validated['limit'] ?? null) ? $validated['limit'] : null,
-            $this->ceiling($config),
+            ReportPage::ceiling($config),
         );
 
         return ToolAnswer::of([
@@ -196,13 +199,5 @@ final class GetFindingsTool extends SqlensTool
 
             return ! is_int($levelMax) || ! is_int($finding['level'] ?? null) || $finding['level'] <= $levelMax;
         }));
-    }
-
-    /** The project's hard ceiling on one answer. */
-    private function ceiling(Repository $config): int
-    {
-        $configured = $config->get('sqlens.agent.mcp.max_findings');
-
-        return is_int($configured) && $configured >= 1 ? $configured : 200;
     }
 }

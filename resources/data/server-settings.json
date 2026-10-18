@@ -48,7 +48,7 @@
             "scope": "instance",
             "changeable": "reload",
             "source_url": "https://dev.mysql.com/doc/refman/8.4/en/query-log.html",
-            "note": "Records every statement the server receives, verbatim and unredacted, because it is a debugging tool rather than an audit trail: CREATE USER ... IDENTIFIED BY goes in with the password, and so does any value interpolated into SQL rather than bound. Off is the vendor default and the expectation, because the variable is meant to be on for minutes while somebody is looking at something -- a server that has it on is almost always one where that was forgotten, and the cost grows silently with uptime. Recorded as reload rather than session: it is GLOBAL-only, so SET GLOBAL moves it without downtime but no session may."
+            "note": "Records every statement the server receives as it was sent, because it is a debugging tool rather than an audit trail: an UPDATE that sets a token goes in with the token, and so does any value interpolated into SQL rather than bound. Only the password of CREATE USER, ALTER USER and SET PASSWORD is rewritten as <secret>, unless log_raw is on. Off is the vendor default and the expectation, because the variable is meant to be on for minutes while somebody is looking at something -- a server that has it on is almost always one where that was forgotten, and the cost grows silently with uptime. Recorded as reload rather than session: it is GLOBAL-only, so SET GLOBAL moves it without downtime but no session may."
         },
         {
             "variable": "general_log_file",

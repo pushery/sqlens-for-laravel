@@ -21,7 +21,7 @@ namespace Pushery\SQLens\Corpus;
  *   {@see self::UndeterminedExpected} — correct behavior, and counting it as a false positive
  *   would punish a rule for honestly reporting it could not run.
  * - A rule that answered `undetermined` where the corpus expected an answer is
- *   {@see self::UndeterminedUnexpected}. This is the class the ticket insists on: it is **neither**
+ *   {@see self::UndeterminedUnexpected}. This class matters most: it is **neither**
  *   a false positive **nor** a pass. It means the measurement could not be made for that case, and
  *   a run full of them is a run whose rate describes less than it appears to.
  *

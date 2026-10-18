@@ -21,7 +21,11 @@ enum GrantOrigin: string
     /** Somebody granted it. The only origin a project can act on, and the only one rules judge. */
     case Project = 'project';
 
-    /** Present since `initdb` — part of what PostgreSQL is, not of what this project did. */
+    /**
+     * Present since `initdb`, or the default PostgreSQL gives every new object of a kind: CONNECT and
+     * TEMPORARY to PUBLIC on a database, EXECUTE to PUBLIC on a routine. Part of what PostgreSQL is,
+     * not of what this project did.
+     */
     case Initdb = 'initdb';
 
     /**

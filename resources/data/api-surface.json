@@ -2693,7 +2693,7 @@
         "UndeterminedInStrictMode": 3
     },
     "baseline_schema_version": 3,
-    "report_schema_version": 9,
+    "report_schema_version": 10,
     "remediation_schema_version": 3,
     "remediation_schema_stability": "preview",
     "extension_contracts": {

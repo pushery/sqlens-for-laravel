@@ -114,6 +114,10 @@ interface DriverCanonicalization
      * generic stages cover both engines today; a driver adds a stage here only for
      * a quirk the generic pipeline cannot express.
      *
+     * They run after the generic normalizers and before the classifier, over the
+     * normalized statement; each hands on a statement or ends the pipeline with a
+     * named failure.
+     *
      * @return list<CanonicalizationStage>
      */
     public function stages(): array;

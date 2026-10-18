@@ -7,7 +7,8 @@ namespace Pushery\SQLens\Rules;
 use Pushery\SQLens\Config\RuleIdValidator;
 
 /**
- * The machine form of the rule-id naming scheme documented in CONTRIBUTING.md.
+ * The machine form of the rule-id naming scheme documented in the contributing guide,
+ * https://github.com/pushery/sqlens-for-laravel/blob/main/CONTRIBUTING.md.
  * Rule ids are public API from 1.0, so the scheme is fixed once, here, before the
  * first rule exists — the metadata property test (which runs over the whole
  * registry) consumes this so no rule can enter the catalog with a malformed id.
@@ -60,7 +61,7 @@ use Pushery\SQLens\Config\RuleIdValidator;
  * AUTH and PRIV rules are also fixed by editing a file.
  *
  * Two reserved families sit outside every shape above, because neither describes
- * a strictness appetite nor asks one of those four questions:
+ * a strictness appetite nor asks one of those questions:
  *
  * - `SEC.SKIPPED.<NAME>` — the security suite's degradation findings.
  * - `CAP.PRESCAN.<NAME>` — what the static pre-scan found in a migration BEFORE
@@ -75,7 +76,7 @@ final class RuleIdFormat
     public const array AREAS = ['PG', 'MY', 'SEC', 'GEN', 'CAP'];
 
     /**
-     * The five questions a security rule can ask. Held here rather than in the
+     * The questions a security rule can ask, one area each. Held here rather than in the
      * pattern alone so the guard over the registry and the documentation-url
      * derivation read the SAME list — two copies would drift, and the drift
      * would be invisible because both would stay green.

@@ -11,10 +11,9 @@ namespace Pushery\SQLens\Tools;
  * needs to turn "amplifier not installed" from a silent loss of coverage into a named
  * result.
  *
- * The concrete tools (the Squawk adapter first) land with the rule packs; the
- * production registry is empty until then. This contract and the locator are ready
- * ahead of them because they depend only on the finding core, and drawing the edge
- * honestly beats a second implementation later.
+ * The PostgreSQL driver ships two, Squawk and the Postgres Language Server. This
+ * contract and the locator depend only on the finding core, so a tool is added by
+ * implementing them rather than by a second path through the engine.
  */
 interface Tool
 {

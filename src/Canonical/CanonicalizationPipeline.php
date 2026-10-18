@@ -31,13 +31,13 @@ use Pushery\SQLens\Contracts\DriverCanonicalization;
  *      named `order` could be upper-cased as if it were the keyword.
  *   3. Keyword casing next, over the now-settled identifiers.
  *   4. Transaction context, read from the normalized statement stream.
- *   5. Classification last, because it matches shapes against the fully
+ *   5. The driver's own stages, over the normalized statement: a driver adds a
+ *      stage only for a quirk the generic pipeline cannot express, and the
+ *      classifier after it then sees the statement with that quirk settled.
+ *   6. Classification last, because it matches shapes against the fully
  *      normalized statement — classifying raw grammar output would couple the
- *      classifier to formatting.
- *
- * The driver's own stages run after the generic ones: a driver adds a stage only
- * for a quirk the generic pipeline cannot express, and it expresses it over the
- * already-normalized statement.
+ *      classifier to formatting. It ends the pipeline with a canonical statement
+ *      for every statement it can read, so no stage after it would ever run.
  */
 final class CanonicalizationPipeline
 {
@@ -54,8 +54,8 @@ final class CanonicalizationPipeline
             new IdentifierNormalizer($driver),
             new KeywordCasingNormalizer($driver),
             new TransactionContextResolver($driver),
-            new StatementClassifier($driver),
             ...$driver->stages(),
+            new StatementClassifier($driver),
         ];
     }
 

@@ -20,7 +20,9 @@ use Throwable;
  *
  * The signatures are engine-specific and matched narrowly:
  *   - PostgreSQL raises a distinct SQLSTATE per budget — `57014` (statement_timeout),
- *     `55P03` (lock_timeout), `25P03` (idle_in_transaction_session_timeout).
+ *     `55P03` (lock_timeout), `25P03` (idle_in_transaction_session_timeout). The last one
+ *     ends the session, and its code does not reach the client: see
+ *     {@see self::endedForIdleInTransaction()}.
  *   - MySQL uses the general `HY000` SQLSTATE, so the driver error number is what
  *     distinguishes a timeout — `1205` (innodb_lock_wait_timeout) and `3024`
  *     (max_execution_time).
@@ -37,9 +39,13 @@ final class SessionTimeoutDetector
     /** MySQL driver error numbers for a lock-wait and a statement-execution timeout. */
     private const array TIMEOUT_DRIVER_CODES = [1205, 3024];
 
+    /** How PostgreSQL words the end of a session whose idle-in-transaction budget fired, in the server's default English. */
+    private const string IDLE_IN_TRANSACTION_ENDED = 'terminating connection due to idle-in-transaction timeout';
+
     public static function isSessionTimeout(Throwable $throwable): bool
     {
-        return self::matchesTimeout((string) $throwable->getCode(), self::driverCode($throwable));
+        return self::matchesTimeout((string) $throwable->getCode(), self::driverCode($throwable))
+            || self::endedForIdleInTransaction($throwable);
     }
 
     /**
@@ -51,6 +57,27 @@ final class SessionTimeoutDetector
     {
         return in_array($sqlState, self::TIMEOUT_SQLSTATES, true)
             || ($driverCode !== null && in_array($driverCode, self::TIMEOUT_DRIVER_CODES, true));
+    }
+
+    /**
+     * Whether PostgreSQL ended the session because its idle-in-transaction budget fired.
+     *
+     * The server ends that session with a FATAL that carries `25P03`, and the code never reaches the client. Measured on
+     * PostgreSQL 18.0 through PDO and libpq 18.6: the next statement fails with `HY000`, driver error 7, and the server's
+     * message ahead of "server closed the connection unexpectedly". The message is the one evidence that survives, so
+     * it is read, and only from the driver's own error text, where SQL quoted into an exception message cannot fake it.
+     * A server whose `lc_messages` translates it reads as a lost connection, which is what every such end read as before.
+     */
+    private static function endedForIdleInTransaction(Throwable $throwable): bool
+    {
+        for ($current = $throwable; $current instanceof Throwable; $current = $current->getPrevious()) {
+            if ($current instanceof PDOException && is_string($current->errorInfo[2] ?? null)
+                && str_contains($current->errorInfo[2], self::IDLE_IN_TRANSACTION_ENDED)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** The driver-specific error number a query exception carries, if any. */

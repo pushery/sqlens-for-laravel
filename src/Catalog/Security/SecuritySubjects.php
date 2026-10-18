@@ -160,6 +160,21 @@ final readonly class SecuritySubjects
         return implode(',', $names);
     }
 
+    /** The exposed partitions in one line, `public.e (app, PUBLIC); public.f (app)`, five named and the rest counted. */
+    private static function exposedPartitions(RlsState $state): string
+    {
+        $named = [];
+
+        foreach ($state->exposedPartitions as $partition => $exposure) {
+            $named[] = sprintf('%s (%s)', $partition, implode(', ', $exposure['roles']));
+        }
+
+        $shown = array_slice($named, 0, 5);
+        $rest = count($named) - count($shown);
+
+        return implode('; ', $shown).($rest > 0 ? sprintf('; and %d more', $rest) : '');
+    }
+
     /**
      * One table's row-level security state.
      *
@@ -206,6 +221,11 @@ final readonly class SecuritySubjects
                 // reader. `qualifiedName` is the name for reading.
                 'statement_name' => $state->statementName,
                 'rls_owner_is_connection' => self::ownedByConnection($state, $connected),
+                // The partitions a role reads around this table's policies, each with the roles holding
+                // a privilege on it directly, and the first one as a statement names it, for the remedy.
+                // A query against a partition applies its own row-level security, not the table's.
+                'rls_exposed_partitions' => self::exposedPartitions($state),
+                'rls_exposed_partition_statement' => array_values($state->exposedPartitions)[0]['statement'] ?? '',
                 'readability' => $state->readability->state->value,
                 'withheld_fields' => implode(',', $state->readability->withheldFields),
             ],

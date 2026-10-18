@@ -27,11 +27,6 @@ use Pushery\SQLens\Findings\CredentialRedactor;
  * English (`sqlens.security.min_severity`), quotes a value from a file whose comments are English,
  * and is read by the person editing that file. A translated sentence wrapped around an untranslated
  * key helps less than it costs.
- *
- * This paragraph replaced one that said the phrasing "can be translated at the reporter". That
- * sentence was written as a note about what the design allowed, and it read as a plan — enough for a
- * later ticket to file the missing translations as a gap. Saying what will NOT be built is part of
- * saying what was.
  */
 final readonly class ConfigViolation
 {

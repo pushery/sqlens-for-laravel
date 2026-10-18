@@ -14,8 +14,8 @@ namespace Pushery\SQLens\Drivers\Pgsql\Catalog;
  * statistics lookup. Asked of the pinned session, `pg_table_is_visible()`, `to_regclass()` and
  * `current_schema()` would answer about `pg_catalog` alone and find none of them.
  *
- * So the path is recorded once, inside the read transaction and before the pin, into two settings
- * that end with the transaction, and every answer about a bare name reads it from there.
+ * So the path is recorded once, inside the read transaction and before the pin, into settings that
+ * end with the transaction, and every answer about a bare name reads it from there.
  */
 final readonly class ApplicationSearchPath
 {
@@ -25,15 +25,19 @@ final readonly class ApplicationSearchPath
     /** The path as configured, without the implicit schemas: what `current_schemas(false)` answers. */
     public const string EXPLICIT = 'sqlens.explicit_search_path';
 
+    /** The path as written, `"$user"` included: what `SHOW search_path` answers. */
+    public const string CONFIGURED = 'sqlens.configured_search_path';
+
     /**
-     * The statement that records both, local to the transaction it runs in.
+     * The statement that records all three, local to the transaction it runs in.
      *
      * @return literal-string
      */
     public static function recordStatement(): string
     {
         return "select pg_catalog.set_config('".self::EFFECTIVE."', pg_catalog.current_schemas(true)::text, true),"
-            ." pg_catalog.set_config('".self::EXPLICIT."', pg_catalog.current_schemas(false)::text, true)";
+            ." pg_catalog.set_config('".self::EXPLICIT."', pg_catalog.current_schemas(false)::text, true),"
+            ." pg_catalog.set_config('".self::CONFIGURED."', pg_catalog.current_setting('search_path'), true)";
     }
 
     /**
@@ -92,6 +96,17 @@ final readonly class ApplicationSearchPath
     public static function explicit(): string
     {
         return 'pg_catalog.current_setting(\''.self::EXPLICIT.'\')::name[]';
+    }
+
+    /**
+     * Whether the path names `"$user"`, the entry PostgreSQL resolves to the schema named after the
+     * role of each session rather than to one schema for every session.
+     *
+     * @return literal-string
+     */
+    public static function namesTheUser(): string
+    {
+        return 'pg_catalog.strpos(pg_catalog.current_setting(\''.self::CONFIGURED.'\'), \'$user\') > 0';
     }
 
     /**

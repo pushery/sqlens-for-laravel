@@ -20,11 +20,11 @@ use Pushery\SQLens\Tools\ToolVersionWindow;
  * ## Why this one is different from Squawk, and why that matters
  *
  * Squawk reads SQL on standard input and never touches a database. `dblint` CONNECTS — with its
- * own credentials, in its own session, outside the statement and lock timeouts SQLens sets on its
- * own connection. That is the fact "primum non nocere" hangs on here, so it was measured rather
- * than assumed: with `log_statement='all'` on a probe database, a run issues sixteen statements,
- * of which zero mutate and zero lock. All catalog reads, inside one transaction, with
- * `set local search_path = ''`.
+ * own credentials, in sessions of its own, which SQLens can bound only through the settings the
+ * runner hands each new session ({@see PglsRunner::OPTIONS_VARIABLE}). That is the fact "primum
+ * non nocere" hangs on here, so it was measured rather than assumed: a run issues sixteen
+ * statements, none of them mutating, over ten sessions open at once. What that means for locks and
+ * for connection slots is in {@see PglsRunner}, beside the bounds that answer it.
  *
  * The measurement is the reason this adapter is defensible. It is also the reason the runner
  * hands the tool a narrow configuration of its own rather than letting it run what it likes: the
@@ -111,10 +111,10 @@ final readonly class PglsTool implements Tool
     /**
      * Held here rather than on the finding mapper, which is where Squawk keeps its equivalent.
      *
-     * The asymmetry is deliberate and temporary in the other direction: this prefix is needed
-     * BEFORE the mapper exists, because it is what keeps a missing PGLS from miscrediting Squawk's
-     * suppressions the moment this tool is registered. The mapper will read it from here rather
-     * than declare a second one — two constants for one prefix is how the ids and the suppression
+     * The asymmetry is deliberate: the tool needs the prefix even where the binary is missing and
+     * no mapper runs, because it is what keeps a missing PGLS from miscrediting Squawk's
+     * suppressions. The mapper reads it from here ({@see PglsFindingMapper::ID_PREFIX}) rather than
+     * declare a second one — two constants for one prefix is how the ids and the suppression
      * bookkeeping come to disagree.
      */
     public function findingIdPrefix(): string

@@ -11,10 +11,19 @@ namespace Pushery\SQLens\Canonical;
  * patterns from the driver; this enum is only the vocabulary.
  *
  * `Unknown` is a DELIBERATE outcome — a statement recognized as valid SQL but of no
- * kind we model (a `SET`, a `COMMENT ON`, a `VACUUM`). It is NOT the same as an
- * undetermined classification, which is a named CanonicalizationFailure meaning
- * "could not be decided". A convenient `DdlOther`/`Unknown` must never stand in for
- * a real undetermined — that is the "no silent green" line of this stage.
+ * kind we model, such as a `SELECT 1`. It is NOT the same as an undetermined
+ * classification, which is a named CanonicalizationFailure meaning "could not be
+ * decided". A convenient `DdlOther`/`Unknown` must never stand in for a real
+ * undetermined — that is the "no silent green" line of this stage.
+ *
+ * On which side of that line a statement falls is measured, not assumed: a `SET`
+ * has a kind of its own ({@see self::SessionSetting}), a PostgreSQL `COMMENT ON` is
+ * {@see self::DdlOther}, and an `ANALYZE` is `Unknown` on both engines. A `VACUUM`
+ * and MySQL's `OPTIMIZE TABLE` are not recognized, and that is deliberate: `VACUUM
+ * FULL` rewrites the table under an ACCESS EXCLUSIVE lock, an `OPTIMIZE TABLE` copies
+ * a table that has a FULLTEXT index, the first word cannot tell either from its
+ * harmless form, and an `Unknown` would let it pass without a word. They end as a
+ * CanonicalizationFailure, which makes the whole migration undetermined.
  *
  * The set is a superset of the plan's list: `DropTable` and `TruncateTable` are
  * carried as their own kinds (not folded into DdlOther) because the destructive

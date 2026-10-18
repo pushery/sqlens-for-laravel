@@ -150,8 +150,8 @@ final class ReaderSession
         // `LostConnectionDetector` lists `SQLSTATE[25006]: Read only sql transaction: 7` among the
         // strings that mean the connection died, and `Connection::handleQueryException()` rethrows
         // only while `transactions >= 1`. Open the transaction where Laravel cannot see it, and a
-        // write this session refuses is read as a dead connection: the framework RECONNECTS and
-        // RUNS THE STATEMENT AGAIN, outside any transaction, where nothing refuses it.
+        // write this session refuses is read as a dead connection: the framework reconnects and
+        // runs the statement again, outside any transaction, where nothing refuses it.
         //
         // The statement that would be retried is the seal's own write probe below. The package
         // would write into the database it promises never to write to — and only then report that
@@ -169,9 +169,39 @@ final class ReaderSession
 
             return $read($this->connection);
         } finally {
-            // Always a rollback, never a commit. A read transaction has nothing to commit, and
-            // rolling back is the one ending that cannot accidentally persist anything.
+            $this->endTheTransaction();
+        }
+    }
+
+    /**
+     * Roll the read transaction back, unless the server has already ended the session it ran in.
+     *
+     * Always a rollback, never a commit. A read transaction has nothing to commit, and rolling back
+     * is the one ending that cannot accidentally persist anything.
+     *
+     * PostgreSQL ends a session whose transaction stayed idle past `idle_in_transaction_session_timeout`,
+     * and the rollback then fails on the closed connection: measured on 18.0, `HY000`, driver code 7,
+     * "terminating connection due to idle-in-transaction timeout". The transaction went with the
+     * session, so nothing is left to roll back. Thrown from here, that error would replace a result the
+     * reading had already finished, or the error the reading raised itself, with a report about the
+     * closed connection. Laravel resets its transaction level to zero when it reads a failed rollback
+     * as a lost connection, and leaves it otherwise, so the level is what decides.
+     *
+     * The handle is dropped as well. PDO still counts itself inside the transaction its rollback could
+     * not end, so the next `beginTransaction()` on it refused with "There is already an active
+     * transaction" (measured with Laravel 13.30), and this session opens every reading that way.
+     * Disconnected, the next reading opens a fresh connection.
+     */
+    private function endTheTransaction(): void
+    {
+        try {
             $this->connection->rollBack();
+        } catch (Throwable $error) {
+            if ($this->connection->transactionLevel() !== 0) {
+                throw $error;
+            }
+
+            $this->connection->disconnect();
         }
     }
 

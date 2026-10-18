@@ -46,7 +46,9 @@ final readonly class ShadowRefusalAdvice
      */
     private const array SENTENCES = [
         'disallowed_environment' => 'the shadow mode may only run in an environment this project allows, and this is not one of '
-            .'them. That check is not overridable — not by a setting, not by a parameter, not by anything this tool accepts.',
+            .'them. Neither the consent setting nor any parameter of this tool overrides that: which environments may host '
+            .'shadow databases is the project\'s decision, recorded in sqlens.capture.shadow.allowed_environments. Raise it with '
+            .'whoever owns the configuration rather than changing the setting to get past this refusal.',
         'production_connection' => 'the target connection, or the connection shadow mode creates and drops its throwaway '
             .'databases on (capture.shadow.connection or capture.shadow.direct_connection), looks like a production instance, '
             .'and a mode that creates and drops databases never runs against one. Point both at a development connection instead.',

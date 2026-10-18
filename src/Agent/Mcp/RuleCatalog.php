@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Agent\Mcp;
 
 use Pushery\SQLens\Catalog\RuleRegistryExport;
+use Pushery\SQLens\Exceptions\UnreadableShippedArtifact;
+use Pushery\SQLens\Resources\ShippedJson;
 
 /**
  * The shipped rule registry, read.
@@ -19,6 +21,15 @@ use Pushery\SQLens\Catalog\RuleRegistryExport;
  *
  * It also costs nothing: no container, no driver resolution, no database. A tool that only explains
  * a rule has no business booting an engine.
+ *
+ * ## Why a broken registry is refused rather than read as empty
+ *
+ * An empty registry would answer every id with "no rule is registered", and an agent holding an id from
+ * a finding would go looking for a typo in it. A missing, unreadable or malformed file, or one
+ * without entries, is refused by name through {@see ShippedJson}, on the shipped path and on a path a
+ * suite hands in alike: the parameter exists for a smaller registry, never for a broken one, and the
+ * refusal can then be tested. A single malformed row is skipped, so one bad entry does not take every
+ * other rule down with it.
  *
  * ## Why unknown is answered with suggestions rather than with nothing
  *
@@ -99,7 +110,11 @@ final class RuleCatalog
         return array_slice(array_keys($scored), 0, self::MAX_SUGGESTIONS);
     }
 
-    /** @return array<string, array<string, mixed>> */
+    /**
+     * @return array<string, array<string, mixed>>
+     *
+     * @throws UnreadableShippedArtifact when the registry file cannot be read or carries no entries
+     */
     private function rows(): array
     {
         if ($this->rows !== null) {
@@ -107,11 +122,10 @@ final class RuleCatalog
         }
 
         $path = $this->path ?? dirname(__DIR__, 3).'/'.RuleRegistryExport::BUNDLED_FILE;
-        $raw = @file_get_contents($path);
-        $decoded = $raw === false ? null : json_decode($raw, true);
+        $decoded = ShippedJson::decode($path, 'entries');
         $rows = [];
 
-        if (is_array($decoded) && is_array($decoded['entries'] ?? null)) {
+        if (is_array($decoded['entries'] ?? null)) {
             foreach ($decoded['entries'] as $row) {
                 if (! is_array($row)) {
                     continue;

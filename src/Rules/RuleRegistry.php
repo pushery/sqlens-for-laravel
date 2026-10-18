@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Rules;
 
+use Pushery\SQLens\Audit\AuditNotices;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\Rule;
 use Pushery\SQLens\Exceptions\InvalidRule;
@@ -25,7 +26,8 @@ use Pushery\SQLens\Levels\Level;
  *
  * Deprecation-aware: all() enumerates every rule (deprecated included, for docs
  * and completeness checks); executable() drops the deprecated ones. A deprecated
- * rule is LISTED, not EXECUTED — the no-op-plus-notice behavior is added later.
+ * rule is LISTED, not EXECUTED: the audit reports it as withheld, with the
+ * successor to reach for ({@see AuditNotices::withheldByDeprecation()}).
  *
  * The axis filters return a new registry (immutable, chainable, side-effect
  * free), so a run composes them in any order and gets the same subset.

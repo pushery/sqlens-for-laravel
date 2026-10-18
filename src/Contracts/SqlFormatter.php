@@ -65,7 +65,7 @@ interface SqlFormatter
     /**
      * Which version of this backend is on the machine, or `null` when that cannot be answered.
      *
-     * ASKED WITHOUT FORMATTING ANYTHING, and that is the whole reason it exists. The version used to
+     * Asked without formatting anything, and that is the whole reason it exists. The version used to
      * be reachable only through a `FormatResult`, so "which pgFormatter is installed?" could only be
      * answered by formatting a file first -- which a diagnostic command has no business doing, and
      * which says nothing at all when no file is at hand.

@@ -499,7 +499,7 @@ final readonly class AuditRunner implements AuditRuns
             // then and would be a lie now: a project with a real baseline would be told its
             // emergency exit had nothing to open while the exit was doing exactly its job.
             ...($ignoreBaseline && $baseline->entries === []
-                ? [AuditNotices::baselineBypassHadNothingToBypass($this->runContext($today, $activeLevel, 0, $overrides, $activeCategories, $target))]
+                ? [AuditNotices::baselineBypassHadNothingToBypass($target, $context)]
                 : []),
             // Independent of the bypass above. That one says a flag found nothing to act on;
             // this says the project's own configuration points at a file that is not there — and
@@ -507,7 +507,8 @@ final readonly class AuditRunner implements AuditRuns
             ...($this->baselineIsConfiguredButAbsent()
                 ? [AuditNotices::baselineConfiguredButAbsent(
                     is_string($configuredBaseline = $this->config->get('sqlens.baseline.path')) ? $configuredBaseline : '',
-                    $this->runContext($today, $activeLevel, 0, $overrides, $activeCategories, $target),
+                    $target,
+                    $context,
                 )]
                 : []),
             ...$this->settingsFindings($settings, $target, $context),
@@ -650,10 +651,9 @@ final readonly class AuditRunner implements AuditRuns
      *
      * @param  list<string>  $readPaths
      * @param  list<Finding>  $findings  every finding of the run, before suppression
-     * @param  list<string>  $activeCategories
      * @return list<Finding>
      */
-    private function orphanedIgnoreFindings(array $readPaths, array $findings, InstanceTarget $target, array $activeCategories, RunOverrides $overrides, Today $today): array
+    private function orphanedIgnoreFindings(array $readPaths, array $findings, InstanceTarget $target, SubjectContext $context): array
     {
         $ignore = IgnoreList::fromConfig(
             $this->config->get('sqlens.audit.ignore'),
@@ -672,7 +672,7 @@ final readonly class AuditRunner implements AuditRuns
 
         return $orphans === []
             ? []
-            : [AuditNotices::orphanedIgnorePatterns($orphans, $this->runContext($today, $this->configuredLevel(), 0, $overrides, $activeCategories, $target))];
+            : [AuditNotices::orphanedIgnorePatterns($orphans, $target, $context)];
     }
 
     /**
@@ -1565,9 +1565,16 @@ final readonly class AuditRunner implements AuditRuns
 
         // No resolved server version means the checks below cannot be built at all. The account is
         // left unread rather than half-read: a partial answer here would report debts as settled on
-        // the strength of a reading that never happened.
+        // the strength of a reading that never happened. Unread is said out loud, because a report
+        // without debt findings otherwise reads as an account with nothing owed.
         if (! $version instanceof ServerVersion) {
-            return [];
+            return [DebtNotices::ledgerUnreadable(
+                'the server did not name its version, and the catalog questions that settle a debt are built for one',
+                UndeterminedReason::ServerVersionUnresolvable,
+                $target->driver,
+                $target->connection,
+                $context,
+            )];
         }
 
         $session = $this->connections->sessionFor($connection, $this->drivers);
@@ -1762,7 +1769,7 @@ final readonly class AuditRunner implements AuditRuns
         // suppression hides any of them: a pattern counts as used when it covers an object this
         // run read or reported.
         if ($readPaths !== null) {
-            $findings = [...$findings, ...$this->orphanedIgnoreFindings($readPaths, $findings, $target, $activeCategories, $overrides, $today)];
+            $findings = [...$findings, ...$this->orphanedIgnoreFindings($readPaths, $findings, $target, $subjectContext)];
         }
 
         // Under a strict profile a FIXABLE absence is an error rather than a degradation — and

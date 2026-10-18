@@ -20,8 +20,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * {@see HbaMd5Rule} is about an obsolete CHALLENGE: the password is never sent, but the exchange can
  * be replayed and the stored digest is weak. This one is about no challenge existing. Merging them
- * would produce a finding that is true of neither, which is why the ticket that specified this family
- * insisted on separate ids.
+ * would produce a finding that is true of neither, which is why this family keeps separate ids.
  *
  * ## What this rule deliberately does not claim
  *

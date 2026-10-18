@@ -31,7 +31,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ## Why the escalation reads the grant and not the account
  *
- * The ticket asks for `high` when the same account also holds far-reaching privileges. The obvious
+ * `high` is wanted when the same account also holds far-reaching privileges. The obvious
  * reading is to look up the account's other grants — and that would be two readings that can
  * disagree, plus a readability question the finding would have to carry.
  *

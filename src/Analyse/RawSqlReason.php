@@ -61,7 +61,7 @@ final readonly class RawSqlReason
     }
 
     /**
-     * Does this attribute list ANSWER THE OTHER QUESTION — why a runtime value sits in the
+     * Does this attribute list answer the other question — why a runtime value sits in the
      * statement's text rather than in its parameters?
      *
      * A separate argument, read separately, and the separation is the point. `reason:` says why raw

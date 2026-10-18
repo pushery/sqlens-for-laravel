@@ -162,8 +162,8 @@ abstract class AbstractCatalogRule implements JudgesSchemaObjects, Rule
      *
      * One rule, one prefix — a reader comparing a lint report and an audit report has to be able to
      * see that the same rule spoke. It reads `sqlens.lint` today because that is what every rule in
-     * the package reports under and the string is part of the published output; renaming it fleet-
-     * wide is a change to what consumers parse, not a detail to slip into a rule.
+     * the package reports under and the string is part of the published output; renaming it across
+     * the package is a change to what consumers parse, not a detail to slip into a rule.
      */
     final public function messagePrefix(): string
     {

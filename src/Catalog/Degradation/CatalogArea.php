@@ -8,7 +8,7 @@ namespace Pushery\SQLens\Catalog\Degradation;
  * One part of the catalog a reading depends on, and the question that decides whether it is there.
  *
  * The area is named in the user's terms — "indexes", "table statistics" — rather than in the
- * server's, because the skip a reader ends up holding has to say what is MISSING FROM THE AUDIT.
+ * server's, because the skip a reader ends up holding has to say what is missing from the audit.
  * `pg_hba_file_rules is not readable` is a fact about a catalog relation; `host-based authentication
  * rules` is the thing that will not be reasoned about, and the second one is what a person can act on.
  */

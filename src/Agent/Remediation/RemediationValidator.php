@@ -21,7 +21,7 @@ use Pushery\SQLens\Remediation\RemediationSubject;
  *
  * ## What the TYPE SYSTEM already guarantees, and is therefore not checked here
  *
- * The ticket asks for enum-value validation and required-field validation. Both are already made by
+ * Enum-value validation and required-field validation are both already made by
  * the language: {@see RemediationPayload} is a readonly object whose `strategy` is a
  * {@see RemediationStrategy}, whose steps are {@see RemediationStep}s and whose kinds are
  * {@see RemediationStepKind}s. There is no way to construct one carrying `strategy: "concurrentley"`
@@ -32,7 +32,7 @@ use Pushery\SQLens\Remediation\RemediationSubject;
  * What CAN go wrong is everything the constructor does not police, and each check below exists
  * because a specific mistake would produce it.
  *
- * ## The check the ticket got backwards, corrected against the built layer
+ * ## The check first specified backwards, corrected against the built layer
  *
  * "No unresolved `{{…}}` in the result" would reject nearly every payload this package produces —
  * and rightly produces. A placeholder STANDS when its value is a decision rather than a fact: the

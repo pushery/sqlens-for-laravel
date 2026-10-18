@@ -10,6 +10,8 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Name;
+use Laravel\Mcp\Server\Tools\Annotations\IsDestructive;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 use Override;
 use Pushery\SQLens\Agent\Mcp\McpConnection;
 use Pushery\SQLens\Agent\Mcp\ProfileRefusal;
@@ -62,6 +64,8 @@ use Pushery\SQLens\Subjects\CaptureMode;
  * them at all.
  */
 #[Name('lint_shadow')]
+#[IsReadOnly(false)]
+#[IsDestructive]
 final class LintShadowTool extends SqlensTool
 {
     protected string $description = 'Runs the pending migrations for real against a throwaway shadow database and returns structured findings — the truth mode, which sees what static analysis cannot. It CREATES AND DROPS a database of its own and never touches project data. Disabled by default: a project must enable it by name and record its standing consent, because a server has nobody to ask.';
@@ -82,7 +86,7 @@ final class LintShadowTool extends SqlensTool
         $profile = $profiles->select(null);
 
         if (! $profile->isValid()) {
-            return Response::json(ProfileRefusal::forLint((string) $profile->rejectedValue, $profile->source));
+            return ToolAnswer::json(ProfileRefusal::forLint((string) $profile->rejectedValue, $profile->source));
         }
 
         // Applied for this call and put back afterwards, because the next call is answered in the
@@ -118,7 +122,7 @@ final class LintShadowTool extends SqlensTool
         );
 
         $envelope = JsonEnvelope::for($outcome->result, $outcome->context)->toArray();
-        $page = ReportPage::of($envelope['findings'], 0, null, $this->ceiling($config));
+        $page = ReportPage::of($envelope['findings'], 0, null, ReportPage::ceiling($config));
         $summary = trim($this->summary($outcome->connectionName, $page, RunUnresolved::reasons($envelope) === []).($outcome->staleBaselineBreaks ? ' '.$outcome->gateMeaning() : ''));
 
         // The run that never happened, then the guard's refusal, then the run that happened and
@@ -131,7 +135,7 @@ final class LintShadowTool extends SqlensTool
             ?? RunUnresolved::in($envelope, $summary)
             ?? ToolAnswer::of([], $summary);
 
-        return Response::json([
+        return ToolAnswer::json([
             ...$answer->toArray(),
             'connection' => $outcome->connectionName,
             'gate' => [
@@ -240,12 +244,5 @@ final class LintShadowTool extends SqlensTool
             count($page->rows),
             $page->truncated ? 'The list is CUT: '.$page->reason.'.' : 'Nothing was left out.',
         );
-    }
-
-    private function ceiling(Repository $config): int
-    {
-        $configured = $config->get('sqlens.agent.mcp.max_findings');
-
-        return is_int($configured) && $configured >= 1 ? $configured : 200;
     }
 }

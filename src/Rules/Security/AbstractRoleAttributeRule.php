@@ -51,7 +51,7 @@ abstract class AbstractRoleAttributeRule extends AbstractSchemaObjectSecurityRul
      *
      * `connection_role` above already narrows this family to the one account the audit authenticated
      * as, and on a container that account is whatever the service block named — `POSTGRES_USER:
-     * postgres` in every Woodpecker lane of this fleet, which is a superuser by construction. The
+     * postgres` in a typical CI service block, which is a superuser by construction. The
      * same attribute on a role somebody deploys with is one of the most serious things here.
      */
     public function serverSubjectJudged(): string

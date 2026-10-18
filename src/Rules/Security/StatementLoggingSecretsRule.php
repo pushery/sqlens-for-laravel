@@ -18,9 +18,9 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * MySQL's `general_log` had a hardening view ({@see GeneralLogRule}) and PostgreSQL's `log_statement`
  * had a privacy view ({@see StatementLoggingRule}). Same concern, opposite categories, one per
- * engine — measured by instantiating both rather than by reading them. Nobody decided that; it is
- * what two tickets written months apart produced, and each docblock argued its own choice
- * convincingly, which is exactly why it survived.
+ * engine — measured by instantiating both rather than by reading them. Nobody decided that: the two
+ * rules were written months apart, and each docblock argued its own choice convincingly, which is
+ * exactly why it survived.
  *
  * The consequence was invisible in the way this package cares about. A team hardening a PostgreSQL
  * server filters on `--category=security`, and `log_statement = all` never reached them — although

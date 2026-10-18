@@ -40,7 +40,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * ## The primary-key half of the original design is deliberately absent
  *
- * The ticket proposed reporting a nullable column in a PRIMARY KEY as well. Measured: PostgreSQL
+ * Reporting a nullable column in a PRIMARY KEY as well was considered. Measured: PostgreSQL
  * refuses it outright — `ERROR: column "a" is in a primary key` — and MySQL rewrites it silently.
  * The state is unreachable from a live catalog, so a rule that checked for it would be code that
  * cannot execute, which is worse than absent: it reads as coverage.

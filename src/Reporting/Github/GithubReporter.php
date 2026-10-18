@@ -137,7 +137,7 @@ final class GithubReporter implements Reporter
      * A pull request shows annotations as three visual weights and nothing else, so this mapping is
      * the entire severity signal a reviewer gets. Left on outcome alone, a critical security finding
      * and a level-9 pedantry note arrive as the same red line, and the reviewer's attention is spent
-     * in the wrong place — which is the specific harm this ticket exists to prevent.
+     * in the wrong place — which is the specific harm this mapping exists to prevent.
      *
      * For a severity-gated finding the weight therefore comes from the SEVERITY: `critical`/`high`
      * are errors, `medium`/`low` warnings, `info` a notice. A level finding keeps the outcome mapping

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Tools\Squawk;
 
 use Pushery\SQLens\Categories\Category;
+use Pushery\SQLens\Docs\DocumentationSite;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Severity\Severity;
@@ -63,5 +64,20 @@ final readonly class SquawkRuleMapping
     public function surfaces(): bool
     {
         return $this->parityStatus->surfaces();
+    }
+
+    /**
+     * The page a reader is sent to.
+     *
+     * Our own rule page when the map names a SQLens rule that covers the same ground — the
+     * reader wants the explanation, and ours is the one written for this report. Otherwise the
+     * rule upstream, because sending them to a page this package has never written would be a
+     * dead link dressed as documentation.
+     */
+    public function documentationUrl(): string
+    {
+        return $this->sqlensRule === null
+            ? $this->sourceUrl
+            : DocumentationSite::page('rules/'.strtolower(str_replace(['.', '_'], '-', $this->sqlensRule)));
     }
 }

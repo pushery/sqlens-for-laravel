@@ -103,8 +103,9 @@ final readonly class BreakingChangeDetector
             // A new rule reports findings a consumer's build did not see before, so it is visible
             // rather than free, and a minor may add one. Before 1.0 it ships `stable`: a 0.x minor
             // is where this package makes its breaking changes, and `^0.N` does not install one on
-            // its own. From 1.0 GOVERNANCE.md asks for `preview`, and a stable newcomer then needs a
-            // major; this comparison does not read the tier yet.
+            // its own. From 1.0 the governance policy asks for `preview`, and a stable newcomer then
+            // needs a major; this comparison does not read the tier yet. The policy:
+            // https://github.com/pushery/sqlens-for-laravel/blob/main/GOVERNANCE.md
             $changes[] = new SurfaceChange(
                 SurfaceChangeClass::AllowedInMinor,
                 $id,

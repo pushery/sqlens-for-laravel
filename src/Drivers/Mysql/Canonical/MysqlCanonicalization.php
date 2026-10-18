@@ -213,6 +213,11 @@ final class MysqlCanonicalization implements DeclaresReservedWords, DriverCanoni
             // Measured before and after rather than reasoned: with these absent, the same DDL in two
             // casings produced two different canonical strings.
             'ALWAYS', 'GENERATED', 'STORED', 'VIRTUAL',
+
+            // `ANALYZE` leads `ANALYZE TABLE`, which the lead fallback reads as `Unknown`, and the
+            // classifier refuses a statement whose lead is not a keyword. MySQL reserves the word,
+            // so a name spelled with it was quoted already and keeps its quotes.
+            'ANALYZE',
         ];
     }
 
@@ -873,6 +878,15 @@ final class MysqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                 // why the hole was invisible — the statements AROUND a grant canonicalized fine.
                 'GRANT' => StatementKind::DdlOther,
                 'REVOKE' => StatementKind::DdlOther,
+
+                // `ANALYZE TABLE` refreshes the index statistics and changes no schema and no row. It
+                // is `Unknown`, as a `SELECT` is. Refused, it made the whole migration undetermined.
+                //
+                // `OPTIMIZE TABLE` is deliberately absent. The online DDL matrix records it as a
+                // rebuild that runs in place only on a table without a FULLTEXT index and copies one
+                // that has it, and `Unknown` would pass the copy without a word. It stays undetermined
+                // until it carries a kind the matrix entry can answer for.
+                'ANALYZE' => StatementKind::Unknown,
             ],
             // `ALTER TABLE t ADD INDEX i (a), ALGORITHM=INPLACE, LOCK=NONE`: the last two qualify how
             // the index is built and are not actions of their own.

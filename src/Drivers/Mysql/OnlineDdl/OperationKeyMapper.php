@@ -20,14 +20,12 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  * the classifier, which already turned them into a kind through its signature machinery. A second matcher
  * here would duplicate work the classifier already does.
  *
- * WHAT IT DELIBERATELY DOES NOT DO YET, so the limit is visible rather than assumed. Three kinds
- * map one-to-one onto a matrix operation. The others are RECOGNIZED but too coarse to key on:
- * {@see StatementKind::AlterColumn} covers a type change, a VARCHAR resize in either direction and
- * a nullability flip — six matrix operations whose difference lives in the type expression, which
- * the kind does not carry. The index builds are now separated too, so only
- * one coarse case is left.
- * {@see StatementKind::AddConstraint} stays the GENERIC named constraint (a CHECK, a
- * UNIQUE) that the matrix does not classify as one operation.
+ * WHAT IT DELIBERATELY DOES NOT DO YET, so the limit is visible rather than assumed. The kinds in
+ * {@see self::DIRECT} map one-to-one onto a matrix operation. Two are RECOGNIZED but too coarse to
+ * key on: {@see StatementKind::AlterColumn} covers a type change, a VARCHAR resize in either
+ * direction and a nullability flip — six matrix operations whose difference lives in the type
+ * expression, which the kind does not carry — and {@see StatementKind::AddConstraint} stays the
+ * GENERIC named constraint (a CHECK, a UNIQUE) that the matrix does not classify as one operation.
  *
  * Those return a NAMED undetermined rather than a guess. Picking the most likely operation would
  * be the silent-green this package exists to refuse — and picking the most expensive one would
@@ -66,8 +64,9 @@ final readonly class OperationKeyMapper
      *
      * A rule never sees a {@see CanonicalStatement}; it sees the canonical view, which carries the
      * kind and nothing that would let it rebuild one. This is the primitive both entry points share,
-     * so a rule and the runner can never map the same kind two different ways — and it is not a
-     * second reading, because {@see map()} never read anything else in the first place.
+     * a rule with a kind and {@see map()} with a statement, so the two can never map the same kind
+     * two different ways — and it is not a second reading, because {@see map()} never read anything
+     * else in the first place.
      */
     public function forKind(?StatementKind $kind): OperationKeyResolution
     {

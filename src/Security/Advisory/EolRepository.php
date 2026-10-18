@@ -72,7 +72,7 @@ final class EolRepository
      */
     public static function forDocument(string $body, string $label): EolLookup
     {
-        return new self(null, '')->parseDocument($body, $label);
+        return new self(null, '')->parseDocument($body, $label, EolSource::Configured, $label);
     }
 
     /**
@@ -146,17 +146,29 @@ final class EolRepository
         return $this->read(dirname(__DIR__, 3).'/'.self::BUNDLED_FILE, EolSource::Bundled);
     }
 
-    /** Shared by the file path and the in-hand path, so both refuse exactly the same documents. */
-    private function parseDocument(string $raw, string $path, EolSource $source = EolSource::Configured): EolLookup
+    /**
+     * Shared by the file path and the in-hand path, so both refuse exactly the same documents.
+     *
+     * A failure sentence names a file by its source and path, and a document in hand by the label
+     * its caller gave it, which is $subject.
+     */
+    private function parseDocument(string $raw, string $path, EolSource $source = EolSource::Configured, ?string $subject = null): EolLookup
     {
+        $subject ??= sprintf('the %s advisory file "%s"', $source->value, $path);
+
         try {
-            /** @var array<string, mixed> $decoded */
             $decoded = json_decode($raw, true, flags: JSON_THROW_ON_ERROR);
         } catch (JsonException $exception) {
-            return EolLookup::unavailable(sprintf('the %s advisory file "%s" is not valid JSON: %s', $source->value, $path, $exception->getMessage()));
+            return EolLookup::unavailable(sprintf('%s is not valid JSON: %s', $subject, $exception->getMessage()));
         }
 
-        return $this->parse($decoded, $path, $source);
+        // Valid JSON with a scalar at its root, a proxy's "Service Unavailable" for one, has no field
+        // to read. It is refused like every other unreadable document rather than handed on.
+        if (! is_array($decoded)) {
+            return EolLookup::unavailable(sprintf('%s is JSON, but not an object', $subject));
+        }
+
+        return $this->parse($decoded, $path, $source, $subject);
     }
 
     private function read(string $path, EolSource $source): EolLookup
@@ -183,8 +195,8 @@ final class EolRepository
         return $this->parseDocument($raw, $path, $source);
     }
 
-    /** @param  array<string, mixed>  $data */
-    private function parse(array $data, string $path, EolSource $source): EolLookup
+    /** @param  array<array-key, mixed>  $data */
+    private function parse(array $data, string $path, EolSource $source, string $subject): EolLookup
     {
         $version = $data['schema_version'] ?? null;
 
@@ -193,9 +205,8 @@ final class EolRepository
         // measured — worse than no verdict, because it looks like one.
         if ($version !== self::SCHEMA_VERSION) {
             return EolLookup::unavailable(sprintf(
-                'the %s advisory file "%s" declares schema_version %s; this build understands %d',
-                $source->value,
-                $path,
+                '%s declares schema_version %s; this build understands %d',
+                $subject,
                 // SUBSTITUTE and deliberately NOT throw: this renders a value INTO AN ERROR
                 // MESSAGE about a malformed file, so a serialization failure here would replace a
                 // useful complaint with an exception raised while explaining the first one. The
@@ -209,20 +220,20 @@ final class EolRepository
         $products = $data['products'] ?? null;
 
         if (! is_array($products) || $products === []) {
-            return EolLookup::unavailable(sprintf('the %s advisory file "%s" carries no products', $source->value, $path));
+            return EolLookup::unavailable(sprintf('%s carries no products', $subject));
         }
 
         $cycles = [];
 
         foreach ($products as $product => $entry) {
             if (! is_string($product) || ! is_array($entry) || ! is_array($entry['cycles'] ?? null)) {
-                return EolLookup::unavailable(sprintf('the %s advisory file "%s" has a product without a cycles list', $source->value, $path));
+                return EolLookup::unavailable(sprintf('%s has a product without a cycles list', $subject));
             }
 
             $parsed = $this->cycles($entry['cycles']);
 
             if ($parsed === null) {
-                return EolLookup::unavailable(sprintf('the %s advisory file "%s" has a malformed cycle under "%s"', $source->value, $path, $product));
+                return EolLookup::unavailable(sprintf('%s has a malformed cycle under "%s"', $subject, $product));
             }
 
             $cycles[$product] = $parsed;
@@ -231,7 +242,7 @@ final class EolRepository
         $compiledOn = $data['compiled_on'] ?? null;
 
         if (! is_string($compiledOn) || $compiledOn === '') {
-            return EolLookup::unavailable(sprintf('the %s advisory file "%s" does not say when it was compiled', $source->value, $path));
+            return EolLookup::unavailable(sprintf('%s does not say when it was compiled', $subject));
         }
 
         return EolLookup::found(new EolData($cycles, $path, $source, $compiledOn));

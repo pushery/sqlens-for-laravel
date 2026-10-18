@@ -59,7 +59,7 @@ enum SchemaObjectType: string
      *
      * ## Most of what `information_schema.EVENTS` holds is not schema
      *
-     * An event is the one catalog object that REWRITES ITS OWN ROW BY RUNNING. Measured on MySQL
+     * An event is the one catalog object that rewrites its own row by running. Measured on MySQL
      * 8.4.10 against a live scheduler: `LAST_EXECUTED` moves on every single execution, and a
      * one-shot event declared `ON COMPLETION PRESERVE` flips its own `STATUS` from `ENABLED` to
      * `DISABLED` when it fires — with nobody touching the schema.

@@ -48,7 +48,7 @@ final readonly class CatalogObjectFingerprint
      * @var array<string, string>
      */
     public const array VOLATILE_ATTRIBUTES = [
-        // NOTHING READS THIS TODAY, and the line stays anyway — with that said out loud, because an
+        // Nothing reads this today, and the line stays anyway — with that said out loud, because an
         // entry whose absence changes nothing is one a later reader deletes as dead.
         //
         // It is kept as a guard ahead of a reader that has not been written: the counter is real

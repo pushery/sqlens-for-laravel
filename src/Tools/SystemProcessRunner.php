@@ -130,7 +130,7 @@ final readonly class SystemProcessRunner implements ProcessRunner
      * shell inherits `PGHOST`, `PGPASSWORD`, `DATABASE_URL` and everything else that happens to
      * be exported — which can send a linter to a live database, and would make the result
      * depend on whose terminal it started in. Naming what may pass through means a variable
-     * added to the fleet tomorrow is excluded by default rather than included by accident.
+     * added to the environment tomorrow is excluded by default rather than included by accident.
      *
      * `PATH` so the binary can find its own helpers, `HOME` and the temp vars because tools
      * write scratch files. Nothing about a database.

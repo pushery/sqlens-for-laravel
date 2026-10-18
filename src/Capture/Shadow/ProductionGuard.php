@@ -31,8 +31,7 @@ namespace Pushery\SQLens\Capture\Shadow;
  * The guard evaluates plain inputs, not a live console — a command gathers the
  * environment, the flags and the connection's production status and hands them
  * over. That keeps the safety logic unit-testable without a terminal and makes it
- * reusable by every mode that needs it, exactly as the ticket requires (no
- * command-private trait).
+ * reusable by every mode that needs it, which code private to one command would not be.
  */
 final readonly class ProductionGuard
 {

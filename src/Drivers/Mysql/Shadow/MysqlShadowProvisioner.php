@@ -53,6 +53,12 @@ final readonly class MysqlShadowProvisioner implements ShadowProvisioner
     private const int DATABASE_ACCESS_DENIED = 1044;
 
     /**
+     * MySQL's ER_BINLOG_CREATE_ROUTINE_NEED_SUPER: binary logging is on, `log_bin_trust_function_creators`
+     * is off, and the account creating a trigger or a stored function has no SUPER.
+     */
+    private const int BINLOG_NEEDS_SUPER = 1419;
+
+    /**
      * @param  MysqlMaintenanceGateway  $source  the same reads on the connection being examined,
      *                                           asked only for the source's character set. That
      *                                           account always sees its own database; the one
@@ -232,8 +238,36 @@ final readonly class MysqlShadowProvisioner implements ShadowProvisioner
                 throw $failure;
             }
 
-            throw new ShadowProvisioningUndetermined(UndeterminedReason::ShadowMysqlReplayFailed);
+            throw new ShadowProvisioningUndetermined(UndeterminedReason::ShadowMysqlReplayFailed, $this->replayFailureDetail($failure));
         }
+    }
+
+    /**
+     * What a refused dump statement tells the operator: the server's error number and SQLSTATE.
+     *
+     * Never the server's message, because MySQL quotes the statement back in it (`… near '…' at
+     * line 1`), and a report does not repeat what a dump holds. One number also names what lifts
+     * it, because the account the documentation recommends meets it on a server left at its
+     * defaults: with binary logging on, MySQL creates a trigger or a stored function only for an
+     * account with SUPER, whatever its definer.
+     */
+    private function replayFailureDetail(Throwable $failure): ?string
+    {
+        $info = $failure instanceof PDOException ? $failure->errorInfo : null;
+        $code = $info[1] ?? null;
+
+        if (! is_int($code)) {
+            return null;
+        }
+
+        $state = $info[0] ?? null;
+        $detail = sprintf('MySQL refused a statement with error %d%s.', $code, is_string($state) ? ' (SQLSTATE '.$state.')' : '');
+
+        if ($code !== self::BINLOG_NEEDS_SUPER) {
+            return $detail;
+        }
+
+        return $detail.' Binary logging is on and the account has no SUPER, which MySQL then requires to create a trigger or a stored function, whatever its definer; log_bin_trust_function_creators = 1 on the server lifts that requirement.';
     }
 
     /**

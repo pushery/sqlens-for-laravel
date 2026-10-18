@@ -33,7 +33,7 @@ use Pushery\SQLens\Severity\Severity;
  */
 final readonly class DebtThresholds
 {
-    /** The ticket's numbers, in UTC calendar days: mention at a month, warn at a quarter, escalate at half a year. */
+    /** The defaults, in UTC calendar days: mention at a month, warn at a quarter, escalate at half a year. */
     public const array DEFAULTS = [
         DebtTier::Notice->value => 30,
         DebtTier::Warning->value => 90,

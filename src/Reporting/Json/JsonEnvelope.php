@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Reporting\Json;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Result;
 use Pushery\SQLens\Levels\Level;
+use Pushery\SQLens\Reporting\RuleLimitations;
 use Pushery\SQLens\Reporting\RunContext;
 use Pushery\SQLens\Reporting\Summary\AxisSummary;
 use Pushery\SQLens\Reporting\Suppression\SuppressedFinding;
@@ -55,7 +56,7 @@ final readonly class JsonEnvelope
      * published number would depend on the order they merged in — and every other
      * change's pin test would be red until it rebased. One version, one source.
      */
-    public const int SCHEMA_VERSION = 9;
+    public const int SCHEMA_VERSION = 10;
 
     /**
      * The RUN-level fields version 4 introduces.
@@ -275,6 +276,20 @@ final readonly class JsonEnvelope
     ];
 
     /**
+     * The per-finding field version 10 introduces: what the finding's rule deliberately does not answer.
+     *
+     * Read from the shipped rule catalog by the finding's rule id ({@see RuleLimitations}), the same list
+     * `explain_rule` gives. Present only where the rule declares limitations; its absence means the rule names
+     * none, never that it checks everything. A finding is the one place a reader of a report meets a rule, so
+     * this is where "found nothing here" is told apart from "found nothing".
+     *
+     * @var list<string>
+     */
+    public const array FIELDS_ADDED_IN_V10 = [
+        'limitations',
+    ];
+
+    /**
      * The summary field version 9 introduces: how many findings carry such a statement.
      *
      * Beside `counts.downtime_class` rather than a key of it, because the classes are a closed set
@@ -352,7 +367,7 @@ final readonly class JsonEnvelope
     ];
 
     /**
-     * The per-finding fields version 2 introduces, declared rather than smuggled.
+     * The per-finding fields version 3 introduces, declared rather than smuggled.
      *
      * The register is not documentation: {@see JsonEnvelope}
      * is held to it by a test that compares the keys a finding actually emits against
@@ -360,8 +375,8 @@ final readonly class JsonEnvelope
      * here fails the build — which is the whole point, because an undeclared additive
      * field is exactly the silent contract change the version exists to announce.
      *
-     * `downtime_class` and `stability` already ship; `confidence` and
-     * `maintenance_window` arrive with their own changes and touch nothing here.
+     * The fields version 2 added, `confidence` and `downtime_class` among them, are in
+     * {@see self::FIELDS_ADDED_IN_V2}.
      *
      * @var list<string>
      */
@@ -450,7 +465,7 @@ final readonly class JsonEnvelope
      *
      * @return array<string, mixed>
      */
-    private function finding(Finding $finding): array
+    private function finding(Finding $finding, RuleLimitations $limitations): array
     {
         $decision = GateDecision::for(
             $finding,
@@ -462,6 +477,7 @@ final readonly class JsonEnvelope
             ...$finding->toArray(),
             'level' => $decision->axis === GateAxis::Severity ? null : $finding->level->value,
             'blocked_by' => $decision->blockedBy?->value,
+            'limitations' => $limitations->of($finding->ruleId),
         ];
 
         // Through the same null filter the finding's own projection uses. One rule for the whole
@@ -483,6 +499,8 @@ final readonly class JsonEnvelope
      */
     public function toArray(): array
     {
+        $limitations = RuleLimitations::shipped();
+
         return [
             'schema_version' => self::SCHEMA_VERSION,
             'run' => [
@@ -536,7 +554,7 @@ final readonly class JsonEnvelope
                 ...AxisSummary::for($this->result, $this->context)->toArray(),
             ],
             'findings' => array_map(
-                $this->finding(...),
+                fn (Finding $finding): array => $this->finding($finding, $limitations),
                 $this->result->findings,
             ),
             'suppressed' => array_map(

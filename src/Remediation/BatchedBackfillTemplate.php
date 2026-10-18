@@ -106,7 +106,7 @@ final readonly class BatchedBackfillTemplate
      *
      * ## Why the timeout preamble is step one rather than step three
      *
-     * The ticket listed it last. It leads here for the same reason it leads in the concurrent-index
+     * A first draft listed it last. It leads here for the same reason it leads in the concurrent-index
      * sequence: a session setting that arrives after the work it is supposed to bound has bounded
      * nothing. The difference worth stating is what the setting should BE — a job's statement
      * timeout is sized to ONE BATCH, not to a whole migration, and a value carried over from a

@@ -61,7 +61,7 @@ final readonly class PostdeployNotValidConstraintCheck implements PostdeployChec
      *
      * The kind is the SAME word the static rule uses, and taking it from that constant rather than
      * writing it again is the guardrail rather than a nicety: two spellings would be two debts for
-     * one constraint, which is precisely the split this ticket exists to close.
+     * one constraint, which is precisely the split the shared constant closes.
      */
     public function debtKind(): string
     {

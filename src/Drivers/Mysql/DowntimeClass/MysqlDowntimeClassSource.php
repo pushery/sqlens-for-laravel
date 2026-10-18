@@ -23,10 +23,21 @@ use Pushery\SQLens\Rules\ServerVersion;
  * The ONE place a MySQL rule gets its `downtime_class`.
  *
  * It builds no classifier of its own. Everything it needs already exists and has an owner: the
- * operation key comes from {@see OperationKeyMapper}, the matrix entry from {@see MatrixResolver},
- * and the entry's axes become a class through {@see DowntimeClassMapper}. This is the wiring
- * between them, and the reason it is a class rather than three calls repeated per rule: a second
- * copy of that chain is a second answer waiting to disagree with the first.
+ * matrix entry comes from {@see MatrixResolver}, and the entry's axes become a class through
+ * {@see DowntimeClassMapper}. This is the wiring between them, and the reason it is a class rather
+ * than calls repeated per rule: a second copy of that chain is a second answer waiting to disagree
+ * with the first.
+ *
+ * ## Where the operation comes from
+ *
+ * A shipped DDL rule names its own operation and asks {@see forCandidateOperations()} or
+ * {@see resolutionFor()}; a rule that holds only a kind derives the operation through
+ * {@see OperationKeyMapper::forKind()} first. {@see forDdl()} runs the same chain from a canonical
+ * statement, mapping its kind through {@see OperationKeyMapper}. No shipped rule calls it, and its
+ * arms are what prove the chain end to end, version windows and predicates included.
+ *
+ * Every shipped caller passes the blind {@see MatrixContext}, `sqlens:predeploy` included, so a
+ * conditional matrix entry resolves to `undetermined` everywhere today.
  *
  * ## Two derivations, both central, neither guessed
  *

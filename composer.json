@@ -19,9 +19,17 @@
     "license": "MIT",
     "type": "library",
     "homepage": "https://github.com/pushery/sqlens-for-laravel",
+    "authors": [
+        {
+            "name": "Pushery",
+            "homepage": "https://www.pushery.com"
+        }
+    ],
     "support": {
         "issues": "https://github.com/pushery/sqlens-for-laravel/issues",
-        "source": "https://github.com/pushery/sqlens-for-laravel"
+        "source": "https://github.com/pushery/sqlens-for-laravel",
+        "docs": "https://docs.pushery.com/sqlens-for-laravel/",
+        "security": "https://github.com/pushery/sqlens-for-laravel/security/policy"
     },
     "require": {
         "php": "^8.4",

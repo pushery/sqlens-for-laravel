@@ -63,8 +63,11 @@ final class CallDeclaredTool extends CallTool
         $name = $request->params['name'] ?? null;
         $refusal = is_string($name) ? $this->refusalFor($name) : null;
 
-        if (is_string($refusal)) {
-            throw new JsonRpcException($refusal, -32601, $request->id);
+        // -32602, the code the SDK and the specification give a tool name that cannot be called, and
+        // never -32601, which says the METHOD does not exist. The state travels as data, so a client
+        // tells a switched-off tool from an unbuilt one without reading the sentence.
+        if (is_array($refusal)) {
+            throw new JsonRpcException($refusal['message'], -32602, $request->id, ['tool' => $name, 'state' => $refusal['state']]);
         }
 
         if ($name === null) {
@@ -91,26 +94,28 @@ final class CallDeclaredTool extends CallTool
      *   write it into a file, and this build has no such tool. Saying "not enabled" here would send
      *   somebody to flip a switch that changes nothing.
      * - **neither** — a typo or an invention, and the SDK's own "not found" is the right answer.
+     *
+     * @return array{message: string, state: 'disabled'|'reserved'}|null
      */
-    private function refusalFor(string $name): ?string
+    private function refusalFor(string $name): ?array
     {
         if (in_array($name, $this->registry->names(), true)) {
-            return $this->policy->isEnabled($name) ? null : sprintf(
+            return $this->policy->isEnabled($name) ? null : ['state' => 'disabled', 'message' => sprintf(
                 'Tool [%s] exists in this build and is not enabled on this project. Enable it by name — '
                 .'set sqlens.agent.mcp.tools.%s to true, or start the server with --enable-tool=%s. '
                 .'There is no switch that enables every tool at once.',
                 $name,
                 $name,
                 $name,
-            );
+            )];
         }
 
         if (in_array($name, ConfigSchema::MCP_TOOL_NAMES, true)) {
-            return sprintf(
+            return ['state' => 'reserved', 'message' => sprintf(
                 'Tool [%s] is a name this package reserves and this build does not implement yet. Enabling it '
                 .'in configuration changes nothing until it ships.',
                 $name,
-            );
+            )];
         }
 
         return null;

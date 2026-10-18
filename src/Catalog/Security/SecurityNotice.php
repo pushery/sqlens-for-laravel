@@ -57,11 +57,9 @@ enum SecurityNotice: string implements RunNotice
      * none. {@see coversFamily()} still says false: that is about whether the DOCS page describes
      * members, which is a separate question from which namespace the id lives in.
      *
-     * The one state a suite must never report as a pass. Today it is the ordinary answer, because
-     * `sqlens:security` is a shell with no sub-run wired into it yet; once the orchestration lands it
-     * becomes the answer for a run whose filters admitted nothing, which is the same sentence for the
-     * same reason. It does not expire with the scaffold — a suite that checked nothing has to say so
-     * whatever the reason, or its silence is indistinguishable from a clean database.
+     * The one state a suite must never report as a pass: a run whose filters admitted nothing. A
+     * suite that checked nothing has to say so, whatever the reason, or its silence is
+     * indistinguishable from a clean database.
      */
     case NothingChecked = 'SEC.SKIPPED.NOTHING_CHECKED';
 
@@ -99,6 +97,10 @@ enum SecurityNotice: string implements RunNotice
         // it needs an id of its own rather than the fallback: on the one engine where this catalog can
         // be withheld, the withholding is the surprise worth naming.
         'pg_proc' => 'PG.PROC',
+        // The partitions of a table with row-level security, each of which applies its own setting to
+        // a query that names it. World-readable on PostgreSQL like `pg_proc`, so a refusal here is
+        // the surprise that earns an id of its own.
+        'pg_inherits' => 'PG.INHERITS',
         'mysql.user' => 'MY.USER',
         'mysql.db' => 'MY.GRANTS',
         'mysql.role_edges' => 'MY.ROLE_EDGES',

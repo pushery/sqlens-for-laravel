@@ -150,7 +150,7 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
     /**
      * The staged retyping — and NOT for every statement this rule looks at.
      *
-     * The version-awareness the ticket makes mandatory, expressed as an absence. A change the
+     * The version-awareness this rule must have, expressed as an absence. A change the
      * matrix classifies as metadata-only produces no finding and gets no plan; and a change the
      * matrix cannot classify — the source type is not in the statement — gets none either, because
      * that finding is a QUESTION rather than a verdict. Handing over a six-step migration plan for

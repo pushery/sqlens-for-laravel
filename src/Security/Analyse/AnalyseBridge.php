@@ -53,6 +53,12 @@ use Pushery\SQLens\Subjects\SubjectContext;
  */
 final readonly class AnalyseBridge
 {
+    /**
+     * The end of the one error that belongs to no file and that a finished run writes: an ignore
+     * pattern nothing matched, as PHPStan words it.
+     */
+    private const string UNMATCHED_IGNORE = 'was not matched in reported errors.';
+
     public function __construct(
         private AnalyseMode $mode,
         private ?string $resultPath,
@@ -84,7 +90,7 @@ final readonly class AnalyseBridge
         $absolute = $this->absolute($path);
 
         if (! is_file($absolute)) {
-            return AnalyseReading::didNotRun(sprintf(
+            return AnalyseReading::couldNotRead(sprintf(
                 'no PHPStan result at `%s` — the analyse step either has not run yet or wrote elsewhere',
                 $path,
             ));
@@ -93,14 +99,14 @@ final readonly class AnalyseBridge
         $raw = @file_get_contents($absolute);
 
         if ($raw === false) {
-            return AnalyseReading::didNotRun(sprintf('the PHPStan result at `%s` could not be read', $path));
+            return AnalyseReading::couldNotRead(sprintf('the PHPStan result at `%s` could not be read', $path));
         }
 
         try {
             /** @var mixed $decoded */
             $decoded = json_decode($raw, true, flags: JSON_THROW_ON_ERROR);
         } catch (JsonException $failure) {
-            return AnalyseReading::didNotRun(sprintf(
+            return AnalyseReading::couldNotRead(sprintf(
                 'the PHPStan result at `%s` is not valid JSON (%s)',
                 $path,
                 $failure->getMessage(),
@@ -108,7 +114,7 @@ final readonly class AnalyseBridge
         }
 
         if (! is_array($decoded) || ! isset($decoded['files']) || ! is_array($decoded['files'])) {
-            return AnalyseReading::didNotRun(sprintf(
+            return AnalyseReading::couldNotRead(sprintf(
                 'the document at `%s` carries no `files` map, so it is not a PHPStan JSON result — '
                 .'reading it anyway would report findings this package cannot vouch for',
                 $path,
@@ -118,7 +124,7 @@ final readonly class AnalyseBridge
         $trace = $decoded[AnalyseResultTrace::KEY] ?? null;
 
         if (! is_array($trace)) {
-            return AnalyseReading::didNotRun(sprintf(
+            return AnalyseReading::couldNotRead(sprintf(
                 'the PHPStan result at `%s` was not written in the SQLens error format, so nothing in it '
                 .'shows that the SQLens extension was loaded: a run without it and a run that found no '
                 .'raw SQL write the same JSON. Write it with `phpstan analyse --error-format=%s`, which '
@@ -131,7 +137,7 @@ final readonly class AnalyseBridge
         $internalErrors = $trace['internal_errors'] ?? null;
 
         if (($trace['version'] ?? null) !== AnalyseResultTrace::VERSION || ! is_array($internalErrors)) {
-            return AnalyseReading::didNotRun(sprintf(
+            return AnalyseReading::couldNotRead(sprintf(
                 'the PHPStan result at `%s` carries a SQLens trace of a shape this version does not '
                 .'read, so it was not read; write it again with the extension this version ships',
                 $path,
@@ -139,13 +145,37 @@ final readonly class AnalyseBridge
         }
 
         if ($internalErrors !== []) {
-            return AnalyseReading::didNotRun(sprintf(
+            return AnalyseReading::couldNotRead(sprintf(
                 'PHPStan did not finish the analysis behind `%s`: it hit %d internal %s, the first "%s". '
                 .'A file it could not analyze is one whose raw SQL nobody examined',
                 $path,
                 count($internalErrors),
                 count($internalErrors) === 1 ? 'error' : 'errors',
                 $this->firstLine(array_values($internalErrors)[0]),
+            ));
+        }
+
+        // PHPStan 2 hands a formatter no internal error as one: after an internal error it replaces the
+        // result, and the message of every internal error stands among the errors that belong to no
+        // file, the trace's list empty. Read from there, a run that hit one is told apart from a run
+        // that found nothing. The one such error a finished run writes is an ignore pattern nothing
+        // matched, which says nothing about what was analyzed; anything else, or a list that is not
+        // one, is read as unfinished.
+        $generic = $decoded['errors'] ?? [];
+        $unfinished = array_values(array_filter(
+            is_array($generic) ? $generic : [$generic],
+            static fn (mixed $error): bool => ! is_string($error) || ! str_ends_with(trim($error), self::UNMATCHED_IGNORE),
+        ));
+
+        if ($unfinished !== []) {
+            return AnalyseReading::couldNotRead(sprintf(
+                'PHPStan did not finish the analysis behind `%s`: it reported %d %s that %s to no file, the first "%s". '
+                .'PHPStan writes its internal errors there, and a file it could not analyze is one whose raw SQL nobody examined',
+                $path,
+                count($unfinished),
+                count($unfinished) === 1 ? 'error' : 'errors',
+                count($unfinished) === 1 ? 'belongs' : 'belong',
+                $this->firstLine($unfinished[0]),
             ));
         }
 

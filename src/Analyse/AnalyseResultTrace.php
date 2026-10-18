@@ -17,8 +17,13 @@ namespace Pushery\SQLens\Analyse;
  * So the result the security suite reads comes from `--error-format=sqlens`, an error format the
  * extension registers. A PHPStan that did not load the extension has no such format and refuses to
  * start, so the document cannot exist without it. The format writes PHPStan's own JSON result and,
- * under {@see self::KEY}, the part only it can know: the errors PHPStan hit INSIDE the analysis. An
- * internal error means a file was not analyzed to the end, and its raw SQL was examined by nobody.
+ * under {@see self::KEY}, the internal errors the formatter was handed. An internal error means a
+ * file was not analyzed to the end, and its raw SQL was examined by nobody.
+ *
+ * PHPStan 2 hands a formatter no internal error as one. After an internal error it replaces the
+ * result with one whose file errors are the internal ones alone, and puts the message of every
+ * internal error among the errors that belong to no file, the document's `errors`. So under
+ * PHPStan 2 the list under the key stays empty, and the reader judges `errors` as well.
  *
  * This class holds the contract both sides read, the writer inside PHPStan and the reader in the
  * security suite, and loads nothing of PHPStan's: the reader runs in the application, where opening

@@ -9,8 +9,8 @@ use Pushery\SQLens\Reporting\RunContext;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
- * The contract every reporter writes against — console and JSON today, GitHub
- * annotations, SARIF, and `--format=agent` later. A reporter RENDERS a result; it
+ * The contract every reporter writes against: console, JSON, GitHub annotations,
+ * SARIF and the agent format. A reporter RENDERS a result; it
  * does NOT decide the exit code. That separation is deliberate: presentation and
  * the gate contract are different concerns, so the exit-code derivation is its own
  * contract and never leaks into how a result is displayed.

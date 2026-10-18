@@ -14,6 +14,7 @@ use Pushery\SQLens\Findings\Result;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Reporting\ReportedServerVersion;
 use Pushery\SQLens\Reporting\ReportText;
+use Pushery\SQLens\Reporting\RuleLimitations;
 use Pushery\SQLens\Reporting\RunContext;
 use Pushery\SQLens\Severity\GateAxis;
 use Pushery\SQLens\Severity\GateDecision;
@@ -104,7 +105,7 @@ final readonly class AgentReporter implements Reporter
         $document = rtrim(implode("\n", [
             ...$this->heading($result, $context),
             ...$this->summary($result, $decided),
-            ...$this->findings($decided),
+            ...$this->findings($decided, RuleLimitations::shipped()),
             ...$this->undetermined($decided),
             ...$this->boundaries(),
         ]), "\n");
@@ -212,7 +213,7 @@ final readonly class AgentReporter implements Reporter
      * @param  list<array{0: Finding, 1: GateDecision}>  $decided
      * @return list<string>
      */
-    private function findings(array $decided): array
+    private function findings(array $decided, RuleLimitations $limitations): array
     {
         // Ordered by the prioritizer rather than by collection order: an agent works top to bottom
         // and stops when it runs out of budget, so the sequence is what the format actually
@@ -249,7 +250,7 @@ final readonly class AgentReporter implements Reporter
         }
 
         foreach ([...$blocking, ...$advisory] as [$finding, $decision]) {
-            $lines = [...$lines, ...$this->finding($finding, $decision)];
+            $lines = [...$lines, ...$this->finding($finding, $decision, $limitations)];
         }
 
         return $lines;
@@ -265,7 +266,7 @@ final readonly class AgentReporter implements Reporter
      *
      * @return list<string>
      */
-    private function finding(Finding $finding, GateDecision $decision): array
+    private function finding(Finding $finding, GateDecision $decision, RuleLimitations $limitations): array
     {
         $axis = $decision->axis === GateAxis::Severity
             ? 'severity '.($finding->severity->value ?? 'unrated')
@@ -284,6 +285,12 @@ final readonly class AgentReporter implements Reporter
                 .($finding->downtimeClass instanceof DowntimeClass ? ' · **Downtime:** '.$finding->downtimeClass->value : '')
                 .($finding->downtimeUndetermined instanceof DowntimeUndetermined ? ' · **Downtime:** undetermined ('.$finding->downtimeUndetermined->reason->value.')' : ''),
             '- **Why and how:** '.$finding->documentationUrl,
+            // What the rule deliberately does not answer, one line each and only where it declares
+            // something. Read from the catalog `explain_rule` answers from, so the two never differ.
+            ...array_map(
+                static fn (string $limitation): string => '- **Does not check:** '.MarkdownText::inline($limitation),
+                $limitations->of($finding->ruleId) ?? [],
+            ),
             // Three states and none of them silence: the sequence, a named absence, or the note
             // that SQLens built something and refused it. An empty gap here would make the second
             // and third indistinguishable from a finding nobody looked at.

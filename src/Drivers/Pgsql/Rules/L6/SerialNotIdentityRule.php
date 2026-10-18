@@ -73,7 +73,7 @@ final class SerialNotIdentityRule extends AbstractCatalogRule implements Declare
     }
 
     /**
-     * The ticket proposed `PG.L6.TYPE.SERIAL_NOT_IDENTITY`; the shipped format allows three
+     * The id first proposed was `PG.L6.TYPE.SERIAL_NOT_IDENTITY`; the shipped format allows three
      * segments ({@see RuleIdFormat::PATTERN}), so the `TYPE` grouping is
      * dropped rather than the format widened. Rule ids are public API from 1.0, and a fourth
      * segment introduced for one rule would be a second id shape every consumer has to parse.

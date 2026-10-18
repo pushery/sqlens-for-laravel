@@ -104,6 +104,25 @@ final readonly class SeverityMapper
     }
 
     /**
+     * The SARIF `kind` of a finding that indicates no problem, or nothing for one that does.
+     *
+     * SARIF's `kind` defaults to `fail`, so a pass sent with `level: none` alone reads as a failure that carries no
+     * weight. A pass says `pass`, a structural not-applicable says `notApplicable`, each beside the `none` level the
+     * format pairs with every kind but `fail`. A fail keeps the default, and so does an undetermined: it is a check
+     * that did not run, and an alert is where it stays visible.
+     *
+     * @return array{kind?: string}
+     */
+    public static function kind(Finding $finding): array
+    {
+        return match ($finding->status->outcome) {
+            Outcome::Pass => ['kind' => 'pass'],
+            Outcome::NotApplicable => ['kind' => 'notApplicable'],
+            Outcome::Fail, Outcome::Undetermined => [],
+        };
+    }
+
+    /**
      * The numeric weight GitHub sorts by, or null when this finding is not on the risk axis.
      *
      * Null and absent are the same thing here, unlike everywhere else in this package: SARIF's

@@ -41,7 +41,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * ## Two cases that need NO special handling, measured rather than assumed
  *
  * - **Self-referential.** `parent_id` referencing the same table ends in `_id` and passes on its
- *   own merits. The ticket that asked for this rule expected a special case; there is nothing to
+ *   own merits. A special case might be expected here; there is nothing to
  *   special-case, and adding one would be a branch no schema can reach.
  * - **Polymorphic.** Laravel's `commentable_id` ends in `_id` and passes. Its partner
  *   `commentable_type` carries no foreign key at all — it cannot, since it names a class rather

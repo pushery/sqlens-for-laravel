@@ -399,7 +399,9 @@ Which tool answers which question:
   documentation is. Reading it is usually cheaper than the workaround.
 - **`get_findings`** — to act on the run that already happened. It reads the report
   artifact a previous run wrote and never starts a new one, so asking "what did the last
-  run find" cannot become a database run nobody asked for.
+  run find" cannot become a database run nobody asked for. The report comes from
+  `php artisan sqlens:lint --format=json --output=sqlens-report.json`; `lint_pending`
+  answers with a fresh run and writes none.
 - **`get_debt_ledger`** — to see what the project has knowingly deferred, and how long
   it has been deferred for.
 

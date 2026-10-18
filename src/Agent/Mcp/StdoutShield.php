@@ -120,8 +120,18 @@ final class StdoutShield
         $this->previousDisplayErrors = $current === false ? null : $current;
         ini_set('display_errors', 'stderr');
 
-        set_error_handler(function (int $severity, string $message, string $file, int $line): bool {
+        $previous = null;
+
+        $previous = set_error_handler(function (int $severity, string $message, string $file, int $line) use (&$previous): bool {
             $this->write(sprintf('[sqlens:mcp] PHP message (%d): %s in %s:%d', $severity, $message, $file, $line));
+
+            // Then the handler this one replaced, so a message means here what it means in every other
+            // Artisan command: Laravel's turns a warning into an ErrorException and reports a
+            // deprecation. Answered here alone, a read that failed went on with `false` in the server
+            // where the same command stopped, and the two could tell a user different things.
+            if (is_callable($previous)) {
+                $previous($severity, $message, $file, $line);
+            }
 
             // Handled. Returning false would hand it back to PHP's own printer, which is the
             // thing being kept away from this process's standard output.

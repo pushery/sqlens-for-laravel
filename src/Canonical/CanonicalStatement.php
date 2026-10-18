@@ -11,7 +11,7 @@ namespace Pushery\SQLens\Canonical;
  * pitfall). The canonicalization is the single allowed abstraction over grammar
  * quirks.
  *
- * Statement kind and targets are typed slots the classification ticket fills.
+ * Statement kind and targets are typed slots that classification fills.
  * They are NULLABLE on purpose: an unclassified statement reads as null (a
  * three-valued, undetermined slot) — never as an empty, harmless-looking default
  * that a rule might mistake for "nothing here". isClassified() is the guard a

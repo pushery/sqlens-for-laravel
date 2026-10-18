@@ -256,6 +256,20 @@ final class ConfigValidator
             $violations = [];
 
             foreach ($value as $name => $entry) {
+                // A name with a dot cannot be told apart from a deeper key once it is part of a path,
+                // and every path here, like every path in Laravel's configuration, is dotted. It is
+                // reported rather than walked into: its keys would be checked against a template
+                // that does not exist.
+                if (str_contains((string) $name, '.')) {
+                    $violations[] = ConfigViolation::outOfRange(
+                        'sqlens.'.$section,
+                        'names without a dot, because a dot in a configuration path reads as one more level',
+                        (string) $name,
+                    );
+
+                    continue;
+                }
+
                 $violations = [...$violations, ...$this->sectionViolations(
                     $section.'.'.$name,
                     $entry,

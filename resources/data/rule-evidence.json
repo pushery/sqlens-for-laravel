@@ -721,7 +721,7 @@
                 "type": "doc",
                 "url": "https://www.postgresql.org/docs/18/sql-altertable.html",
                 "applies_to": "PostgreSQL 18",
-                "note": "A constraint added NOT VALID is enforced for rows inserted or updated afterwards, but existing rows are not checked and the constraint is not assumed to hold: PostgreSQL records convalidated = false and the planner will not rely on it. VALIDATE CONSTRAINT performs the scan under a SHARE UPDATE EXCLUSIVE lock, which does not block reads or writes. The scan also becomes unavoidable later, as part of any table rewrite, which is where the deferred cost lands on a migration nobody expected it in."
+                "note": "A constraint added NOT VALID is enforced for rows inserted or updated afterwards, but existing rows are not checked and the constraint is not assumed to hold: PostgreSQL records convalidated = false and the planner will not rely on it. VALIDATE CONSTRAINT performs the scan under a SHARE UPDATE EXCLUSIVE lock, which does not block reads or writes. Nothing else performs it: measured on PostgreSQL 18, a table rewrite through ALTER COLUMN TYPE carries the constraint over with convalidated = false and the violating rows in place."
             }
         ],
         "PG.L4.DROP_WITHOUT_DEPLOY_WINDOW": [
@@ -1335,7 +1335,7 @@
                 "type": "doc",
                 "url": "https://dev.mysql.com/doc/refman/8.4/en/query-log.html",
                 "applies_to": "MySQL 8.4",
-                "note": "The general query log chapter states that the server writes every statement it receives, and that passwords in statements are rewritten only in the ERROR log and the slow log — not here. Cited for the negative: the redaction a reader would assume exists is documented as applying elsewhere."
+                "note": "The general query log chapter states that the server writes every statement it receives. It rewrites one kind of secret here too: the password of CREATE USER, ALTER USER and SET PASSWORD is written as <secret> unless log_raw is on, measured on MySQL 8.0. Every other value, a token an UPDATE sets among them, is written as it was sent."
             },
             {
                 "type": "doc",

@@ -22,7 +22,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * ## The three answers, and why the third one carries the design
  *
- * Production lets the finding stand; not-production is a PASS WITH ITS SENTENCE; and unplaceable is
+ * Production lets the finding stand; not-production is a pass with its sentence; and unplaceable is
  * `undetermined`.
  *
  * That third value is the whole reason this is safe to apply to a security rule at all. The

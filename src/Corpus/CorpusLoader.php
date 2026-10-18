@@ -29,10 +29,10 @@ use JsonException;
  *
  * ## Where the boundary to the measurement runs
  *
- * This class reads FILES and hands back data. The classification and metrics layer (the corpus tickets)
- * takes that data and never touches a filesystem, which is what lets it live in `src/` without
- * shipping corpus machinery to consumers. Anything here that started resolving findings would have
- * put a test-fixture reader on the far side of that line.
+ * This class reads FILES and hands back data. The classification and metrics layer
+ * ({@see CorpusClassifier}, {@see CorpusMetrics}) takes that data and never touches a filesystem,
+ * which is what lets it live in `src/` without shipping corpus machinery to consumers. Anything here
+ * that started resolving findings would have put a test-fixture reader on the far side of that line.
  */
 final readonly class CorpusLoader
 {

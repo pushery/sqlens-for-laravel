@@ -185,6 +185,11 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
             // for the same reason: each one moved a canonical form that a characterization test
             // had pinned, and none of them is needed for a statement to be recognized.
             'GRANT', 'REVOKE', 'PRIVILEGES', 'OPTION', 'USAGE', 'ALL',
+
+            // `ANALYZE` leads a statement the lead fallback reads as `Unknown`, and the classifier
+            // refuses a statement whose lead is not a keyword. PostgreSQL reserves the word, so a
+            // name spelled with it was quoted already and keeps its quotes.
+            'ANALYZE',
         ];
     }
 
@@ -577,6 +582,18 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                 // target set empty, which is the honest shape: the statement that changed the
                 // column is the `alter table` beside it, and that one carries the target.
                 'COMMENT' => StatementKind::DdlOther,
+
+                // `ANALYZE` refreshes the planner's statistics and changes no schema and no row, under
+                // a SHARE UPDATE EXCLUSIVE lock that blocks no reader and no writer. It is `Unknown`,
+                // as a `SELECT` is. Refused, it made the whole migration undetermined, so a migration
+                // that analyzed a table after a backfill was never judged, a blocking `CREATE INDEX`
+                // beside it included.
+                //
+                // `VACUUM` is deliberately absent, although its plain form is just as harmless.
+                // `VACUUM FULL` rewrites the table under an ACCESS EXCLUSIVE lock, the lead word cannot
+                // tell the two apart, and `Unknown` would pass the blocking one without a word. A
+                // migration that vacuums stays undetermined, with the statement named in the finding.
+                'ANALYZE' => StatementKind::Unknown,
             ],
             unreservedNames: self::UNRESERVED_NAMES,
         );

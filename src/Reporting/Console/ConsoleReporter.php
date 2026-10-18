@@ -23,6 +23,7 @@ use Pushery\SQLens\Reporting\Agent\RemediationRenderer;
 use Pushery\SQLens\Reporting\EstimateNarrator;
 use Pushery\SQLens\Reporting\ReportedInstance;
 use Pushery\SQLens\Reporting\ReportText;
+use Pushery\SQLens\Reporting\RuleLimitations;
 use Pushery\SQLens\Reporting\RunContext;
 use Pushery\SQLens\Reporting\Summary\AxisSummary;
 use Pushery\SQLens\Reporting\Suppression\AuditIgnoreSuppressionSource;
@@ -141,6 +142,8 @@ final readonly class ConsoleReporter implements Reporter
         $this->axisSection($sections[GateAxis::Level->value], GateAxis::Level, $out);
         $this->axisSection($sections[GateAxis::Severity->value], GateAxis::Severity, $out);
 
+        $this->limitationsFootnote($result->findings, $out);
+
         $this->suppressedSection($result, $out);
 
         ReportText::line($out, '');
@@ -234,6 +237,34 @@ final readonly class ConsoleReporter implements Reporter
         ReportText::line($out, '  ['.implode('] / [', $names).'] marks the RULE, not the finding: the rule may still'
             .' change or be withdrawn, and this project opted into that tier. The finding itself is as'
             .' firm as any other.');
+    }
+
+    /**
+     * What the rules that reported something deliberately do not answer, once per rule.
+     *
+     * Beneath the findings and once per run, because a rule that fired twelve times has one set of limits, and
+     * repeating them under every line would bury the lines. Read from the catalog ({@see RuleLimitations}), so it
+     * says what `explain_rule` says. Nothing is printed for a run whose rules declare none, which is the rule
+     * this file keeps for every legend.
+     *
+     * @param  list<Finding>  $findings
+     */
+    private function limitationsFootnote(array $findings, OutputInterface $out): void
+    {
+        $byRule = RuleLimitations::shipped()->forFindings($findings);
+
+        if ($byRule === []) {
+            return;
+        }
+
+        ReportText::line($out, '');
+        ReportText::line($out, '  What these rules do not check:');
+
+        foreach ($byRule as $ruleId => $limitations) {
+            foreach ($limitations as $limitation) {
+                ReportText::line($out, '    '.$ruleId.': '.$limitation);
+            }
+        }
     }
 
     /**

@@ -237,7 +237,23 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 ." select 'routine', n.nspname||'.'||p.proname||'('||pg_catalog.pg_get_function_identity_arguments(p.oid)||')',"
                 .' a.privilege_type, a.is_grantable, pg_catalog.pg_get_userbyid(a.grantor),'
                 ." case when a.grantee = 0 then '' else pg_catalog.pg_get_userbyid(a.grantee) end,"
-                ." coalesce(i.privtype::text, case when a.grantee = p.proowner then 'o' end),"
+                // A routine's ACL is NULL until its first grant, and that grant writes out the default
+                // with it, EXECUTE to PUBLIC from the owner included: measured on PostgreSQL 18.0, one
+                // `grant execute … to app` turned NULL into `{=X/owner,owner=X/owner,app=X/owner}`.
+                // Read as the project's, that entry made every routine that ever received a grant
+                // report PUBLIC holding EXECUTE, and no routine with the same rights and no grant. So an
+                // entry of the default a new routine of this owner gets is PostgreSQL's, like the
+                // owner's own. That default is built the way PostgreSQL builds it: a global entry in
+                // pg_default_acl replaces `acldefault()`, and one for the routine's schema adds to it.
+                // So where `alter default privileges … revoke execute on functions from public` is in
+                // force, a PUBLIC entry is somebody's grant and stays the project's.
+                ." coalesce(i.privtype::text, case when a.grantee = p.proowner then 'o'"
+                .' when (a.grantor, a.grantee, a.privilege_type) in (select d.grantor, d.grantee, d.privilege_type'
+                .' from pg_catalog.aclexplode(coalesce('
+                ."  (select g.defaclacl from pg_default_acl g where g.defaclrole = p.proowner and g.defaclnamespace = 0 and g.defaclobjtype = 'f'),"
+                ."  pg_catalog.acldefault('f', p.proowner))"
+                ."  || coalesce((select s.defaclacl from pg_default_acl s where s.defaclrole = p.proowner and s.defaclnamespace = p.pronamespace and s.defaclobjtype = 'f'), '{}'::aclitem[])"
+                ." ) d) then 'i' end),"
                 .' n.nspname, p.proname, pg_catalog.pg_get_function_identity_arguments(p.oid)'
                 .' from pg_proc p join pg_namespace n on n.oid = p.pronamespace cross join lateral pg_catalog.aclexplode(p.proacl) a'
                 ." left join init i on i.classoid = 'pg_proc'::regclass and i.objoid = p.oid"
@@ -455,7 +471,7 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 // The parts as well, for the ALTER TABLE every finding here closes with: each is
                 // quoted on its own, which the dotted name cannot be split back into.
                 .' n.nspname as table_schema, c.relname as table_local,'
-                .' c.relforcerowsecurity as forced,'
+                .' c.relforcerowsecurity as forced, c.relkind::text as kind,'
                 // The OWNER by name, resolved by the server rather than joined by hand: `relowner` is
                 // an oid, and the rule that matters most here — the application connects as the role
                 // that owns its tables — is a comparison against a NAME.
@@ -502,6 +518,7 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 'owner' => $this->text($row, 'owner'),
                 'policies' => [],
                 'statement_name' => QuotedIdentifier::of('"', $this->text($row, 'table_schema'), $this->text($row, 'table_local')),
+                'partitioned' => $this->text($row, 'kind') === 'p',
             ];
 
             $command = RlsCommand::fromCatalog($this->text($row, 'polcmd'));
@@ -531,10 +548,15 @@ final readonly class PgsqlSecurityReader implements SecurityReader
             );
         }
 
+        $exposed = $this->partitionsReadableAround(
+            array_keys(array_filter($collected, static fn (array $parts): bool => $parts['partitioned'] && $parts['enabled'])),
+            $skips,
+        );
+
         $states = [];
 
         foreach ($collected as $table => $parts) {
-            $states[] = RlsState::of($table, $parts['enabled'], $parts['forced'], $parts['policies'], Readability::complete(), $parts['owner'], $parts['statement_name']);
+            $states[] = RlsState::of($table, $parts['enabled'], $parts['forced'], $parts['policies'], Readability::complete(), $parts['owner'], $parts['statement_name'], $exposed[$table] ?? []);
         }
 
         // A table the project named and the catalog does not have is a finding of its own kind — a
@@ -566,6 +588,83 @@ final readonly class PgsqlSecurityReader implements SecurityReader
         }
 
         return $skips === [] ? RlsReading::complete($states) : RlsReading::partial($states, $skips);
+    }
+
+    /**
+     * The partitions of the given tables that a role can read around their row-level security.
+     *
+     * Row-level security is a property of each table and is not inherited. Measured on PostgreSQL
+     * 18.0: a partition of a table with it enabled carries `relrowsecurity = false`; a role querying
+     * through the parent sees what the parent's policy admits (1 of 2 rows); the same role querying the
+     * partition directly is refused while it holds a privilege on the parent only, and sees every row
+     * (2 of 2) once it holds one on the partition, which `GRANT … ON ALL TABLES IN SCHEMA` and default
+     * privileges on tables hand out to every new partition.
+     *
+     * So a partition is named when its own row-level security is off and a role other than its owner
+     * holds SELECT, INSERT, UPDATE or DELETE on it directly. A superuser or a BYPASSRLS role passes
+     * the parent's policies as well and adds nothing. Sub-partitions are walked too: a query against
+     * any level applies that level's own setting.
+     *
+     * @param  list<string>  $tables  the partitioned tables with row-level security enabled
+     * @param  list<CatalogSkip>  $skips
+     * @return array<string, array<string, array{statement: string, roles: list<string>}>> table => partition => its statement name and the roles
+     */
+    #[RawSql(reason: 'walks pg_inherits to the partitions of an RLS table and reads their ACLs; partitioning has no builder form')]
+    private function partitionsReadableAround(array $tables, array &$skips): array
+    {
+        if ($tables === []) {
+            return [];
+        }
+
+        $list = $this->textArray($tables);
+
+        /** @var list<object> $rows */
+        $rows = DatabaseErrorTranslator::attempt(
+            /** @return list<object> */
+            fn (): array => array_values($this->session->read(static fn (Connection $db): array => $db->select(
+                'with recursive tree as ('
+                .' select i.inhrelid as child, i.inhparent as root from pg_inherits i'
+                .' join pg_class pc on pc.oid = i.inhparent join pg_namespace pn on pn.oid = pc.relnamespace'
+                .' where pn.nspname||\'.\'||pc.relname = any(?)'
+                .' union all'
+                .' select i.inhrelid, t.root from tree t join pg_inherits i on i.inhparent = t.child'
+                .')'
+                .' select rn.nspname||\'.\'||rc.relname as table_name, n.nspname||\'.\'||c.relname as partition_name,'
+                .' n.nspname as partition_schema, c.relname as partition_local,'
+                .' case when a.grantee = 0 then \'\' else pg_catalog.pg_get_userbyid(a.grantee) end as grantee'
+                .' from tree t'
+                .' join pg_class c on c.oid = t.child join pg_namespace n on n.oid = c.relnamespace'
+                .' join pg_class rc on rc.oid = t.root join pg_namespace rn on rn.oid = rc.relnamespace'
+                .' cross join lateral pg_catalog.aclexplode(c.relacl) a'
+                .' where not c.relrowsecurity and a.grantee <> c.relowner'
+                .' and a.privilege_type in (\'SELECT\', \'INSERT\', \'UPDATE\', \'DELETE\')'
+                .' and not exists (select 1 from pg_roles r where r.oid = a.grantee and (r.rolsuper or r.rolbypassrls))'
+                .' order by 1, 2, 5',
+                [$list],
+            ))),
+            SchemaObjectType::Policy,
+            'pg_inherits',
+            $skips,
+        );
+
+        $exposed = [];
+
+        foreach ($rows as $row) {
+            $table = $this->text($row, 'table_name');
+            $partition = $this->text($row, 'partition_name');
+            $role = $this->text($row, 'grantee') === '' ? 'PUBLIC' : $this->text($row, 'grantee');
+
+            $exposed[$table][$partition] ??= [
+                'statement' => QuotedIdentifier::of('"', $this->text($row, 'partition_schema'), $this->text($row, 'partition_local')),
+                'roles' => [],
+            ];
+
+            if (! in_array($role, $exposed[$table][$partition]['roles'], true)) {
+                $exposed[$table][$partition]['roles'][] = $role;
+            }
+        }
+
+        return $exposed;
     }
 
     /**
@@ -640,109 +739,173 @@ final readonly class PgsqlSecurityReader implements SecurityReader
     /**
      * Every role each account can reach through membership, and what those roles hold.
      *
-     * A RECURSIVE closure, not one hop: `app` is a member of `deploy`, `deploy` is a member of
-     * `admin`, and `app` can become `admin` in two steps that no single-hop reading shows.
+     * A closure, not one hop: `app` is a member of `deploy`, `deploy` is a member of `admin`, and `app`
+     * can become `admin` in two steps that no single-hop reading shows.
      *
-     * `union` rather than `union all`, and the reason is a diamond rather than a cycle: a role reached
-     * by two paths would otherwise appear once per PATH, so the set would grow with the shape of the
-     * hierarchy instead of with its size. Cycles are not the concern — measured, PostgreSQL 18 refuses
-     * to create one at all (`0LP01: role "b" is a member of role "a"`).
+     * Only chains that carry RIGHTS. PostgreSQL 16 split a membership into ADMIN, INHERIT and SET:
+     * `SET ROLE` follows a chain of SET grants from the member, and after it the session has the rights
+     * of the role it became plus whatever that role inherits. So a chain is some SET grants followed by
+     * some INHERIT grants, and a grant with neither ends it. That last kind is what a CREATEROLE role
+     * receives in every role it creates, and a walk over every membership made such a role the owner of
+     * the tables that role owns, while PostgreSQL applies row-level security to it.
      *
-     * It is a separate statement from the role list on purpose: the closure multiplies rows, and
-     * joining it into the main query would return one row per (role, reachable role) pair and make
-     * every attribute arrive N times.
+     * A chain is settable when every grant on the way carries SET TRUE: only then can the member
+     * `SET ROLE` to its end and take on that role's ATTRIBUTES, which are not inherited.
+     * `grant su to app with set false` is the hardening that keeps `app` from becoming `su`, and a walk
+     * that ignored it reported exactly that as "can become a SUPERUSER with one SET ROLE".
+     *
+     * The PATH comes with it, because a finding that says "this role reaches superuser" and stops is not
+     * resolvable: the person fixing it has to know WHICH grant to revoke. Per pair the settable chain
+     * wins, and the shortest of those, the one a reader acts on first.
+     *
+     * The walk runs here, breadth first over the memberships read once ({@see self::chainsFrom()}). It
+     * used to be a recursive query that listed every simple path and kept one per pair afterwards, which
+     * grows with the number of paths: measured on PostgreSQL 18.0 over layers of eight roles, each a
+     * member of every role in the next layer, six layers took 502 ms and seven 4 418 ms, and each further
+     * layer multiplies the paths by eight, past the statement budget. Breadth first, the cost follows the
+     * number of roles and grants, and of two chains of equal length the one through the lower OIDs is
+     * kept, the same on every run.
+     *
+     * It is a separate statement from the role list on purpose: joined into the main query, the
+     * memberships would make every attribute of a role arrive once per grant.
      *
      * @param  list<CatalogSkip>  $skips
      * @return array{roles: array<string, list<string>>, attributes: array<string, list<RoleAttribute>>, paths: array<string, array<string, string>>, held: array<string, array<string, list<RoleAttribute>>>}
      */
-    #[RawSql(reason: 'walks role membership recursively through pg_auth_members; inheritance has no builder form')]
+    #[RawSql(reason: 'reads the memberships from pg_auth_members; membership has no builder form')]
     private function reachability(array &$skips): array
     {
-        /** @var list<object> $rows */
-        $rows = DatabaseErrorTranslator::attempt(
+        /** @var list<object> $grants */
+        $grants = DatabaseErrorTranslator::attempt(
             /** @return list<object> */
             fn (): array => array_values($this->session->read(static fn (Connection $db): array => $db->select(
-                // The PATH, not just the endpoint. A finding that says "this role reaches superuser"
-                // and stops is not resolvable: the person fixing it has to know WHICH grant to revoke,
-                // and on a three-step chain that is two grants they cannot see. So the walk carries the
-                // roles it went through, and the SHORTEST path per pair survives — `distinct on` over
-                // the length, because a diamond offers several and the shortest is the one a reader
-                // acts on first.
-                //
-                // `union all` with an explicit cycle guard rather than `union`: the dedupe of `union`
-                // works on the whole row, and two rows differing only in their path are not duplicates
-                // to it — the walk would keep finding longer ways round. PostgreSQL refuses to CREATE a
-                // membership cycle, but the guard costs one comparison and does not rely on that.
-                //
-                // Only chains that carry RIGHTS. PostgreSQL 16 split a membership into ADMIN, INHERIT
-                // and SET: `SET ROLE` follows a chain of SET grants from the member, and after it the
-                // session has the rights of the role it became plus whatever that role inherits. So a
-                // chain is some SET grants followed by some INHERIT grants, and a grant with neither
-                // ends it. That last kind is what a CREATEROLE role receives in every role it creates,
-                // and a walk over every membership made such a role the owner of the tables that role
-                // owns, while PostgreSQL applies row-level security to it.
-                //
-                // `settable` is whether every grant on the way carries SET TRUE: only then can the
-                // member `SET ROLE` to the end and take on its ATTRIBUTES, which are not inherited.
-                // `grant su to app with set false` is the hardening that keeps `app` from becoming
-                // `su`, and a walk that ignored it reported exactly that as "can become a SUPERUSER
-                // with one SET ROLE". Per pair the settable path wins, and the shortest of those.
-                'with recursive reach as ('
-                .' select m.member as base, m.roleid as reached, array[m.roleid] as path, m.set_option as settable'
-                .' from pg_auth_members m'
-                .' where m.set_option or m.inherit_option'
-                .' union all'
-                .' select r.base, m.roleid, r.path || m.roleid, r.settable and m.set_option from reach r'
-                .' join pg_auth_members m on m.member = r.reached'
-                .' where not m.roleid = any(r.path)'
-                .' and (m.inherit_option or (r.settable and m.set_option))'
-                .')'
-                .' select distinct on (reach.base, reach.reached)'
-                .' b.rolname as base, g.rolname as reached, reach.settable,'
+                // One row per member and role, however many roles granted it: since PostgreSQL 16 the
+                // same membership can come from several grantors, each with options of its own, and a
+                // chain can follow any of them. The granted role's attributes ride along, so the walk
+                // needs no second statement.
+                'select b.oid as member_oid, b.rolname as member, g.oid as role_oid, g.rolname as role,'
+                .' pg_catalog.bool_or(m.set_option) as set_option, pg_catalog.bool_or(m.inherit_option) as inherit_option,'
                 .' g.rolsuper, g.rolcreaterole, g.rolcreatedb, g.rolbypassrls, g.rolcanlogin,'
-                .' g.rolreplication, g.rolinherit,'
-                // The path as names, in order, so the finding can print it verbatim.
-                .' (select pg_catalog.array_agg(p.rolname order by step.ord)'
-                .'  from pg_catalog.unnest(reach.path) with ordinality as step(oid, ord)'
-                .'  join pg_roles p on p.oid = step.oid) as path'
-                .' from reach join pg_roles b on b.oid = reach.base'
-                .' join pg_roles g on g.oid = reach.reached'
-                .' order by reach.base, reach.reached, reach.settable desc, pg_catalog.array_length(reach.path, 1)'
+                .' g.rolreplication, g.rolinherit'
+                .' from pg_auth_members m'
+                .' join pg_roles b on b.oid = m.member'
+                .' join pg_roles g on g.oid = m.roleid'
+                .' where m.set_option or m.inherit_option'
+                .' group by b.oid, b.rolname, g.oid, g.rolname, g.rolsuper, g.rolcreaterole, g.rolcreatedb,'
+                .' g.rolbypassrls, g.rolcanlogin, g.rolreplication, g.rolinherit'
+                .' order by b.oid, g.oid'
             ))),
             SchemaObjectType::Role,
             'pg_auth_members',
             $skips,
         );
 
+        /** @var array<string, list<array{to: string, set: bool, inherit: bool}>> $memberships */
+        $memberships = [];
+        /** @var array<string, object> $granted */
+        $granted = [];
+        /** @var array<string, int> $oids */
+        $oids = [];
+
+        foreach ($grants as $grant) {
+            $member = $this->text($grant, 'member');
+            $role = $this->text($grant, 'role');
+
+            $memberships[$member][] = [
+                'to' => $role,
+                'set' => ($grant->set_option ?? false) === true,
+                'inherit' => ($grant->inherit_option ?? false) === true,
+            ];
+            $granted[$role] = $grant;
+            $oids[$member] = is_numeric($grant->member_oid ?? null) ? (int) $grant->member_oid : 0;
+            $oids[$role] = is_numeric($grant->role_oid ?? null) ? (int) $grant->role_oid : 0;
+        }
+
         $roles = [];
         $attributes = [];
         $paths = [];
         $held = [];
 
-        foreach ($rows as $row) {
-            $base = $this->text($row, 'base');
-            $reached = $this->text($row, 'reached');
+        foreach (array_keys($memberships) as $base) {
+            $base = (string) $base;
+            $chains = $this->chainsFrom($base, $memberships);
 
-            $roles[$base][] = $reached;
+            uksort($chains, static fn (int|string $a, int|string $b): int => ($oids[(string) $a] ?? 0) <=> ($oids[(string) $b] ?? 0));
 
-            // An attribute is not inherited, so it is only within reach at the end of a chain the
-            // account can `SET ROLE` along. A role reached through a grant WITH SET FALSE stays among
-            // the reachable roles and adds nothing to what the account can become.
-            if (($row->settable ?? false) !== true) {
-                continue;
+            foreach ($chains as $reached => $chain) {
+                $reached = (string) $reached;
+                $roles[$base][] = $reached;
+
+                // An attribute is not inherited, so it is only within reach at the end of a chain the
+                // account can `SET ROLE` along. A role reached through a grant WITH SET FALSE stays among
+                // the reachable roles and adds nothing to what the account can become.
+                if (! $chain['settable']) {
+                    continue;
+                }
+
+                $reachedAttributes = $this->attributes($granted[$reached]);
+                $attributes[$base] = [...$attributes[$base] ?? [], ...$reachedAttributes];
+                // Per reached role as well as in the union: the union says whether the account can become
+                // something, and only this says which role on the way actually carries it.
+                $held[$base][$reached] = $reachedAttributes;
+                // The membership that leads there, from the base role outwards, which is what makes the
+                // printed chain read the way a person describes it.
+                $paths[$base][$reached] = implode(' -> ', [$base, ...$chain['path']]);
             }
-
-            $attributes[$base] = [...$attributes[$base] ?? [], ...$this->attributes($row)];
-            // Per reached role as well as in the union: the union says whether the account can become
-            // something, and only this says which role on the way actually carries it.
-            $held[$base][$reached] = $this->attributes($row);
-            // The membership that leads there, from the base role outwards. The base itself is not in
-            // the catalog's path array — it is the row's own key — so it is prepended here, which is
-            // what makes the printed chain read the way a person describes it.
-            $paths[$base][$reached] = implode(' -> ', [$base, ...$this->memberships($row, 'path')]);
         }
 
         return ['roles' => $roles, 'attributes' => $attributes, 'paths' => $paths, 'held' => $held];
+    }
+
+    /**
+     * Every role `$base` reaches, with the chain that counts: the settable one where there is one, and
+     * the shortest of its kind.
+     *
+     * Breadth first over (role, settable) states, each visited once, so the first visit is along a
+     * shortest chain and every role costs at most two visits. From a state a grant is followed when it
+     * carries INHERIT, or SET while the chain so far is settable, and the chain stays settable only
+     * through SET grants.
+     *
+     * @param  array<string, list<array{to: string, set: bool, inherit: bool}>>  $memberships
+     * @return array<string, array{settable: bool, path: list<string>}>
+     */
+    private function chainsFrom(string $base, array $memberships): array
+    {
+        /** @var list<array{string, bool, list<string>}> $queue */
+        $queue = [];
+
+        foreach ($memberships[$base] ?? [] as $grant) {
+            $queue[] = [$grant['to'], $grant['set'], [$grant['to']]];
+        }
+
+        /** @var array<string, array{settable: bool, path: list<string>}> $chains */
+        $chains = [];
+        /** @var array<string, true> $visited */
+        $visited = [];
+
+        for ($next = 0; isset($queue[$next]); $next++) {
+            [$role, $settable, $path] = $queue[$next];
+            $state = ($settable ? '1:' : '0:').$role;
+
+            if (isset($visited[$state]) || $role === $base) {
+                continue;
+            }
+
+            $visited[$state] = true;
+
+            // The settable chain wins over any other, however short the other one is.
+            if (! isset($chains[$role]) || ($settable && ! $chains[$role]['settable'])) {
+                $chains[$role] = ['settable' => $settable, 'path' => $path];
+            }
+
+            foreach ($memberships[$role] ?? [] as $grant) {
+                if ($grant['inherit'] || ($settable && $grant['set'])) {
+                    $queue[] = [$grant['to'], $settable && $grant['set'], [...$path, $grant['to']]];
+                }
+            }
+        }
+
+        return $chains;
     }
 
     /**

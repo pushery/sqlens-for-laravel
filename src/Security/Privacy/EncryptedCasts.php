@@ -24,7 +24,7 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  *
  * ## Five forms, not three
  *
- * The ticket that asked for this named three. Measured against Laravel 13, there are five — and
+ * The first specification named three. Measured against Laravel 13, there are five — and
  * reading four of five is worse than reading none, because it under-reports on a real application
  * while looking like it works.
  */
@@ -103,10 +103,14 @@ final readonly class EncryptedCasts
      * Compared whole, never by prefix. `encrypted` is a prefix of `encryptedX`, and a project is
      * free to name a custom cast that way — reading it as the framework's own would be this package
      * asserting protection it never verified, which is the one direction that must never be guessed.
+     *
+     * Normalized as the framework normalizes a cast that names no class before it compares one:
+     * trimmed and lower-cased (`HasAttributes::getCastType()`). So `Encrypted` and `encrypted:Json`
+     * encrypt, as they do in Laravel, and a column cast that way is not called stored in the clear.
      */
     public static function protects(string $cast): bool
     {
-        return in_array($cast, self::FAMILY, true);
+        return in_array(class_exists($cast) ? $cast : trim(strtolower($cast)), self::FAMILY, true);
     }
 
     /**

@@ -34,12 +34,11 @@ use stdClass;
  * Nothing here serves resources or prompts, and announcing that it might is an invitation with no
  * building behind it.
  *
- * ## Why there are no tools yet
+ * ## Where the tools come from
  *
- * The registry is its own piece of work. A server that can hold the handshake, refuse a protocol
- * revision it does not speak, and name itself honestly is a complete thing to prove on its own —
- * and proving it before any tool exists means the tools are added to something already known to
- * behave.
+ * The server is handed the tools the registry built and the policy exposes, and decides nothing
+ * about which tools exist: {@see ToolRegistry} declares them, and the configuration and the
+ * session only turn them on or off.
  *
  * ## Why it opens nothing
  *
@@ -97,7 +96,7 @@ final class SqlensMcpServer extends Server
         // The handshake is held to the pin above. Since laravel/mcp 1.0 the SDK's own `initialize`
         // negotiates instead of refusing, and reads the declared pin only on the newer discovery
         // handshake — so without this a client asking for a revision this build does not implement
-        // gets served the SDK's newest one.
+        // gets served `2025-11-25`, the newest revision the SDK's `initialize` knows.
         $this->addMethod('initialize', InitializeOnThePinnedRevision::class);
 
         // Read from Composer's installed set rather than declared as a second string here. A
