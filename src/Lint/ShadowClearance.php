@@ -25,7 +25,7 @@ use Pushery\SQLens\Capture\Shadow\GuardDecision;
  * ## Why the three confirmation flags stay separate
  *
  * They mean different things and the report says so. `--force` is a standing yes recorded in the run
- * header; an interactive run somebody confirmed is a yes given once and NOT recorded as force.
+ * header; an interactive run somebody confirmed is a yes given once and not recorded as force.
  * Collapsing them into one boolean would make a confirmed interactive run report `force: true`,
  * which describes a run nobody made — and the header exists so a decision can be reproduced.
  *

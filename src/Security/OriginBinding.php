@@ -34,7 +34,7 @@ enum OriginBinding: string
     case Migration = 'migration';
 
     /**
-     * The statement came from a file that is NOT a migration: a seeder, a factory, a test fixture.
+     * The statement came from a file that is not a migration: a seeder, a factory, a test fixture.
      *
      * The distinction is made on the REGISTRATION, never on the file name. A seeder called
      * `2026_01_01_000000_seed_users.php` is still a seeder, and a migration inside

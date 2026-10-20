@@ -26,8 +26,10 @@ enum EstimateFreshness: string
      * The server states that no statistics run has ever happened for this object.
      *
      * A positive fact rather than an absence of one, and PostgreSQL says it outright: since 14,
-     * `pg_class.reltuples` is -1 for a relation that has never been vacuumed or analyzed. The
-     * number a consumer holds is therefore weak in a way that is knowable, and marked as such.
+     * `pg_class.reltuples` is -1 for a relation that has never been vacuumed or analyzed. That
+     * sentinel carries no number, though, so the PostgreSQL reader reports such a table as a skip
+     * without a row count, and no reader produces this case today. It stays the name for a source
+     * that answers with a value and says no statistics were ever collected behind it.
      */
     case NeverCollected = 'never_collected';
 

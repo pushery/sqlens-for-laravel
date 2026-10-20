@@ -63,11 +63,11 @@ final readonly class EmittableIds
      */
     public static function shipped(): self
     {
-        // Read ONCE per process, the same way the Squawk map and the online-DDL matrix are. The
-        // artifact is 92 KB of JSON and the baseline check runs at the start of every audit, so a
-        // suite that drives hundreds of runs would parse it hundreds of times — and a shipped file
-        // cannot change under a running process, so a second read could only ever return the same
-        // answer more slowly.
+        // Read once per process, the same way the Squawk map and the online-DDL matrix are. The
+        // artifact is a few hundred KB of JSON and the baseline check runs at the start of every
+        // audit, so a suite that drives hundreds of runs would parse it hundreds of times — and a
+        // shipped file cannot change under a running process, so a second read could only ever
+        // return the same answer more slowly.
         static $bundled = null;
 
         if (! $bundled instanceof self) {
@@ -96,7 +96,9 @@ final readonly class EmittableIds
 
         try {
             /** @var array{entries?: list<array{id?: string, covers?: string}>} $decoded */
-            $decoded = json_decode((string) file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
+            // Suppressed, so a file the user may not read is the empty answer an unparseable one
+            // already is, rather than an ErrorException under Laravel's error handler.
+            $decoded = json_decode((string) @file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
         } catch (JsonException) {
             return new self([], []);
         }

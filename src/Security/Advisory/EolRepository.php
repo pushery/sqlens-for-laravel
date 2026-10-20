@@ -129,7 +129,7 @@ final class EolRepository
 
         $configured = $this->config?->get('sqlens.security.advisories.path');
 
-        // A CONFIGURED path that does not answer is a hard stop, not a reason to fall through. The
+        // A configured path that does not answer is a hard stop, not a reason to fall through. The
         // project named a file; reading a different one instead would be the exact silent
         // substitution this class exists to prevent — and the operator would see verdicts from a
         // file they had deliberately replaced.
@@ -175,7 +175,7 @@ final class EolRepository
     {
         $raw = @file_get_contents($path);
 
-        // ONE branch for "no bytes came back", covering both a path that names nothing and a file
+        // One branch for "no bytes came back", covering both a path that names nothing and a file
         // that exists and would not open. Split in two it read better — a typo and a permission are
         // different problems — but the second half could not be proven: staging an unreadable file
         // needs a process that is not root, and the gate's container is. A branch no test can reach

@@ -68,7 +68,7 @@ final readonly class NarrowIntegerPrimaryKey
      * The ceiling of one narrow key, grouped for reading.
      *
      * Returns an empty string for a type this table does not know, and the caller then says nothing
-     * about a limit rather than a wrong one. A missing entry is a gap in THIS table, not a fact about
+     * about a limit rather than a wrong one. A missing entry is a gap in this table, not a fact about
      * the column, and inventing a number for it is the failure the whole class exists against.
      */
     public static function ceiling(string $type, bool $unsigned): string
@@ -99,6 +99,22 @@ final readonly class NarrowIntegerPrimaryKey
      */
     public static function of(SchemaObject $table): ?array
     {
+        $key = self::integerKey($table);
+
+        return $key !== null && in_array($key['type'], self::NARROW, true) ? $key : null;
+    }
+
+    /**
+     * The single-column integer primary key of any width, `bigint` included, or null.
+     *
+     * The rules about how far a key's counter has got need the wide keys too: a `bigint` column can
+     * be fed by a sequence that stops at the `integer` ceiling, and the column's type says nothing
+     * about that. {@see self::of()} is this answer narrowed to the widths that run out by type.
+     *
+     * @return array{column: string, type: string, unsigned: bool}|null
+     */
+    public static function integerKey(SchemaObject $table): ?array
+    {
         $primary = ForeignKeyIndexCoverage::parse($table->getString('primary_key') ?? '');
         $columns = array_values($primary)[0] ?? [];
 
@@ -110,9 +126,9 @@ final readonly class NarrowIntegerPrimaryKey
         $types = ForeignKeyIndexCoverage::parse($table->getString('column_types') ?? '');
         $type = strtolower((string) ($types[$column][0] ?? ''));
 
-        // An unread type is not a narrow one. A column nobody looked at must not become a finding,
-        // or a gap in the reading decides what the report says.
-        if (! in_array($type, self::NARROW, true)) {
+        // An unread type is not an integer one. A column nobody looked at must not become a
+        // finding, or a gap in the reading decides what the report says.
+        if (! in_array($type, [...self::NARROW, ...self::WIDE], true)) {
             return null;
         }
 
@@ -151,6 +167,10 @@ final readonly class NarrowIntegerPrimaryKey
      *
      * An empty name exempts nothing: a project that cleared the setting has said nothing about a
      * table, and "" would otherwise match every unqualified name in some spellings.
+     *
+     * Matched on the LOGICAL name where the catalog carries one. On a connection with a table prefix
+     * the ledger is `acme_migrations` on disk, and the setting names it `migrations`, because
+     * Laravel adds the prefix itself when it builds the name.
      */
     public static function isFrameworkMigrationsTable(SchemaObject $table, string $migrationsTable): bool
     {
@@ -158,7 +178,7 @@ final readonly class NarrowIntegerPrimaryKey
             return false;
         }
 
-        $qualified = $table->qualifiedName;
+        $qualified = $table->getString('logical_name') ?? $table->qualifiedName;
         $separator = strrpos($qualified, '.');
         $unqualified = $separator === false ? $qualified : substr($qualified, $separator + 1);
 

@@ -13,7 +13,7 @@ namespace Pushery\SQLens\Findings;
  * not in the SQL. Both produce a verdict; only one of them can be proven from what was
  * captured.
  *
- * **This is NOT `undetermined`.** An undetermined finding means the check could not
+ * **This is not `undetermined`.** An undetermined finding means the check could not
  * run — no server version, no statistics reader, an unparseable migration — and the
  * honest answer is "I do not know". A heuristic finding is the opposite situation: the
  * check ran and reached a conclusion, and the conclusion carries a margin. Collapsing

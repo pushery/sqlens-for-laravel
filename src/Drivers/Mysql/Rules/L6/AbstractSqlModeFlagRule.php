@@ -21,7 +21,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * ## What this base owns
  *
- * The parse, and the sentence structure. What it deliberately does NOT own is the consequence: each
+ * The parse, and the sentence structure. What it deliberately does not own is the consequence: each
  * flag fails differently, and a shared "this flag is missing" message would be the kind of finding
  * that tells a reader what is wrong without telling them why it matters.
  */

@@ -25,7 +25,7 @@ use Pushery\SQLens\Severity\Severity;
  *    from {@see GateDecision} — the same object the exit code reads, not a second judgment.
  * 2. **Security severity, descending.** A critical is a critical whatever the project's level says.
  * 3. **Downtime class**, `rewrite` → `blocking` → `online`. This is the field that decides what
- *    somebody WRITES next, and a table rewrite is a different afternoon from an online index build.
+ *    somebody writes next, and a table rewrite is a different afternoon from an online index build.
  * 4. **Level, ascending.** The lower level is the more fundamental rule; fixing it first often
  *    removes the higher one.
  * 5. **Rule id, then file, then line** — a byte comparison, so equals never swap between two runs.

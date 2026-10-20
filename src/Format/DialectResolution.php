@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Format;
 
 /**
- * What `dialect=auto` resolved to — a dialect, or a NAMED reason there is none.
+ * What `dialect=auto` resolved to — a dialect, or a named reason there is none.
  *
  * Three outcomes rather than a nullable enum, because the two absences mean different things and
  * are refused with different reasons:

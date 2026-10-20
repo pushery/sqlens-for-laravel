@@ -20,7 +20,7 @@ final readonly class SignatureElement
         public ?string $keyword,
         public ?SchemaObjectType $targetType,
         /**
-         * For a Target element: what the matched object is TO the statement.
+         * For a Target element: what the matched object is to the statement.
          *
          * Declared here because the GRAMMAR is the one place that knows. A foreign key names two
          * tables and only one of them is being altered; nothing downstream can tell them apart,

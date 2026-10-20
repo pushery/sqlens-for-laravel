@@ -37,8 +37,25 @@ final readonly class PatchAssessment
         return sprintf(
             'judged from the %s end-of-life data at "%s", compiled %s',
             $this->data->source->value,
-            $this->data->path,
+            $this->file(),
             $this->data->compiledOn,
         );
+    }
+
+    /**
+     * The file, named the same way on every machine.
+     *
+     * The bundled and the published copy sit at one fixed place, inside the package and inside the
+     * application, so their absolute path adds nothing but the directory a project was checked out
+     * into: the same finding would read differently on a laptop and in CI, and carry a user name
+     * into an annotation. A configured path is the project's own statement and stays as written.
+     */
+    private function file(): string
+    {
+        return match ($this->data->source) {
+            EolSource::Bundled => 'pushery/sqlens-for-laravel:'.EolRepository::BUNDLED_FILE,
+            EolSource::Published => EolRepository::BUNDLED_FILE,
+            EolSource::Configured => $this->data->path,
+        };
     }
 }

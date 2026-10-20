@@ -24,7 +24,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * They arrived at the same predicate independently, and for a while each carried its own
  * byte-identical copy of it. That is the shape of a defect waiting to happen: the predicate decides
- * whether a rule may speak AT ALL, so two copies drifting apart would not read as a bug in a helper
+ * whether a rule may speak at all, so two copies drifting apart would not read as a bug in a helper
  * — it would read as one rule being right and the other being mysteriously silent. One reading,
  * one place, exactly as {@see MigrationVerdicts} exists so two bases cannot build differently
  * shaped findings.
@@ -106,7 +106,7 @@ final readonly class TouchedTables
      * are new: the referenced table's lock is real, but it is the same lock the safe form takes,
      * and the rule that judges waiting on it is the lock-timeout one.
      *
-     * Three ways a table is NOT born empty, and each is checked rather than assumed:
+     * Three ways a table is not born empty, and each is checked rather than assumed:
      *
      *  - it was not created here at all,
      *  - it was created FROM A QUERY (`CREATE TABLE … AS SELECT`, `AS TABLE`, `AS (SELECT …)` and

@@ -13,11 +13,11 @@ use Pushery\SQLens\Rules\Settings\ServerSettingExpectation;
 use Pushery\SQLens\Subjects\SchemaObject;
 
 /**
- * A MySQL server running a NAMED time zone while its timezone tables are empty.
+ * A MySQL server running a named time zone while its timezone tables are empty.
  *
  * ## Why this is a separate rule from the one beside it
  *
- * {@see TimeZoneNotUtcRule} judges WHICH zone the server is on — an idiom question. This one judges
+ * {@see TimeZoneNotUtcRule} judges which zone the server is on — an idiom question. This one judges
  * whether the server can resolve a named zone at all, which is a misconfiguration. One rule id
  * carries one category, and folding a `safety` finding into an `idiom` one would put it in the wrong
  * band for whoever gates on categories.
@@ -30,7 +30,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * ## Why the trigger is narrower than it first appears
  *
- * Also measured: with the tables empty the server REFUSES to adopt a named zone —
+ * Also measured: with the tables empty the server refuses to adopt a named zone —
  * `SET time_zone = 'Europe/Vienna'` answers `ERROR 1298 Unknown or incorrect time zone`. So this
  * state does not arise by setting the value; it arises the other way round, when a server that had
  * the tables loses them — a `mysql` schema restored from a dump that omitted them, an upgrade that

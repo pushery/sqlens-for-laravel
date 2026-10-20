@@ -27,7 +27,7 @@ use ReflectionClass;
  *
  * ## `throw` is the whole design, and it defaults to false
  *
- * `preventLazyLoading(true)` THROWS. On a developer's machine that is the fastest feedback there is;
+ * `preventLazyLoading(true)` throws. On a developer's machine that is the fastest feedback there is;
  * in production it turns a slow page into a broken one, over a relationship that would have loaded.
  * So the shipped behavior is to report through {@see ViolationLogger} and let the request finish,
  * and `strict.throw` is the deliberate opt-in for the environments where stopping is better.
@@ -100,7 +100,7 @@ final readonly class StrictModeGuard implements RuntimeGuard
         });
 
         Model::handleDiscardedAttributeViolationUsing(static function (Model $model, array $keys) use ($logger, $profile): void {
-            // The attribute NAMES and never their values. A discarded attribute is by definition
+            // The attribute names and never their values. A discarded attribute is by definition
             // something somebody tried to write, so its value is user input — and a log is not where
             // that belongs.
             $logger->record($profile, Violation::found(

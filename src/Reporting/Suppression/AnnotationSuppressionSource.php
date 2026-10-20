@@ -6,13 +6,13 @@ namespace Pushery\SQLens\Reporting\Suppression;
 
 use Pushery\SQLens\Attributes\SqlensIgnore;
 use Pushery\SQLens\Subjects\MigrationSql;
-use ReflectionAttribute;
 use ReflectionClass;
+use Throwable;
 
 /**
  * Reads the `#[SqlensIgnore]` annotations off a migration subject's class — by
  * reflection, never by parsing the file or matching a regex. The suppressions it
- * returns apply ONLY to findings of that same subject: a migration can never
+ * returns apply only to findings of that same subject: a migration can never
  * suppress another migration's findings.
  *
  * It never autoloads a class off disk (`class_exists` with autoload disabled): only
@@ -50,6 +50,13 @@ final readonly class AnnotationSuppressionSource
      * second answer to "what does this migration annotate" — and the two would agree until the
      * day one of them learned about a new attribute target.
      *
+     * Only an annotation with a reason counts. PHP checks an attribute's arguments when it is
+     * instantiated rather than when the file loads, so one written without its reason is a
+     * migration that loads fine and throws here, and one whose reason is empty or only whitespace
+     * satisfies PHP and states nothing. Both are left out, the fail-safe direction the
+     * destructive opt-in takes too: the finding they name is reported, rather than the run
+     * failing or the finding disappearing behind a reason nobody wrote.
+     *
      * @return list<SqlensIgnore>
      */
     public function forClass(?string $class): array
@@ -58,10 +65,21 @@ final readonly class AnnotationSuppressionSource
             return [];
         }
 
-        return array_map(
-            static fn (ReflectionAttribute $attribute): SqlensIgnore => $attribute->newInstance(),
-            new ReflectionClass($class)->getAttributes(SqlensIgnore::class),
-        );
+        $annotations = [];
+
+        foreach (new ReflectionClass($class)->getAttributes(SqlensIgnore::class) as $attribute) {
+            try {
+                $annotation = $attribute->newInstance();
+            } catch (Throwable) {
+                continue;
+            }
+
+            if ($annotation->isReasoned()) {
+                $annotations[] = $annotation;
+            }
+        }
+
+        return $annotations;
     }
 
     /**

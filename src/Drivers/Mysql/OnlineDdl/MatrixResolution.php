@@ -8,7 +8,7 @@ use Pushery\SQLens\Findings\UndeterminedReason;
 
 /**
  * The outcome of asking the matrix about one operation: either the single applicable
- * {@see MatrixEntry}, or a NAMED undetermined — never a silent default. It is the same
+ * {@see MatrixEntry}, or a named undetermined — never a silent default. It is the same
  * three-valued shape the rest of the package uses, carried across the matrix boundary so the
  * resolver's uncertainty reaches the finding intact.
  *

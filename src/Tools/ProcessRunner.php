@@ -50,7 +50,7 @@ interface ProcessRunner
      *                                              comes to depend on whose terminal ran it. What
      *                                              is named here comes from the configuration
      *                                              under audit instead, which is the thing being
-     *                                              measured. Secrets belong HERE and never in
+     *                                              measured. Secrets belong here and never in
      *                                              `$arguments`, where they are readable in `ps`.
      */
     public function run(string $binaryPath, array $arguments, float $timeoutSeconds, ?string $stdin = null, array $environment = []): ToolRunResult;

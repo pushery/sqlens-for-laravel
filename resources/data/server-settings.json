@@ -171,6 +171,18 @@
             "note": "The session zone decides what timestamptz renders as and how a bare timestamp is interpreted on input; a server on local time makes two application servers disagree about the same row."
         },
         {
+            "variable": "autovacuum",
+            "driver": "pgsql",
+            "min_version": "18",
+            "max_version": null,
+            "vendor_default": "on",
+            "sqlens_expectation": "on",
+            "scope": "instance",
+            "changeable": "reload",
+            "source_url": "https://www.postgresql.org/docs/18/runtime-config-autovacuum.html#GUC-AUTOVACUUM",
+            "note": "Off stops the autovacuum daemon for every table, and a table storage parameter cannot turn it back on for one. Dead rows are then reclaimed by nobody and row estimates go stale, while a table that crosses autovacuum_freeze_max_age is still vacuumed, by a worker that does not yield to a lock request. Measured on 18.0: context sighup, so a configuration change and a reload."
+        },
+        {
             "variable": "data_checksums",
             "driver": "pgsql",
             "min_version": "18",
@@ -301,6 +313,18 @@
             "changeable": "session",
             "source_url": "https://www.postgresql.org/docs/18/runtime-config-compatible.html",
             "note": "Off makes a backslash an escape character inside ordinary string literals, which changes what a stored value MEANS and is a classic injection surface."
+        },
+        {
+            "variable": "track_counts",
+            "driver": "pgsql",
+            "min_version": "18",
+            "max_version": null,
+            "vendor_default": "on",
+            "sqlens_expectation": "on",
+            "scope": "instance",
+            "changeable": "session",
+            "source_url": "https://www.postgresql.org/docs/18/runtime-config-statistics.html#GUC-TRACK-COUNTS",
+            "note": "Off stops the counts autovacuum decides by, so it vacuums and analyzes nothing on its own while autovacuum itself stays on, and the index scan counters stop with them. Measured on 18.0: three index scans in a session with it off left idx_scan where it was, and ALTER DATABASE ... SET track_counts = off makes it the value a new connection of that database gets. Context superuser, so a session may override it, and the judged value is the one a new connection gets."
         }
     ]
 }

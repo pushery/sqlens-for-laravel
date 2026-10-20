@@ -28,7 +28,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  * {@see MysqlTimeouts::LOCK_WAIT_TIMEOUT_DEFAULT_SECONDS}, one year. A rule copied across would
  * have demanded a setting MySQL does not have while leaving the one it does have unbounded.
  *
- * ## What this rule deliberately does NOT ask for
+ * ## What this rule deliberately does not ask for
  *
  * There is no MySQL counterpart to `statement_timeout` for DDL, so this rule has no sibling asking
  * for one. `max_execution_time` is the setting that looks like the counterpart, and it is not: it
@@ -117,7 +117,7 @@ final class MissingLockWaitTimeoutRule extends AbstractMysqlRule implements Decl
         }
 
         return 'This migration takes a metadata lock without first setting lock_wait_timeout. MySQL '
-            .'defaults that setting to 31536000 seconds — a year — so a statement that cannot get the '
+            .'defaults that setting to '.MysqlTimeouts::LOCK_WAIT_TIMEOUT_DEFAULT_SECONDS.' seconds — a year — so a statement that cannot get the '
             .'lock at once waits effectively forever, and every query wanting the same table queues '
             .'behind it. Worse than the wait itself: MySQL grants metadata locks in order, so one '
             .'blocked DDL blocks the readers behind it even though they only wanted to read. Set the '

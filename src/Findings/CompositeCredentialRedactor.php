@@ -20,28 +20,34 @@ use Throwable;
  * {@see CredentialRedactor} knows the SHAPES the two drivers emit and removes coordinates by their
  * form. It cannot know that `hunter2` is a password when nothing around it says so.
  *
- * Each is blind exactly where the other sees, and the package had them wired to different callers:
- * the value pass ran on the `agent` reporter alone, the shape pass on a handful of translation
- * sites. Console, JSON, SARIF and GitHub got whichever one the producer happened to apply.
+ * Each is blind exactly where the other sees, so a site that quotes words this package did not
+ * write applies both.
  *
  * ## The order is not interchangeable
  *
- * Values first. The shape pass rewrites its matches to `<redacted>`, so a configured password that
- * sat inside `password=hunter2` is gone before the value pass could recognize it — which is fine
- * for that occurrence and wrong for the general case: the same secret elsewhere in the message, in
- * a shape no pattern knows, would then survive. Running the value pass first removes every literal
- * occurrence, and the shape pass then takes the coordinates that are left.
+ * Values first. A shape ends an unquoted value at the first delimiter, so run first it takes `abc`
+ * out of `password=abc;def` and leaves `;def` behind, a part of the password that no longer matches
+ * the configured value whole. Run first, the value pass removes the whole password wherever it
+ * appears, and the shape pass then takes the coordinates that are left.
  *
- * ## Why this is one object and not two calls at each site
+ * ## Where it runs
  *
- * A composite assembled at the call site is a decision repeated at every call site, and the
- * finding this class comes from counted sixteen places that had made it differently. One object,
- * resolved from the container, is one decision.
+ * Wherever this package quotes words it did not write: the capture rules, the catalog readings, the
+ * key counters a catalog reader could not read, the security run's notices, the error output of a
+ * tool, and the audit's notice for an instance it cannot reach. Constructed without arguments it
+ * reads the application's configured connections, so a site applies both halves without asking the
+ * container for anything.
+ *
+ * Two kinds of site keep the shape half alone. A deploy check quotes an error into its reason, and
+ * the preflight takes the configured values out of every reason when it returns its report, the
+ * check's own prose included. And a configured URL shown through {@see CredentialRedactor::url()}
+ * keeps its host, because a reader needs to know which address was meant. The `agent` reporter
+ * applies the value half to the whole of its report.
  */
 final readonly class CompositeCredentialRedactor
 {
     public function __construct(
-        private CredentialRedaction $values,
+        private CredentialRedaction $values = new CredentialRedaction,
         private CredentialRedactor $shapes = new CredentialRedactor,
     ) {}
 

@@ -23,7 +23,7 @@ final readonly class PglsRule
         public string $rule,
         public PglsSeverity $severity,
         /**
-         * What the rule is about, in THIS package's words.
+         * What the rule is about, in this package's words.
          *
          * Deliberately not the tool's own title and description, which is what an earlier draft
          * shipped. Those are somebody else's prose, and this package's NOTICE says plainly that no

@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Drivers\Mysql\DowntimeClass;
 use Pushery\SQLens\Findings\DowntimeClass;
 
 /**
- * What a NON-DDL statement does to a table, as the one named input the second downtime derivation
+ * What a non-DDL statement does to a table, as the one named input the second downtime derivation
  * takes.
  *
  * The online-DDL matrix describes schema changes. A `WHERE`-less `UPDATE`, an unbatched backfill,
@@ -69,7 +69,7 @@ enum NonDdlImpact: string
      * A data write in the same statement stream as a schema change, where no single DDL operation
      * can be keyed.
      *
-     * The lock belongs to the schema change, so when the operation IS known the caller looks the
+     * The lock belongs to the schema change, so when the operation is known the caller looks the
      * class up in the matrix instead. This case is the honest floor for when it is not: the
      * combined statement holds a lock over the data write, and `blocking` is the least it can be.
      */

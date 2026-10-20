@@ -24,7 +24,7 @@ namespace Pushery\SQLens\Rules\Security;
  *
  * So the name `TLSv1.10` cannot occur: the server rejects a value outside its enum at startup, and a
  * reader would never see it. That makes the sorting trap unreachable through PostgreSQL today —
- * which is an argument for writing the comparison correctly and NOT for skipping it, because the
+ * which is an argument for writing the comparison correctly and not for skipping it, because the
  * unreachability is a property of one server's parameter validation rather than of this package. The
  * MySQL side reads `tls_version`, a comma-separated LIST whose members are spelled differently
  * again, and any future member arrives here as a name this class has to place.
@@ -36,7 +36,7 @@ namespace Pushery\SQLens\Rules\Security;
 final readonly class TlsProtocolVersion
 {
     /**
-     * Oldest first. The index IS the rank; nothing else about this list is load-bearing.
+     * Oldest first. The index is the rank; nothing else about this list is load-bearing.
      *
      * @var list<string>
      */

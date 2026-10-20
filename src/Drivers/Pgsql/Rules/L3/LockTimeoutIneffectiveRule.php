@@ -33,7 +33,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * cannot see when the pair is wrong is advice that stops being true the moment somebody follows it
  * with the wrong numbers. An arm proves the shipped template never produces such a pair.
  *
- * ## Two states this deliberately does NOT report
+ * ## Two states this deliberately does not report
  *
  * `lock_timeout = 0` is the existing finding of `PG.L3.MISSING_LOCK_TIMEOUT` — unbounded, not
  * ineffective — and reporting it here as well would be two findings for one fact, which is how a
@@ -43,7 +43,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * ## What "effective" means here, and why it is not the session value
  *
  * `reset_val`, which is what the configuration file, the database and the role have settled between
- * them: the pair a deploy session inherits before it sets anything of its own. NOT `setting` — this
+ * them: the pair a deploy session inherits before it sets anything of its own. Not `setting` — this
  * audit sets both of these timeouts on its own session before reading anything, so the session
  * value describes SQLens on every server it is ever pointed at. Which layer named either clock is
  * measured beside it, from `pg_db_role_setting`, because a reader told the pair is wrong still has
@@ -126,7 +126,7 @@ final class LockTimeoutIneffectiveRule extends AbstractServerSettingRule
             $this->crossFact($object, PgsqlSettingCrossFactCollector::STATEMENT_TIMEOUT) ?? '0',
         );
 
-        // Unbounded is the OTHER rule's finding, and there is no statement clock to be swallowed by
+        // Unbounded is the other rule's finding, and there is no statement clock to be swallowed by
         // when the second is zero. Neither is this rule's subject.
         if ($lock === 0 || $statement === 0 || $lock < $statement) {
             return null;
@@ -141,8 +141,9 @@ final class LockTimeoutIneffectiveRule extends AbstractServerSettingRule
             .'mislabeled as well: the statement returns a statement timeout, so a reader concludes '
             .'the DDL is slow and goes looking at the table, when the migration never got the lock '
             .'at all. Set lock_timeout strictly below statement_timeout, leaving room for the work '
-            .'itself. %s These are the values a fresh session inherits (reset_val), not this '
-            .'audit session\'s own — SQLens sets both on itself before reading anything.',
+            .'itself. %s These are the values a fresh session of the role this audit connected as '
+            .'inherits (reset_val), not this audit session\'s own — SQLens sets both on itself '
+            .'before reading anything.',
             $lock,
             $statement,
             $statement,
@@ -154,17 +155,19 @@ final class LockTimeoutIneffectiveRule extends AbstractServerSettingRule
      * Which layer to change, named from what was measured rather than guessed.
      *
      * An empty measurement is a real answer and the commonest one: neither clock was set by
-     * `ALTER DATABASE` or `ALTER ROLE`, so the pair came from the configuration file or the
-     * built-in default.
+     * `ALTER DATABASE` or by `ALTER ROLE` for the role this audit connected as, so for that role the
+     * pair came from the configuration file or the built-in default. Another role's settings were
+     * not read, and the text says so rather than speaking for them.
      */
     private function whereToChangeIt(SchemaObject $object): string
     {
         $overrides = $this->crossFact($object, PgsqlSettingCrossFactCollector::TIMEOUT_OVERRIDES) ?? '';
 
         if (trim($overrides) === '') {
-            return 'Neither clock is set by ALTER DATABASE or ALTER ROLE, so this pair comes from '
-                .'postgresql.conf or the built-in default; change it there, or per deploy in the '
-                .'migration preamble.';
+            return 'Neither clock is set by ALTER DATABASE, or by ALTER ROLE for the role this audit '
+                .'connected as, so for that role this pair comes from postgresql.conf or the built-in '
+                .'default; change it there, or per deploy in the migration preamble. A migration that '
+                .'runs as another role inherits that role\'s own settings.';
         }
 
         return sprintf('Set by: %s — change it at that level rather than in postgresql.conf.', $overrides);

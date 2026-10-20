@@ -19,7 +19,7 @@ namespace Pushery\SQLens\Catalog;
  * says "nothing else is affected" about a database it never examined. That is the package's silent
  * green, one layer below where it usually appears.
  *
- * Five separate rules needed this and each invented its own discriminator: a nullable string, a
+ * The first five rules that needed this each invented their own discriminator: a nullable string, a
  * `hasAttribute()` check, an explicit zero, a `'yes'|'no'|null` triple. Five conventions is five
  * chances for one of them to collapse the two cases, so the state travels as its own value and is
  * mandatory rather than inferable.

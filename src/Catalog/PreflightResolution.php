@@ -24,7 +24,7 @@ use Pushery\SQLens\Rules\ServerVersion;
  * ## Why the readers are RESOLVED here rather than looked up in the checks
  *
  * A check that built its own reader would need a `Connection`, and the console that hands the
- * context down may not name one — the core-purity census pins exactly three files that know both
+ * context down may not name one — the core-purity census pins the few files that know both
  * engines, and `PredeployCommand` is not among them. Resolving here keeps that true while giving
  * every check the readers it needs.
  *
@@ -40,7 +40,7 @@ final readonly class PreflightResolution
         /** Why the run cannot happen, or null when it can. */
         public ?CatalogSkip $refusal,
         /**
-         * A named concern that does NOT stop the run — currently: the preflight is reading through
+         * A named concern that does not stop the run — currently: the preflight is reading through
          * the connection that runs the migrations, which works and costs the least-privilege claim.
          *
          * Deliberately a separate field from the refusal rather than the same one with a severity.
@@ -62,6 +62,11 @@ final readonly class PreflightResolution
          * layer already gives, and the two would drift.
          */
         public ?string $migrationRole = null,
+        /**
+         * What the server said about itself when the session was opened: the read the server
+         * version above comes from, kept whole so a report can name the instance as well.
+         */
+        public ?InstanceIdentity $identity = null,
     ) {}
 
     public static function refused(CatalogSkip $refusal, string $driver = ''): self
@@ -77,7 +82,8 @@ final readonly class PreflightResolution
         ?StatisticsReader $statistics = null,
         ?ActivityReader $activity = null,
         ?string $migrationRole = null,
+        ?InstanceIdentity $identity = null,
     ): self {
-        return new self($session, null, $advisory, $driver, $serverVersion, $statistics, $activity, $migrationRole);
+        return new self($session, null, $advisory, $driver, $serverVersion, $statistics, $activity, $migrationRole, $identity);
     }
 }

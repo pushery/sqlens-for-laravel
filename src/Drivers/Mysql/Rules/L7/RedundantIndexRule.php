@@ -19,9 +19,9 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * The judgment is shared with the PostgreSQL sister through {@see RedundantIndex}; what is MySQL's
  * own is the remedy, and the difference is worth stating. `DROP INDEX` on InnoDB is an in-place
- * operation that does not copy the table, so there is no CONCURRENTLY to ask for — but an index
- * that CARRIES A FOREIGN KEY cannot be dropped at all while the constraint stands, and MySQL
- * refuses the statement rather than silently leaving the key unindexed.
+ * operation that does not copy the table, so there is no CONCURRENTLY to ask for. A foreign key
+ * moves to the index that covers this one, because that index carries the key's columns first, so
+ * the drop goes through; MySQL refuses it (ERROR 1553) only for the last index satisfying a key.
  *
  * ## What this rule will not do
  *
@@ -95,9 +95,9 @@ final class RedundantIndexRule extends AbstractCatalogRule implements DeclaresJu
             'On %s, %s whose work another index already does: %s. A b-tree index on (a) beside one on (a, b) '
             .'answers nothing the second cannot, and is still maintained on every insert and on every update '
             .'that touches its columns — it occupies its own pages in the buffer pool, for no read it serves '
-            .'alone. DROP INDEX is in place on InnoDB and copies no table — but '
-            .'check first whether the index carries a foreign key, because MySQL refuses to drop one that does '
-            .'rather than leave the constraint unindexed. Only indexes this reading could compare are considered '
+            .'alone. DROP INDEX is in place on InnoDB and copies no table, and a foreign key on these columns '
+            .'moves to the covering index, which carries them first; MySQL refuses the drop only for the last '
+            .'index satisfying a foreign key. Only indexes this reading could compare are considered '
             .'at all: a functional index, a prefix-length key, a non-b-tree method such as FULLTEXT or SPATIAL '
             .'are each excluded with a named reason, so a schema full of them is told they were not compared '
             .'rather than handed a clean report.',

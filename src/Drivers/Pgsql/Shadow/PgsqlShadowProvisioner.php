@@ -38,7 +38,7 @@ use Throwable;
  *      as a `TEMPLATE` source. Read from `pg_stat_activity`, not discovered by a
  *      failed clone.
  *
- * THE ORDER IS SORTED CHEAPEST-AND-MOST-DETERMINISTIC FIRST, and that is a decision
+ * The order is sorted cheapest and most deterministic first, and that is a decision
  * rather than a convenience. Checks 1 and 2 are single catalog reads whose answers do
  * not change with how busy the machine is; check 3 is a timing question about a
  * backend on its way out. With 3 ahead of 2 — where it used to be — a run that was
@@ -59,7 +59,7 @@ use Throwable;
  * none. A caller cannot hand this provisioner the live database by passing a
  * different string, because it does not accept a string.
  *
- * A provisioner is reached ONLY after the production guard has allowed the run and
+ * A provisioner is reached only after the production guard has allowed the run and
  * the captor has ruled out a replica and a transaction pooler; those engine-neutral
  * checks are the captor's. These three are the engine-specific preconditions only
  * PostgreSQL can answer, so they live here.
@@ -116,18 +116,18 @@ final readonly class PgsqlShadowProvisioner implements ShadowProvisioner
             throw new ShadowProvisioningUndetermined(UndeterminedReason::ShadowNameCollision);
         }
 
-        // The template is built HERE, not handed in already built, and that is
+        // The template is built here, not handed in already built, and that is
         // deliberate: building one CREATES a database, so doing it in a constructor
         // would provision for a run the guard may still refuse. Inside provision() the
         // guard has already allowed the run, and a build that cannot finish surfaces as
         // the named undetermined the captor knows how to report.
         $template = $this->templates->build();
 
-        // EVERYTHING after the build is guarded, because the build CREATED a database and every path
+        // Everything after the build is guarded, because the build CREATED a database and every path
         // below can leave without one.
         //
         // `destroy()` discards the template — but it takes a ShadowSession, and on a throw path there
-        // is none, so it never runs. A refused run therefore used to leave the project's ENTIRE
+        // is none, so it never runs. A refused run therefore used to leave the project's entire
         // SCHEMA sitting on the server under a name nothing would ever collect. That is a direct
         // primum-non-nocere failure, and it was invisible: the tests that exercised these paths
         // asserted the CLONE was absent and then dropped the template themselves, one line later.
@@ -142,9 +142,9 @@ final readonly class PgsqlShadowProvisioner implements ShadowProvisioner
             // connections as a TEMPLATE source. Read it rather than fail the clone.
             if (! $this->waitForIdle($template->database)) {
                 // Name them here or never: this is the last moment those sessions are observable.
-                // Once the exception is caught the reason enum is all that survives, and a CI
-                // failure that says only "other active connections" sends the next reader back to
-                // a server whose state has moved on.
+                // The results keep the reason enum alone, and the names reach a person on the
+                // command's STDERR; a CI failure that says only "other active connections" sends the
+                // next reader back to a server whose state has moved on.
                 throw new ShadowProvisioningUndetermined(
                     UndeterminedReason::ShadowTemplateInUse,
                     $this->describeBlockers($template->database),
@@ -159,7 +159,7 @@ final readonly class PgsqlShadowProvisioner implements ShadowProvisioner
             // Nothing runs on the clone before the server has said the session is in it.
             ShadowConnectionLatch::assertReaches($this->db->connection($name), $name);
         } catch (Throwable $failure) {
-            // Discarded here and NOT swallowed: the caller still gets its named undetermined, which
+            // Discarded here and not swallowed: the caller still gets its named undetermined, which
             // is what the captor reports. The cleanup is silent about its own errors for the same
             // reason `destroy()` is — a teardown that throws while unwinding replaces a diagnosable
             // failure with an undiagnosable one.
@@ -200,7 +200,7 @@ final readonly class PgsqlShadowProvisioner implements ShadowProvisioner
         // a database nobody drops is a leak, so this errs toward always removing it.
         $this->db->purge($session->connectionName);
 
-        // EVERY database this run created is attempted, whatever happened to the one before it.
+        // Every database this run created is attempted, whatever happened to the one before it.
         //
         // This used to be two statements in a row, and the order was the bug: a clone whose drop
         // threw took the TEMPLATE's drop with it, and the template is the worse leak by a distance
@@ -210,7 +210,7 @@ final readonly class PgsqlShadowProvisioner implements ShadowProvisioner
         // measured in CI — the clone gone, the template still there, and nothing said about it.
         //
         // The failures are collected rather than rethrown at the first one for the same reason:
-        // whichever database is still on the server has to be NAMED, and the first exception can
+        // whichever database is still on the server has to be named, and the first exception can
         // only name one of them.
         $failures = [];
 
@@ -254,7 +254,7 @@ final readonly class PgsqlShadowProvisioner implements ShadowProvisioner
     /**
      * The refusal's diagnosis: who holds $database, in one line.
      *
-     * Read AFTER the wait rather than during it, and that ordering is the point. A session
+     * Read after the wait rather than during it, and that ordering is the point. A session
      * observed on the first of three reads may be a backend on its way out — the very thing the
      * wait exists to tolerate — so describing it would name a session that is no longer the
      * reason for anything. What is left standing after ~100 ms is what actually blocks.
@@ -294,7 +294,7 @@ final readonly class PgsqlShadowProvisioner implements ShadowProvisioner
      * SERVER reaping its backend are two different events: `pg_stat_activity` can still list a backend
      * that is on its way out, and that window is exactly as long as the machine is busy.
      *
-     * Measured as an intermittent CI failure where `provision()` refused its OWN freshly built
+     * Measured as an intermittent CI failure where `provision()` refused its own freshly built
      * template — never locally, always under load. A single read is a hair-trigger on a race this
      * class caused itself, and the honest question is not "is a row there right now" but "is anyone
      * still using this". A backend on its way out is not.

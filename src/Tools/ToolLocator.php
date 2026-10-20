@@ -16,16 +16,21 @@ use Illuminate\Contracts\Config\Repository;
  * for reproducibility while still working out of the box when the tool is simply
  * installed system-wide.
  *
- * A pinned path that does not run does NOT fall through to `$PATH`. That fall-through was
+ * A pinned path that does not run does not fall through to `$PATH`. That fall-through was
  * here, and it was the dangerous kind of helpful: the configuration would read as honored
  * while the verdict came from whichever binary happened to be installed. Naming a path is
- * a statement about WHICH binary, so a broken pin is reported, not worked around.
+ * a statement about which binary, so a broken pin is reported, not worked around.
  *
- * Resolution is cached for the life of this instance — one run. The diagnostic is asked for
- * repeatedly (the run header, the doctor command, the strict-tool gate), and each miss used
- * to cost a fork for `--version`. The cache makes the answer both cheap and identical to
- * itself within a run, which matters more: two readings that disagree would be worse than
- * two readings that are slow.
+ * Resolution is cached for one run. The diagnostic is asked for repeatedly (the run header,
+ * the doctor command, the strict-tool gate), and each miss used to cost a fork for `--version`.
+ * The cache makes the answer both cheap and identical to itself within a run, which matters
+ * more: two readings that disagree would be worse than two readings that are slow.
+ *
+ * One run, not the life of this instance. The runners that hold a locator live as long as the
+ * process, and the MCP server's process lasts an editor session: a memo kept that long reports
+ * a tool installed during the session as missing, and a tool upgraded past its version window
+ * as the build that was checked. So {@see diagnoseFor()}, which a run asks once at its start,
+ * resolves every tool afresh.
  */
 final class ToolLocator
 {
@@ -63,10 +68,16 @@ final class ToolLocator
      * strict gate and the notice loop, and a filter applied at three call sites is a filter with
      * two chances to be forgotten.
      *
+     * A run asks this once, at its start, and the answer is the machine as it is then: the memo of
+     * an earlier run is dropped, and the one refilled here answers {@see diagnose()} until the next
+     * run begins.
+     *
      * @return list<ToolDiagnostic>
      */
     public function diagnoseFor(string $driver): array
     {
+        $this->resolved = [];
+
         return array_values(array_filter(
             $this->diagnoseAll(),
             static fn (ToolDiagnostic $diagnostic): bool => $diagnostic->tool->supportsDriver($driver),
@@ -121,7 +132,7 @@ final class ToolLocator
      * It sits here rather than in each adapter because this is the only place both halves
      * meet: a check that lived in the adapter would be a check with no caller, and finding a
      * binary is exactly half of establishing that a tool can be used. The other half is
-     * knowing WHICH binary answered, and an amplifier whose output shape is unverified is not
+     * knowing which binary answered, and an amplifier whose output shape is unverified is not
      * a weaker amplifier — it is a confident wrong answer.
      *
      * The path and the raw version line travel even when the verdict is a downgrade. A user

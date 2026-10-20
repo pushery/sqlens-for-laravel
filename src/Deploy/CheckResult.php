@@ -39,8 +39,8 @@ final readonly class CheckResult
         /**
          * The same reason as a NAME — present exactly when {@see $reason} is.
          *
-         * Both, and not one instead of the other. The sentence above is specific on purpose: WHICH
-         * view refused, WHICH privilege is missing, WHICH budget ran out, and a category alone
+         * Both, and not one instead of the other. The sentence above is specific on purpose: which
+         * view refused, which privilege is missing, which budget ran out, and a category alone
          * would make two very different situations look alike at exactly the moment somebody needs
          * to tell them apart. That argument stands and is why this is an addition rather than a
          * replacement.
@@ -83,8 +83,8 @@ final readonly class CheckResult
     /**
      * The check could not answer, and here is why — in words somebody can act on.
      *
-     * The reason travels as BOTH a name and a sentence, and the sentence is why it is not only a
-     * name: it is specific — WHICH view refused, WHICH privilege is missing, WHICH budget ran out —
+     * The reason travels as both a name and a sentence, and the sentence is why it is not only a
+     * name: it is specific — which view refused, which privilege is missing, which budget ran out —
      * and a category alone would make two very different situations look alike at exactly the
      * moment somebody needs to tell them apart.
      *
@@ -96,17 +96,19 @@ final readonly class CheckResult
      * The shape `name: detail` is the one call sites wrote out by hand before it was composed here,
      * so every undetermined result now carries the same prefix.
      *
-     * **The detail is not redacted here.** Some call sites compose a driver's message into it, so
-     * a sink here looks right — and it is not: this field carries the check's own prose as well,
-     * and some of that prose quotes an identifier. `GrantCheck` writes "the migration connection
-     * names the role `deploy`", which the shape redactor would remove, because removing a quoted role
-     * is exactly its job when the text came from a driver.
-     *
-     * A role name there is not a credential. It is the identifier the reader typed into their own
-     * configuration, and it is the one thing that makes the message actionable.
-     *
-     * So the redaction stays at the sites that compose a `Throwable`, where the text is a driver's
+     * **The detail is not shape-redacted here.** Some call sites compose a driver's message into it,
+     * so a sink here looks right — and it is not: this field carries the check's own prose as well,
+     * and some of that prose quotes an identifier in backticks, which the shape redactor would remove,
+     * because removing a quoted identifier is exactly its job when the text came from a driver. So
+     * the shape redaction stays at the sites that compose a `Throwable`, where the text is a driver's
      * and nothing else.
+     *
+     * Every detail does pass through {@see redactedWith()} later, which the preflight applies to the
+     * whole report and which takes this application's configured values out of the text, the
+     * `username` of the migration connection among them. A check therefore names the configuration a
+     * reader has to look at rather than the configured value: `GrantCheck` says that the role the
+     * migration connection's `username` names does not exist, because the role itself would arrive
+     * as `<redacted>`.
      *
      * @param  list<Finding>  $findings
      */

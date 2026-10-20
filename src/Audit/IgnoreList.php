@@ -12,7 +12,7 @@ namespace Pushery\SQLens\Audit;
  *
  * It answers one question: does this project's configuration name this rule on this object. What
  * happens to a finding that matches is the suppression machinery's business, and that machinery
- * already COUNTS and LISTS what it hides. Keeping the two apart is what stops this from becoming a
+ * already counts and LISTS what it hides. Keeping the two apart is what stops this from becoming a
  * second, quieter way to make findings disappear: a list that deleted findings itself would report
  * "clean" over a database with twelve known problems, which is the exact leak the ignore list is
  * meant to be an alternative to.
@@ -21,7 +21,7 @@ namespace Pushery\SQLens\Audit;
  *
  * - `rules` silences a rule everywhere. Blunt, and honest about being blunt.
  * - `objects` silences every rule on a path. Useful for a legacy schema nobody will fix.
- * - `pairs` silences ONE rule on named paths, and is the form to reach for: the other two grow
+ * - `pairs` silences one rule on named paths, and is the form to reach for: the other two grow
  *   silently. A rule ignored project-wide keeps ignoring itself on tables added next year, and a
  *   schema ignored wholesale hides rules that did not exist when somebody wrote the line.
  *
@@ -29,12 +29,12 @@ namespace Pushery\SQLens\Audit;
  *
  * A path is dot-separated and increasingly specific — `schema`, `schema.table`,
  * `schema.table.column`. A pattern is the same shape, and a segment may end in `*` to match a
- * prefix within THAT segment only. The glob never crosses a dot, which is the property that makes
+ * prefix within that segment only. The glob never crosses a dot, which is the property that makes
  * a pattern's blast radius readable: `public.orders` cannot reach `public.orders_archive`, because
  * segments match whole.
  *
  * A pattern matches a path when every one of its segments matches the path's corresponding
- * segment. A path MAY be longer than its pattern — `public.orders` covers `public.orders.total`,
+ * segment. A path may be longer than its pattern — `public.orders` covers `public.orders.total`,
  * since ignoring a table means ignoring what is in it — but never shorter, so `public.orders` does
  * not silence a finding about the `public` schema itself.
  *
@@ -46,11 +46,11 @@ namespace Pushery\SQLens\Audit;
  *     /etc/postgresql/18/main/pg_hba.conf:117
  *
  * Splitting that on dots produces two meaningless halves (`/etc/…/pg_hba` and `conf:117`), so a
- * project with ONE deliberately accepted `trust` line could only reach it through a pattern like
+ * project with one deliberately accepted `trust` line could only reach it through a pattern like
  * `*.conf:117` — or had to fall back to `rules` and silence the rule everywhere, which is the blunt
  * instrument this list exists to offer an alternative to.
  *
- * **A pattern containing `/` is matched against the WHOLE path instead**, with `*` free to cross
+ * **A pattern containing `/` is matched against the whole path instead**, with `*` free to cross
  * both dots and slashes. The switch is a property of the pattern the author wrote, never a guess
  * about the data: a schema path never contains a slash, so no existing pattern changes meaning, and
  * an author who writes a file path gets file semantics because that is plainly what they meant.
@@ -83,7 +83,7 @@ final readonly class IgnoreList
     /**
      * @param  list<string>  $rules  rule ids silenced everywhere
      * @param  list<string>  $objects  paths on which every rule is silenced
-     * @param  list<array{rule: string, objects: list<string>}>  $pairs  one rule, named paths
+     * @param  array<int, array{rule: string, objects: list<string>}>  $pairs  one rule, named paths, keyed by position in the configured list
      * @param  string  $tablePrefix  the application's table prefix, so a pattern may omit it
      */
     private function __construct(
@@ -104,7 +104,7 @@ final readonly class IgnoreList
      *
      * Malformed entries are dropped rather than refused, because refusing is the config
      * validator's job and it runs before this does. What must never happen here is the opposite
-     * failure: a value this class could not read must not silence MORE than it says. Every
+     * failure: a value this class could not read must not silence more than it says. Every
      * narrowing below therefore drops toward the empty list, never toward a wildcard.
      */
     public static function fromConfig(mixed $config, string $tablePrefix = ''): self
@@ -156,7 +156,7 @@ final readonly class IgnoreList
     }
 
     /**
-     * WHICH form covers this rule on this object — `rules`, `objects`, `pairs` — or null.
+     * Which form covers this rule on this object — `rules`, `objects`, `pairs` — or null.
      *
      * The form rather than a bare yes, because a report that says "12 suppressed" and one that
      * says "12 suppressed (9 by rule, 3 by object)" answer different questions. The first tells a
@@ -262,7 +262,7 @@ final readonly class IgnoreList
         $patternSegments = explode('.', $pattern);
         $pathSegments = explode('.', $path);
 
-        // A path shorter than its pattern is a LESS specific thing than the pattern describes, and
+        // A path shorter than its pattern is a less specific thing than the pattern describes, and
         // silencing it would widen the pattern beyond what its author wrote.
         if (count($pathSegments) < count($patternSegments)) {
             return false;
@@ -279,7 +279,7 @@ final readonly class IgnoreList
      * pattern like `/etc/postgresql/18/main/pg_hba.conf:*` needs it to do. The match is anchored at
      * both ends, so a pattern names the whole object and cannot silence a longer one by accident.
      *
-     * The table prefix is deliberately NOT consulted here. It exists because an application writes
+     * The table prefix is deliberately not consulted here. It exists because an application writes
      * `orders` where the database stores `wp_orders`; a file on the server's disk has no such second
      * spelling, and applying it would invent one.
      */
@@ -317,7 +317,40 @@ final readonly class IgnoreList
     }
 
     /**
-     * @return list<array{rule: string, objects: list<string>}>
+     * Whether a `pairs` entry is one this list can read: exactly a `rule` and an `objects` key, the
+     * rule id a non-blank string and the objects a non-empty list of non-blank paths.
+     *
+     * One definition for both readers of an entry. The configuration check refuses an entry that
+     * fails it, under its index, before a run starts, and {@see self::fromConfig()} drops one for a
+     * caller that skipped the check. A pair with no objects fails it rather than reading as "this
+     * rule, everywhere": that reading is spelled `rules:`, and treating an empty list as a wildcard
+     * would turn a half-written line into a project-wide silence.
+     *
+     * @phpstan-assert-if-true array{rule: string, objects: list<string>} $entry
+     */
+    public static function isReadablePair(mixed $entry): bool
+    {
+        if (! is_array($entry)) {
+            return false;
+        }
+
+        $keys = array_map(strval(...), array_keys($entry));
+        sort($keys);
+        $rule = $entry['rule'] ?? null;
+        $objects = $entry['objects'] ?? null;
+
+        return $keys === ['objects', 'rule']
+            && is_string($rule) && trim($rule) !== ''
+            && is_array($objects) && array_is_list($objects) && $objects !== []
+            && array_all($objects, static fn (mixed $object): bool => is_string($object) && trim($object) !== '');
+    }
+
+    /**
+     * The readable pairs, keyed by their position in the configured list, so a rule id that turns
+     * out to be unknown is reported at the line it was written on even when an entry before it was
+     * dropped.
+     *
+     * @return array<int, array{rule: string, objects: list<string>}>
      */
     private static function pairs(mixed $value): array
     {
@@ -327,23 +360,10 @@ final readonly class IgnoreList
 
         $pairs = [];
 
-        foreach ($value as $entry) {
-            if (! is_array($entry)) {
-                continue;
+        foreach (array_values($value) as $index => $entry) {
+            if (self::isReadablePair($entry)) {
+                $pairs[$index] = ['rule' => $entry['rule'], 'objects' => $entry['objects']];
             }
-            if (! is_string($entry['rule'] ?? null)) {
-                continue;
-            }
-            $objects = self::strings($entry['objects'] ?? null);
-
-            // A pair with no objects is dropped rather than read as "this rule, everywhere". The
-            // other reading is available and spelled `rules:`; treating an empty list as a wildcard
-            // would turn a half-written line into a project-wide silence.
-            if ($objects === []) {
-                continue;
-            }
-
-            $pairs[] = ['rule' => $entry['rule'], 'objects' => $objects];
         }
 
         return $pairs;

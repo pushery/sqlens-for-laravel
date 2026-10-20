@@ -13,7 +13,7 @@ use Pushery\SQLens\Attributes\RawSql;
  * ## Two joins, because an annotation has two ways of reaching a call
  *
  * - **By NAME.** A call inside `App\Report::build()` is covered by an annotation on the method OR
- *   on its class, so both names are tried. An anonymous class counts: it IS a class, PHPStan gives
+ *   on its class, so both names are tried. An anonymous class counts: it is a class, PHPStan gives
  *   it a synthetic name both sides of the join agree on, and it is the shape every Laravel
  *   migration takes — which is where raw DDL lives.
  * - **By POSITION.** A free function, a closure and an arrow function report no scope name at all,

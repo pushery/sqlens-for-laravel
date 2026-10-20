@@ -20,7 +20,7 @@ use Pushery\SQLens\Subjects\SubjectContext;
  *
  * ## It translates; it does not map onto SQLens rules
  *
- * A PGLS rule keeps its own identity under this package's prefix. It is deliberately NOT resolved
+ * A PGLS rule keeps its own identity under this package's prefix. It is deliberately not resolved
  * to the SQLens rule that says a similar thing — that correspondence is de-duplication, a concern
  * of its own, and doing it here would mean two mechanisms deciding what a finding is.
  *
@@ -72,7 +72,7 @@ final readonly class PglsFindingMapper
      * The tool's severities, translated once.
      *
      * Not a pass-through, because the two scales are not the same scale. The tool ranks how loudly
-     * IT would complain; this package's severity feeds a gate somebody sets in CI. An `ERROR` from
+     * it would complain; this package's severity feeds a gate somebody sets in CI. An `ERROR` from
      * a schema linter is a real problem worth failing a build over, so High — but not Critical,
      * which in this package is reserved for findings SQLens established itself and is prepared to
      * stand behind. Deferring to another tool's top rank for that would let an upstream re-rating
@@ -139,7 +139,7 @@ final readonly class PglsFindingMapper
                 $detail,
             ),
             // One reason for every way the tool can contribute nothing, and the specificity is
-            // not lost: the finding's own id IS the failure reason, so an unreachable database and
+            // not lost: the finding's own id is the failure reason, so an unreachable database and
             // an unreadable report are already two different ids a reader can route on. A second
             // axis saying the same thing in coarser words would be one more place to disagree —
             // and the branch that chose between them could only ever be exercised by one arm.

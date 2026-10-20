@@ -137,4 +137,26 @@ final readonly class ColumnTypeChange
 
         return new self(trim($matches[1], '"'), $matches[2]);
     }
+
+    /**
+     * The retyping of the named column a canonical statement text performs, or null when it retypes
+     * no such column.
+     *
+     * {@see inCanonical()} reads the first `ALTER COLUMN … TYPE` of a statement, which is the one a
+     * rule judging that statement asks about. A reader following one column through earlier
+     * statements needs that column's clause wherever it stands in the action list, and in every
+     * spelling PostgreSQL accepts for it: `COLUMN` and `SET DATA` are optional words. Matched with
+     * the case the canonical form gives both: keywords upper case, and a name in the case it was
+     * created with, so `"Views"` and `views` stay two columns.
+     */
+    public static function ofColumnIn(string $canonical, string $column): ?self
+    {
+        $pattern = '/\bALTER\s+(?:COLUMN\s+)?"?'.preg_quote($column, '/').'"?\s+(?:SET\s+DATA\s+)?TYPE\s+(.+)$/';
+
+        if (preg_match($pattern, $canonical, $matches) !== 1) {
+            return null;
+        }
+
+        return new self($column, $matches[1]);
+    }
 }

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Drivers\Mysql\OnlineDdl;
 
 /**
- * Renders a loaded matrix back to its ONE canonical on-disk form, so the data file stays cleanly
+ * Renders a loaded matrix back to its one canonical on-disk form, so the data file stays cleanly
  * diffable as it grows: entries sorted by id, conditions and sources sorted within each entry,
  * object keys always in the same order, pretty-printed with a trailing newline. Change one entry
  * and the git diff touches only that entry's lines — never a neighbor reshuffled by an editor.

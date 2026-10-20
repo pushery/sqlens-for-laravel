@@ -30,7 +30,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * ## Why a second rule rather than a second category on the first
  *
- * `category()` returns ONE category, and widening it to a list would touch every category filter,
+ * `category()` returns one category, and widening it to a list would touch every category filter,
  * every reporter, the SARIF mapping and the gate — a change to a core axis for two settings. The
  * two-rule shape costs a duplicate finding on the same value instead, and that has an answer:
  * `suppressed_by` records the second view against the first rather than printing it twice.
@@ -104,7 +104,7 @@ final class StatementLoggingSecretsRule extends AbstractSettingSecurityRule
      *
      * Its privacy sibling reaches the same place through {@see AbstractPrivacySettingRule}, which
      * declares this for the whole family; the security family does not, because most of its settings
-     * ARE judged by the matrix — `general_log` is, measured.
+     * are judged by the matrix — `general_log` is, measured.
      */
     #[Override]
     protected function bringsOwnExpectation(): bool
@@ -174,9 +174,9 @@ final class StatementLoggingSecretsRule extends AbstractSettingSecurityRule
     public function limitations(): array
     {
         return [
-            'reads the RUNNING value, not the file: a setting changed in postgresql.conf and not yet '
-            .'reloaded is invisible here, and one changed only for this session would be read as the '
-            .'server\'s',
+            'reads the reset value, not the file: a setting changed on disk and not yet reloaded is '
+            .'invisible here, and defaults set with ALTER ROLE or ALTER DATABASE for the connecting role '
+            .'and its database are part of that value, while those set for other roles are not read',
             'cannot see where the log GOES. Statements written to a file only root can read are a '
             .'different exposure from ones shipped to an aggregator a whole team queries, and the '
             .'destination — not this switch — decides how far a credential travels',

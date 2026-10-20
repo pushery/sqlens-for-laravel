@@ -25,7 +25,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * ## Why an unrecognized statement produces a requirement rather than nothing
  *
  * Silence and "needs no privilege" are the same value in a list. A statement whose kind this build
- * cannot resolve therefore produces a requirement with a NAMED reason and no class, so a check
+ * cannot resolve therefore produces a requirement with a named reason and no class, so a check
  * downstream reports `undetermined` instead of certifying a role it never tested against that
  * object.
  */
@@ -48,7 +48,7 @@ final readonly class RequiredPrivileges
         'drop_index' => PrivilegeClass::Drop,
         // A schema drop needs OWNERSHIP of the schema, not a grant — PostgreSQL does not make
         // `DROP` grantable. Classed as Drop rather than Ownership for the same reason `drop_table`
-        // is: the two classes exist so a project can be told WHICH of them it is short of, and the
+        // is: the two classes exist so a project can be told which of them it is short of, and the
         // check asks the ownership question for both.
         'drop_schema' => PrivilegeClass::Drop,
         'truncate_table' => PrivilegeClass::Drop,

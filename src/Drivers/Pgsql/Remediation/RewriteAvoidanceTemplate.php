@@ -61,7 +61,7 @@ final readonly class RewriteAvoidanceTemplate
      * The staged retyping.
      *
      * @param  array<string, string>  $context  placeholder values the caller measured — the table and
-     *                                          the old column. The NEW column's name is a decision
+     *                                          the old column. The new column's name is a decision
      *                                          and stays visible, and so does the target type: the
      *                                          statement names one, but writing it into the plan
      *                                          would present the rewriting change as the destination
@@ -95,7 +95,7 @@ final readonly class RewriteAvoidanceTemplate
                     ),
                     // 4 — the step that distinguishes this from a plain expand/contract, also by
                     // reference: an index or constraint the old column carried has to exist on the
-                    // new one BEFORE the swap, built concurrently.
+                    // new one before the swap, built concurrently.
                     new RemediationStep(
                         order: 4,
                         kind: RemediationStepKind::SeparateMigration,

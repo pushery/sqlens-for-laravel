@@ -40,9 +40,9 @@ use Pushery\SQLens\Subjects\ParametrizationSignal;
  *
  * ## The boundary, stated rather than discovered
  *
- * The classifier sees EXACTLY ONE call site. It does not follow assignments across function
+ * The classifier sees exactly one call site. It does not follow assignments across function
  * boundaries and does not track where a value came from. That is why an argument it cannot resolve
- * becomes {@see ParametrizationSignal::Undetermined} with a named reason and NEVER
+ * becomes {@see ParametrizationSignal::Undetermined} with a named reason and never
  * {@see ParametrizationSignal::Parametrized} — the failure direction is the whole design. A value
  * assembled unsafely one method away is invisible here, and the honest answer to an invisible thing
  * is "I cannot tell", not "it is fine".
@@ -65,7 +65,7 @@ final class ParameterizationAnalyzer
     /**
      * Classify one raw-SQL argument.
      *
-     * @param  Expr|null  $bindings  the call's bindings argument, when it has one. Used ONLY for the
+     * @param  Expr|null  $bindings  the call's bindings argument, when it has one. Used only for the
      *                               coherence check below — never to decide whether the call is
      *                               parameterized, because that is a property of the SQL text.
      */
@@ -92,7 +92,7 @@ final class ParameterizationAnalyzer
             // measured with a positive control.
             //
             // Only `escape()`, deliberately. `Grammar::wrap()` is the other half of the same idiom
-            // and is NOT admitted here: it stops the breakout and not the object choice — measured,
+            // and is not admitted here: it stops the breakout and not the object choice — measured,
             // `wrap('other_schema.secrets')` yields `"other_schema"."secrets"`. It earns a truthful
             // remedy in {@see RawInterpolationRule}, never silence. See {@see EngineNeutralization}.
             if ($origin !== FragmentOrigin::UnknownVariable && EngineNeutralization::valueEscaped($sql, $scope)) {
@@ -114,7 +114,7 @@ final class ParameterizationAnalyzer
     /**
      * Do the constant SQL's placeholders and the constant bindings array agree on how many there are?
      *
-     * A mismatch is NOT an injection — the text is constant, so nothing can be smuggled into it. It
+     * A mismatch is not an injection — the text is constant, so nothing can be smuggled into it. It
      * is a bug that surfaces at runtime, and the classifier refuses to call a call site parameterized
      * while its own two halves contradict each other.
      *
@@ -258,13 +258,13 @@ final class ParameterizationAnalyzer
      * Nothing but `?` and `,` is assembled; the values travel as bindings. Reporting it says the
      * value reached the STATEMENT, which is factually wrong rather than merely strict — and the
      * consequence is worse than noise: a project that believes the report rewrites the canonical
-     * SAFE form into something else. This package already refuses to report the
+     * safe form into something else. This package already refuses to report the
      * `whereIntegerInRaw` family for exactly that reason.
      *
      * ## The proof is a TYPE, not a shape, and that is what makes it sound
      *
      * `literal-string` is PHPStan's own statement that every possible value of a string was written
-     * as a literal in the source. That IS the property this rule needs, stated by the analyzer that
+     * as a literal in the source. That is the property this rule needs, stated by the analyzer that
      * already computed it. Measured:
      *
      *     implode(', ', array_fill(0, count($ids), '?'))   ->  literal-string
@@ -278,7 +278,7 @@ final class ParameterizationAnalyzer
      *
      * ## Why the arguments are inspected rather than the result
      *
-     * Measured too: `literal-string` does NOT survive `str_replace()` — PHPStan widens the result to
+     * Measured too: `literal-string` does not survive `str_replace()` — PHPStan widens the result to
      * `string`. So the question is asked one level down, of each part the builder was handed, which
      * is also where the answer is meaningful: a builder is safe exactly when everything it was given
      * is.

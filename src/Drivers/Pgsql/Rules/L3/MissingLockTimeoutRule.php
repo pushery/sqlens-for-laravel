@@ -21,9 +21,9 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  * table queues up behind it. A single `ALTER TABLE` stuck behind one long-running query
  * can stall an entire application. Level 3 asks a migration to bound its own lock wait.
  *
- * The rule fires on the FIRST strong-lock statement that acts on a pre-existing object
+ * The rule fires on the first strong-lock statement that acts on a pre-existing object
  * (see {@see StrongLockStatements}), when no `SET [LOCAL] lock_timeout` appears in the
- * stream before it. Order is the whole point: a timeout set AFTER the risky statement
+ * stream before it. Order is the whole point: a timeout set after the risky statement
  * does not protect it, so mere presence is not enough. It fires once per migration, on
  * that first statement, because the timeout is a migration-level omission, not a
  * per-statement one.
@@ -34,7 +34,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  * `lock_timeout`; the two timeout rules read that one config, each for its own timeout.
  *
  * Primum non nocere as a worked example, not just a sermon: SQLens sets `lock_timeout`
- * on its OWN capture session (`capture.session.lock_timeout`) before it runs, so the
+ * on its own capture session (`capture.session.lock_timeout`) before it runs, so the
  * rule asks of a migration exactly what the tool already does to itself.
  */
 final class MissingLockTimeoutRule extends AbstractPgsqlSafetyRule implements ProvidesRemediation
@@ -142,7 +142,7 @@ final class MissingLockTimeoutRule extends AbstractPgsqlSafetyRule implements Pr
             return null;
         }
 
-        // The migration may have WRITTEN the line in the form that does nothing. Same finding --
+        // The migration may have written the line in the form that does nothing. Same finding --
         // the wait is unbounded either way -- but a different sentence, because telling an operator
         // that no timeout was set while they are looking at the line that sets it reads as a false
         // positive, and a rule that reads as wrong gets switched off.

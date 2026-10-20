@@ -30,14 +30,14 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * is green, the deploy is green, and the report that quietly lacks the new column is noticed weeks
  * later by somebody who does not know a view is involved.
  *
- * ## The two suites answer DIFFERENT questions here, and only one of them can
+ * ## The two suites answer different questions here, and only one of them can
  *
  * - **lint reads the migration**, where the star is still written down. This is the real check.
  * - **audit reads the catalog**, where the star no longer exists — PostgreSQL expanded it on
  *   the way in. The audit half therefore reports `undetermined` for every view, naming
  *   {@see UndeterminedReason::ServerExpandedDefinition} and pointing at the suite that can answer.
  *
- * The audit half is NOT decoration. A rule that simply left the audit suite would let a run over a
+ * The audit half is not decoration. A rule that simply left the audit suite would let a run over a
  * schema full of views report nothing at all about them, and a reader would take the silence for a
  * clean result. This package's first principle is that a check which cannot run says so.
  */
@@ -59,7 +59,7 @@ final class SelectStarInViewRule extends AbstractCatalogRule implements Declares
     }
 
     /**
-     * Online — and there IS an operation to price here, which is what earns the answer.
+     * Online — and there is an operation to price here, which is what earns the answer.
      *
      * The flagged statement is a `CREATE VIEW`: it takes no lock on data, rewrites no table, and
      * costs a deploy nothing on either engine. So `online` is literally true of it rather than a

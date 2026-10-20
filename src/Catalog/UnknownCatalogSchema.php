@@ -9,7 +9,7 @@ use InvalidArgumentException;
 /**
  * A schema scope the reading cannot honor — named, never silently skipped.
  *
- * Every case below produces a run that reads LESS than the project asked for, and in each the
+ * Every case below produces a run that reads less than the project asked for, and in each the
  * tempting behavior is to quietly narrow the scope and finish green. That is the failure this
  * package refuses everywhere: an audit that examined nothing looks exactly like an audit that
  * examined everything and found nothing wrong.

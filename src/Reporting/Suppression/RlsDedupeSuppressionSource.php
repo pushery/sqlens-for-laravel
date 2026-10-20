@@ -13,13 +13,14 @@ use Pushery\SQLens\Resources\ShippedJson;
  * SQLens's own rules already reports, the foreign finding is HIDDEN rather than shown twice — and
  * hidden VISIBLY, with the rule that superseded it named.
  *
- * ## Why the contract exists before any adapter does
+ * ## Why the contract is a file, and where it runs
  *
- * No PGLS or Splinter adapter is wired yet. That is exactly why this is written down now: the first
- * adapter to land would otherwise decide precedence by accident, and whichever side happened to run
- * first would win. `resources/data/rule-dedupe-rls.json` states it instead — ours wins, because ours
- * carries a severity on our own axis, a downtime class where one applies, and a documentation URL
- * that survives a release.
+ * The PGLS adapter exists and confirms our findings at merge time rather than suppressing its own:
+ * `PglsDeduplicator`, by the pairs in `PglsDeduplicationMap`, which the register here agrees with.
+ * This layer is wired to no run yet. It holds the contract a suppressing adapter, such as one for
+ * Splinter, would match against, so that adapter does not decide precedence by accident:
+ * `resources/data/rule-dedupe-rls.json` states it, and ours wins, because ours carries a severity on
+ * our own axis, a downtime class where one applies, and a documentation URL that survives a release.
  *
  * ## Why the foreign finding is suppressed rather than dropped
  *

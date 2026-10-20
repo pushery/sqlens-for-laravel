@@ -8,7 +8,7 @@ use Illuminate\Database\Migrations\Migrator;
 use Pushery\SQLens\ProjectPath;
 
 /**
- * The `--file` fast-path subject source: it resolves exactly ONE migration file to a
+ * The `--file` fast-path subject source: it resolves exactly one migration file to a
  * subject, the sibling of the pending resolver. It is the only new thing the fast
  * path adds — capture, canonicalization, rule selection, gates and the reporter stay
  * the full run's, so there is no second engine to drift (pitfall 13).

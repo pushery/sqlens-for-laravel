@@ -6,7 +6,7 @@ namespace Pushery\SQLens\Capture;
 
 /**
  * The three-valued answer to "which migrations are pending": either a resolved,
- * ordered list, or a NAMED skip — never a bare empty list.
+ * ordered list, or a named skip — never a bare empty list.
  *
  * A resolved result with an empty list is a real, honest answer ("nothing is
  * pending"). A skip is a different answer ("I could not tell"), and the type keeps

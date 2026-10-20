@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Drivers\Mysql\Rules;
 
+use LogicException;
 use Override;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\DowntimeUndetermined;
@@ -23,7 +24,7 @@ use Pushery\SQLens\Rules\VersionWindow;
  * inherited `DOCUMENTATION_BASE` constant and `slug()` helper stay reachable as
  * `AbstractMysqlRule::…`, so the MySQL completeness test needs no change.
  *
- * The one thing it does add is the VERSION FLOOR, and it belongs to the family rather than to each
+ * The one thing it does add is the version floor, and it belongs to the family rather than to each
  * rule. Every rule here was written against MySQL 8.4 — the online-DDL matrix it reads is keyed per
  * version window, the behaviors it reports were measured on 8.4, and the driver refuses to run
  * against anything older. A rule that left its window unbounded would be claiming to hold on
@@ -32,13 +33,20 @@ use Pushery\SQLens\Rules\VersionWindow;
  */
 abstract class AbstractMysqlRule extends AbstractSafetyRule
 {
-    /** The engine floor this family was written against, and the floor the driver enforces. */
+    /**
+     * The engine floor this family was written against, and the floor the driver enforces.
+     *
+     * Read by `versionWindow()` below and by the MySQL driver's `minimumServerVersion()`, so the
+     * window every rule inherits and the floor the driver checks a server against are this one value.
+     */
     public const string MINIMUM_SERVER_VERSION = '8.4';
 
     #[Override]
     public function versionWindow(): VersionWindow
     {
-        return VersionWindow::from(ServerVersion::of(8, 4, 0, 'mysql'));
+        $floor = ServerVersion::parsePin(self::MINIMUM_SERVER_VERSION, 'mysql');
+
+        return VersionWindow::from($floor instanceof ServerVersion ? $floor : throw new LogicException('the MySQL floor is not a version the pin grammar reads'));
     }
 
     /**

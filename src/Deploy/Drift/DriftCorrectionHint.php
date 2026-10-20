@@ -22,7 +22,7 @@ use Pushery\SQLens\Remediation\RemediationStrategy;
  *
  * ## It never picks a side, and that is the design rather than caution
  *
- * An object in the database that no migration describes has TWO honest remedies — write the
+ * An object in the database that no migration describes has two honest remedies — write the
  * migration that creates it, or drop it — and which one is right depends on why it is there, which
  * this package cannot know. A hint that recommended one would be wrong half the time, and wrong in
  * the direction of deleting something on the half where it is wrong.
@@ -102,7 +102,7 @@ final readonly class DriftCorrectionHint
      *
      * The first step is a READ, not a write, and it is first because the two causes need opposite
      * answers: a migration that never ran is fixed by running it, and one that ran and did not do
-     * what it claims needs a NEW migration — editing the old one would make every other environment
+     * what it claims needs a new migration — editing the old one would make every other environment
      * silently disagree with the file that describes it.
      */
     private static function missing(): RemediationPayload

@@ -8,7 +8,7 @@ use Pushery\SQLens\Exceptions\InvalidCatalogSkip;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
 /**
- * One object the catalog read did NOT deliver, with the reason it did not.
+ * One object the catalog read did not deliver, with the reason it did not.
  *
  * The type is the guardrail, not a convention: the constructor is private, and every way in
  * requires a reason. A skip without one cannot be built — so "the read quietly dropped something"
@@ -45,7 +45,7 @@ final readonly class CatalogSkip
          */
         public ?string $detail,
         /**
-         * The extension that OWNS the skipped object, when the skip is a scope decision about one.
+         * The extension that owns the skipped object, when the skip is a scope decision about one.
          *
          * Carried as a value rather than parsed back out of {@see $detail}, and that is the whole
          * point of the field: the reader knows the owner at the moment it decides to exclude, and
@@ -101,7 +101,7 @@ final readonly class CatalogSkip
     /**
      * One entry standing for every object of one KIND that one extension owns.
      *
-     * The skip list is where a reader looks to find out what could NOT be checked, and a thousand
+     * The skip list is where a reader looks to find out what could not be checked, and a thousand
      * PostGIS function names are not that information — they bury it. Measured on the smallest
      * extension in the fixture tree: `pg_trgm` alone contributed 31 of 35 entries, all routines,
      * all saying the same thing.

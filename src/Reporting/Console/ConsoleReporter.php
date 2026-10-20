@@ -13,6 +13,7 @@ use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\DowntimeUndetermined;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
+use Pushery\SQLens\Findings\LocationKind;
 use Pushery\SQLens\Findings\Outcome;
 use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Findings\Result;
@@ -44,14 +45,16 @@ use Symfony\Component\Console\Output\OutputInterface;
  * no color codes, no terminal-width-dependent wrapping, no locale-formatted numbers.
  * That also satisfies NO_COLOR / --no-ansi trivially, because there is no color to
  * suppress. Findings arrive already ordered from the Result, so grouping by
- * file/subject is a single pass with no re-sorting.
+ * file/subject is a single pass with no re-sorting. A catalog finding is grouped by its
+ * object, which is what the Result orders it by; the migration it came from is detail on
+ * its line, so one migration that introduced several objects does not head several groups.
  *
  * The stability marker is an English API token (like the rule id), never
  * translated: a preview or experimental rule is flagged so a reader in the terminal
  * — not only in the docs — knows the finding may still move. `stable` is unmarked so
  * the ordinary output stays quiet.
  *
- * The BALANCE is localized; the FINDING LINES are not. That line is deliberate:
+ * The balance is localized; the finding lines are not. That line is deliberate:
  * the balance is prose a person reads, while a finding line carries the rule id,
  * the message prefix, the outcome value and the key=value pairs a machine and a
  * grep both depend on. Translating those would break every consumer and make the
@@ -157,7 +160,7 @@ final readonly class ConsoleReporter implements Reporter
      *
      * The two axes answer different questions, and a reader scanning one list has to hold both in
      * mind at once: "is this above my level?" and "is this above my risk floor?" — with the answer
-     * depending on which category each line happens to be. Split, each section has ONE rule, and the
+     * depending on which category each line happens to be. Split, each section has one rule, and the
      * question a reader brings to it is the question it answers.
      *
      * It also makes the honest thing visible: a level-0 run can carry a full security section. That
@@ -312,7 +315,7 @@ final readonly class ConsoleReporter implements Reporter
         // versus hid — a hidden rule is a counted, visible choice, never a silent pass.
         ReportText::line($out, '  level<='.$context->level.' active-rules='.$this->ruleCount($context->activeRuleCount).' hidden-rules='.$this->ruleCount($context->hiddenRuleCount).' evaluated-rules='.$this->evaluatedRules($context));
 
-        // The severity axis, on its OWN line — the two gates (level = strictness
+        // The severity axis, on its own line — the two gates (level = strictness
         // appetite, severity = risk) are orthogonal, so the header keeps them visibly
         // apart, never merged into one figure. "off" when the severity gate is not set.
         ReportText::line($out, '  min-severity='.($context->minSeverity instanceof Severity ? $context->minSeverity->value : 'off'));
@@ -322,7 +325,7 @@ final readonly class ConsoleReporter implements Reporter
         // one that never asked, and silence would be read as "down() is fine".
         ReportText::line($out, '  roundtrip='.$this->onOff($context->roundtrip));
 
-        // The escape hatch, and the ONE header line that is conditional.
+        // The escape hatch, and the one header line that is conditional.
         //
         // Everything above is stated even when off, because "not asked" and "asked and negative"
         // are different answers and a reader cannot otherwise tell them apart. This field carries
@@ -330,7 +333,7 @@ final readonly class ConsoleReporter implements Reporter
         // waive at all — a lint run has no `--allow-undetermined` — and printing `off` there would
         // claim a fail-closed gate ran when none did.
         //
-        // When a gate DID run, the line is unconditional, including `off`. That half matters more
+        // When a gate did run, the line is unconditional, including `off`. That half matters more
         // than it looks: a deploy log has to be able to show that a green predeploy was earned
         // rather than waved through, and a line that appeared only on waivers would make its
         // absence the claim — which is the reading this package refuses everywhere else.
@@ -359,7 +362,7 @@ final readonly class ConsoleReporter implements Reporter
         // The maturity axis, unconditionally and even when it is only `stable`. A missing line
         // would read as "this build has no stability axis"; `stability=stable` is a statement.
         //
-        // It is here for the run that finds NOTHING. A preview rule that reports is marked at its
+        // It is here for the run that finds nothing. A preview rule that reports is marked at its
         // own finding, so it is already visible; the one that stays silent is not, and two runs over
         // one unchanged tree — one admitting preview, one not — otherwise print identical headers
         // over different coverage.
@@ -379,7 +382,7 @@ final readonly class ConsoleReporter implements Reporter
             ReportText::line($out, '  connection '.$server['connection'].': '.$server['version'].' ('.$server['source'].')');
         }
 
-        // WHICH instance the report is about, printed only when one was addressed — a lint run
+        // Which instance the report is about, printed only when one was addressed — a lint run
         // over files has none, and an "instance: unknown" line there would invent a subject.
         if ($context->instance instanceof ReportedInstance) {
             ReportText::line($out, '  instance '.$context->instance->describe());
@@ -576,7 +579,7 @@ final readonly class ConsoleReporter implements Reporter
             $parts[] = 'reason='.$finding->status->reason->value;
         }
 
-        // What the ledger holds about this debt — and on this surface it is the ONLY way a reader
+        // What the ledger holds about this debt — and on this surface it is the only way a reader
         // learns it. Measured while adding this: these lines carry the message PREFIX and never the
         // message itself, so the sentence `DebtNotices` builds ("open since 101 days") reaches the
         // JSON and SARIF readers and never the person at the terminal. Without this field they see
@@ -656,7 +659,7 @@ final readonly class ConsoleReporter implements Reporter
 
         $line = implode('  ', $parts);
 
-        // The extras are their OWN lines rather than another `key=value` on the summary line:
+        // The extras are their own lines rather than another `key=value` on the summary line:
         // they are sentences a person reads, and squeezing a sentence into a field list is how a
         // line becomes something readers learn to skip.
         //
@@ -707,7 +710,7 @@ final readonly class ConsoleReporter implements Reporter
             ? ', '.$notApplicable.' '.$this->label('not_applicable')
             : '';
 
-        // undetermined is reported on its OWN line item, never folded into "ok",
+        // undetermined is reported on its own line item, never folded into "ok",
         // and so is suppressed: it is neither a pass nor a failure, it is a
         // decision somebody made. not-applicable sits BESIDE it rather than inside
         // it — "7 undetermined" and "7 undetermined, 4 not applicable" are two
@@ -717,7 +720,7 @@ final readonly class ConsoleReporter implements Reporter
         if ($result->suppressed !== []) {
             ReportText::line($out, $this->label('by_suppression_source').': '.$this->counts($result->countsBySuppressionSource()));
             // Per AXIS on its own line, beside per source. They answer different questions — who hid
-            // it, and WHAT was hidden — and only the second notices a critical security finding
+            // it, and what was hidden — and only the second notices a critical security finding
             // disappearing into a collective total: "12 suppressed by config" reads the same whether
             // the twelve are naming conventions or password literals.
             ReportText::line($out, $this->label('by_suppressed_axis').': '.$this->counts($result->countsBySuppressedAxis()));
@@ -750,7 +753,7 @@ final readonly class ConsoleReporter implements Reporter
         ReportText::line($out, $this->label('by_severity').': '.$this->counts($result->countsBySeverity()));
         // The third axis on its own line, next to the other two and never folded into
         // them: level is how strict the run was, severity is how risky a finding is,
-        // and this is what deploying it does. The class NAMES stay English API tokens
+        // and this is what deploying it does. The class names stay English API tokens
         // in every locale — only the label in front of them is prose.
         //
         // A class that could not be determined is named after the three, and only when there is
@@ -762,6 +765,12 @@ final readonly class ConsoleReporter implements Reporter
     /** A stable, subject-scoped group label, derived from the location kind. */
     private function groupLabel(Location $location): string
     {
+        // The object, for a finding about the live database: the anchor file says where the object
+        // came from, and grouping by it put one migration at the head of several groups apart.
+        if ($location->kind === LocationKind::Catalog && $location->objectName !== null) {
+            return $location->objectName;
+        }
+
         return $location->file
             ?? $location->objectName
             ?? $location->driver
@@ -770,11 +779,15 @@ final readonly class ConsoleReporter implements Reporter
 
     private function locationDetail(Location $location): string
     {
+        // A catalog finding's file is the migration the object came from, named as such, because the
+        // group above it is the object and a bare line number would point into nothing.
+        $anchor = $location->kind === LocationKind::Catalog && $location->file !== null ? 'from '.$location->file.($location->line !== null ? ':'.$location->line : '') : null;
+
         $bits = array_filter([
             $location->migrationClass,
             $location->statementIndex !== null ? 'stmt '.$location->statementIndex : null,
             $location->direction?->value,
-            $location->line !== null ? 'line '.$location->line : null,
+            $anchor ?? ($location->line !== null ? 'line '.$location->line : null),
             $location->objectType?->value,
         ], static fn (?string $bit): bool => $bit !== null && $bit !== '');
 

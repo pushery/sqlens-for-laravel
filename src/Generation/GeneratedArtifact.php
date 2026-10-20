@@ -18,7 +18,7 @@ use Pushery\SQLens\Reporting\Agent\Redactor;
  * ## The marker bounds
  *
  * Some targets are files the tool does not own. A project's `CLAUDE.md` holds the project's own
- * prose, and a regeneration must replace only ITS section. So an artifact may carry the two marker
+ * prose, and a regeneration must replace only its section. So an artifact may carry the two marker
  * lines that bound the region it is responsible for; an artifact without them owns its whole file.
  *
  * Both or neither. A start with no end has no region — the writer would have to guess where the
@@ -74,7 +74,7 @@ final readonly class GeneratedArtifact
      * The same artifact with its content masked.
      *
      * A new value rather than a mutation, and the path stays untouched: a redactor is about what a
-     * file SAYS, never about where it goes. A version that could move an artifact would be a second
+     * file says, never about where it goes. A version that could move an artifact would be a second
      * thing deciding a destination.
      */
     public function redactedWith(Redactor $redactor): self

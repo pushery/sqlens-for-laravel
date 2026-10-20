@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Drivers\Mysql\Catalog;
 
 use Illuminate\Database\Connection;
 use Pushery\SQLens\Attributes\RawSql;
+use Pushery\SQLens\Catalog\Canonical\CanonicalType;
 use Pushery\SQLens\Catalog\Canonical\CatalogCanonicalizer;
 use Pushery\SQLens\Catalog\Canonical\IdentifierFolding;
 use Pushery\SQLens\Catalog\Canonical\ReferentialAction;
@@ -22,9 +23,14 @@ use Pushery\SQLens\Catalog\TableMembers;
 use Pushery\SQLens\Catalog\TablePrefix;
 use Pushery\SQLens\Catalog\Understanding\IndexComprehension;
 use Pushery\SQLens\Catalog\Usage\IndexUsageReading;
+use Pushery\SQLens\Catalog\Usage\KeyCounter;
+use Pushery\SQLens\Catalog\Usage\KeyCounterReading;
+use Pushery\SQLens\Catalog\Usage\KeyCounterState;
 use Pushery\SQLens\Contracts\CatalogPrivileges;
 use Pushery\SQLens\Contracts\CatalogReader;
+use Pushery\SQLens\Contracts\ReadsKeyCounters;
 use Pushery\SQLens\Engine\ResolvedServerVersion;
+use Pushery\SQLens\Findings\CompositeCredentialRedactor;
 use Pushery\SQLens\Rules\ServerVersion;
 use Pushery\SQLens\Subjects\SchemaObject;
 use Pushery\SQLens\Subjects\SchemaObjectType;
@@ -38,7 +44,7 @@ use Throwable;
  * ## Why `information_schema` here and `pg_catalog` there
  *
  * Not inconsistency. MySQL has no second, richer catalog to prefer: since 8.0 the
- * `information_schema` views ARE the data dictionary rather than a compatibility layer over one, and
+ * `information_schema` views are the data dictionary rather than a compatibility layer over one, and
  * they carry the things this package needs — `IS_VISIBLE` for an invisible index, `EXTRA` for a
  * generated column, `ENFORCED` for a check constraint. PostgreSQL is the engine where the standard
  * views throw away what matters, so each driver reads the source that answers.
@@ -54,7 +60,7 @@ use Throwable;
  *   all despite the column name, and a reader that skipped it would report a descending index as an
  *   ascending one.
  *
- * ## Extension filtering is a NAMED non-case here
+ * ## Extension filtering is a named non-case here
  *
  * `CatalogRequest::$includeExtensionObjects` and `$allowedExtensions` have no effect on this driver,
  * and that is a fact about MySQL rather than a gap in the reader. A MySQL plugin or component is
@@ -69,20 +75,26 @@ use Throwable;
  * `information_schema` without a filter is a full scan of the data dictionary — the audit would
  * become the load it was sent to look for, and it would read databases it was never asked about.
  */
-final readonly class MysqlCatalogReader implements CatalogReader
+final readonly class MysqlCatalogReader implements CatalogReader, ReadsKeyCounters
 {
     /**
      * MySQL's own bookkeeping databases, never part of a reading.
      *
-     * MySQL draws no schema/database distinction — a database IS the schema — so the server's own
+     * MySQL draws no schema/database distinction — a database is the schema — so the server's own
      * four are exactly the ones a project must never be judged on.
      */
     private const array SYSTEM_SCHEMAS = ['information_schema', 'mysql', 'performance_schema', 'sys'];
 
     /**
+     * The column types whose literal default `SHOW CREATE TABLE` writes in quotes and PostgreSQL's
+     * catalog returns in quotes: the character and the temporal types.
+     */
+    private const array QUOTED_LITERAL_TYPES = ['char', 'varchar', 'enum', 'set', 'date', 'time', 'datetime', 'timestamp'];
+
+    /**
      * The context every object read here carries, stamped with the connection it was read from.
      *
-     * Assigned rather than promoted so the instance is attached ONCE, at construction, instead of
+     * Assigned rather than promoted so the instance is attached once, at construction, instead of
      * at each of the several places that build a SchemaObject — one of which would eventually be
      * added without it, and a finding that named no instance would look exactly like one whose
      * instance happened to be the driver name.
@@ -106,7 +118,7 @@ final readonly class MysqlCatalogReader implements CatalogReader
      *
      * `information_schema` exposes EVENTS as well, and it is not read here, so `Event` does not
      * appear above — it needs an enum case that does not exist yet, and it brings the timestamp
-     * noise that makes it its own piece of work rather than a line added below. TRIGGERS IS read.
+     * noise that makes it its own piece of work rather than a line added below. TRIGGERS is read.
      *
      * @return non-empty-list<SchemaObjectType>
      */
@@ -148,12 +160,26 @@ final readonly class MysqlCatalogReader implements CatalogReader
                 $request->tablePrefix,
             );
 
-            // Asked BEFORE the reading, not inferred from it afterwards. MySQL FILTERS
+            // Asked before the reading, not inferred from it afterwards. MySQL FILTERS
             // information_schema by privilege without a word, so an under-privileged reading
             // succeeds and comes back empty — a clean, complete-looking audit of a database the
             // reader could not see. Nothing after the fact distinguishes that from a bare database.
             $skips = new PrivilegeProbe($this->privileges)->run($reader, $schemas);
             $objects = [];
+
+            // A table created without a primary key on a server that generates one gets an invisible
+            // key, and `show_gipk_in_create_table_and_information_schema = OFF` hides it from
+            // information_schema: measured on MySQL 8.0.36, STATISTICS and TABLE_CONSTRAINTS then show
+            // no row for such a table. A table without a visible key is then a question rather than an
+            // answer, and every table read in such a session says so. A server without the variable
+            // leaves a skip.
+            $keyDisplay = DatabaseErrorTranslator::attempt(
+                fn (): array => $this->rows($reader, 'SELECT @@show_gipk_in_create_table_and_information_schema AS v', []),
+                SchemaObjectType::Table,
+                'show_gipk_in_create_table_and_information_schema',
+                $skips,
+            );
+            $keysHidden = $this->str($keyDisplay[0] ?? [], 'v') === '0';
 
             foreach ($this->tables($reader, $schemas) as $row) {
                 $isView = $this->str($row, 'table_type') === 'VIEW';
@@ -180,7 +206,8 @@ final readonly class MysqlCatalogReader implements CatalogReader
                         'charset' => $canonicalizer->collation($this->nullableStr($row, 'charset')),
                         'row_format' => $this->nullableStr($row, 'row_format'),
                         'comment' => $this->tableComment($this->nullableStr($row, 'comment'), $isView),
-                    ], static fn (?string $value): bool => $value !== null),
+                    ], static fn (?string $value): bool => $value !== null)
+                    + ($keysHidden && ! $isView ? ['generated_primary_key_hidden' => true] : []),
                     $this->subjectContext,
                 );
             }
@@ -214,7 +241,7 @@ final readonly class MysqlCatalogReader implements CatalogReader
                 }
             }
 
-            // Beside the battery rather than inside it, because this reading NAMES what it could not
+            // Beside the battery rather than inside it, because this reading names what it could not
             // read: a routine whose body `information_schema` blanks becomes a skip of its own, and
             // the battery's uniform three-argument shape has no room to hand that back.
             if ($request->wants(SchemaObjectType::Routine)) {
@@ -247,11 +274,11 @@ final readonly class MysqlCatalogReader implements CatalogReader
             $objects = new TablePrefix($request->tablePrefix, $request->prefixScope)->applyTo($objects, $skips);
             $objects = IndexComprehension::classify($objects, $skips);
 
-            // LAST, because it reads the comprehension verdict the line above writes: a rule asking
+            // Last, because it reads the comprehension verdict the line above writes: a rule asking
             // which indexes could cover a foreign key must not be handed one nobody can compare.
             $objects = TableMembers::attachTo($objects);
 
-            // The whole-reading budget, checked once at the end. Exceeding it is a NAMED
+            // The whole-reading budget, checked once at the end. Exceeding it is a named
             // undetermined and not an abort: the objects already read are worth having, and killing
             // the run would throw them away to report a problem the run itself caused.
             $elapsedMs = (int) ((hrtime(true) - $startedAt) / 1_000_000);
@@ -277,6 +304,11 @@ final readonly class MysqlCatalogReader implements CatalogReader
      * nothing at all. So an empty reading here is genuinely ambiguous in a way PostgreSQL's is not,
      * and the unavailable answer is the common case rather than the exotic one.
      *
+     * The switch is asked before the view, because the view does not refuse when it is off: the
+     * `performance_schema` tables stay present and queryable and answer with an empty set, as
+     * `MysqlActivityReader` measured for the lock views. An empty answer read without the switch
+     * would report every index as read and never used.
+     *
      * There is no counterpart to `pg_stat_database.stats_reset`: the counters run from server start
      * and MySQL records no reset point of its own. So the window is reported as unknown, and a rule
      * that needs one has to say so rather than assume the counters have been running long enough.
@@ -288,26 +320,20 @@ final readonly class MysqlCatalogReader implements CatalogReader
             $canonicalizer = $this->canonicalizer ?? new CatalogCanonicalizer(IdentifierFolding::Preserve);
 
             try {
-                // The SCOPE resolution is inside the try as well, and that placement was a defect
+                // The SCOPE resolution runs inside the try as well, and that placement was a defect
                 // until a test caught it: those queries read the catalog too, and a failure there
                 // escaped the accessor and took the whole audit down — over a set of counters that
                 // were never essential to it.
-                $schemas = new SchemaScope($request->schemas, self::SYSTEM_SCHEMAS)
-                    ->apply([$this->scalar($reader, 'SELECT DATABASE() AS v')], $this->existingSchemas($reader));
-
-                $rows = $this->rows($reader, <<<'SQL'
-                    SELECT OBJECT_SCHEMA AS `schema`,
-                           OBJECT_NAME   AS relation,
-                           INDEX_NAME    AS `name`,
-                           COUNT_STAR    AS scans
-                    FROM performance_schema.table_io_waits_summary_by_index_usage
-                    WHERE OBJECT_SCHEMA IN (SCHEMA_LIST) AND INDEX_NAME IS NOT NULL
-                    ORDER BY OBJECT_SCHEMA, OBJECT_NAME, INDEX_NAME
-                    SQL, $schemas);
+                $rows = $this->indexUsageRows($reader, $request);
             } catch (Throwable) {
-                // performance_schema off, or not readable by this role. Named rather than returned
-                // as an empty reading: "no index has been used" and "nobody could look" are
-                // different statements and only one of them is a finding.
+                // performance_schema not readable by this role, or a catalog read that failed. Named
+                // rather than returned as an empty reading: "no index has been used" and "nobody
+                // could look" are different statements and only one of them is a finding.
+                return IndexUsageReading::unavailable();
+            }
+
+            // The switch is off, and the empty view behind it says nothing about the indexes.
+            if ($rows === null) {
                 return IndexUsageReading::unavailable();
             }
 
@@ -325,6 +351,150 @@ final readonly class MysqlCatalogReader implements CatalogReader
             // stays unknown. A rule needing one must say so.
             return new IndexUsageReading($scans);
         });
+    }
+
+    /**
+     * The next AUTO_INCREMENT value behind each primary key that can run out.
+     *
+     * ## Why not `information_schema.TABLES.AUTO_INCREMENT`
+     *
+     * That column is served from cached statistics. Measured on MySQL 8.0.36 with
+     * `information_schema_stats_expiry` at its default of 86400: it still answered 4 after five more
+     * inserts, and still 4 after `ALTER TABLE ... AUTO_INCREMENT = 4000000000`. A SET_VAR hint cannot
+     * change the setting for one statement (warning 3637), and setting it for the session would make
+     * every later statistics read on this connection fetch fresh numbers for every table, which is
+     * the expensive path the statistics reader stays off on purpose. `SHOW CREATE TABLE` reports the
+     * value the engine holds, so it is read there, one statement per key.
+     *
+     * ## Only the keys that can run out
+     *
+     * A single-column AUTO_INCREMENT primary key of a type narrower than `BIGINT`. A `BIGINT` key is
+     * left out, so a schema of modern Laravel tables sends no statement at all. The list comes from
+     * static `information_schema` columns, which no statistics cache stands in front of.
+     *
+     * A table whose statement fails, a metadata lock not granted in time or a table dropped since the
+     * list was read, is reported unread on its own, and the other keys are still read.
+     */
+    public function keyCounters(CatalogRequest $request): KeyCounterReading
+    {
+        return $this->session->read(function (Connection $reader) use ($request): KeyCounterReading {
+            try {
+                $canonicalizer = $this->canonicalizer ?? new CatalogCanonicalizer(
+                    IdentifierFolding::forLowerCaseTableNames((int) $this->scalar($reader, 'SELECT @@GLOBAL.lower_case_table_names AS v')),
+                );
+
+                $schemas = new SchemaScope($request->schemas, self::SYSTEM_SCHEMAS)
+                    ->apply([$this->scalar($reader, 'SELECT DATABASE() AS v')], $this->existingSchemas($reader));
+
+                $keys = $this->rows($reader, <<<'SQL'
+                    SELECT c.TABLE_SCHEMA AS `schema`,
+                           c.TABLE_NAME   AS `name`
+                    FROM information_schema.COLUMNS c
+                    JOIN information_schema.TABLES t
+                      ON t.TABLE_SCHEMA = c.TABLE_SCHEMA
+                     AND t.TABLE_NAME = c.TABLE_NAME
+                     AND t.TABLE_TYPE = 'BASE TABLE'
+                    WHERE c.TABLE_SCHEMA IN (SCHEMA_LIST)
+                      AND c.COLUMN_KEY = 'PRI'
+                      AND c.EXTRA LIKE '%auto_increment%'
+                      AND c.DATA_TYPE IN ('tinyint', 'smallint', 'mediumint', 'int')
+                      AND NOT EXISTS (
+                          SELECT 1 FROM information_schema.COLUMNS o
+                          WHERE o.TABLE_SCHEMA = c.TABLE_SCHEMA
+                            AND o.TABLE_NAME = c.TABLE_NAME
+                            AND o.COLUMN_KEY = 'PRI'
+                            AND o.COLUMN_NAME <> c.COLUMN_NAME
+                      )
+                    ORDER BY c.TABLE_SCHEMA, c.TABLE_NAME
+                    SQL, $schemas);
+            } catch (Throwable $failure) {
+                return KeyCounterReading::unavailable(new CompositeCredentialRedactor()->redact($failure->getMessage()));
+            }
+
+            $counters = [];
+
+            foreach ($keys as $row) {
+                $schema = $this->str($row, 'schema');
+                $table = $this->str($row, 'name');
+
+                try {
+                    $next = $this->nextAutoIncrement($reader, $schema, $table);
+                    $counter = $next === null
+                        ? new KeyCounter('AUTO_INCREMENT', KeyCounterState::Unread, failure: 'SHOW CREATE TABLE returned no table definition')
+                        : ($next > 1
+                            ? new KeyCounter('AUTO_INCREMENT', KeyCounterState::Read, $next - 1)
+                            : new KeyCounter('AUTO_INCREMENT', KeyCounterState::Unused));
+                } catch (Throwable $failure) {
+                    $counter = new KeyCounter('AUTO_INCREMENT', KeyCounterState::Unread, failure: new CompositeCredentialRedactor()->redact($failure->getMessage()));
+                }
+
+                $counters[$canonicalizer->qualified($schema, $table)] = $counter;
+            }
+
+            return new KeyCounterReading($counters);
+        });
+    }
+
+    /**
+     * The value the next insert into this table would take, or null when there is no definition.
+     *
+     * Read from the table options after the column list, where `SHOW CREATE TABLE` writes
+     * `AUTO_INCREMENT=n`. It leaves the option out while the counter is still at its start, so a
+     * definition without it is a counter that has handed out nothing, and 1 is returned.
+     */
+    #[RawSql(
+        reason: 'SHOW CREATE TABLE is the one statement that reports a fresh AUTO_INCREMENT; information_schema.TABLES serves a cached one',
+        interpolation: 'the schema and table names come from information_schema and go through quoteIdentifier(); MySQL binds no identifier',
+    )]
+    private function nextAutoIncrement(Connection $reader, string $schema, string $table): ?int
+    {
+        $row = (array) ($reader->select(sprintf(
+            'SHOW CREATE TABLE %s.%s',
+            $this->quoteIdentifier($schema),
+            $this->quoteIdentifier($table),
+        ))[0] ?? []);
+
+        $definition = $row['Create Table'] ?? null;
+
+        if (! is_string($definition) || $definition === '') {
+            return null;
+        }
+
+        return preg_match('/^\).*\bAUTO_INCREMENT=(\d+)/m', $definition, $match) === 1 ? (int) $match[1] : 1;
+    }
+
+    /** Backtick-quote an identifier, doubling any embedded backtick. */
+    private function quoteIdentifier(string $identifier): string
+    {
+        return '`'.str_replace('`', '``', $identifier).'`';
+    }
+
+    /**
+     * The usage counters of the indexes in scope, or null when `performance_schema` is not on.
+     *
+     * Anything but 1 leaves the counters unread: a value this reader cannot place is not evidence
+     * that they are being kept. Asked first, so a server with the switch off is never sent the view.
+     *
+     * @return list<array<string, scalar|null>>|null
+     */
+    private function indexUsageRows(Connection $reader, CatalogRequest $request): ?array
+    {
+        if ($this->scalar($reader, 'SELECT @@performance_schema AS v') !== '1') {
+            return null;
+        }
+
+        $schemas = new SchemaScope($request->schemas, self::SYSTEM_SCHEMAS)
+            ->apply([$this->scalar($reader, 'SELECT DATABASE() AS v')], $this->existingSchemas($reader));
+
+        return $this->rows($reader, <<<'SQL'
+            SELECT OBJECT_SCHEMA AS `schema`,
+                   OBJECT_NAME   AS relation,
+                   INDEX_NAME    AS `name`,
+                   COUNT_STAR    AS scans
+            FROM performance_schema.table_io_waits_summary_by_index_usage
+            WHERE OBJECT_SCHEMA IN (SCHEMA_LIST) AND INDEX_NAME IS NOT NULL
+            ORDER BY OBJECT_SCHEMA, OBJECT_NAME, INDEX_NAME
+            SQL, $schemas);
     }
 
     /**
@@ -438,7 +608,7 @@ final readonly class MysqlCatalogReader implements CatalogReader
      * which is the failure this suite exists to not have. Argued once on the PostgreSQL side too;
      * the shape of the identity is a property of triggers, not of an engine.
      *
-     * ## Here the body IS the object, unlike PostgreSQL
+     * ## Here the body is the object, unlike PostgreSQL
      *
      * MySQL stores the action statement inline, so `ACTION_STATEMENT` is what drifts. PostgreSQL's
      * trigger only names a function and its body is compared separately as a routine. The two
@@ -606,7 +776,7 @@ final readonly class MysqlCatalogReader implements CatalogReader
      * identity here, while the PostgreSQL reader has to carry the identity arguments in its key.
      * Two engines, two correct answers — not an inconsistency to reconcile.
      *
-     * ## Three columns are read and deliberately NOT compared
+     * ## Three columns are read and deliberately not compared
      *
      * `CREATED` and `LAST_ALTERED` are timestamps, so they differ between the live database and a
      * replay by construction. They are not listed under `VOLATILE_ATTRIBUTES`, they are simply never
@@ -761,15 +931,15 @@ final readonly class MysqlCatalogReader implements CatalogReader
                     'comment' => ($c = trim((string) $this->nullableStr($row, 'comment'))) === '' ? null : $c,
                     'unsigned' => $type->unsigned,
                     'not_null' => $this->str($row, 'is_nullable') === 'NO',
-                    'default' => $canonicalizer->defaultExpression($this->nullableStr($row, 'column_default')),
+                    'default' => $canonicalizer->defaultExpression($this->literalDefault($this->nullableStr($row, 'column_default'), $extra, $type)),
                     // MySQL packs several unrelated facts into EXTRA. They are read out here rather
                     // than left as one string, because a rule asking "is this generated?" should not
                     // have to parse a field that also says `auto_increment` and `DEFAULT_GENERATED`.
                     //
-                    // `auto_increments`, NOT `auto_increment`, and the extra letter is a defect fix.
+                    // `auto_increments`, not `auto_increment`, and the extra letter is a defect fix.
                     // The volatile register drops the attribute named `auto_increment` on the
                     // grounds that it is "MySQL's next value for the table" — a counter that moves
-                    // on every insert. That counter is read NOWHERE in this package. What the name
+                    // on every insert. That counter is read nowhere in this package. What the name
                     // collided with was this: a boolean saying whether the column auto-increments,
                     // which is a genuine schema fact. So a column that gained or lost AUTO_INCREMENT
                     // was invisible to the drift comparison — measured, and losing it on a primary
@@ -786,6 +956,28 @@ final readonly class MysqlCatalogReader implements CatalogReader
                 $this->subjectContext,
             );
         }, $rows);
+    }
+
+    /**
+     * A literal default of a character or temporal column in quotes, the way `SHOW CREATE TABLE`
+     * writes it, and any other default as the catalog returned it.
+     *
+     * `COLUMN_DEFAULT` returns a literal without its quotes (`a  b`, `now()`, `it's`) and an
+     * expression as written (`CURRENT_TIMESTAMP`, `uuid()`). The canonicalizer leaves a quoted
+     * literal alone and folds what stands outside one, so a literal has to arrive quoted for its
+     * value to survive: unquoted, two spaces would become one and the text `now()` would become
+     * `CURRENT_TIMESTAMP`. MySQL marks an expression default with `DEFAULT_GENERATED` in `EXTRA`,
+     * on a view's column as well, so a default without that mark is a literal. A number stays as it
+     * is, the way PostgreSQL returns it, and so do a binary column's `0x…` and a bit column's
+     * `b'…'`, which the catalog already spells as literals.
+     */
+    private function literalDefault(?string $default, string $extra, CanonicalType $type): ?string
+    {
+        if ($default === null || str_contains($extra, 'DEFAULT_GENERATED') || ! in_array($type->name, self::QUOTED_LITERAL_TYPES, true)) {
+            return $default;
+        }
+
+        return "'".str_replace("'", "''", $default)."'";
     }
 
     /**
@@ -837,7 +1029,7 @@ final readonly class MysqlCatalogReader implements CatalogReader
             $grouped[$key] ??= ['row' => $row, 'columns' => [], 'functional' => false, 'prefixed' => false, 'expression' => null];
 
             if ($this->nullableInt($row, 'sub_part') !== null) {
-                // ANY prefixed column makes the whole index one this package will not compare: a
+                // Any prefixed column makes the whole index one this package will not compare: a
                 // key over the first 20 characters of a column answers a different question from a
                 // key over the column, and the two are indistinguishable by name alone.
                 $grouped[$key]['prefixed'] = true;
@@ -942,35 +1134,20 @@ final readonly class MysqlCatalogReader implements CatalogReader
                    c.TABLE_NAME         AS relation,
                    c.CONSTRAINT_NAME    AS `name`,
                    c.CONSTRAINT_TYPE    AS constraint_type,
-                   c.ENFORCED           AS enforced,
-                   -- The constraint's own columns, in the order it declares them. A foreign key is
-                   -- covered only by an index whose LEFT PREFIX is this list, so the order is the
-                   -- fact rather than a detail — hence ORDER BY ORDINAL_POSITION and not by name.
-                   (SELECT GROUP_CONCAT(u.COLUMN_NAME ORDER BY u.ORDINAL_POSITION SEPARATOR ', ')
-                      FROM information_schema.KEY_COLUMN_USAGE u
-                     WHERE u.CONSTRAINT_SCHEMA = c.CONSTRAINT_SCHEMA
-                       AND u.CONSTRAINT_NAME = c.CONSTRAINT_NAME
-                       AND u.TABLE_NAME = c.TABLE_NAME) AS key_columns,
-                   -- The columns on the OTHER side, in the SAME order, so position n here pairs with
-                   -- position n above. A rule comparing the two sides — their types, their
-                   -- collations — has nothing to compare without it, and pairing by name would be
-                   -- wrong the moment the two sides spell a column differently.
-                   (SELECT GROUP_CONCAT(u.REFERENCED_COLUMN_NAME ORDER BY u.ORDINAL_POSITION SEPARATOR ', ')
-                      FROM information_schema.KEY_COLUMN_USAGE u
-                     WHERE u.CONSTRAINT_SCHEMA = c.CONSTRAINT_SCHEMA
-                       AND u.CONSTRAINT_NAME = c.CONSTRAINT_NAME
-                       AND u.TABLE_NAME = c.TABLE_NAME
-                       AND u.REFERENCED_COLUMN_NAME IS NOT NULL) AS referenced_columns
+                   c.ENFORCED           AS enforced
             FROM information_schema.TABLE_CONSTRAINTS c
             WHERE c.CONSTRAINT_SCHEMA IN (SCHEMA_LIST)
             ORDER BY c.CONSTRAINT_SCHEMA, c.TABLE_NAME, c.CONSTRAINT_NAME
             SQL, $schemas);
 
         $referential = $this->referentialHalves($reader, $schemas);
+        $columns = $this->keyColumns($reader, $schemas);
 
-        return array_map(function (array $row) use ($canonicalizer, $referential): SchemaObject {
+        return array_map(function (array $row) use ($canonicalizer, $referential, $columns): SchemaObject {
             // A foreign key's actions and target, read apart; any other kind of constraint has none.
             $row += $referential[$this->constraintKey($row)] ?? [];
+            // The columns, read apart as well; a CHECK constraint has none.
+            $row += $columns[$this->constraintKey($row)] ?? [];
             $relation = $canonicalizer->qualified($this->str($row, 'schema'), $this->str($row, 'relation'));
 
             return new SchemaObject(
@@ -1043,7 +1220,61 @@ final readonly class MysqlCatalogReader implements CatalogReader
     }
 
     /**
-     * A constraint's identity across the two reads: schema, table and name, which MySQL keeps
+     * The columns of every constraint in scope, keyed like {@see constraintKey()}: its own in the order
+     * it declares them, and for a foreign key the columns on the other side in the same order.
+     *
+     * The order is the fact rather than a detail. A foreign key is covered only by an index whose LEFT
+     * PREFIX is its own list, and position n on the other side pairs with position n here, which is
+     * what a rule comparing the two sides' types or collations compares; pairing by name would be wrong
+     * the moment the two sides spell a column differently.
+     *
+     * Joined here rather than with `GROUP_CONCAT`, which cuts its result at `group_concat_max_len`,
+     * 1024 bytes by default, with no more than a warning. Measured on MySQL 8.0.36: a primary key over
+     * sixteen columns with 64-character names joined to 1054 bytes and was read as 1024, ending inside
+     * the sixteenth name.
+     *
+     * @param  list<string>  $schemas
+     * @return array<string, array{key_columns: string, referenced_columns: string|null}>
+     */
+    private function keyColumns(Connection $reader, array $schemas): array
+    {
+        $rows = $this->rows($reader, <<<'SQL'
+            SELECT CONSTRAINT_SCHEMA      AS `schema`,
+                   TABLE_NAME             AS relation,
+                   CONSTRAINT_NAME        AS `name`,
+                   COLUMN_NAME            AS column_name,
+                   REFERENCED_COLUMN_NAME AS referenced_column
+            FROM information_schema.KEY_COLUMN_USAGE
+            WHERE CONSTRAINT_SCHEMA IN (SCHEMA_LIST)
+            ORDER BY CONSTRAINT_SCHEMA, TABLE_NAME, CONSTRAINT_NAME, ORDINAL_POSITION
+            SQL, $schemas);
+
+        $own = [];
+        $referenced = [];
+
+        foreach ($rows as $row) {
+            $key = $this->constraintKey($row);
+            $own[$key][] = $this->str($row, 'column_name');
+
+            if ($this->nullableStr($row, 'referenced_column') !== null) {
+                $referenced[$key][] = $this->str($row, 'referenced_column');
+            }
+        }
+
+        $columns = [];
+
+        foreach ($own as $key => $names) {
+            $columns[$key] = [
+                'key_columns' => implode(', ', $names),
+                'referenced_columns' => isset($referenced[$key]) ? implode(', ', $referenced[$key]) : null,
+            ];
+        }
+
+        return $columns;
+    }
+
+    /**
+     * A constraint's identity across the three reads: schema, table and name, which MySQL keeps
      * unique together, since every primary key is called `PRIMARY`.
      *
      * @param  array<string, scalar|null>  $row

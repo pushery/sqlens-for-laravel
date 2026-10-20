@@ -59,7 +59,7 @@ interface Driver
      *
      * Empty is a real answer: MySQL has no adapter at all, and a driver that returns nothing here is
      * saying so rather than leaving a gap. {@see Tool::supportsDriver()} stays
-     * the runtime guard — this list is about which package OWNS a tool, not about which run may use
+     * the runtime guard — this list is about which package owns a tool, not about which run may use
      * it.
      *
      * @return iterable<Tool>

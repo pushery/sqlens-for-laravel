@@ -9,7 +9,7 @@ use Pushery\SQLens\Subjects\SubjectContext;
 
 /**
  * One normalization stage in the canonicalization pipeline. It receives the
- * in-flight RawStatement and the injected context, and MUST return one of:
+ * in-flight RawStatement and the injected context, and must return one of:
  *   - a refined RawStatement, to continue the pipeline;
  *   - a CanonicalStatement, to finalize it early; or
  *   - a CanonicalStatement is not the only terminal — a CanonicalizationFailure

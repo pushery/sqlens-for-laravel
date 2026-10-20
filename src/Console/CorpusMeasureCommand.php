@@ -15,6 +15,7 @@ use Pushery\SQLens\Corpus\CorpusMetrics;
 use Pushery\SQLens\Corpus\CorpusReport;
 use Pushery\SQLens\Corpus\CorpusRun;
 use Pushery\SQLens\Drivers\DriverResolutionFailure;
+use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Lint\LintOutcome;
 use Pushery\SQLens\Lint\LintRunner;
@@ -24,11 +25,11 @@ use Pushery\SQLens\Subjects\CaptureMode;
 /**
  * Measures the rule set against the false-positive corpus.
  *
- * ## Why this command is NOT part of the promised command surface
+ * ## Why this command is not part of the promised command surface
  *
  * From 1.0 the `sqlens:*` commands are public API: a command registered in the regular service
  * provider appears in every consuming application's `artisan list`, and appearing there is what
- * makes it a promise. This one measures THIS package against THIS package's corpus and would mean
+ * makes it a promise. This one measures this package against this package's corpus and would mean
  * nothing in a consumer's application — so it is registered only by the development provider, which
  * nothing auto-discovers.
  *
@@ -217,7 +218,7 @@ final class CorpusMeasureCommand extends Command
      * Why the run left migrations unjudged, in the runner's own words where it has any.
      *
      * A run that stops before its capture says why in its outcome: an engine the rule pack does not
-     * support, or the findings it leaves in place of a result. A run that went through the capture
+     * support, a baseline it cannot read, or the findings it leaves in place of a result. A run that went through the capture
      * judged its whole pending set, so what it left out was not pending: a file whose name is not a
      * migration name, or a migration the connection's migration table lists as already run.
      *
@@ -227,6 +228,10 @@ final class CorpusMeasureCommand extends Command
     {
         if ($outcome->unsupported instanceof DriverResolutionFailure) {
             return sprintf('The run stopped at the engine: %s.', $outcome->unsupported->detail);
+        }
+
+        if ($outcome->unreadableBaseline !== null) {
+            return sprintf('The run stopped at the baseline: %s', $outcome->unreadableBaseline);
         }
 
         if ($outcome->context->subjectCount === null) {
@@ -297,7 +302,7 @@ final class CorpusMeasureCommand extends Command
         $connections = $this->laravel->make(Repository::class)->get('database.connections');
 
         foreach (is_array($connections) ? $connections : [] as $name => $configured) {
-            if (is_array($configured) && ($configured['driver'] ?? null) === $engine) {
+            if (is_array($configured) && EffectiveConnectionConfig::driverFor($configured) === $engine) {
                 return (string) $name;
             }
         }
@@ -332,7 +337,7 @@ final class CorpusMeasureCommand extends Command
     {
         // No catch, deliberately. The registry is a generated artifact this repository ships and a
         // gate validates; a malformed one is a broken build, not a condition to degrade around.
-        // Swallowed into an empty list it would produce a report whose blind-spot list named EVERY
+        // Swallowed into an empty list it would produce a report whose blind-spot list named every
         // rule — a dramatic number with a boring cause, and nothing pointing at the cause.
         /** @var array{entries?: list<array{id?: string, level?: int}>} $registry */
         $registry = json_decode(

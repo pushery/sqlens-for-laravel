@@ -7,6 +7,7 @@ namespace Pushery\SQLens\Security\Advisory;
 use Illuminate\Contracts\Config\Repository as Config;
 use Illuminate\Http\Client\Factory;
 use Pushery\SQLens\Findings\CredentialRedactor;
+use Pushery\SQLens\Format\SafeFileWriter;
 use Pushery\SQLens\PackageVersion;
 use Throwable;
 
@@ -20,17 +21,17 @@ use Throwable;
  * can accept for anyone. So `sqlens.security.advisories.source` is null out of the box and the
  * refresh says exactly that when it is asked to run without one.
  *
- * The source must serve a document in THIS package's advisory format. That is not a limitation
+ * The source must serve a document in this package's advisory format. That is not a limitation
  * dressed as a decision: it means the package never parses a third party's shape, so it never
  * inherits a change to that shape, and an organization can generate the file from whatever source
  * their own terms allow.
  *
  * ## Why it validates by reading, not by checking
  *
- * The fetched bytes are written to a temporary file and read back through {@see EolRepository} —
- * the same parser the rules judge from. A second validator would eventually disagree with the
- * reader about what a valid file is, and the disagreement would surface as a refresh that succeeds
- * and a run that then reports the data as unreadable.
+ * The fetched bytes are read in memory through {@see EolRepository::forDocument()} — the same
+ * parser the rules judge from, and no temporary file holds them on the way. A second validator
+ * would eventually disagree with the reader about what a valid file is, and the disagreement would
+ * surface as a refresh that succeeds and a run that then reports the data as unreadable.
  *
  * ## Why it never writes to the package
  *
@@ -181,7 +182,9 @@ final readonly class AdvisoryRefresher
         // refresh into a diff nobody can review — the whole point of committing this file.
         $encoded = json_encode($this->serialize($data), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
 
-        if (@file_put_contents($target, $encoded."\n") === false) {
+        // Atomically: the message below promises the existing file is unchanged, and only a write
+        // beside it that is renamed over it can keep that promise.
+        if (! SafeFileWriter::ensure($target, $encoded."\n")) {
             return AdvisoryRefreshOutcome::refused(sprintf('"%s" could not be written, so the existing file is unchanged', $target));
         }
 

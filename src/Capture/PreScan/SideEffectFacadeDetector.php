@@ -23,11 +23,11 @@ use Pushery\SQLens\Rules\VersionWindow;
  * normally — so a `Notification::send()` in a migration sends a real
  * notification, an `Http::post()` calls a real endpoint, and a `dispatch()`
  * puts a real job on a real queue, all from a command whose entire promise is
- * that it looks at a migration WITHOUT running it. A lint run that mails a
+ * that it looks at a migration without running it. A lint run that mails a
  * customer is the worst thing this tool could do, so a migration touching any
  * cataloged surface is reported and never pretend-executed.
  *
- * The order matters: the pre-scan runs BEFORE the capture, because detecting a
+ * The order matters: the pre-scan runs before the capture, because detecting a
  * side effect after it has fired is not a safety mechanism.
  *
  * **What the catalog deliberately does not carry.** `Log` is absent: writing a
@@ -39,7 +39,7 @@ use Pushery\SQLens\Rules\VersionWindow;
  *
  * **What it cannot carry.** A hand-written list of names only ever catches known
  * mistakes. A side effect reached through the application's own code, or through
- * a call the scanner cannot resolve at all, is invisible here BY CONSTRUCTION,
+ * a call the scanner cannot resolve at all, is invisible here by construction,
  * which is why this catalog is never extended with project classes. A call it
  * cannot resolve is the dynamic-call detector's, which is stable. A call into the
  * application's own code is the indirect-call detector's, which is `preview`: a
@@ -94,7 +94,7 @@ final readonly class SideEffectFacadeDetector implements PreScanDetector
             versionWindow: VersionWindow::unbounded(),
             downtimeClass: null,
             downtimeClassRationale: 'A pre-scan hit describes no DDL — it is the reason a migration was not captured at all — so it has no downtime behavior to classify.',
-            messagePrefix: 'Side effect in migration',
+            messagePrefix: 'sqlens.lint',
             documentationUrl: RuleDocumentationUrl::for(self::RULE_ID),
             suites: PreScanMetadataAudit::defaultSuites(),
             badExample: <<<'PHP'

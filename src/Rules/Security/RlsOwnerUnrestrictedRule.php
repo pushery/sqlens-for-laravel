@@ -29,7 +29,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * smaller and more supervised surface. Severity is metadata on the RULE, so the difference cannot live
  * on the verdict; two rules is what saying it honestly costs.
  *
- * A run whose reading could not establish the connecting role reports through THIS rule rather than
+ * A run whose reading could not establish the connecting role reports through this rule rather than
  * the other one — the weaker claim is the one that stays true when the stronger cannot be checked.
  */
 final class RlsOwnerUnrestrictedRule extends AbstractSchemaObjectSecurityRule implements DeclaresJudgedObjectTypes
@@ -73,7 +73,7 @@ final class RlsOwnerUnrestrictedRule extends AbstractSchemaObjectSecurityRule im
             return [];
         }
 
-        // The other side of one condition, never both: a table whose owner IS this connection is
+        // The other side of one condition, never both: a table whose owner is this connection is
         // reported by SEC.RLS.NOT_FORCED at high, and reporting it twice would put the smaller
         // sentence next to the larger one about the same table.
         if ($object->getBool('rls_owner_is_connection') === true) {

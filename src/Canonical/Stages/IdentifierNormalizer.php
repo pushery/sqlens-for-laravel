@@ -18,7 +18,7 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * MySQL) `` `users` `` are the same to a rule, and folds their case per the driver
  * — the precondition for a later drift comparison that is not just quoting noise.
  *
- * What it does NOT do is normalize qualification: `public."users"` becomes
+ * What it does not do is normalize qualification: `public."users"` becomes
  * `public.users` (each part canonicalized), never `users`. Collapsing the schema
  * away would silently assume a `search_path`, which the audit suite decides by
  * configuration, not this layer. The schema stays a separate, comparable part.

@@ -15,7 +15,7 @@ use Pushery\SQLens\Subjects\SubjectContext;
 /**
  * Folds keyword casing to one canonical form (upper case) so `select`, `SELECT`
  * and `SeLeCt` are the same keyword to a rule — the last piece of grammar-casing
- * drift a rule must never see. A QUOTED identifier is left exactly as written,
+ * drift a rule must never see. A quoted identifier is left exactly as written,
  * because under PostgreSQL upper-casing `"user"` would change which object it
  * names — a semantic error that would otherwise pass as "just formatting".
  *
@@ -29,9 +29,9 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * not a keyword alone.
  *
  * It reads the keyword list from the driver — no list, no `match`, no engine name
- * lives in the core. It runs AFTER identifier normalization, which keeps a
+ * lives in the core. It runs after identifier normalization, which keeps a
  * keyword-named identifier in quotes when it was written quoted (`"key"` stays
- * `"key"`). A BARE word matching a keyword is folded as the keyword even where it
+ * `"key"`). A bare word matching a keyword is folded as the keyword even where it
  * names an object: telling the two apart needs the grammar position, which only the
  * classifier knows. Both engines accept a word they do not reserve as a bare name
  * (`user`, `date`, `text` on MySQL), so the classifier reads a keyword in a name

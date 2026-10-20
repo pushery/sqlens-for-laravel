@@ -40,10 +40,10 @@ use Throwable;
  *
  * ## MySQL cannot answer this about somebody else, and that makes false REDS the risk
  *
- * PostgreSQL has `has_table_privilege(role, …)`, which resolves inheritance for ANY role. MySQL has
+ * PostgreSQL has `has_table_privilege(role, …)`, which resolves inheritance for any role. MySQL has
  * no equivalent. `information_schema.APPLICABLE_ROLES` lists the roles of the **current** user —
  * measured: granting a role to another user and asking about them returns zero rows — and the
- * privilege views list grants held DIRECTLY, never those reached through a role.
+ * privilege views list grants held directly, never those reached through a role.
  *
  * So a check that reported "missing" whenever the views came up empty would be wrong for every
  * project whose migration user holds its grants through a role, which is the modern MySQL 8 setup.
@@ -53,7 +53,7 @@ use Throwable;
  * The resolution is asymmetric on purpose:
  *
  * - A privilege FOUND in the views is definitive. Grants do not lie about themselves.
- * - A privilege NOT found is only a finding when this run can also establish that the user holds no
+ * - A privilege not found is only a finding when this run can also establish that the user holds no
  *   roles at all — which needs `SELECT` on `mysql.role_edges`. Without that, it is `undetermined`
  *   with the reason named.
  *
@@ -67,7 +67,7 @@ use Throwable;
  *
  * And a grant has a scope. An `ALTER` on `app.audit_log` does not let anybody alter `app.orders`, so
  * a requirement is met by a global grant, by a database-level grant whose name pattern reaches the
- * object's database, or by a table-level grant on that very table. MySQL applies ONE matching
+ * object's database, or by a table-level grant on that very table. MySQL applies one matching
  * database-level entry rather than their union, so only what every matching entry holds counts.
  *
  * The privilege views are filtered to what the READING connection may see, without a word: without
@@ -131,20 +131,16 @@ final readonly class GrantCheck implements PreflightCheck
             return CheckResult::undetermined(
                 self::ID,
                 UndeterminedReason::MigrationRoleMissing,
-                sprintf(
-                    '`%s` is named as the migration user, and `mysql.user` '
-                    .'holds no account by that name. Nothing can be established about privileges it '
-                    .'does not have — and a finding here would advise a `GRANT` to an account that '
-                    .'does not exist, which fails in turn. Check the `username` on the migration '
-                    .'connection.',
-                    $role,
-                ),
+                '`mysql.user` holds no account by the name the `username` on the migration connection '
+                    .'gives. Nothing can be established about privileges it does not have — and a finding '
+                    .'here would advise a `GRANT` to an account that does not exist, which fails in turn. '
+                    .'Check that `username`.',
             );
         }
 
         try {
             $reading = $this->grantsOfTheName($context, $role);
-            $rolesVisible = $this->holdsNoRoles($context, $role);
+            $rolesUnseen = $this->rolesUnseenBecause($context, $role);
         } catch (Throwable $failure) {
             return CheckResult::undetermined(
                 self::ID,
@@ -196,7 +192,7 @@ final readonly class GrantCheck implements PreflightCheck
             $unknownFor = [];
 
             foreach ($reading['accounts'] as $account => $grants) {
-                $reaches = $this->reaches($grants, $needed, $requirement->objectType, $scope, $reading['folds'], $reading['wildcards']);
+                $reaches = $this->reaches($grants, $needed, $requirement->objectType, $scope, $reading['folds'], $reading['wildcards'], $reading['restrictions'] === null ? null : $reading['restrictions'][$account] ?? []);
 
                 if ($reaches === null) {
                     $unknownFor[] = $account;
@@ -215,19 +211,30 @@ final readonly class GrantCheck implements PreflightCheck
                 // Two different reasons, and the sentence has to name the one that applies: a name
                 // that does not split at all is not an unqualified one, and the connection that read
                 // it may well have a default database.
-                $unanswered[] = $scope === null
-                    ? sprintf(
+                if ($scope === null) {
+                    $unanswered[] = sprintf(
                         '%s: which database it is in could not be established. The name does not split '
                         .'into a database and an object, which MySQL names in at most two parts, so no '
                         .'grant below the global level can be matched to it.',
                         $requirement->object,
-                    )
-                    : sprintf(
+                    );
+                } elseif ($scope['schema'] === null) {
+                    $unanswered[] = sprintf(
                         '%s: which database it is in could not be established. The name is not qualified '
                         .'and the reading connection has no default database, so no grant below the global '
                         .'level can be matched to it.',
                         $requirement->object,
                     );
+                } else {
+                    // The database is known, so what is unsettled is the global grant itself.
+                    $unanswered[] = sprintf(
+                        '%s: `partial_revokes` is on, and whether a partial revoke takes the global `%s` back on '
+                        .'its database could not be established. MySQL keeps those restrictions in `mysql.user`, '
+                        .'which this connection cannot read.',
+                        $requirement->object,
+                        $needed,
+                    );
+                }
 
                 continue;
             }
@@ -250,19 +257,19 @@ final readonly class GrantCheck implements PreflightCheck
                 continue;
             }
 
-            // Not found — and on MySQL that is NOT enough to report it missing. The privilege views
+            // Not found — and on MySQL that is not enough to report it missing. The privilege views
             // do not expand roles, and this server cannot be asked what another user reaches through
             // one. Reporting a finding here would be a false RED on every role-based setup, which is
             // the modern one.
-            if (! $rolesVisible) {
+            if ($rolesUnseen !== null) {
                 $unanswered[] = sprintf(
                     '%s: `%s` is not among the grants `%s` holds directly on it, and whether it is '
-                    .'reached through a ROLE could not be established — `mysql.role_edges` is not '
-                    .'readable by this connection. Reporting it missing would be wrong for every '
-                    .'setup that grants through roles.',
+                    .'reached through a ROLE could not be established — %s. Reporting it missing would '
+                    .'be wrong for every setup that grants through roles.',
                     $requirement->object,
                     $needed,
                     $role,
+                    $rolesUnseen,
                 );
 
                 continue;
@@ -316,7 +323,13 @@ final readonly class GrantCheck implements PreflightCheck
      * its own. Global grants have neither a database nor a table, database-level grants a database
      * (as the pattern it was granted with), table-level grants both.
      *
-     * @return array{accounts: array<string, list<array{privilege: string, schema: string|null, table: string|null}>>, schema: string|null, folds: bool, wildcards: bool}
+     * With `partial_revokes` on, a global grant can be taken back on single databases, and MySQL keeps
+     * those restrictions in `mysql.user` rather than in the privilege views: measured on MySQL 8.0, a
+     * `REVOKE SELECT ON db.*` under a global `SELECT` leaves `USER_PRIVILEGES` showing `SELECT` and adds
+     * `{"Restrictions": [{"Database": "db", "Privileges": ["SELECT"]}]}` to `User_attributes`. They are
+     * read per account, and null when that table refuses, which leaves every global grant unsettled.
+     *
+     * @return array{accounts: array<string, list<array{privilege: string, schema: string|null, table: string|null}>>, schema: string|null, folds: bool, wildcards: bool, restrictions: array<string, array<string, list<string>>>|null}
      */
     #[RawSql(reason: 'reads the privileges the deploying account actually holds, and where; a preflight that guessed would pass a deploy that then fails halfway')]
     private function grantsOfTheName(PreflightContext $context, string $role): array
@@ -373,12 +386,66 @@ final readonly class GrantCheck implements PreflightCheck
         $settings = $server[0] ?? null;
         $schema = is_object($settings) && is_scalar($settings->db ?? null) ? (string) $settings->db : '';
 
+        $partialRevokes = is_object($settings) && is_numeric($settings->pr ?? null) && (int) $settings->pr === 1;
+
         return [
             'accounts' => $accounts,
             'schema' => $schema === '' ? null : $schema,
             'folds' => is_object($settings) && is_numeric($settings->lctn ?? null) && (int) $settings->lctn > 0,
-            'wildcards' => ! (is_object($settings) && is_numeric($settings->pr ?? null) && (int) $settings->pr === 1),
+            'wildcards' => ! $partialRevokes,
+            'restrictions' => $partialRevokes ? $this->restrictionsOfTheName($context, $role) : [],
         ];
+    }
+
+    /**
+     * What a partial revoke takes back from each account of the name, by database, or null when
+     * `mysql.user` cannot be read.
+     *
+     * @return array<string, array<string, list<string>>>|null keyed by `'user'@'host'`, the spelling of `GRANTEE`
+     */
+    #[RawSql(reason: 'reads the restrictions partial revokes keep in mysql.user, which the privilege views do not show')]
+    private function restrictionsOfTheName(PreflightContext $context, string $role): ?array
+    {
+        try {
+            $rows = $context->session->read(static fn (Connection $db): array => $db->select(
+                'select User as u, Host as h, User_attributes as a from mysql.user where User = ?',
+                [$role],
+            ));
+        } catch (Throwable) {
+            return null;
+        }
+
+        $restrictions = [];
+
+        foreach ($rows as $row) {
+            $user = is_object($row) ? $row->u ?? null : null;
+            $host = is_object($row) ? $row->h ?? null : null;
+            $json = is_object($row) ? $row->a ?? null : null;
+
+            if (! is_scalar($user) || ! is_scalar($host)) {
+                continue;
+            }
+
+            $attributes = is_string($json) ? json_decode($json, true) : null;
+            $list = is_array($attributes) ? $attributes['Restrictions'] ?? null : null;
+            $taken = [];
+
+            foreach (is_array($list) ? $list : [] as $restriction) {
+                $database = is_array($restriction) ? $restriction['Database'] ?? null : null;
+                $privileges = is_array($restriction) ? $restriction['Privileges'] ?? null : null;
+
+                if (is_string($database) && is_array($privileges)) {
+                    $taken[$database] = array_values(array_map(
+                        static fn (mixed $privilege): string => strtoupper(is_scalar($privilege) ? (string) $privilege : ''),
+                        $privileges,
+                    ));
+                }
+            }
+
+            $restrictions["'".$user."'@'".$host."'"] = $taken;
+        }
+
+        return $restrictions;
     }
 
     /**
@@ -397,7 +464,7 @@ final readonly class GrantCheck implements PreflightCheck
             return null;
         }
 
-        // On MySQL a schema IS a database, so the object names the database itself.
+        // On MySQL a schema is a database, so the object names the database itself.
         if (in_array($requirement->objectType, [SchemaObjectType::Schema, SchemaObjectType::Database], true)) {
             return ['schema' => $this->spelled($identifier->name), 'name' => $this->spelled($identifier->name)];
         }
@@ -428,14 +495,22 @@ final readonly class GrantCheck implements PreflightCheck
      * which is required on its own, so a table-level grant anywhere in its database counts. A database
      * is reached by no table-level grant at all.
      *
+     * A partial revoke takes a global grant back on the databases it names, and those are left to the
+     * grants below the global level, as MySQL leaves them.
+     *
      * @param  list<array{privilege: string, schema: string|null, table: string|null}>  $grants
      * @param  array{schema: string|null, name: string}|null  $scope
+     * @param  array<string, list<string>>|null  $restrictions  what partial revokes take back from this account, by database, or null when unreadable
      */
-    private function reaches(array $grants, string $privilege, SchemaObjectType $type, ?array $scope, bool $folds, bool $wildcards): ?bool
+    private function reaches(array $grants, string $privilege, SchemaObjectType $type, ?array $scope, bool $folds, bool $wildcards, ?array $restrictions = []): ?bool
     {
         foreach ($grants as $grant) {
             if ($grant['schema'] === null && $grant['privilege'] === $privilege) {
-                return true;
+                $takenBack = $this->takenBack($restrictions, $privilege, $scope, $folds);
+
+                if ($takenBack !== true) {
+                    return $takenBack === false ? true : null;
+                }
             }
         }
 
@@ -485,10 +560,39 @@ final readonly class GrantCheck implements PreflightCheck
     }
 
     /**
+     * Whether a partial revoke takes a global privilege back on the object's database: true or false,
+     * or null when that cannot be said, because the restrictions could not be read or the object's
+     * database is not known while the account has restrictions on this privilege.
+     *
+     * @param  array<string, list<string>>|null  $restrictions
+     * @param  array{schema: string|null, name: string}|null  $scope
+     */
+    private function takenBack(?array $restrictions, string $privilege, ?array $scope, bool $folds): ?bool
+    {
+        if ($restrictions === null) {
+            return null;
+        }
+
+        $databases = array_keys(array_filter($restrictions, static fn (array $privileges): bool => in_array($privilege, $privileges, true)));
+
+        if ($databases === []) {
+            return false;
+        }
+
+        if ($scope === null || $scope['schema'] === null) {
+            return null;
+        }
+
+        $database = $folds ? strtolower($scope['schema']) : $scope['schema'];
+
+        return in_array($database, array_map(static fn (string|int $name): string => $folds ? strtolower((string) $name) : (string) $name, $databases), true);
+    }
+
+    /**
      * Whether the account is provably absent.
      *
-     * True ONLY when `mysql.user` is readable AND holds no row for this name. Unreadable answers
-     * false — the same direction as {@see self::holdsNoRoles()}, and for the same reason: on a
+     * True only when `mysql.user` is readable and holds no row for this name. Unreadable answers
+     * false — the same direction as {@see self::rolesUnseenBecause()}, and for the same reason: on a
      * managed instance that view is closed, and turning "cannot tell" into "does not exist" would
      * refuse every deploy it cannot see.
      */
@@ -511,15 +615,30 @@ final readonly class GrantCheck implements PreflightCheck
     }
 
     /**
-     * Whether this run can establish that the user holds NO roles.
+     * Why this run cannot establish that the user holds NO roles, or null when it can.
      *
-     * True only when `mysql.role_edges` is readable AND empty for this user. False means "cannot
-     * tell", which is why the caller treats it as a reason to withhold a finding rather than as a
-     * reason to emit one — the two states must not collapse into each other.
+     * Null only when `@@mandatory_roles` names no role and `mysql.role_edges` is readable AND empty
+     * for this user. Anything else is "cannot tell", which is why the caller treats it as a reason to
+     * withhold a finding rather than as a reason to emit one, and names the reason it is given here —
+     * the two states must not collapse into each other.
+     *
+     * The mandatory roles come first because `role_edges` does not list them: MySQL grants them to
+     * every account without a row there, and an account activates one with `SET ROLE`. Measured on
+     * MySQL 8.0, an account with no grant of its own read a table through a mandatory role after
+     * `SET ROLE ALL` while `role_edges` held nothing for it. A global system variable needs no
+     * privilege to read.
      */
-    #[RawSql(reason: 'reads granted roles from the catalog; role membership is not a model relation')]
-    private function holdsNoRoles(PreflightContext $context, string $role): bool
+    #[RawSql(reason: 'reads granted and mandatory roles from the catalog; role membership is not a model relation')]
+    private function rolesUnseenBecause(PreflightContext $context, string $role): ?string
     {
+        $mandatory = $context->session->read(static fn (Connection $db): array => $db->select('select @@global.mandatory_roles as roles'));
+        $answer = $mandatory[0] ?? null;
+        $roles = is_object($answer) ? $answer->roles ?? null : null;
+
+        if (is_string($roles) && trim($roles) !== '') {
+            return '`@@mandatory_roles` names a role every account can activate, and this check does not expand what a role grants';
+        }
+
         try {
             $rows = $context->session->read(static fn (Connection $db): array => $db->select(
                 'select count(*) as n from mysql.role_edges where to_user = ?',
@@ -528,7 +647,7 @@ final readonly class GrantCheck implements PreflightCheck
         } catch (Throwable) {
             // Not readable is the ordinary case for an unprivileged reader, and on a managed
             // instance it is the only case. Not an error — a limit, and one the caller names.
-            return false;
+            return '`mysql.role_edges` is not readable by this connection';
         }
 
         $row = $rows[0] ?? null;
@@ -537,7 +656,9 @@ final readonly class GrantCheck implements PreflightCheck
         // Only a real zero counts. Anything the driver hands back that is not a number leaves this
         // "cannot tell", which is the safe direction here — the caller withholds a finding rather
         // than emitting one.
-        return is_numeric($count) && (int) $count === 0;
+        return is_numeric($count) && (int) $count === 0
+            ? null
+            : '`mysql.role_edges` grants this account a role, and this check does not expand what a role grants';
     }
 
     /**

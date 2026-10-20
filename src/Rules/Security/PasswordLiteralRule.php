@@ -41,7 +41,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  * itself — a rule that did would reach for `database/migrations` and miss a package path, a tenant
  * subdirectory, and be fooled by a seeder named like a migration.
  *
- * ## The value NEVER appears in the finding
+ * ## The value never appears in the finding
  *
  * Not the literal, not a prefix, not a length, not a hash. A finding travels into a JSON report, a
  * SARIF file, a CI annotation and an agent artifact — several of which are committed or uploaded —
@@ -80,7 +80,7 @@ final class PasswordLiteralRule extends AbstractMigrationSecurityRule
      * - `IDENTIFIED BY PASSWORD '<hash>'` — retired in 8.4, but an old migration still says it, and
      *   a hash in version control is a secret in version control.
      *
-     * ## What it deliberately does NOT match, and why each one would have been a bad alarm
+     * ## What it deliberately does not match, and why each one would have been a bad alarm
      *
      * `IDENTIFIED WITH auth_socket` and `IDENTIFIED WITH caching_sha2_password` set no literal at
      * all — the plugin decides. Requiring `BY` followed by a quote keeps them out.
@@ -209,7 +209,7 @@ final class PasswordLiteralRule extends AbstractMigrationSecurityRule
         }
 
         // The path binding, and the order matters: the statement is only judged once it is known to
-        // BE the shape this rule is about. Answering `undetermined` for every snippet that merely
+        // be the shape this rule is about. Answering `undetermined` for every snippet that merely
         // has no origin would fill a run with reasons about statements this rule would have ignored
         // anyway.
         return match ($statement->originBinding) {

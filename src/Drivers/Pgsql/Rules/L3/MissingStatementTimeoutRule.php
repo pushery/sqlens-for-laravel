@@ -17,7 +17,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
 
 /**
  * The other half of level-3 timeout hygiene: `lock_timeout` bounds the WAIT for a lock,
- * `statement_timeout` bounds how long the operation runs once it HAS the lock. They fail
+ * `statement_timeout` bounds how long the operation runs once it has the lock. They fail
  * differently — one migration is stuck in the queue, the other holds an ACCESS EXCLUSIVE
  * lock for hours while it rewrites a billion-row table — so this is a rule of its own,
  * with its own id, page and finding, not a restatement of {@see MissingLockTimeoutRule}.
@@ -57,10 +57,10 @@ final class MissingStatementTimeoutRule extends AbstractPgsqlSafetyRule implemen
     }
 
     /**
-     * The preamble for the OTHER timeout — a different failure on a different axis.
+     * The preamble for the other timeout — a different failure on a different axis.
      *
-     * `statement_timeout` caps how long a statement RUNS once it holds its lock; the lock-timeout
-     * rule next door caps how long it WAITS for one. Two rules, two findings, two one-line
+     * `statement_timeout` caps how long a statement runs once it holds its lock; the lock-timeout
+     * rule next door caps how long it waits for one. Two rules, two findings, two one-line
      * preambles — so a migration missing only one is never told to add the one it already has.
      */
     public function remediationFor(MigrationStatementView $statement): ?RemediationPayload
@@ -128,12 +128,12 @@ final class MissingStatementTimeoutRule extends AbstractPgsqlSafetyRule implemen
         }
 
         // A statement_timeout set anywhere before the gate already bounds the runtime. A
-        // lock_timeout does NOT — that is the other rule's concern.
+        // lock_timeout does not — that is the other rule's concern.
         if (StrongLockStatements::timeoutSetBefore($statement->migration->statements, $gate->index, ExpectedTimeouts::STATEMENT_TIMEOUT)) {
             return null;
         }
 
-        // The migration may have WRITTEN the line in the form that does nothing — see the sibling
+        // The migration may have written the line in the form that does nothing — see the sibling
         // rule for why that deserves its own sentence rather than the generic one.
         $ineffective = StrongLockStatements::ineffectiveLocalTimeoutBefore(
             $statement->migration->statements,

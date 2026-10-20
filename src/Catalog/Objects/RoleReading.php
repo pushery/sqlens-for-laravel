@@ -16,7 +16,7 @@ use Pushery\SQLens\Catalog\CatalogSkip;
  * the roles without having been handed the caveat.
  *
  * Measured on PostgreSQL 18 and MySQL 8.4, the two
- * engines fail here in opposite shapes and BOTH shapes end up in this type:
+ * engines fail here in opposite shapes and both shapes end up in this type:
  *
  * - PostgreSQL refuses `pg_authid` with `42501` while `pg_roles` answers in full — a complete SET of
  *   partial OBJECTS.
@@ -55,7 +55,7 @@ final readonly class RoleReading
      * and a partial reading with an empty one would be a caveat nobody can act on. {@see CatalogSkip}
      * already refuses to exist without a reason, so the guarantee travels the whole way down.
      *
-     * @param  list<RoleObject>  $roles  whatever WAS read — often empty, sometimes not
+     * @param  list<RoleObject>  $roles  whatever was read — often empty, sometimes not
      * @param  non-empty-list<CatalogSkip>  $skips
      */
     public static function partial(array $roles, array $skips): self

@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Catalog\Understanding;
 /**
  * A partial index's `WHERE` clause, read into a shape two of them can be compared in.
  *
- * ## What this does NOT do, stated first because it is the point
+ * ## What this does not do, stated first because it is the point
  *
  * It answers "are these two predicates the same condition" and nothing else. It does not answer
  * whether one IMPLIES the other, and implication is the hard question a redundancy verdict actually
@@ -31,7 +31,7 @@ namespace Pushery\SQLens\Catalog\Understanding;
  * indrelid)` back — the same expression the PostgreSQL catalog reader stores in an index object's
  * `predicate`. That reader is named in prose rather than as a class reference on purpose: this file
  * stays in the core package and the reader would move to a driver one, so naming it would be the
- * coupling the topology arm refuses. Seven kinds, and the surprise is that several of them have TWO
+ * coupling the topology arm refuses. Seven kinds, and the surprise is that several of them have two
  * spellings for one condition:
  *
  * | written | `pg_get_expr` prints | kind |
@@ -412,11 +412,11 @@ final readonly class IndexPredicate
         // whole predicate came back not understood.
         //
         // It is the shape Postgres emits for the ordinary Laravel case: a `string` column and a
-        // `whereNotIn`. Measured against a consumer's index, where `(stripe_status)::text <> ALL (ARRAY[
+        // `whereNotIn`. Measured against a consumer's index, where `(stripe_status)::text <> all (ARRAY[
         // ('incomplete'::character varying)::text, …])` was refused while the same predicate without the
         // inner cast was read -- so the refusal was about the printing, not about the predicate.
         //
-        // ONE literal and nothing else between the parentheses. `('a' || 'b')` keeps them, because
+        // One literal and nothing else between the parentheses. `('a' || 'b')` keeps them, because
         // dropping them there would change what the text says -- the same rule the identifier unwrap
         // above follows, and the same lookbehind, which keeps a function call like `coalesce('a')` from
         // losing the parentheses around its argument.

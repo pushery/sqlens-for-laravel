@@ -25,7 +25,7 @@ use Pushery\SQLens\Rules\VersionWindow;
 
 /**
  * Closes the most common way around the side-effect catalog: a migration that
- * reaches its effect through the application's OWN code.
+ * reaches its effect through the application's own code.
  *
  *     public function up(): void
  *     {
@@ -39,7 +39,7 @@ use Pushery\SQLens\Rules\VersionWindow;
  * run that mails a customer) happens one level below where the side-effect
  * detector was looking.
  *
- * **The decision this detector embodies.** The detector does NOT follow the call
+ * **The decision this detector embodies.** The detector does not follow the call
  * into the target class — it is pattern detection, not taint analysis. It cannot
  * know whether `UserBackfill::run()` sends a notification or formats a string. So
  * it could either leave the case as a named honesty limit ("the pre-scan sees one
@@ -49,7 +49,7 @@ use Pushery\SQLens\Rules\VersionWindow;
  * helper call from a migration is common and fine — the point is that pretend
  * cannot see what it does, not that the call is wrong.
  *
- * **What is deliberately NOT a hit,** so the rule is not noise:
+ * **What is deliberately not a hit,** so the rule is not noise:
  *
  * - A call on `$this` (the migration's own method or a method mixed into
  *   it). Flagging every migration that factored code into a private helper would
@@ -115,7 +115,7 @@ final readonly class IndirectCallDetector implements PreScanDetector
             versionWindow: VersionWindow::unbounded(),
             downtimeClass: null,
             downtimeClassRationale: 'A pre-scan hit describes no DDL — it is the reason a migration was not captured at all — so it has no downtime behavior to classify.',
-            messagePrefix: 'Indirect call from migration',
+            messagePrefix: 'sqlens.lint',
             documentationUrl: RuleDocumentationUrl::for(self::RULE_ID),
             suites: PreScanMetadataAudit::defaultSuites(),
             badExample: <<<'PHP'

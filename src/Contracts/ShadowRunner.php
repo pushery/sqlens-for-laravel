@@ -15,7 +15,7 @@ use Pushery\SQLens\Capture\Shadow\ShadowSession;
  *
  * It is a seam, not the implementation: the concrete runner listens on the shadow
  * connection while a real `migrate` executes, canonicalizes each statement, and
- * produces the SAME `CaptureRun` shape the pretend path does — because the whole
+ * produces the same `CaptureRun` shape the pretend path does — because the whole
  * point of the two modes is one result form, not two. Keeping it behind an
  * interface lets the `ShadowCaptor` orchestrate guard, provision, run and teardown
  * without knowing how the capture itself works, and lets that orchestration be

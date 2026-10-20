@@ -32,7 +32,7 @@ final readonly class MetadataLockStatements
     /**
      * How long a lock wait stops being a wait and becomes an outage, in seconds.
      *
-     * A DECLARED expectation rather than a measured one, and it is declared once, here, so the lint
+     * A declared expectation rather than a measured one, and it is declared once, here, so the lint
      * rule and the preflight check cannot disagree about one `SET`. MySQL ships
      * `lock_wait_timeout = 31536000`, one year, which at deploy time is indistinguishable from
      * waiting forever. An hour is the line: past it, the deploy has already failed in every way that
@@ -49,6 +49,10 @@ final readonly class MetadataLockStatements
      * `Dml`, `SessionSetting` and `CreateTable` are absent on purpose: the first takes row locks
      * (a different setting bounds those), the second is how the preamble itself is written, and the
      * third creates the object rather than queueing for it.
+     *
+     * `RebuildTable` is `OPTIMIZE TABLE`, which rebuilds the table like an `ALTER TABLE … FORCE` and
+     * takes the same exclusive metadata lock to start and to finish, even where the rebuild in between
+     * leaves the table writable.
      */
     private const array LOCKING_KINDS = [
         StatementKind::AlterTable,
@@ -66,6 +70,7 @@ final readonly class MetadataLockStatements
         StatementKind::DropTable,
         StatementKind::TruncateTable,
         StatementKind::Rename,
+        StatementKind::RebuildTable,
     ];
 
     /**
@@ -96,7 +101,7 @@ final readonly class MetadataLockStatements
     }
 
     /**
-     * Whether the named timeout was set anywhere BEFORE the gate.
+     * Whether the named timeout was set anywhere before the gate.
      *
      * Anywhere, not immediately before: a preamble at the top of `up()` bounds every statement that
      * follows it in the session, and requiring adjacency would report a migration that is already
@@ -106,7 +111,7 @@ final readonly class MetadataLockStatements
      */
     public static function timeoutSetBefore(array $stream, int $gateIndex, string $timeout): bool
     {
-        // The LAST statement that touches the variable decides, not any of them: a later
+        // The last statement that touches the variable decides, not any of them: a later
         // `SET … = DEFAULT` takes a bound away again.
         $bounded = false;
 
@@ -162,7 +167,7 @@ final readonly class MetadataLockStatements
      *
      * `seconds` is the value it sets, or null for one that bounds nothing this can read: `DEFAULT`,
      * which on MySQL 8.4 is a year, or an expression. A `GLOBAL` or `PERSIST` assignment changes what
-     * LATER connections start with, never this session, so it leaves the session's value alone. The
+     * later connections start with, never this session, so it leaves the session's value alone. The
      * scope keyword carries over to the following assignments of the same `SET`, as the manual says,
      * and `@@SESSION.`, `@@LOCAL.` or a bare `@@` name the session for that one assignment.
      *

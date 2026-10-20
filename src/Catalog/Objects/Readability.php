@@ -9,7 +9,7 @@ use Pushery\SQLens\Catalog\SkipReason;
 use Pushery\SQLens\Exceptions\InvalidReadability;
 
 /**
- * How completely one object was read, and — when the answer is "not completely" — WHY.
+ * How completely one object was read, and — when the answer is "not completely" — why.
  *
  * The type is the guardrail, not a convention. The constructor is private and the only way to a
  * non-complete state requires a reason plus the names of the fields that are missing. So "something

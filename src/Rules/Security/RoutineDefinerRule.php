@@ -53,18 +53,29 @@ final class RoutineDefinerRule extends AbstractRoutineRule
 
     protected function message(SchemaObject $object): string
     {
+        $owner = $object->getString('owner') ?? 'its owner';
+        $loan = sprintf(
+            'It is listed because EXECUTE on it is a bounded loan of %s\'s rights rather than an ordinary '
+            .'privilege: a role holding only EXECUTE can look minimal and still reach further than its other '
+            .'grants allow. Confirm the grant list on this routine is the one you meant.',
+            $owner,
+        );
+
+        // An engine without a per-routine search path has no clause to pin and no escalation through
+        // one: MySQL resolves an unqualified name against the routine's own database, so the two rules
+        // about the path never speak there and the sentence about them would describe nothing.
+        if ($object->getBool('search_path_configurable') !== true) {
+            return sprintf('%s runs with the privileges of %s (SQL SECURITY DEFINER). %s', $object->qualifiedName, $owner, $loan);
+        }
+
         return sprintf(
             '%s runs with the privileges of %s (SECURITY DEFINER) and pins its search_path (%s), so the '
             .'escalation path SEC.PRIV.ROUTINE_DEFINER_MUTABLE_PATH reports does not apply here; whether '
-            .'the pinned path is itself closed is SEC.PRIV.ROUTINE_DEFINER_UNSAFE_PATH\'s question. It is '
-            .'listed because EXECUTE on it is a bounded loan of %s\'s '
-            .'rights rather than an ordinary privilege: a role holding only EXECUTE can look minimal and '
-            .'still reach further than its other grants allow. Confirm the grant list on this routine is '
-            .'the one you meant.',
+            .'the pinned path is itself closed is SEC.PRIV.ROUTINE_DEFINER_UNSAFE_PATH\'s question. %s',
             $object->qualifiedName,
-            $object->getString('owner') ?? 'its owner',
-            $object->getString('settings') ?? 'set',
-            $object->getString('owner') ?? 'its owner',
+            $owner,
+            $object->getString('search_path') ?? 'set',
+            $loan,
         );
     }
 

@@ -23,6 +23,11 @@ final readonly class SquawkRunResult
          * the tool's own stderr reaches it only through the runner's redaction.
          */
         public string $detail = '',
+        /**
+         * Whether the tool ran out of its bound. Of all the ways to produce no report, it is the one
+         * that costs the whole bound again on every later call, so the contribution stops asking.
+         */
+        public bool $timedOut = false,
     ) {}
 
     /** @param  list<SquawkRawFinding>  $findings */
@@ -34,6 +39,12 @@ final readonly class SquawkRunResult
     public static function failed(SquawkFailureReason $reason, string $detail): self
     {
         return new self([], $reason, $detail);
+    }
+
+    /** A run the bound ended before it produced a report. */
+    public static function timedOut(string $detail): self
+    {
+        return new self([], SquawkFailureReason::RunFailed, $detail, true);
     }
 
     /** Whether a report exists — an empty one included. */

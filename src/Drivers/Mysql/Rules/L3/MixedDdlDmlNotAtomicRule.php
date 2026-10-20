@@ -42,7 +42,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  *
  * ## Reported once, on the write
  *
- * The finding sits on the FIRST data write that follows a schema change, not on every one and not on
+ * The finding sits on the first data write that follows a schema change, not on every one and not on
  * the schema change itself. The write is where the migration stops being recoverable, and a
  * migration that does three of them has one problem, not three.
  *
@@ -74,7 +74,7 @@ final class MixedDdlDmlNotAtomicRule extends AbstractMysqlRule implements Provid
     }
 
     /**
-     * The split — and deliberately NOT the PostgreSQL split template under a different caller.
+     * The split — and deliberately not the PostgreSQL split template under a different caller.
      *
      * That one argues from locks held to commit, an argument that does not exist here: Laravel's
      * MySQL grammar opens no transaction at all, so there is no lock to hold across anything. The
@@ -131,7 +131,7 @@ final class MixedDdlDmlNotAtomicRule extends AbstractMysqlRule implements Provid
             .'data, so each step either completes or leaves nothing behind.';
     }
 
-    /** Whether a schema change runs BEFORE this statement in the migration's own stream. */
+    /** Whether a schema change runs before this statement in the migration's own stream. */
     private function followsASchemaChange(MigrationStatementView $statement): bool
     {
         return array_any(
@@ -178,7 +178,7 @@ final class MixedDdlDmlNotAtomicRule extends AbstractMysqlRule implements Provid
      * Everything that is not data manipulation, not a session setting and not unclassified is a
      * schema change here — inverted deliberately, so a statement kind added later is covered without
      * anyone remembering to extend a list. An UNCLASSIFIED statement is excluded: it might be either,
-     * and "might" is not the basis for a finding. A SESSION SETTING is excluded because it is neither:
+     * and "might" is not the basis for a finding. A session setting is excluded because it is neither:
      * `SET SESSION lock_wait_timeout` changes no schema and commits nothing, and it is the line
      * `MY.L3.MISSING_LOCK_WAIT_TIMEOUT` asks a migration to open with, so counting it would report
      * every data migration written the way this package advises.

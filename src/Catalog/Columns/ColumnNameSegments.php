@@ -9,7 +9,7 @@ namespace Pushery\SQLens\Catalog\Columns;
  *
  * ## Why this is a class and not two private methods
  *
- * Two dictionaries in this package read column NAMES and guess what lives in them — the money one
+ * Two dictionaries in this package read column names and guess what lives in them — the money one
  * and the privacy one. Written twice, the halves that must agree would be free to drift, and the
  * drift would be invisible: both would keep passing their own tests while disagreeing about whether
  * `birthDate` and `birth_date` are the same name.
@@ -87,7 +87,7 @@ final readonly class ColumnNameSegments
     /**
      * Whether a term matches the whole name, or — for a single-word term — one whole segment.
      *
-     * The money dictionary's rule. A multi-word term matches the WHOLE NAME only, which is narrow
+     * The money dictionary's rule. A multi-word term matches the whole name only, which is narrow
      * on purpose: `amount_due` firing on any column with an `amount` segment would be the substring
      * failure by another route.
      *

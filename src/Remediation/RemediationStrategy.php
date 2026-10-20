@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Remediation;
 /**
  * The named safe sequences this package knows how to describe.
  *
- * The list is written ONCE and in full, deliberately. Every value is a promise in a schema that is
+ * The list is written once and in full, deliberately. Every value is a promise in a schema that is
  * a candidate for the public API, so adding one later is a schema change with a version bump behind
  * it — and a strategy invented ad hoc when its first rule needs it is how an enum ends up with two
  * values meaning the same thing under different names.
@@ -79,7 +79,7 @@ enum RemediationStrategy: string
      * that goes over the limit.
      *
      * Added before the first tag, which is when this enum's own rule says a value belongs, and it
-     * duplicates none of the others: every strategy above changes WHAT a migration does, and this
+     * duplicates none of the others: every strategy above changes what a migration does, and this
      * one changes only what a thing is CALLED. Nothing about the schema moves, no data is touched,
      * and there is no window to wait out — which is why folding it into an existing strategy would
      * have made a reader expect a staged sequence where a single argument is the whole remedy.
@@ -87,7 +87,7 @@ enum RemediationStrategy: string
     case ExplicitIdentifier = 'explicit_identifier';
 
     /**
-     * Rebuild the indexes FIRST, and only then tell the server the recorded version is current.
+     * Rebuild the indexes first, and only then tell the server the recorded version is current.
      *
      * The order is the whole strategy, which is why it is in the name. A B-tree index on a text
      * column stores its entries in the collation's sort order; change the collation underneath it
@@ -105,7 +105,7 @@ enum RemediationStrategy: string
      * It duplicates none of the others. `drift_correction` is the nearest, and its own description
      * names the drift comparison as what found the difference; this one is found by reading a
      * collation's recorded version against the installed one, which is a different instrument.
-     * `none` would be false: there IS a safe standard sequence, and it is two statements long.
+     * `none` would be false: there is a safe standard sequence, and it is two statements long.
      */
     case ReindexBeforeRefresh = 'reindex_before_refresh';
 

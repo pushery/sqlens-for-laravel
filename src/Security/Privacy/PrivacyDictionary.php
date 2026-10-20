@@ -18,7 +18,7 @@ use Pushery\SQLens\Catalog\Columns\ColumnNameSegments;
  *
  * This is the confusion worth heading off, because the repository rule sitting next to it points the
  * other way: SQLens ships exactly one locale, `en`, and a second `lang/` directory turns a test red.
- * That rule is about what this package SAYS. This artifact is about what a schema is CALLED — a
+ * That rule is about what this package says. This artifact is about what a schema is CALLED — a
  * German shop names a column `geburtsdatum` whatever language the report comes back in, and a
  * dictionary that only knew English would simply not see it.
  *
@@ -163,7 +163,7 @@ final class PrivacyDictionary
     {
         $segments = ColumnNameSegments::folded($columnName);
 
-        // Sorted so two runs over one schema agree on WHICH group a name that matches several is
+        // Sorted so two runs over one schema agree on which group a name that matches several is
         // reported under. Without it the answer would follow the artifact's row order, which is a
         // determinism bug waiting for somebody to re-sort the file.
         $groups = array_values(array_unique(array_values($this->groupOf)));

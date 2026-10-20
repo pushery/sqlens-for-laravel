@@ -7,11 +7,14 @@ namespace Pushery\SQLens\Console;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Foundation\Application;
+use Pushery\SQLens\Audit\InstanceTarget;
 use Pushery\SQLens\Capture\PendingSkipReason;
 use Pushery\SQLens\Catalog\AmbiguousPrimaryHost;
+use Pushery\SQLens\Catalog\CatalogContext;
 use Pushery\SQLens\Catalog\CatalogReaderFactory;
 use Pushery\SQLens\Catalog\CatalogRequest;
 use Pushery\SQLens\Catalog\ReaderConnectionFactory;
+use Pushery\SQLens\Contracts\Driver;
 use Pushery\SQLens\Contracts\PendingResolver;
 use Pushery\SQLens\Deploy\Drift\DriftClass;
 use Pushery\SQLens\Deploy\Drift\DriftExcludeEntry;
@@ -26,22 +29,27 @@ use Pushery\SQLens\Deploy\Drift\ShadowReferenceBuilder;
 use Pushery\SQLens\Drivers\Capture\DriverCaptorFactory;
 use Pushery\SQLens\Drivers\DriverManager;
 use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
+use Pushery\SQLens\Drivers\MeasuredServerVersion;
 use Pushery\SQLens\Exceptions\UnknownReporterFormat;
 use Pushery\SQLens\Exceptions\UnreadableDriftExcludes;
 use Pushery\SQLens\Findings\Result;
+use Pushery\SQLens\Format\SafeFileWriter;
 use Pushery\SQLens\Lint\ShadowClearance;
 use Pushery\SQLens\Reporting\CaptureMode as ReportingCaptureMode;
 use Pushery\SQLens\Reporting\ConfigRunContextCollector;
+use Pushery\SQLens\Reporting\ReportedServerVersion;
 use Pushery\SQLens\Reporting\ReporterManager;
+use Pushery\SQLens\Reporting\ReportText;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 use Pushery\SQLens\Subjects\SubjectContext;
 use Pushery\SQLens\Today;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * `sqlens:drift` — what the database holds against what the migrations describe.
  *
- * ## It REPORTS by default, and that is the decision the feature lives or dies on
+ * ## It reports by default, and that is the decision the feature lives or dies on
  *
  * The first run of this command on a real production database finds a decade of hand-made objects.
  * A gate that turns red there is not adopted, it is switched off — and a command nobody runs reports
@@ -53,7 +61,7 @@ use Symfony\Component\Console\Output\ConsoleOutputInterface;
  * this package refuses everywhere else.
  *
  * **And it exits clean when no expectation could be built either, which is the ordinary CI case.**
- * The reference is a shadow replay, and `deploy.shadow.allowed_environments` ships as
+ * The reference is a shadow replay, and `capture.shadow.allowed_environments` ships as
  * `['local', 'testing']` — so in a `ci` environment the production guard refuses and there is nothing
  * to compare against. The run says so and names the reason, and the exit code comes from
  * {@see DriftExitPolicy} like every other verdict: a command documented to exit clean that turned red
@@ -66,7 +74,7 @@ use Symfony\Component\Console\Output\ConsoleOutputInterface;
  * read-only session — this command never writes to it.
  *
  * The EXPECTATION side is a **replay**: the migration state applied for real into a throwaway
- * database, whose catalog is then read with the SAME request. That half creates and drops a
+ * database, whose catalog is then read with the same request. That half creates and drops a
  * database, so it runs behind the production guard and nowhere else.
  *
  * ## It carries NO time budget, unlike both deploy commands
@@ -81,11 +89,11 @@ use Symfony\Component\Console\Output\ConsoleOutputInterface;
  * invented budget goes red on projects behaving perfectly, and the first fix anybody reaches for is
  * to delete the check.
  *
- * What replaces it is a statement about where this command belongs: NOT in a deploy script's hot
+ * What replaces it is a statement about where this command belongs: not in a deploy script's hot
  * path, but in a CI or cron-adjacent run outside the deploy window, where taking a minute costs
  * nobody anything. A team that wants the comparison inside a deploy has
  * `sqlens:postdeploy --expect-shadow` — which is off by default, behind the production guard, and
- * deliberately outside THAT command's budget for the same reason.
+ * deliberately outside that command's budget for the same reason.
  */
 final class DriftCommand extends Command
 {
@@ -104,7 +112,7 @@ final class DriftCommand extends Command
 
     protected $description = 'Compare the live schema against a replay of the migration state.';
 
-    /** Beside `composer.json`, like the debt ledger — a decision log, not configuration. */
+    /** Compare the live schema against a replay of the migration state, refusing a misconfiguration first. */
     public function handle(
         DriverCaptorFactory $captors,
         ReaderConnectionFactory $connections,
@@ -117,7 +125,7 @@ final class DriftCommand extends Command
         Application $app,
         DriverManager $drivers,
     ): int {
-        // FIRST, before the reporter, before the profile, before anything opens a connection. A
+        // First, before the reporter, before the profile, before anything opens a connection. A
         // misconfiguration that surfaces after twenty seconds of catalog reading is one people
         // check for less often — and a key this package does not know is one it IGNORES, silently.
         if ($this->refusesInvalidConfig()) {
@@ -129,8 +137,8 @@ final class DriftCommand extends Command
         $today = Today::fromClock();
         $connectionName = $this->connectionName($drivers);
 
-        // FIRST, before anything reaches a database — and earlier than the sibling deploy commands
-        // resolve theirs, deliberately. The expectation side of this comparison CREATES and drops a
+        // First, before anything reaches a database, deliberately, as the sibling deploy commands
+        // resolve theirs. The expectation side of this comparison CREATES and drops a
         // database; discovering a typo in `--format` after that work would spend a provision, a
         // full migration replay and a teardown to produce an error message that was available
         // before any of it started.
@@ -190,7 +198,7 @@ final class DriftCommand extends Command
 
         // Narrowed on the property for the same reason as the snapshot below: `isResolved()` is the
         // readable way to ask, and a method call cannot narrow a nullable — the reason would then be
-        // `?PendingSkipReason` in the very branch that exists because there IS one.
+        // `?PendingSkipReason` in the very branch that exists because there is one.
         if ($resolution->skip instanceof PendingSkipReason) {
             // A migration set that could not be enumerated is not an empty one, and treating it as
             // empty would make the expectation side "the database as provisioned" — against which
@@ -247,9 +255,10 @@ final class DriftCommand extends Command
 
         $reference = $comparison->reference;
 
-        // No expectation, no comparison — and NOT an empty one. A run that could not build the
+        // No expectation, no comparison — and not an empty one. A run that could not build the
         // reference has established nothing about the live database, so it reports the named reason
-        // and returns the undetermined code rather than a reassuring zero.
+        // with its mode. Report mode then exits clean with both printed; gate mode blocks as
+        // undetermined (see DriftExitPolicy).
         // Narrowed on the PROPERTY rather than through `isComplete()`, and that is not a style
         // choice: a method call cannot narrow a nullable, so `$report` below would be `?DriftReport`
         // and every use of it would take a null the type system had already been told could not
@@ -259,6 +268,11 @@ final class DriftCommand extends Command
         if (! $report instanceof DriftReport) {
             $this->outputErrorLine('mode: '.$mode->value);
             $this->outputErrorLine('sqlens:drift: no expectation could be built: '.$reference?->describe());
+
+            // What a refused provisioning said beyond its reason, for the person reading this: who
+            // held the template, which line of the dump could not be split. Raw, because it quotes
+            // what the server said.
+            ReportText::lines($this->errorOutput(), array_filter([$reference?->refusal]));
 
             // Asked, not decided: the policy holds the whole verdict, and report mode never blocks.
             // Under the shipped defaults this is the ordinary CI outcome — the reference is a shadow
@@ -275,6 +289,10 @@ final class DriftCommand extends Command
                 referenceBuilt: false,
             )->value;
         }
+
+        // What setting up the expectation left out that a person should know, such as a dump
+        // directive the replay did not run. On STDERR like a refusal, and never in the report.
+        ReportText::lines($this->errorOutput(), $reference->notes ?? []);
 
         // `--update-excludes` is HOUSEKEEPING and ends the run — it does not also report.
         //
@@ -294,7 +312,7 @@ final class DriftCommand extends Command
             return ExitCode::Misconfiguration->value;
         }
 
-        // Reported BEFORE the findings, and as a failure rather than a note. An entry that covers
+        // Reported before the findings, and as a failure rather than a note. An entry that covers
         // nothing is how an exclude file rots: it keeps looking like a decision while protecting
         // nothing, and forty of them are indistinguishable from four that are still true.
         if ($outcome->stale !== []) {
@@ -310,6 +328,11 @@ final class DriftCommand extends Command
 
         $hatchOpen = $this->option('allow-undetermined') === true;
 
+        // Which instance the live side was read from, asked of the reader the comparison read
+        // through. Here, past every exit above: a run that ends on its exclude file, or without an
+        // expectation, sends nothing beyond what it already read.
+        $instance = InstanceTarget::observed($connectionName, $context->driver, $catalogReaders->identity->read($connectionName))->reported();
+
         $this->renderSummary(
             $mode,
             $report->counts(),
@@ -318,13 +341,13 @@ final class DriftCommand extends Command
             $catalogReaders->catalog->readableObjectTypes(),
         );
 
-        // Through the SAME reporters everything else uses, carrying findings as findings. A drift
+        // Through the same reporters everything else uses, carrying findings as findings. A drift
         // verdict is not a new kind of thing — it is the same three-valued statement about a
         // database that `lint` and `audit` produce — and a private shape would have cost it the
         // severity axis, `downtime_class`, the baseline, suppression and every format but prose.
         $reporter->report(
             Result::of(DriftFindings::of($report, $context, $connectionName)),
-            // BOTH policy facts on the record, because neither is visible in the document otherwise.
+            // Both policy facts on the record, because neither is visible in the document otherwise.
             //
             // The mode is printed on STDERR for the person at the console, and that was the whole
             // story until a consumer archived the JSON: a `report` run and a `gate` run over the same
@@ -340,6 +363,8 @@ final class DriftCommand extends Command
             // `RunMetadata` — filled from different places and free to disagree in one document. The
             // duplicate is gone, so this is the only statement of it.
             $runContext->collect(ReportingCaptureMode::Shadow, today: $today)
+                ->withServerVersions($this->serverVersions($drivers, $config, $connectionName, $comparison->live))
+                ->withInstance($instance)
                 ->withDriftMode($mode)
                 ->withComparedObjectTypes($catalogReaders->catalog->readableObjectTypes())
                 ->withUndeterminedWaiver(DriftExitPolicy::waived(
@@ -366,7 +391,7 @@ final class DriftCommand extends Command
     /**
      * The header and the counts, in that order.
      *
-     * The mode goes FIRST and unconditionally. A line that appeared only in gate mode would make its
+     * The mode goes first and unconditionally. A line that appeared only in gate mode would make its
      * absence the claim, and an absent claim is the reading this package refuses.
      *
      * @param  array<string, int>  $counts
@@ -399,8 +424,8 @@ final class DriftCommand extends Command
         // whole; the reader has to be able to ask what the other thirty-seven were.
         $this->outputErrorLine('excluded: '.$excluded);
 
-        // The scope, LAST and always — the line that tells a reader what the counts above are counts
-        // OF. `undetermined` above says what could not be read; this says what was never in the
+        // The scope, last and always — the line that tells a reader what the counts above are counts
+        // of. `undetermined` above says what could not be read; this says what was never in the
         // reading, which is a different sentence and the one nobody could get before.
         //
         // Phrased as a closed list plus an explicit "and nothing else", because a bare list invites
@@ -440,7 +465,8 @@ final class DriftCommand extends Command
             return ExitCode::Misconfiguration->value;
         }
 
-        if (@file_put_contents($path, $file->contents()) === false) {
+        // Atomically, for the reason the baseline is: the file holds decisions somebody made.
+        if (! SafeFileWriter::ensure($path, $file->contents())) {
             $this->outputErrorLine('sqlens:drift: '.$path.' could not be written.');
 
             return ExitCode::Misconfiguration->value;
@@ -523,10 +549,34 @@ final class DriftCommand extends Command
         return is_string($driver) ? $driver : '';
     }
 
+    /**
+     * The server the live side was read from, as the report header names it: the banner it gave,
+     * marked when it is newer than the release the rules were measured against, and the pin beside
+     * it when the project set one.
+     *
+     * @return list<ReportedServerVersion>
+     */
+    private function serverVersions(DriverManager $drivers, Repository $config, string $connectionName, ?CatalogContext $live): array
+    {
+        $driver = $drivers->resolve($connectionName);
+
+        return ReportedServerVersion::detectedAndPinned(
+            $connectionName,
+            $live instanceof CatalogContext ? new MeasuredServerVersion()->headerBanner($driver instanceof Driver ? $driver : null, $live->serverVersionRaw) : null,
+            $config->get('sqlens.assume_server_version'),
+        );
+    }
+
     private function outputErrorLine(string $message): void
+    {
+        $this->errorOutput()->writeln($message);
+    }
+
+    /** STDERR when the output offers one, so a machine format leaves STDOUT to its report. */
+    private function errorOutput(): OutputInterface
     {
         $output = $this->getOutput()->getOutput();
 
-        ($output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output)->writeln($message);
+        return $output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output;
     }
 }

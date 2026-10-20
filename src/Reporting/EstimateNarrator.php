@@ -34,7 +34,7 @@ use Pushery\SQLens\ShippedLocale;
  * for a count. Every user-facing rendering of an estimate goes through here, so a new output surface
  * inherits the marker instead of having to remember it.
  *
- * ## What is NOT translated, deliberately
+ * ## What is not translated, deliberately
  *
  * The unit and the source keep their English identifiers. They are public API from 1.0 on — a
  * consumer matching on `row_count` must keep matching on it whatever language the report is read in,

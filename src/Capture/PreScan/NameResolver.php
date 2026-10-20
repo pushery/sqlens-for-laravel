@@ -33,7 +33,7 @@ use PhpParser\Node\Scalar\String_;
  * of those and miss three, and the one it missed is the one someone ships.
  *
  * Imports are resolved by the parser's own name resolution; this class adds the
- * root-alias map on top and, deliberately, resolves targets OUTSIDE `Illuminate\*`
+ * root-alias map on top and, deliberately, resolves targets outside `Illuminate\*`
  * too — project classes, traits and helper functions. A side effect reached
  * through the application's own code is the most common way around a facade
  * catalog, and the detector for it needs the resolved target to work with.
@@ -71,7 +71,7 @@ final readonly class NameResolver
      * construction: it agrees with the tests written beside it and with nothing else.
      *
      * Deriving it means the resolver answers what the framework answers. Judging which of those
-     * surfaces MATTERS is a separate job, and it belongs to the catalog: the resolver turns a name
+     * surfaces matters is a separate job, and it belongs to the catalog: the resolver turns a name
      * into a class, the catalog decides whether that class is a side effect. Splitting it that way
      * is also why taking all 47 aliases rather than a curated 18 costs nothing — an alias nobody
      * cataloged resolves and is then ignored.
@@ -278,7 +278,7 @@ final readonly class NameResolver
 
     /**
      * A free function call. `call_user_func` and friends are reported as dynamic
-     * BY NAME rather than resolved, because what they actually invoke is an
+     * by name rather than resolved, because what they actually invoke is an
      * argument — exactly the indirection a catalog cannot follow.
      */
     private function resolveFuncCall(FuncCall $node): CallTarget

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Rules\Pedantic;
 
 use Pushery\SQLens\Subjects\SchemaObject;
+use Pushery\SQLens\Subjects\SchemaObjectType;
 
 /**
  * Whether a schema object carries a comment, and whether anybody should be asked about it.
@@ -80,6 +81,33 @@ final readonly class MissingComment
     public static function readable(SchemaObject $object): bool
     {
         return $object->hasAttribute('comment') || $object->isFullyUnderstood();
+    }
+
+    /**
+     * The bare name of the table an object belongs to, as the project knows it: a column belongs to
+     * its table, a table to itself.
+     *
+     * Read from the LOGICAL name where the catalog carries one. On a connection with a table prefix
+     * the framework's tables are `acme_jobs` on disk, while the exempt list names them as Laravel
+     * does, without the prefix. The prefix comes off a column's table segment and never off the
+     * column's own name, so the table is the segment before the last.
+     */
+    public static function ownerName(SchemaObject $object): string
+    {
+        $logical = $object->getString('logical_name');
+
+        if ($object->type !== SchemaObjectType::Column) {
+            return self::bareName($logical ?? $object->qualifiedName);
+        }
+
+        if ($logical === null) {
+            return self::bareName($object->parent ?? $object->qualifiedName);
+        }
+
+        $segments = explode('.', $logical);
+        array_pop($segments);
+
+        return self::bareName(implode('.', $segments));
     }
 
     /** The last segment of a qualified name — `public.orders` is `orders`. */

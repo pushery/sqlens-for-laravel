@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Catalog;
 use Pushery\SQLens\Findings\UndeterminedReason;
 
 /**
- * Why a catalog object is NOT in the snapshot.
+ * Why a catalog object is not in the snapshot.
  *
  * A live catalog is never fully readable and never fully understood, and pretending otherwise is
  * how an audit suite becomes confidently wrong. On a managed database half the catalog is closed to
@@ -26,7 +26,7 @@ enum SkipReason: string
      * The catalog relation itself could not be read — it does not exist on this server, or the
      * connection lost access to it mid-read.
      *
-     * Deliberately NOT the bucket for a permission error: those get their own reason below, because
+     * Deliberately not the bucket for a permission error: those get their own reason below, because
      * "grant this role SELECT on that view" and "this server has no such view" send a reader to
      * completely different places.
      */
@@ -103,7 +103,7 @@ enum SkipReason: string
     case UnexpectedError = 'unexpected_error';
 
     /**
-     * A table prefix is configured and NOTHING in the audited schemas carries it.
+     * A table prefix is configured and nothing in the audited schemas carries it.
      *
      * Reported rather than returned as an empty reading, because the likeliest real cause is a
      * prefix that is simply wrong — copied from another project, or read from a connection the
@@ -121,7 +121,7 @@ enum SkipReason: string
      * here has met. Dropping it during the mapping would delete a blocking lock from the picture and
      * report calm at the one moment calm matters most.
      *
-     * So the row STAYS, carrying the server's own spelling as metadata, and this reason is what
+     * So the row stays, carrying the server's own spelling as metadata, and this reason is what
      * makes the reading visibly partial. The snapshot adds it itself rather than trusting a reader
      * to remember — a normative exclusion enforced by a constructor rather than by a sentence.
      */
@@ -137,7 +137,7 @@ enum SkipReason: string
      * gives. A reader that trusted the emptiness would report calm for a server it cannot see at
      * all.
      *
-     * Deliberately NOT `insufficient_privilege`, and the reason is the same one that keeps
+     * Deliberately not `insufficient_privilege`, and the reason is the same one that keeps
      * "never collected" apart from "unknown": the remedies differ. A privilege is granted in a
      * session; instrumentation is a start-up variable, so turning it on means restarting the
      * server — a different conversation with a different person.
@@ -164,7 +164,7 @@ enum SkipReason: string
      * - **Unread** — a privilege, a budget, a driver gap, a prefix that matched nothing. The reading
      *   is not a complete statement about the schema, and silence in it cannot be trusted.
      * - **A decision** — `excluded_by_config`. Nothing went unread; a scope was chosen.
-     * - **Read, not understood** — `not_understood`. The object IS in the snapshot; part of it did not
+     * - **Read, not understood** — `not_understood`. The object is in the snapshot; part of it did not
      *   arrive in a form a rule can reason about, which is a question about the rule and not about
      *   the reading — the mechanism a rule uses here is the per-object `isFullyUnderstood()`
      *   predicate.

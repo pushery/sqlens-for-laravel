@@ -14,7 +14,7 @@ use PHPStan\Analyser\Scope;
 use PHPStan\Collectors\Collector;
 
 /**
- * Where a reasoned `#[RawSql]` sits, as a LINE RANGE rather than as a name.
+ * Where a reasoned `#[RawSql]` sits, as a line range rather than as a name.
  *
  * ## The two shapes that had no name to join on
  *
@@ -76,11 +76,11 @@ final readonly class JustificationSpanCollector implements Collector
     /**
      * The line range this annotation covers, or null when it carries no reasoned `#[RawSql]`.
      *
-     * The range is the whole node — signature included — because a call site can only be INSIDE the
+     * The range is the whole node — signature included — because a call site can only be inside the
      * body, so a range that starts at the attribute is never too wide and is easier to reason about
      * than one that tries to start at the brace.
      *
-     * The two flags say WHICH question the annotation answered, and they are independent. `reason:`
+     * The two flags say which question the annotation answered, and they are independent. `reason:`
      * says why raw SQL was chosen; `interpolation:` says why a runtime value is in the statement's
      * text. A span carrying only the second is not a justification for the policy rule, and a span
      * carrying only the first must not clear an injection finding — so the span is recorded once and
@@ -95,7 +95,7 @@ final readonly class JustificationSpanCollector implements Collector
     {
         // No `instanceof FunctionLike` here: the generic annotation above already tells PHPStan the
         // node type, and re-checking it is a branch no run can enter — which the analyzer reports
-        // rather than tolerates. `ClassMethod` is a different question: it IS reached, and it is the
+        // rather than tolerates. `ClassMethod` is a different question: it is reached, and it is the
         // one shape the name collector owns.
         if ($node instanceof ClassMethod) {
             return null;
@@ -114,7 +114,7 @@ final readonly class JustificationSpanCollector implements Collector
         // A node whose position the parser could not give is not a span anybody can be inside. -1 is
         // what php-parser answers without position attributes, and a range of -1..-1 would either
         // cover nothing (harmless) or, read the wrong way round, cover a file (not harmless).
-        // Bound to ONE line, deliberately. Wrapped across three, the `? null` arm sits on a line of
+        // Bound to one line, deliberately. Wrapped across three, the `? null` arm sits on a line of
         // its own that no coverage driver ever marks as executed — a known trap in this repository —
         // so the span is named first and the guard stays a single statement.
         $span = ['from' => $from, 'to' => $to, 'rawSql' => $rawSql, 'interpolation' => $interpolation];

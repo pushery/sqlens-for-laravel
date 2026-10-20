@@ -43,7 +43,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *   breaks on the first project with another convention and cannot be justified to the person it
  *   reports at.
  *
- * What IS in the SQL is the data move. An expand/contract writes the old value into the new column:
+ * What is in the SQL is the data move. An expand/contract writes the old value into the new column:
  *
  * ```sql
  * ALTER TABLE orders ADD COLUMN total_cents bigint;   -- expand
@@ -55,7 +55,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * rule asks for the pair — added AND written to in this run — and reports only when nothing in the
  * run drops a column from that table.
  *
- * ## What it deliberately does NOT try to read
+ * ## What it deliberately does not try to read
  *
  * The SOURCE column. In `SET total_cents = total * 100` it sits inside an expression, and lifting it
  * out means parsing expressions in a layer that exists to be free of grammar. It is also not needed:
@@ -64,7 +64,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ## Why it reads the whole RUN
  *
- * The contract step belongs in a LATER migration — that separation IS the pattern. A rule reading
+ * The contract step belongs in a later migration — that separation is the pattern. A rule reading
  * only its own file would report every correctly split pair, on a file whose author did nothing
  * wrong. So the question goes to the run-wide view, exactly as
  * {@see ConstraintValidationPendingRule} asks it, and for the same reason: that view exists to
@@ -80,7 +80,7 @@ final class ExpandWithoutContractRule extends AbstractPgsqlSafetyRule implements
      * The word this debt is filed under, read from the neutral sequence rather than spelled here.
      *
      * Driver-NEUTRAL on purpose: the MySQL rule for the same shape files under the same word, so one
-     * open end seen from two engines is ONE account rather than two that never reconcile. It
+     * open end seen from two engines is one account rather than two that never reconcile. It
      * therefore lives on {@see ExpandContractTemplate}, which both engines already depend on — a
      * copy on this class would be a second spelling waiting to drift, and reaching for it from the
      * core template would be the core naming a driver.
@@ -123,7 +123,7 @@ final class ExpandWithoutContractRule extends AbstractPgsqlSafetyRule implements
         return Level::BackwardCompatibility;
     }
 
-    /** Online: adding a column and writing to it blocks nothing. The debt is what is LEFT, not what it cost. */
+    /** Online: adding a column and writing to it blocks nothing. The debt is what is left, not what it cost. */
     public function downtimeClass(): DowntimeClass
     {
         return DowntimeClass::Online;
@@ -266,7 +266,7 @@ final class ExpandWithoutContractRule extends AbstractPgsqlSafetyRule implements
     /**
      * Whether this run drops any column from the named table.
      *
-     * ANY column, not the replaced one — which this rule never learns. A drop on the same table in
+     * Any column, not the replaced one — which this rule never learns. A drop on the same table in
      * the same run is the contract step by construction: nothing else drops a column there while a
      * new one is being back-filled. Every action of a statement counts, so a drop behind an
      * `ADD COLUMN` in one `ALTER TABLE` is the same step as a drop on its own.
@@ -293,7 +293,7 @@ final class ExpandWithoutContractRule extends AbstractPgsqlSafetyRule implements
      * A column is named WITHIN its table: `ALTER TABLE public.orders ADD COLUMN total_cents …`
      * qualifies the table and never the column, so a rule reading only the column target gets a bare
      * name — while a catalog-side reader has the schema and would write `public.total_cents`. Two
-     * spellings of one column are TWO debts, because an entry's identity hashes the object string,
+     * spellings of one column are two debts, because an entry's identity hashes the object string,
      * and the account would double while the reconciliation never converged.
      *
      * **When the statement names no schema, neither does this.** `ALTER TABLE orders …` resolves

@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Reporting\Baseline;
 use Pushery\SQLens\Severity\Severity;
 
 /**
- * A baseline as a value: the entries it accepts, held in the ONE documented
+ * A baseline as a value: the entries it accepts, held in the one documented
  * order the file is written in.
  *
  * The order is subject, then rule id, then ordinal, then fingerprint — never the

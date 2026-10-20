@@ -40,7 +40,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * ## Why this is a level-1 rule and its sibling is level 4
  *
  * {@see DownMissingRule} is about a rollback path that does not exist: nothing is destroyed, the
- * way back is simply absent, and that is the deploy-window question level 4 asks. This one IS
+ * way back is simply absent, and that is the deploy-window question level 4 asks. This one is
  * destruction — a `DROP TABLE` nobody asked for, sitting in a method that will be run under
  * pressure. It belongs in the destructive band with the other rules that flag data loss, and it
  * fires as early as level 1 because that is the level a project turns on when it wants to be
@@ -56,12 +56,12 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * - **A column, index or constraint dropped** is unaccounted when `up()` never touched that table
  *   at all. The bar is deliberately lower here — "up() touched this table" rather than "up()
  *   created this exact object" — and it is a false-NEGATIVE trade made on purpose. Laravel's
- *   `$table->dropColumn(['a', 'b'])` emits ONE statement with two clauses, of which the
+ *   `$table->dropColumn(['a', 'b'])` emits one statement with two clauses, of which the
  *   classification names the first; and on PostgreSQL an added column is not classified as an
  *   add-column at all, so "up() added exactly this column" is not a question that can be asked
  *   the same way on both engines. Asking it anyway would flag the commonest symmetric migration
  *   in existence on one engine and not the other. What the rule loses by asking the coarser
- *   question is a `down()` that drops a DIFFERENT column of a table `up()` did touch; what it
+ *   question is a `down()` that drops a different column of a table `up()` did touch; what it
  *   would lose by asking the finer one is its users.
  *
  * A rollback that only DROPs things `up()` created — the symmetric one everybody writes — says
@@ -95,14 +95,14 @@ final class DownMoreDestructiveRule extends AbstractLifecycleRule implements Pro
         StatementKind::TruncateTable,
     ];
 
-    /** The rollback statements that destroy something INSIDE a table. */
+    /** The rollback statements that destroy something inside a table. */
     private const array MEMBER_DESTROYING = [
         StatementKind::DropColumn,
         StatementKind::DropIndex,
         StatementKind::DropConstraint,
     ];
 
-    /** The considered `none` — narrowing THIS rollback is a decision, not a sequence. */
+    /** The considered `none` — narrowing this rollback is a decision, not a sequence. */
     private readonly NoSafeSequenceTemplate $template;
 
     public function __construct(string $projectRoot, ?RuleDriverNotes $driverNotes = null)
@@ -122,7 +122,7 @@ final class DownMoreDestructiveRule extends AbstractLifecycleRule implements Pro
      * mistake.
      *
      * The obvious one is the deploy-window drop: the rollback destroys a table, this package has a
-     * staged-drop template, point at it. That would be advice to CARRY OUT the destruction, on the
+     * staged-drop template, point at it. That would be advice to carry out the destruction, on the
      * reading that it was intended — and the far likelier reading is the one the class docblock
      * opens with: a `dropIfExists` that was copied from the migration next to it and drops a table
      * holding every order in the system. A payload cannot tell those apart, and only one of the two
@@ -205,16 +205,16 @@ final class DownMoreDestructiveRule extends AbstractLifecycleRule implements Pro
 
         $unaccounted = $this->unaccountedDestruction($leg, $statement);
 
-        // An unclassified statement is reported on ONE side at a time, and which side depends on
+        // An unclassified statement is reported on one side at a time, and which side depends on
         // what the comparison currently says. The asymmetry is not a compromise — it follows from
         // the direction each half of the comparison can move the verdict:
         //
-        //   * knowing MORE about up() can only ADD reasons for a rollback statement to exist, so an
+        //   * knowing more about up() can only add reasons for a rollback statement to exist, so an
         //     unclassified up() statement can only turn a flag into a silence. It therefore matters
-        //     exactly when there IS something to flag — and reporting it when there is not would put
+        //     exactly when there is something to flag — and reporting it when there is not would put
         //     an undetermined on every migration whose up() opens with `SET lock_timeout`, which is
         //     the preamble this package's own lock rules ask for;
-        //   * knowing MORE about down() can only ADD destructions, so an unclassified down()
+        //   * knowing more about down() can only add destructions, so an unclassified down()
         //     statement can only turn a silence into a flag. It therefore matters exactly when the
         //     comparison is about to say nothing — which is where a rollback SQLens could not read
         //     would otherwise be vouched for.
@@ -253,7 +253,7 @@ final class DownMoreDestructiveRule extends AbstractLifecycleRule implements Pro
         $rollbacks = array_merge(...array_map(static fn (MigrationStatementDigest $digest): array => $digest->andItsActions(), $leg->statements));
 
         foreach ($rollbacks as $rollback) {
-            // A drop or a truncate destroys EVERY table it names, so there is no side to pick:
+            // A drop or a truncate destroys every table it names, so there is no side to pick:
             // `DROP TABLE orders, users` in a rollback whose up() created only `orders` takes
             // `users` with it, rows and all, and that second name is the one this rule exists for.
             if (in_array($rollback->kind, self::TABLE_DESTROYING, true)) {

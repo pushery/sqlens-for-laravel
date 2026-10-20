@@ -19,6 +19,9 @@ use Pushery\SQLens\Exceptions\InvalidRuleEvidence;
  * written by hand would. A `numeric` that carries a precision is the exception: its
  * specifier decides the answer, so it is not classified by the type alone.
  *
+ * Where the source is known after all, because an earlier migration of the same run gave the
+ * column its type, {@see classifyFrom()} reads the pair.
+ *
  * A malformed matrix is an error, not an empty result — read leniently, a typo would
  * turn every rewrite into an "unknown" and quietly weaken the rule. It reuses
  * {@see InvalidRuleEvidence} for its failure type: the two bundled data files share the
@@ -32,6 +35,47 @@ final readonly class PgTypeChangeMatrix
      * @var list<string>
      */
     private const array DECIDED_BY_THEIR_SPECIFIER = ['numeric', 'timestamp', 'timestamp with time zone', 'time', 'time with time zone'];
+
+    /**
+     * The types whose every value fits a bigger size of the same type, or the type written without
+     * one, so PostgreSQL relabels the column without reading it. A smaller size, or a `numeric` with
+     * another scale, rewrites the table. Any other type written with another size is unknown: `char`
+     * bare is `char(1)` and is padded anew, `float(24)` is `real` and `float(53)` is
+     * `double precision`.
+     *
+     * Measured on 18.4 for the rewrite rule: `varchar(10)` to `varchar(20)`, `numeric(8,2)` to
+     * `numeric(12,2)` and `timestamp(3)` to `timestamp(6)` kept the heap, `numeric(14,2)` to
+     * `numeric(14,4)` and `timestamp(6)` to `timestamp(0)` rewrote it.
+     *
+     * @var list<string>
+     */
+    private const array GROW_IN_PLACE = ['varchar', 'numeric', 'timestamp', 'timestamp with time zone', 'time', 'time with time zone'];
+
+    /**
+     * Pairs of two types PostgreSQL converts without a cast function, the old one binary-coercible to
+     * the new, so the change rewrites no row. `text` to a bare `varchar` is one more, decided where
+     * the target's size can be read.
+     *
+     * @var list<array{string, string}>
+     */
+    private const array BINARY_COERCIBLE = [['varchar', 'text'], ['cidr', 'inet']];
+
+    /**
+     * The two types between which the session's time zone decides whether a change rewrites: since
+     * PostgreSQL 12 it is metadata-only under UTC and a rewrite otherwise. Public so the rule that
+     * hands the reader that condition keys it on this list rather than on a copy of it.
+     *
+     * @var list<string>
+     */
+    public const array DECIDED_BY_THE_SESSION = ['timestamp', 'timestamp with time zone'];
+
+    /**
+     * The character types. A value of a type this matrix lists under `rewrite` becomes one of them
+     * only through that type's output function, row by row, so such a change rewrites the table.
+     *
+     * @var list<string>
+     */
+    private const array CHARACTER_TYPES = ['text', 'varchar', 'char'];
 
     /** The matrix format this reader implements; an unknown version is an error. */
     public const int SCHEMA_VERSION = 1;
@@ -119,10 +163,72 @@ final readonly class PgTypeChangeMatrix
     }
 
     /**
+     * The impact of changing a column from a type the run knows to the given raw target type.
+     *
+     * {@see classify()} answers from the target alone, which is all a statement names. Where an
+     * earlier migration of the run gave the column its type, the pair decides: restating the type a
+     * column has rewrites nothing, neither does a change PostgreSQL makes without a cast function or
+     * a bigger size of a type that grows in place, and any other change to a type this matrix
+     * rewrites to rewrites the table.
+     */
+    public function classifyFrom(string $rawSourceType, string $rawTargetType): TypeChangeImpact
+    {
+        $source = $this->canonicalize($rawSourceType);
+        $target = $this->canonicalize($rawTargetType);
+
+        if ($source === $target) {
+            return $this->resized($target, $this->specifier($rawSourceType), $this->specifier($rawTargetType));
+        }
+
+        if (in_array([$source, $target], self::BINARY_COERCIBLE, true)
+            || ($source === 'text' && $target === 'varchar' && $this->specifier($rawTargetType) === null)) {
+            return TypeChangeImpact::MetadataOnly;
+        }
+
+        // Between the two timestamp types the session decides, and the source adds nothing to what
+        // the target alone says about that.
+        if (in_array($source, self::DECIDED_BY_THE_SESSION, true) && in_array($target, self::DECIDED_BY_THE_SESSION, true)) {
+            return $this->classify($rawTargetType);
+        }
+
+        if (in_array($target, $this->rewrite, true)
+            || (in_array($target, self::CHARACTER_TYPES, true) && in_array($source, $this->rewrite, true))) {
+            return TypeChangeImpact::Rewrite;
+        }
+
+        return TypeChangeImpact::Unknown;
+    }
+
+    /** The impact of keeping a column's type and writing its size anew, from one size to another or to none. */
+    private function resized(string $type, ?string $from, ?string $to): TypeChangeImpact
+    {
+        if ($from === $to) {
+            return TypeChangeImpact::MetadataOnly;
+        }
+
+        if (! in_array($type, self::GROW_IN_PLACE, true)) {
+            return TypeChangeImpact::Unknown;
+        }
+
+        if ($to === null) {
+            return TypeChangeImpact::MetadataOnly;
+        }
+
+        if ($from === null) {
+            return TypeChangeImpact::Unknown;
+        }
+
+        [$fromSize, $fromScale] = $this->sizeOf($from);
+        [$toSize, $toScale] = $this->sizeOf($to);
+
+        return $toSize >= $fromSize && $toScale === $fromScale ? TypeChangeImpact::MetadataOnly : TypeChangeImpact::Rewrite;
+    }
+
+    /**
      * Whether the target type's dominant real case is a NARROWING — a shrink of range or
      * precision that can truncate data and break an old app version writing wider values.
      * This is orthogonal to {@see classify()}: `integer` both rewrites AND narrows, on two
-     * different axes. It is only true for the target types whose ONE common source is a
+     * different axes. It is only true for the target types whose one common source is a
      * wider sibling (`integer`, `smallint`, `real`); a parametrized type like `varchar(50)`
      * cannot be told from a widening by the target alone and is deliberately not listed, so
      * this returns false for it.
@@ -149,13 +255,31 @@ final readonly class PgTypeChangeMatrix
     private function canonicalize(string $rawTargetType): string
     {
         $type = strtolower(trim($rawTargetType));
-        // Drop a "(255)" or "(10, 2)" specifier — the length does not change WHICH type
+        // Drop a "(255)" or "(10, 2)" specifier — the length does not change which type
         // it is, and the matrix classifies by type, not width.
         $type = trim((string) preg_replace('/\s*\([^)]*\)/', '', $type));
         // Collapse the internal whitespace of a multi-word type ("timestamp  with …").
         $type = (string) preg_replace('/\s+/', ' ', $type);
 
         return $this->aliases[$type] ?? $type;
+    }
+
+    /** The parenthesized length or precision a written type carries, without its spaces, or null. */
+    private function specifier(string $rawType): ?string
+    {
+        return preg_match('/\([^)]*\)/', $rawType, $matches) === 1 ? (string) preg_replace('/\s+/', '', $matches[0]) : null;
+    }
+
+    /**
+     * A size as its two numbers, the scale 0 where only one is written.
+     *
+     * @return array{int, int}
+     */
+    private function sizeOf(string $specifier): array
+    {
+        $numbers = array_map(intval(...), explode(',', trim($specifier, '()')));
+
+        return [$numbers[0], $numbers[1] ?? 0];
     }
 
     /**

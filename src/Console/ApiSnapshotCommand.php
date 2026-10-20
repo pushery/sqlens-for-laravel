@@ -103,7 +103,7 @@ final class ApiSnapshotCommand extends Command
      *
      * ## Why the comparison is a separate mode rather than part of `--check`
      *
-     * `--check` asks "is the checked-in file current" — a question about THIS commit, answerable
+     * `--check` asks "is the checked-in file current" — a question about this commit, answerable
      * without any history. This asks "what would releasing it cost", which needs a released
      * baseline and belongs to the release path.
      *

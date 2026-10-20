@@ -11,7 +11,7 @@ use Pushery\SQLens\Findings\Finding;
  *
  * ## The rule is one-directional, and that is the whole design
  *
- * A SQLens finding is NEVER dropped or changed by anything the tool said. The set of own findings
+ * A SQLens finding is never dropped or changed by anything the tool said. The set of own findings
  * a run produces is identical with the binary installed and without it — otherwise a laptop and a
  * CI container would gate differently on the same database, which is the one difference nobody can
  * reconstruct from a report afterwards.
@@ -31,7 +31,7 @@ use Pushery\SQLens\Findings\Finding;
 final readonly class PglsDeduplicator
 {
     public function __construct(
-        /** Stamped onto a confirmation, so a report says WHICH build agreed. */
+        /** Stamped onto a confirmation, so a report says which build agreed. */
         private string $toolVersion,
     ) {}
 
@@ -41,12 +41,13 @@ final readonly class PglsDeduplicator
      */
     public function merge(array $own, array $tool): PglsDeduplication
     {
+        $covered = $this->coveredBy($own);
         $additional = [];
         $confirmed = [];
 
         foreach ($tool as $finding) {
             $key = $this->keyForTool($finding);
-            $match = $key === null ? null : $this->firstMatch($own, $key);
+            $match = $key === null ? null : ($covered[$key] ?? null);
 
             if ($match === null) {
                 $additional[] = $finding;
@@ -67,37 +68,31 @@ final readonly class PglsDeduplicator
     }
 
     /**
-     * The index of the first own finding that covers the same ground on the same object.
+     * For each key an own finding carries, the index of the own finding that a tool finding on it
+     * confirms.
      *
-     * FIRST by the order the run produced them, which is already deterministic — so two runs over
-     * the same database confirm the same finding. A tie between several own findings on one object
-     * is broken by rule id, which is stable and readable in a diff; taking "whichever came back
-     * first" would be stable only by accident.
+     * Built once per merge, so a merge costs the findings on both sides rather than their product.
+     * First by the order the run produced them, which is already deterministic — so two runs over
+     * the same database confirm the same finding. The key carries the rule, so own findings that
+     * share one are the same rule firing twice on one object, unusual but not impossible, and
+     * `??=` keeps the first of them: plain assignment would keep the last.
      *
      * @param  list<Finding>  $own
+     * @return array<string, int>
      */
-    private function firstMatch(array $own, string $key): ?int
+    private function coveredBy(array $own): array
     {
-        $candidates = [];
+        $covered = [];
 
         foreach ($own as $index => $finding) {
-            if ($this->keyForOwn($finding) === $key) {
-                // `??=`, not `=`. Two own findings can share a rule AND an object — the same rule
-                // firing twice on one table is unusual but not impossible — and plain assignment
-                // would keep the LAST index while the note above promises the first. A docblock
-                // that says "first" over code that takes the last is worse than either behavior:
-                // it is the one a reader will not check.
-                $candidates[$finding->ruleId] ??= $index;
+            $key = $this->keyForOwn($finding);
+
+            if ($key !== null) {
+                $covered[$key] ??= $index;
             }
         }
 
-        if ($candidates === []) {
-            return null;
-        }
-
-        ksort($candidates);
-
-        return array_values($candidates)[0];
+        return $covered;
     }
 
     /**

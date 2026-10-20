@@ -30,7 +30,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * `value` names a hundred things, `wert` likewise. A rule that fired on those would be noise, and
  * noise is how a team learns to skip a whole level band.
  *
- * ## The second signal a weak term needs, defined HERE
+ * ## The second signal a weak term needs, defined here
  *
  * The dictionary states outright that it does not define this: *"a weak term reports only together
  * with a second signal, which the rule defines and this artifact does not"*. Two signals count, and
@@ -41,7 +41,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * - **A `cents` segment in the name.** `balance_cents` is a minor-unit amount whatever `balance`
  *   means elsewhere.
  *
- * A suffix of `_amount` is deliberately NOT a second signal, even though it looks like one: `amount`
+ * A suffix of `_amount` is deliberately not a second signal, even though it looks like one: `amount`
  * is itself a weak term, so "the name ends in `_amount`" would let a weak term vouch for itself and
  * the confidence split would stop meaning anything.
  */
@@ -61,11 +61,18 @@ final readonly class FloatingMoneyColumns
     public const array FLOATING = ['real', 'double precision', 'float'];
 
     /**
-     * The column names that make a table's other names readable as money.
+     * The name segments that say a column holds a currency.
      *
      * @var list<string>
      */
-    private const array CURRENCY_NAMES = ['currency', 'currency_code', 'waehrung', 'währung'];
+    private const array CURRENCY_NAMES = ['currency', 'waehrung', 'währung'];
+
+    /**
+     * The segments that may follow a currency name and say how the currency is keyed.
+     *
+     * @var list<string>
+     */
+    private const array CURRENCY_KEYS = ['code', 'iso', 'id'];
 
     /**
      * Every floating-point column on this table whose name reads as money.
@@ -106,18 +113,35 @@ final readonly class FloatingMoneyColumns
         return $hasCurrencyColumn || in_array('cents', self::segments($column), true);
     }
 
-    /** @param  list<array-key>  $columns */
+    /**
+     * Whether one of these columns holds a currency.
+     *
+     * A column holds one when its name ENDS in a currency name, alone or followed by one segment
+     * that says how the currency is keyed: `currency`, `amount_currency`, `currency_code`,
+     * `currency_id`. A currency name further inside describes something else, and the usual case
+     * is an exchange rate: `currency_rate_id` points at one and `currency_rate` stores one, and
+     * neither says that the other numbers on the table are money.
+     *
+     * @param  list<array-key>  $columns
+     */
     private static function hasCurrencyColumn(array $columns): bool
     {
-        return array_any($columns, fn (int|string $column): bool => array_intersect(self::segments((string) $column), self::CURRENCY_NAMES) !== []);
+        return array_any($columns, static function (int|string $column): bool {
+            $segments = self::segments((string) $column);
+
+            if (in_array(end($segments), self::CURRENCY_KEYS, true)) {
+                array_pop($segments);
+            }
+
+            return in_array(end($segments), self::CURRENCY_NAMES, true);
+        });
     }
 
     /**
      * A column name as its underscore-separated segments, lowercased.
      *
      * Segments rather than a substring test, matching the dictionary's own stated rule: `rating` is
-     * not `rate`, and `currency_rate_id` should not make every column on the table look monetary
-     * through a careless `str_contains`.
+     * not `rate`, and `pricing` is not `price`.
      *
      * @return list<string>
      */

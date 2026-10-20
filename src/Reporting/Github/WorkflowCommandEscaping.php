@@ -9,13 +9,13 @@ use Pushery\SQLens\Console\FormatCommand;
 /**
  * The two escapes a GitHub workflow command needs, in one place because two suites emit them.
  *
- * The rule is not cosmetic. A workflow command is ONE line, terminated by the newline; an
+ * The rule is not cosmetic. A workflow command is one line, terminated by the newline; an
  * unescaped `\n` in a message does not produce a two-line annotation, it produces one annotation
  * that ends early and a second line GitHub reads as ordinary log output. So the half of the message
  * that mattered — the reason a file could not be formatted, say — is silently dropped from the
  * annotation and appears nowhere a reviewer looks.
  *
- * It lives here rather than in each emitter because the escapes are a property of the WIRE FORMAT,
+ * It lives here rather than in each emitter because the escapes are a property of the wire format,
  * not of what is being reported. {@see GithubReporter} renders findings and
  * {@see FormatCommand} renders file outcomes; they share no result model at
  * all, and duplicating two `str_replace` calls across them is how one of the two ends up missing a

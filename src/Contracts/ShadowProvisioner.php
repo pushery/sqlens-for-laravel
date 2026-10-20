@@ -16,7 +16,7 @@ use Pushery\SQLens\Capture\Shadow\ShadowSession;
  * concrete provisioners hold the driver knowledge — the same split that keeps the
  * core+driver separation a mechanical move.
  *
- * A provisioner is reached ONLY after the production guard has allowed the run.
+ * A provisioner is reached only after the production guard has allowed the run.
  * That ordering is the captor's responsibility, stated here because it is the
  * whole safety story: a mode that creates and drops databases must never be
  * reachable without the guard, and `provision()` trusts that it was.

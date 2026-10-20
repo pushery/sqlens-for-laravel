@@ -32,17 +32,17 @@ use Throwable;
 /**
  * How much space the pending migration will need, against what the instance can see.
  *
- * A table rewrite needs the table's size AGAIN while it runs — the old copy stays readable until the
+ * A table rewrite needs the table's size again while it runs — the old copy stays readable until the
  * new one is complete. An index build needs its own. If the instance fills up mid-rewrite the
  * database stops, which is the most expensive way a deploy can end.
  *
  * ## The honesty limit, stated first because it decides the shape
  *
- * Free filesystem space is usually NOT readable from inside the database. A managed instance does
+ * Free filesystem space is usually not readable from inside the database. A managed instance does
  * not expose it at all, and no amount of privilege changes that — it is a fact about the host, and
  * this package will not shell out to a database server to learn it.
  *
- * So the check reports what it CAN establish: the estimated need. When headroom is unreadable it
+ * So the check reports what it can establish: the estimated need. When headroom is unreadable it
  * ends `undetermined` with a named reason AND the number attached, because that number is the one
  * thing a human in a deploy window can hold against their own monitoring. An undetermined result
  * that also withheld the estimate would be correct and useless.
@@ -65,7 +65,7 @@ final readonly class DiskHeadroomCheck implements PreflightCheck
     public function __construct(private ?int $declaredFreeBytes = null) {}
 
     /**
-     * The statement kinds that need space AGAIN while they run.
+     * The statement kinds that need space again while they run.
      *
      * A rewrite keeps the old copy readable until the new one is complete, so the peak is roughly
      * double. `CreateIndex` needs the index rather than the table, which is smaller and still real.
@@ -167,7 +167,7 @@ final readonly class DiskHeadroomCheck implements PreflightCheck
         // verdict correct and useless.
         $freeBytes = $this->freeBytes($snapshot);
 
-        // The operator's own figure, and ONLY where the instance had nothing to say. A configured
+        // The operator's own figure, and only where the instance had nothing to say. A configured
         // number never overrides a measured one: a reading from the server is evidence, and a value
         // in a config file is a claim somebody typed once — quietly preferring the claim would be
         // the tool choosing the weaker source.
@@ -301,7 +301,7 @@ final readonly class DiskHeadroomCheck implements PreflightCheck
                 .'fill factor, TOAST, index rebuilds and the WAL it generates.',
                 $objects,
                 $this->humanBytes($needBytes),
-                // WHOSE number this is, in the sentence itself. A configured figure is a claim
+                // Whose number this is, in the sentence itself. A configured figure is a claim
                 // nothing here can verify, and one set once when the volume was new tells this gate
                 // that a full disk is empty — a reader has to know which of the two they are acting
                 // on before they act on it.

@@ -91,7 +91,7 @@ final class UnresolvableRuleCatalog extends RuntimeException
     /**
      * A pin that does not parse as a version of this engine.
      *
-     * Deliberately NOT a fallback to "no pin". Somebody who wrote a pin asked for a specific
+     * Deliberately not a fallback to "no pin". Somebody who wrote a pin asked for a specific
      * world; answering with the unpinned catalog would hand them a different one under the name
      * they chose, which is the environment skew the pin exists to remove.
      */

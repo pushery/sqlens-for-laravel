@@ -25,14 +25,14 @@ namespace Pushery\SQLens\Catalog\Objects;
  * than in an exception. Hence `error` is a first-class field here, and {@see self::isBroken()} exists
  * so a rule can say so without string-matching.
  *
- * ## What is deliberately NOT normalized
+ * ## What is deliberately not normalized
  *
  * `authMethod` keeps the server's own spelling. The temptation is to fold `md5` and `scram-sha-256`
  * into "password-ish", and it would be wrong in the direction that matters: the whole point of the
  * MD5 rule is that those two are not the same thing. A vocabulary that lost the distinction would
  * make the rule unwritable.
  *
- * ## What is deliberately NOT read
+ * ## What is deliberately not read
  *
  * The `options` column is never selected. It holds the auth method's parameters, and for `ldap` or
  * `radius` those include a bind password or a shared secret — a credential, sitting in the one
@@ -40,7 +40,7 @@ namespace Pushery\SQLens\Catalog\Objects;
  * about the TYPE, the SCOPE and the METHOD, all of which are separate columns. So it is left on the
  * server, on the same terms as `pg_authid.rolpassword`: a secret in a PHP variable is a secret a
  * stack trace or a var-dump can carry, and the cheapest way to keep it out of one is not to fetch
- * it. A rule that one day genuinely needs an option reads THAT option by name and says why.
+ * it. A rule that one day genuinely needs an option reads that option by name and says why.
  */
 final readonly class HbaRule
 {
@@ -126,7 +126,7 @@ final readonly class HbaRule
      * differently for four spellings of one fact, which is precisely the guessing the canonicalization
      * layer exists to remove.
      *
-     * `samehost` and `samenet` are deliberately NOT open: they are keywords that resolve to the
+     * `samehost` and `samenet` are deliberately not open: they are keywords that resolve to the
      * server's own addresses, so they narrow rather than widen.
      */
     public function isOpenToTheWorld(): bool

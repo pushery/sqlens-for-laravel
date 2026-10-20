@@ -24,7 +24,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ## Why this reads the catalog
  *
- * The question is whether ANY index on the table leads with the type column, and only the catalog
+ * The question is whether any index on the table leads with the type column, and only the catalog
  * holds both columns and every index at once: a migration shows what it writes, not the indexes
  * the table already has or the one a later migration adds. There the answer is a fact rather than
  * an inference. A statement's own column types are not the obstacle — the classifier carries them

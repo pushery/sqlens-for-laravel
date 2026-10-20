@@ -12,7 +12,7 @@ namespace Pushery\SQLens\Deploy;
  * the reason every recorded state is: a typo in a hand-edited ledger would otherwise read as a
  * fourth state, and a reader that does not recognize a state has to guess whether to count it.
  *
- * What is NOT here is the TRANSITION table — which change is allowed from which state, and what a
+ * What is not here is the transition table — which change is allowed from which state, and what a
  * resolved debt reappearing means. That is a separate question with its own answer, and inventing it
  * alongside the file format would be a decision made in the wrong place.
  */

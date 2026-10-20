@@ -34,7 +34,7 @@ use PHPStan\Type\VerbosityLevel;
  * Laravel connection is not available yet — a connector, a health check, a migration helper — so
  * this is not an exotic corner.
  *
- * ## Why the receiver decides ALONE here, with no name-based fallback
+ * ## Why the receiver decides alone here, with no name-based fallback
  *
  * {@see RawSqlConnectionCallCollector} has three branches, and its third one lets a NAME speak when
  * the receiver resolves to nothing: `->unprepared()` is written on connections and on nothing else,
@@ -52,7 +52,7 @@ use PHPStan\Type\VerbosityLevel;
  * subclasses (`Pdo\Pgsql`, `Pdo\Mysql`, `Pdo\Sqlite`) are what PHP 8.4 hands back, and matching
  * `PDO` by name alone would be silent on every one of them.
  *
- * ## The bindings arrive at a DIFFERENT call, and it does not matter
+ * ## The bindings arrive at a different call, and it does not matter
  *
  * `prepare()` carries the text and no bindings; `execute()` carries the bindings and no text. That
  * looked like a reason this could not be classified at one call site — and it is not, because the

@@ -10,7 +10,7 @@ use Pushery\SQLens\Catalog\Statistics\EstimateSource;
 /**
  * A statistics reading was assembled in a shape that would misreport what it measured.
  *
- * Wiring errors rather than user errors, so they throw: in every case the reader HAD the numbers
+ * Wiring errors rather than user errors, so they throw: in every case the reader had the numbers
  * and put them somewhere they mean something else. A statistics reading is consumed to weight a
  * finding's severity, and a size that arrived in the row slot would weight it by a factor of eight
  * thousand without anything looking wrong.

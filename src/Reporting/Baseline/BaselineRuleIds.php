@@ -39,14 +39,14 @@ final readonly class BaselineRuleIds
     /**
      * The violations this baseline carries, or an empty list when every id it names is real.
      *
-     * Checked against EVERY rule of every driver rather than the ones this run would use: a
+     * Checked against every rule of every driver rather than the ones this run would use: a
      * baseline is written once and read on every machine, and an id that names a real rule from
      * another engine is a different mistake from one that names nothing. The external tools'
      * declared ids count as known for the same reason they do in an ignore list — a suppression
      * naming a tool rule has to stay valid on a machine where the tool is absent.
      *
      * @param  array<string, Rule>  $rules  every rule of every driver, for the near-miss suggestion
-     * @param  list<string>  $openNamespaces  the tools' finding-id prefixes. A baseline is WRITTEN
+     * @param  list<string>  $openNamespaces  the tools' finding-id prefixes. A baseline is written
      *                                        by this package from what a run found, so it can
      *                                        legitimately carry a tool id the shipped map does
      *                                        not describe — refusing it here would make the

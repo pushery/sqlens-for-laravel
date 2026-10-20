@@ -17,7 +17,7 @@ use Pushery\SQLens\Severity\Severity;
  * Its own trait rather than a member of {@see SharesRunOptions}, for the reason that trait's
  * companion {@see WritesReportOutput} states: a command may offer this flag without offering
  * `--level` or `--category`, and Larastan resolves an option access against the command's real
- * signature. `sqlens:security` is exactly that command — a security finding is weighed HERE, and a
+ * signature. `sqlens:security` is exactly that command — a security finding is weighed here, and a
  * level would let a project's strictness appetite silently withhold a security rule.
  */
 trait ResolvesMinSeverity

@@ -33,7 +33,7 @@ use Throwable;
  * `PG.L7.AUTOVACUUM_DISABLED` reports every such table in the database, which is the right shape for
  * an audit and the wrong one for a deploy: the list is read once, months ago, and a reader planning
  * a migration has no reason to go back to it. This check asks the narrower question at the moment it
- * matters — is one of the tables THIS RUN touches in that state — and it is the only form of the
+ * matters — is one of the tables this run touches in that state — and it is the only form of the
  * question a deploy report can act on.
  *
  * ## What it changes about the deploy, and the first half is the one that surprises
@@ -48,6 +48,14 @@ use Throwable;
  * `autovacuum_freeze_max_age` the server starts an anti-wraparound worker on it regardless, and that
  * worker does not yield to a lock request. {@see FreezeHorizonCheck} measures how close that is;
  * this one says why the table got there.
+ *
+ * ## A server with autovacuum off is the same caveat for every table
+ *
+ * The per-table option is one way to stop autovacuum; `autovacuum = off` for the server is the
+ * other, and it stops it for every table at once, the ones this run touches included. The check reads
+ * the server setting beside the option, and where it is off every table the run touches carries the
+ * caveat, with the server named as the reason. `PG.L7.AUTOVACUUM_OFF` reports the setting itself in
+ * an audit; this check says what it means for the deploy at hand.
  *
  * ## A hand-maintained table is a real false positive, and `ignore` is its answer
  *
@@ -93,25 +101,26 @@ final readonly class AutovacuumDisabledCheck implements PreflightCheck
         }
 
         try {
-            $disabled = $this->disabledAmong($context, $targets);
+            $relations = $this->autovacuumAmong($context, $targets);
         } catch (Throwable $failure) {
             return CheckResult::undetermined(
                 self::ID,
                 UndeterminedReason::AutovacuumSettingUnreadable,
-                'whether these tables carry a per-table autovacuum '
-                .'override could not be read, so the estimates below cannot be qualified either '
+                'whether autovacuum runs for these tables, by the server setting or by a per-table '
+                .'override, could not be read, so the estimates below cannot be qualified either '
                 .'way: '.new CredentialRedactor()->redact($failure->getMessage()),
             );
         }
 
-        if ($disabled === []) {
-            return CheckResult::pass(self::ID);
+        $findings = [];
+
+        foreach ($relations as $relation) {
+            if ($relation['table_off'] || $relation['server_off']) {
+                $findings[] = $this->finding($context, $relation['relation'], $relation['table_off'], $relation['server_off']);
+            }
         }
 
-        return CheckResult::fail(self::ID, array_map(
-            fn (string $relation): Finding => $this->finding($context, $relation),
-            $disabled,
-        ));
+        return $findings === [] ? CheckResult::pass(self::ID) : CheckResult::fail(self::ID, $findings);
     }
 
     /**
@@ -148,30 +157,31 @@ final readonly class AutovacuumDisabledCheck implements PreflightCheck
     }
 
     /**
-     * Which of those tables carry `autovacuum_enabled = false`.
+     * Each of those tables, with whether its own option and the server stop autovacuum for it.
      *
-     * The read is three-valued and only one value comes back. `false` is the finding, `true` is
-     * somebody being deliberate the other way, and ABSENT — the ordinary case — means the table runs
-     * under the cluster setting. Filtering in SQL rather than in PHP keeps the third state from ever
-     * needing a representation here: a boolean cast has no room for it, and the absent case is the
-     * common one.
+     * The per-table read is three-valued: `false` is the finding, `true` is somebody being
+     * deliberate the other way, and ABSENT, the ordinary case, means the table runs under the server
+     * setting. The EXISTS keeps the third state from needing a representation here: a table without
+     * the option is simply not off by it. The server setting is read in the same statement, so one
+     * round trip answers both, and `pg_settings` shows it to a role without privileges.
      *
      * @param  list<string>  $targets
-     * @return list<string>
+     * @return list<array{relation: string, table_off: bool, server_off: bool}>
      */
-    #[RawSql(reason: 'reads pg_class.reloptions through pg_options_to_table; a per-table storage parameter is a catalog fact with no model equivalent')]
-    private function disabledAmong(PreflightContext $context, array $targets): array
+    #[RawSql(reason: 'reads pg_class.reloptions through pg_options_to_table and the server setting from pg_settings; a storage parameter and a setting are catalog facts with no model equivalent')]
+    private function autovacuumAmong(PreflightContext $context, array $targets): array
     {
         $placeholders = implode(', ', array_fill(0, count($targets), '?'));
 
         $rows = $context->session->read(static fn (Connection $db): array => $db->select(
-            'select n.nspname || \'.\' || c.relname as relation'
+            'select n.nspname || \'.\' || c.relname as relation,'
+            .' exists (select 1 from pg_catalog.pg_options_to_table(c.reloptions) o'
+            .' where o.option_name = \'autovacuum_enabled\''
+            .' and pg_catalog.lower(o.option_value) in (\'false\', \'off\', \'0\', \'n\', \'no\', \'f\')) as table_off,'
+            .' (select s.setting from pg_catalog.pg_settings s where s.name = \'autovacuum\') as server_setting'
             .' from pg_class c'
             .' join pg_namespace n on n.oid = c.relnamespace'
-            .' cross join lateral pg_catalog.pg_options_to_table(c.reloptions) o'
             .' where c.relkind in (\'r\', \'m\', \'p\')'
-            .' and o.option_name = \'autovacuum_enabled\''
-            .' and pg_catalog.lower(o.option_value) in (\'false\', \'off\', \'0\', \'n\', \'no\', \'f\')'
             // A bare target, as `Schema::table('orders', …)` writes it, matches the table an
             // unqualified reference finds; a qualified one matches by its composed name.
             .' and (n.nspname || \'.\' || c.relname in ('.$placeholders.')'
@@ -186,41 +196,64 @@ final readonly class AutovacuumDisabledCheck implements PreflightCheck
             $relation = (array) $row;
             $name = $relation['relation'] ?? null;
 
-            if (is_string($name) && $name !== '') {
-                $relations[] = $name;
+            if (! is_string($name) || $name === '') {
+                continue;
             }
+
+            $setting = $relation['server_setting'] ?? null;
+
+            $relations[] = [
+                'relation' => $name,
+                'table_off' => in_array($relation['table_off'] ?? null, [true, 't', 1, '1'], true),
+                // Only an explicit off stops it. A value the read could not see leaves the server's
+                // part out of the verdict rather than putting it on every table.
+                'server_off' => is_string($setting) && in_array(strtolower($setting), ['off', 'false', '0'], true),
+            ];
         }
 
         return $relations;
     }
 
     /** One table, and the two things its state costs this particular run. */
-    private function finding(PreflightContext $context, string $relation): Finding
+    private function finding(PreflightContext $context, string $relation, bool $tableOff, bool $serverOff): Finding
     {
-        // A FAILURE rather than undetermined, and the distinction is the catalog's certainty. That
+        $why = match (true) {
+            $serverOff && $tableOff => 'autovacuum is switched off for the whole server (`autovacuum = off`), and the '
+                .'table\'s own reloptions say `autovacuum_enabled = false` as well',
+            $serverOff => 'autovacuum is switched off for the whole server (`autovacuum = off`), so no table is '
+                .'vacuumed on its own, this one included',
+            default => 'autovacuum is switched off for that table (`autovacuum_enabled = false` in its reloptions)',
+        };
+        $decide = match ($serverOff) {
+            true => 'PG.L7.AUTOVACUUM_OFF reports the server setting itself, and until it is on again every table '
+                .'this deploy touches carries the same caveat.',
+            false => 'If this table is vacuumed by hand on a schedule, say so with an ignore entry and the reason '
+                .'beside it — nothing in the catalog separates a deliberate arrangement from a setting nobody '
+                .'revisited, so this is reported rather than decided.',
+        };
+
+        // A failure rather than undetermined, and the distinction is the catalog's certainty. That
         // autovacuum is off is measured, not inferred — unlike the name-shaped checks beside it,
         // which report undetermined because a name is a heuristic. What is genuinely open is whether
-        // somebody MEANT it, and that is answered by an ignore entry with a reason, which is how
+        // somebody meant it, and that is answered by an ignore entry with a reason, which is how
         // this package silences a failure. Reporting it as undetermined would put the uncertainty
         // on the reading rather than on the intent, and the reading is not uncertain.
         return Finding::fail(
             ruleId: self::ID,
             messagePrefix: DeployNotice::MESSAGE_PREFIX,
             message: sprintf(
-                'This deploy touches `%s`, and autovacuum is switched off for that table '
-                .'(`autovacuum_enabled = false` in its reloptions). Two things follow, and the '
+                'This deploy touches `%s`, and %s. Two things follow, and the '
                 .'first is about this report rather than about the table. Dead rows are not '
                 .'reclaimed, so the table\'s file size no longer predicts what a rewrite would '
                 .'copy, and its row estimate goes stale with it — autovacuum is what triggers most '
                 .'ANALYZE runs — which makes every duration and size stated here for this table the '
-                .'least trustworthy figure in the report. Second, the setting DEFERS the vacuum '
+                .'least trustworthy figure in the report. Second, the setting defers the vacuum '
                 .'rather than avoiding it: once the table crosses autovacuum_freeze_max_age the '
                 .'server starts an anti-wraparound worker on it regardless, and that worker does '
-                .'not yield to a lock request. If this table is vacuumed by hand on a schedule, say '
-                .'so with an ignore entry and the reason beside it — nothing in the catalog '
-                .'separates a deliberate arrangement from a setting nobody revisited, so this is '
-                .'reported rather than decided.',
+                .'not yield to a lock request. %s',
                 $relation,
+                $why,
+                $decide,
             ),
             location: Location::inCatalog($context->driver, $context->connection, $relation, SchemaObjectType::Table),
             category: Category::Safety,

@@ -68,7 +68,7 @@ trait WritesReportOutput
      *
      * `--output` is opened with `w` before the run, which is what proves the path is
      * writable without costing a connection to discover — and it truncates the file at that
-     * instant. Every path that then returned without reporting left a ZERO-BYTE file behind, and a
+     * instant. Every path that then returned without reporting left a zero-byte file behind, and a
      * zero-byte report is worse than none: `test -f report.json` passes, a consumer that reads an
      * empty findings list as "clean" agrees, and the run that produced it never looked at a
      * database. The test covering this even asserted "no report file at all" while a file was
@@ -78,7 +78,7 @@ trait WritesReportOutput
      * and a thirteenth arrives with the next option; remembering to clean up at each one is exactly
      * the kind of discipline that holds until it does not.
      *
-     * Only a regular file AT the path is removed, never a symbolic link. `is_file()` follows a link
+     * Only a regular file at the path is removed, never a symbolic link. `is_file()` follows a link
      * and `unlink()` removes the link itself, so the name the caller passed went away while the file
      * it points at stayed behind, empty. Named `/dev/stdout` with stdout redirected into a file, that
      * name is the container's own device link, and a run as root deleted it for every process after

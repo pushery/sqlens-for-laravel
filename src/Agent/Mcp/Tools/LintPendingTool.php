@@ -106,7 +106,7 @@ final class LintPendingTool extends SqlensTool
         $summary = trim($this->summary($outcome->connectionName, $page).($outcome->staleBaselineBreaks ? ' '.$outcome->gateMeaning() : ''));
 
         // A run the engine never performed can only be undetermined, whatever the findings list
-        // looks like — and an empty list is exactly what it looks like. Checked BEFORE the ordinary
+        // looks like — and an empty list is exactly what it looks like. Checked before the ordinary
         // answer, because the ordinary answer over a run that did not happen is the silent green.
         // Then a run that happened and could not determine everything, in the engine's own reasons.
         $answer = RunRefusal::in($outcome)
@@ -145,14 +145,14 @@ final class LintPendingTool extends SqlensTool
         return [
             'level' => ['sometimes', 'integer', 'min:0', 'max:9'],
             'category' => ['sometimes', 'string', 'in:'.implode(',', array_column(Category::cases(), 'value'))],
-            // A NAME from the application's own connections, never a DSN. A free connection string
+            // A name from the application's own connections, never a DSN. A free connection string
             // would let a caller point this tool at a database the project never configured — which
             // is the same class of hole as a free path, one layer down.
             'connection' => ['sometimes', 'string', 'in:'.implode(',', new McpConnection($config)->allowed())],
             // The names `--profile` accepts, whether or not the project configured overrides for
             // them. A profile without overrides runs on the base configuration on both paths.
             'profile' => ['sometimes', 'string', 'in:'.implode(',', ProfileApplication::names())],
-            // Bounded AND patterned. The pattern refuses a traversal BEFORE anything touches the
+            // Bounded and patterned. The pattern refuses a traversal before anything touches the
             // filesystem, which is worth having on its own — but it is not the containment. That
             // belongs to the engine's own single-file resolver, which resolves the path and refuses
             // anything outside the configured migration paths, so `..`, an absolute foreign path and

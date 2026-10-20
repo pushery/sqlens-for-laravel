@@ -20,7 +20,7 @@ use Pushery\SQLens\Contracts\PreflightCheck;
  *
  * ## A check that does not apply is not run
  *
- * `appliesTo()` is asked BEFORE `run()`, and a check that answers no produces no result. It is
+ * `appliesTo()` is asked before `run()`, and a check that answers no produces no result. It is
  * listed separately as not applicable, and the distinction is the whole reason there is no fourth
  * outcome: "this does not apply to your database" and "this could not answer" are different
  * sentences that send a reader to different places.

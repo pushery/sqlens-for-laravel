@@ -27,7 +27,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * ## Why `mod` is a finding and `ddl` is not
  *
- * `ddl` logs schema statements. Those carry column NAMES, never row values, so they say nothing
+ * `ddl` logs schema statements. Those carry column names, never row values, so they say nothing
  * about a person. The line is data, not verbosity: `ddl` on a production server is an ordinary
  * audit trail and reporting it would train people to ignore this rule.
  *
@@ -45,7 +45,7 @@ final class StatementLoggingRule extends AbstractPrivacySettingRule
 {
     public function id(): string
     {
-        // `SEC.CFG.*` — a SERVER SETTING that reaches data, which is the same thing its MySQL
+        // `SEC.CFG.*` — a server setting that reaches data, which is the same thing its MySQL
         // sibling `SEC.CFG.GENERAL_LOG` says about `general_log`. This id once carried a driver and
         // a fifth segment; both were wrong by the package's own contract, which knows four areas
         // and no driver segment, and `RuleIdFormat::matches()` rejected it outright.

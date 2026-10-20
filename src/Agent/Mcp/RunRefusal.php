@@ -22,12 +22,12 @@ use Pushery\SQLens\Lint\LintOutcome;
  * saying the wrong half. An agent reading that reports the migration clean and moves on, which is
  * the most expensive path this package exists to prevent.
  *
- * ## Why the exit code and not the two named failures
+ * ## Why the exit code and not the named failures
  *
- * `LintOutcome` carries `unsupported` and `fileFailure`, and both are used below for the REASON.
- * But neither is what decides: a misconfiguration exit is reachable without either — an invalid
- * config, an unreadable baseline, a strict-tool stop — and a check written against the two known
- * causes would go quiet again the first time a third arrived. The exit code is the engine's own
+ * `LintOutcome` carries `unsupported`, `fileFailure` and `unreadableBaseline`, and all three are
+ * used below for the REASON. But none of them is what decides: a misconfiguration exit is
+ * reachable without any — an invalid config, a strict-tool stop — and a check written against the
+ * known causes would go quiet again the first time another arrived. The exit code is the engine's own
  * summary of "nothing was audited", so it is the condition, and the failures only sharpen the
  * sentence. The one exit it does not summarize is a run that examined everything and was ended by
  * a stale baseline entry, which the outcome says in `examined`.
@@ -42,9 +42,10 @@ use Pushery\SQLens\Lint\LintOutcome;
  * A tool still has to call it, and nothing in PHP makes a new one do so. `RunRefusalTest` does: it
  * reads every tool that starts a lint run and fails for one that does not call this class.
  *
- * Nothing here invents a reason. The identifiers come from the engine's own named failures and stay
- * stable English, exactly as they are in the JSON envelope: a translated reason id would be a
- * breaking change per language.
+ * Nothing here invents a reason. The identifiers come from the engine's own named failures, or name
+ * one the engine carries as a sentence without an enum (`baseline_unreadable`), and stay stable
+ * English, exactly as they are in the JSON envelope: a translated reason id would be a breaking
+ * change per language.
  */
 final readonly class RunRefusal
 {
@@ -103,6 +104,13 @@ final readonly class RunRefusal
                 'the file did not resolve to a migration this project lints ('.$outcome->fileFailure->value
                 .'), so nothing was checked. The file parameter names one migration under a configured '
                 .'migration path — it is not a general-purpose file linter.',
+            ];
+        }
+
+        if ($outcome->unreadableBaseline !== null) {
+            return [
+                'baseline_unreadable',
+                'nothing was checked on connection "'.$outcome->connectionName.'": '.$outcome->unreadableBaseline,
             ];
         }
 

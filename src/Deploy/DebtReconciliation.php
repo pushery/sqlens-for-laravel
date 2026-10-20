@@ -52,7 +52,7 @@ final readonly class DebtReconciliation
         /** The entry set a recording run would write. */
         public array $recorded,
         /**
-         * In the ledger and outside what this run looked at — kept, and NOT a finding.
+         * In the ledger and outside what this run looked at — kept, and not a finding.
          *
          * Exposed so a caller can say how much of the account it did not judge, which is the honest
          * counterpart to a settled report: "nothing to do" and "nothing to do in the part I read"

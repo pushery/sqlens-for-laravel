@@ -26,7 +26,7 @@ use Symfony\Component\VarDumper\VarDumper;
  * ## Why the frames are not affected
  *
  * Measured: an output buffer captures the PHP output layer — `echo`, `print`, `printf` — and does
- * NOT capture `fwrite()` to the stdout stream resource. The transport writes frames with `fwrite`,
+ * not capture `fwrite()` to the stdout stream resource. The transport writes frames with `fwrite`,
  * so they pass straight through while foreign output is intercepted. That is what makes a blanket
  * buffer safe here rather than a way to swallow the protocol.
  *
@@ -46,10 +46,10 @@ use Symfony\Component\VarDumper\VarDumper;
  * trade a visible failure for an invisible one: the frame stream would be clean and the bug would
  * live forever. It goes to the diagnostic channel, named, so somebody can find the `echo`.
  *
- * ## THE ONE THING IT CANNOT COVER: output that precedes it
+ * ## the one thing it cannot COVER: output that precedes it
  *
  * `engage()` is called as early as a service provider can manage, and again where the conversation
- * starts. Neither is early enough for a COMPILE-TIME message. PHP emits those when a file is
+ * starts. Neither is early enough for a compile-time message. PHP emits those when a file is
  * LOADED, which happens in the autoloader — before any provider boots, and therefore before this
  * class exists.
  *

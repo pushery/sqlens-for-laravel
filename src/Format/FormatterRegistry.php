@@ -16,11 +16,11 @@ use Pushery\SQLens\Contracts\SqlFormatter;
  * discovered one: a preference that depended on which adapter happened to register first would make
  * two identical projects format differently, and the output is committed.
  *
- * ## A NAMED backend is never silently substituted
+ * ## a named backend is never silently substituted
  *
  * Asking for `pgformatter` and getting the PHP core because the binary is missing would produce
  * output a project did not ask for and no signal that it had happened — and the next machine, where
- * the binary IS installed, would rewrite every file. A named backend that cannot run is a refusal
+ * the binary is installed, would rewrite every file. A named backend that cannot run is a refusal
  * with its reason, and only `auto` falls back.
  */
 final readonly class FormatterRegistry
@@ -38,7 +38,7 @@ final readonly class FormatterRegistry
      *                                  {@see FormatConfig::$disabledBackends}. They are kept OUT of
      *                                  the registry rather than filtered inside it, so `auto` never
      *                                  reaches them and never counts them as a loss; this list
-     *                                  survives only so a NAMED one can be refused with the true
+     *                                  survives only so a named one can be refused with the true
      *                                  reason instead of "no such backend".
      */
     public function __construct(private array $formatters = [], private array $disabled = []) {}
@@ -89,8 +89,8 @@ final readonly class FormatterRegistry
             // silently would produce output the project did not ask for, and the next machine would
             // rewrite every file.
             if (! $named->isAvailable()) {
-                // A NAMED backend that cannot run is still a refusal rather than a fallback — but it
-                // is now discovered HERE, once, rather than by every file failing in turn. The
+                // A named backend that cannot run is still a refusal rather than a fallback — but it
+                // is now discovered here, once, rather than by every file failing in turn. The
                 // difference matters to a reader: one line saying the binary is missing, instead of
                 // a hundred saying each file could not be formatted.
                 return FormatterResolution::unavailable(FormatResult::undetermined(
@@ -167,7 +167,7 @@ final readonly class FormatterRegistry
             return FormatterResolution::of($fallback, $passedOver);
         }
 
-        // Unreachable while the built-in core is registered, and NOT written as an assumption: a
+        // Unreachable while the built-in core is registered, and not written as an assumption: a
         // project can register its own set, and a resolver that returned null here would hand a
         // null to a caller that has no way to describe what happened.
         return FormatterResolution::unavailable(FormatResult::undetermined(

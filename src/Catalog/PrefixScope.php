@@ -27,7 +27,7 @@ enum PrefixScope: string
     case Loose = 'loose';
 
     /**
-     * Read ONLY objects carrying the prefix.
+     * Read only objects carrying the prefix.
      *
      * The deliberate narrowing for a genuinely shared database, where everything unprefixed belongs
      * to somebody else and reporting on it is worse than useless. What it drops is still counted:

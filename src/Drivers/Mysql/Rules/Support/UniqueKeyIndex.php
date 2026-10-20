@@ -20,7 +20,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * - `$table->id()` puts an inline `PRIMARY KEY` on the column, inside the `CREATE TABLE`;
  * - `$table->primary([…])` is FOLDED INTO the same `CREATE TABLE` as a `PRIMARY KEY (…)` clause;
- * - `$table->unique(…)` is NOT — even inside a `Schema::create` block it comes out as its own
+ * - `$table->unique(…)` is not — even inside a `Schema::create` block it comes out as its own
  *   `ALTER TABLE … ADD UNIQUE …`.
  *
  * That asymmetry is the reason this reads the migration's whole statement STREAM rather than one
@@ -67,8 +67,8 @@ final readonly class UniqueKeyIndex
     /**
      * Whether one of the declared keys covers exactly these columns.
      *
-     * EXACTLY, not "starts with", and that is measured: MySQL 8.4 rejects a foreign key onto the
-     * FIRST column of a composite primary key just as it rejects one onto a non-unique index. A
+     * Exactly, not "starts with", and that is measured: MySQL 8.4 rejects a foreign key onto the
+     * first column of a composite primary key just as it rejects one onto a non-unique index. A
      * prefix is not a unique key, whatever it looks like.
      *
      * @param  list<list<string>>  $keys
@@ -93,7 +93,7 @@ final readonly class UniqueKeyIndex
         }
 
         // `ADD PRIMARY KEY (a, b)` and `ADD UNIQUE <name>(a, b)` — the two shapes a key arrives in
-        // after the table exists, which for a unique key is ALWAYS, even inside a create block.
+        // after the table exists, which for a unique key is always, even inside a create block.
         if (preg_match('/\bADD PRIMARY KEY\s*\(([^)]*)\)/', $statement, $primary) === 1) {
             return [self::columnList($primary[1])];
         }
@@ -104,22 +104,88 @@ final readonly class UniqueKeyIndex
     }
 
     /**
-     * The keys declared inside a `CREATE TABLE`: the folded `PRIMARY KEY (…)` clause, and the
-     * inline `PRIMARY KEY` that rides on a single column.
+     * The keys declared inside a `CREATE TABLE`: a `PRIMARY KEY (…)` or `UNIQUE [KEY|INDEX] [name] (…)`
+     * entry, either one behind `CONSTRAINT name`, and a column definition that carries `PRIMARY KEY`
+     * or `UNIQUE` itself, such as the inline key `$table->id()` folds in.
+     *
+     * Laravel's grammar writes a unique key as its own `ALTER TABLE`, so the clause forms come from
+     * raw SQL. The list is split at the commas outside parentheses, because a type such as
+     * `DECIMAL(8, 2)` or an `ENUM` carries commas of its own.
      *
      * @return list<list<string>>
      */
     private static function keysInCreateTable(string $statement): array
     {
-        if (preg_match('/\bPRIMARY KEY\s*\(([^)]*)\)/', $statement, $clause) === 1) {
-            return [self::columnList($clause[1])];
+        $keys = [];
+
+        foreach (self::definitionEntries($statement) as $entry) {
+            $entry = (string) preg_replace('/^CONSTRAINT\s+\S+\s+/', '', trim($entry));
+
+            if (preg_match('/^(?:PRIMARY KEY|UNIQUE(?:\s+(?:KEY|INDEX))?(?:\s+[^\s(]+)?)\s*\(([^)]*)\)/', $entry, $clause) === 1) {
+                $keys[] = self::columnList($clause[1]);
+
+                continue;
+            }
+
+            if (preg_match('/^(?:KEY|INDEX|FULLTEXT|SPATIAL|FOREIGN|CHECK)\b/', $entry) === 1) {
+                continue;
+            }
+
+            // A column definition: its name, then the type and the attributes, where `PRIMARY KEY`
+            // or `UNIQUE` makes the column a key of its own. Parentheses hold the type's arguments,
+            // a default or a generation expression, never a key attribute.
+            if (preg_match('/^(\S+)\s+(.+)$/s', $entry, $column) === 1
+                && preg_match('/\b(?:PRIMARY KEY|UNIQUE)\b/', (string) preg_replace('/\([^()]*\)/', '', $column[2])) === 1) {
+                $keys[] = self::columnList($column[1]);
+            }
         }
 
-        // The inline form: `<column> <type…> PRIMARY KEY`. The column is the last identifier-ish
-        // word before the type, so the definition is read from the start of its list entry.
-        return preg_match('/(?:\(|,)\s*(\S+)\s[^,]*?\bPRIMARY KEY\b/', $statement, $inline) === 1
-            ? [[$inline[1]]]
-            : [];
+        return $keys;
+    }
+
+    /**
+     * The entries of a `CREATE TABLE` definition list, split at the commas outside parentheses: the
+     * list's own parenthesis is the first one, and it ends at its matching close. A statement without
+     * one, such as `CREATE TABLE t LIKE u`, declares no entries, and an unclosed list is read to its
+     * end.
+     *
+     * @return list<string>
+     */
+    private static function definitionEntries(string $statement): array
+    {
+        $open = strpos($statement, '(');
+
+        if ($open === false) {
+            return [];
+        }
+
+        $entries = [];
+        $current = '';
+        $depth = 0;
+
+        foreach (str_split(substr($statement, $open + 1)) as $character) {
+            if ($character === ')' && $depth === 0) {
+                break;
+            }
+
+            if ($character === ',' && $depth === 0) {
+                $entries[] = $current;
+                $current = '';
+
+                continue;
+            }
+
+            $depth += match ($character) {
+                '(' => 1,
+                ')' => -1,
+                default => 0,
+            };
+            $current .= $character;
+        }
+
+        $entries[] = $current;
+
+        return $entries;
     }
 
     /**

@@ -47,10 +47,10 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
      */
     private const array UNRESERVED_NAMES = [
         // pg_get_keywords() category U: not reserved.
-        'ACTION', 'ADD', 'ALTER', 'ALWAYS', 'BY', 'CASCADE', 'COMMENT', 'DELETE', 'DOUBLE', 'DROP',
-        'GENERATED', 'IDENTITY', 'INDEX', 'INSERT', 'KEY', 'NO', 'OPTION', 'PRIVILEGES', 'RENAME',
-        'RESTRICT', 'REVOKE', 'SCHEMA', 'SET', 'STORED', 'TEXT', 'TRUNCATE', 'TYPE', 'UPDATE', 'VALID',
-        'VALIDATE', 'VIRTUAL', 'WITHOUT', 'ZONE',
+        'ACTION', 'ADD', 'ALTER', 'ALWAYS', 'BY', 'CASCADE', 'CLUSTER', 'COMMENT', 'DELETE', 'DOUBLE',
+        'DROP', 'GENERATED', 'IDENTITY', 'INDEX', 'INSERT', 'KEY', 'NO', 'OPTION', 'PRIVILEGES',
+        'REFRESH', 'REINDEX', 'RENAME', 'RESTRICT', 'REVOKE', 'SCHEMA', 'SET', 'STORED', 'TEXT',
+        'TRUNCATE', 'TYPE', 'UPDATE', 'VACUUM', 'VALID', 'VALIDATE', 'VIRTUAL', 'WITHOUT', 'ZONE',
         // Category C: not reserved, though no function or type may carry the name.
         'BETWEEN', 'BIGINT', 'BOOLEAN', 'CHAR', 'DECIMAL', 'FLOAT', 'INTEGER', 'JSON', 'PRECISION',
         'REAL', 'SMALLINT', 'TIME', 'TIMESTAMP', 'VALUES', 'VARCHAR',
@@ -155,7 +155,7 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
             // baseline entry stops matching the moment someone reformats a migration. Measured from
             // what Laravel's PostgreSQL grammar actually emits, not recalled.
             //
-            // Safe by construction: this stage runs AFTER identifier normalization, so a column
+            // Safe by construction: this stage runs after identifier normalization, so a column
             // named `text` is already quoted and a BARE word is unambiguously the keyword.
             'BIGINT', 'BOOLEAN', 'BYTEA', 'CHAR', 'DATE', 'DECIMAL', 'DOUBLE', 'FLOAT', 'GEOGRAPHY',
             'GEOMETRY', 'INET', 'INTEGER', 'JSON', 'JSONB', 'MACADDR', 'PRECISION', 'REAL',
@@ -177,7 +177,7 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
             // different strings, which is two fingerprints for one statement and a baseline entry
             // that stops matching when somebody reformats a migration.
             //
-            // The list is DELIBERATELY short of `PUBLIC`, and that is measured rather than cautious:
+            // The list is deliberately short of `PUBLIC`, and that is measured rather than cautious:
             // adding it turned `SELECT * FROM public.users` into `SELECT * FROM "public".users`,
             // because `public` is PostgreSQL's default schema and appears in ordinary identifiers
             // everywhere. A grant needs only its LEAD token to be a keyword, so PUBLIC buys nothing
@@ -190,6 +190,20 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
             // refuses a statement whose lead is not a keyword. PostgreSQL reserves the word, so a
             // name spelled with it was quoted already and keeps its quotes.
             'ANALYZE',
+
+            // `VACUUM` leads a statement the signatures below read, and `FULL` is the word that
+            // separates the rewrite from the plain form. PostgreSQL reserves `FULL`, so a name
+            // spelled with it keeps its quotes; it does not reserve `VACUUM`, which is why that
+            // word is in UNRESERVED_NAMES and a table called `vacuum` stays a table.
+            'VACUUM', 'FULL',
+
+            // `CLUSTER`, `REINDEX` and `REFRESH` lead statements the signatures below read, and
+            // `VERBOSE` is the option two of them write between the lead and the name. PostgreSQL
+            // reserves none of the three leads, so they are in UNRESERVED_NAMES as well; it keeps
+            // `VERBOSE` for function and type names, so a table spelled with it keeps its quotes.
+            // `MATERIALIZED` and `VIEW` stay out: a `CREATE MATERIALIZED VIEW` keeps the canonical
+            // form it had, and the refresh signatures read the two words as names.
+            'CLUSTER', 'REINDEX', 'REFRESH', 'VERBOSE',
         ];
     }
 
@@ -262,12 +276,13 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
         $constraint = SchemaObjectType::Constraint;
         $column = SchemaObjectType::Column;
         $schema = SchemaObjectType::Schema;
+        $materializedView = SchemaObjectType::MaterializedView;
 
         return new StatementClassificationProfile(
             signatures: [
                 // CREATE [UNIQUE] INDEX [CONCURRENTLY] <i> ON <t> (<c>, …) — and NOTHING after it.
                 //
-                // Tried BEFORE the column-less variant below, which stays as the fallback: a shape
+                // Tried before the column-less variant below, which stays as the fallback: a shape
                 // whose list cannot be read still classifies as an index rather than falling
                 // through to unknown, it simply carries no columns. Degrading to "no columns" is
                 // safe for every reader — a rule asking about coverage sees nothing it can conclude
@@ -495,7 +510,7 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                 //
                 // BEFORE the plain `UPDATE <t>` signature below, because signatures are tried in
                 // order and the plain one matches everything this one does. It captures the columns
-                // the statement WRITES, which is what a debt rule asking "was this new column
+                // the statement writes, which is what a debt rule asking "was this new column
                 // back-filled" needs; the columns it reads sit inside expressions and stay there.
                 //
                 // A clause this element cannot read whole — `SET a = (SELECT …), b = 2` — declines
@@ -517,8 +532,110 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                     SignatureElement::keyword('DELETE'), SignatureElement::keyword('FROM'),
                     SignatureElement::target($table),
                 ]),
+                // VACUUM FULL [ANALYZE] [<t>, …]
+                //
+                // The rewrite: `VACUUM FULL` writes the table into a new file under an ACCESS
+                // EXCLUSIVE lock. Every statement that holds the word reaches this kind, because
+                // the third signature matches FULL anywhere after the lead. The option list in
+                // parentheses reads like the older spelling, since the classifier skips symbols:
+                // `VACUUM (FULL, ANALYZE) orders` and `VACUUM FULL ANALYZE orders` are one stream.
+                //
+                // The first two read the tables and end at the end of the statement, so an option
+                // never lends its name to a target: `VACUUM (FULL, SKIP_LOCKED) orders` falls
+                // through to the third, which reports the rewrite without naming the table. A value
+                // the list spells as a reserved word, `VACUUM (FULL, ANALYZE ON)`, stops the second
+                // with a name it cannot resolve, and the statement stays undetermined.
+                new StatementSignature(StatementKind::RebuildTable, [
+                    SignatureElement::keyword('VACUUM'), SignatureElement::keyword('FULL'),
+                    SignatureElement::optionalModifiers(), SignatureElement::endOfStatement(),
+                ]),
+                new StatementSignature(StatementKind::RebuildTable, [
+                    SignatureElement::keyword('VACUUM'), SignatureElement::keyword('FULL'),
+                    SignatureElement::optionalModifiers(), SignatureElement::targetList($table),
+                    SignatureElement::endOfStatement(),
+                ]),
+                new StatementSignature(StatementKind::RebuildTable, [
+                    SignatureElement::keyword('VACUUM'), SignatureElement::seekKeyword('FULL'),
+                ]),
+                // VACUUM [ANALYZE] [<t>, …]
+                //
+                // The plain form, after every FULL shape: it marks dead rows for reuse under a SHARE
+                // UPDATE EXCLUSIVE lock that blocks no reader and no writer, and it is `Unknown`, as
+                // `ANALYZE` is. Only these two spellings. A list with any other option does not end
+                // where they expect, finds no signature and stays undetermined, because a statement
+                // read in part is not read as harmless.
+                new StatementSignature(StatementKind::Unknown, [
+                    SignatureElement::keyword('VACUUM'), SignatureElement::optionalModifiers(),
+                    SignatureElement::endOfStatement(),
+                ]),
+                new StatementSignature(StatementKind::Unknown, [
+                    SignatureElement::keyword('VACUUM'), SignatureElement::optionalModifiers(),
+                    SignatureElement::targetList($table), SignatureElement::endOfStatement(),
+                ]),
+                // CLUSTER [VERBOSE] <t> [USING <i>], and the older CLUSTER <i> ON <t>
+                //
+                // A rewrite like `VACUUM FULL`: the table is written into a new file in the index's
+                // order under an ACCESS EXCLUSIVE lock. The index is skipped rather than read as a
+                // target, because the lock that matters is the table's. A `CLUSTER` without a table
+                // re-clusters every table clustered before, which no target here can name and which
+                // PostgreSQL refuses inside a transaction block: the first signature finds no name
+                // and the statement stays undetermined.
+                new StatementSignature(StatementKind::RebuildTable, [
+                    SignatureElement::keyword('CLUSTER'), SignatureElement::optionalModifiers(),
+                    SignatureElement::target($table), SignatureElement::endOfStatement(),
+                ]),
+                new StatementSignature(StatementKind::RebuildTable, [
+                    SignatureElement::keyword('CLUSTER'), SignatureElement::optionalModifiers(),
+                    SignatureElement::target($table), SignatureElement::keyword('USING'),
+                    SignatureElement::skippedName(), SignatureElement::endOfStatement(),
+                ]),
+                new StatementSignature(StatementKind::RebuildTable, [
+                    SignatureElement::keyword('CLUSTER'), SignatureElement::optionalModifiers(),
+                    SignatureElement::skippedName(), SignatureElement::keyword('ON'),
+                    SignatureElement::target($table), SignatureElement::endOfStatement(),
+                ]),
+                // REINDEX [(<option>, …)] INDEX|TABLE [CONCURRENTLY] <name>
+                //
+                // Without CONCURRENTLY it holds SHARE on the table, so every write waits, and ACCESS
+                // EXCLUSIVE on each index it rebuilds, so every read that would use one waits. The
+                // options in parentheses read like modifiers, and CONCURRENTLY may stand among them.
+                // `SCHEMA`, `DATABASE` and `SYSTEM` rebuild every index they reach, which PostgreSQL
+                // refuses inside a transaction block and no target here can name: they find no
+                // signature and stay undetermined, as does an option this list does not read.
+                new StatementSignature(StatementKind::Reindex, [
+                    SignatureElement::keyword('REINDEX'), SignatureElement::optionalModifiers(),
+                    SignatureElement::keyword('INDEX'), SignatureElement::optionalModifiers(),
+                    SignatureElement::target($index), SignatureElement::endOfStatement(),
+                ]),
+                new StatementSignature(StatementKind::Reindex, [
+                    SignatureElement::keyword('REINDEX'), SignatureElement::optionalModifiers(),
+                    SignatureElement::keyword('TABLE'), SignatureElement::optionalModifiers(),
+                    SignatureElement::target($table), SignatureElement::endOfStatement(),
+                ]),
+                // REFRESH MATERIALIZED VIEW [CONCURRENTLY] <v> [WITH DATA]
+                //
+                // Without CONCURRENTLY it holds ACCESS EXCLUSIVE on the view, so every read of it
+                // waits for the refresh query; with it, an EXCLUSIVE lock that lets reads through.
+                // `MATERIALIZED` and `VIEW` are read as names, the only words PostgreSQL accepts
+                // there. `WITH NO DATA` empties the view, so every later read fails rather than
+                // waits: the `NO` stands where the end was expected, and the statement stays
+                // undetermined.
+                new StatementSignature(StatementKind::RefreshMaterializedView, [
+                    SignatureElement::keyword('REFRESH'), SignatureElement::skippedName(),
+                    SignatureElement::skippedName(), SignatureElement::optionalModifiers(),
+                    SignatureElement::target($materializedView), SignatureElement::endOfStatement(),
+                ]),
+                new StatementSignature(StatementKind::RefreshMaterializedView, [
+                    SignatureElement::keyword('REFRESH'), SignatureElement::skippedName(),
+                    SignatureElement::skippedName(), SignatureElement::optionalModifiers(),
+                    SignatureElement::target($materializedView), SignatureElement::keyword('WITH'),
+                    SignatureElement::skippedName(), SignatureElement::endOfStatement(),
+                ]),
             ],
-            modifiers: ['UNIQUE', 'CONCURRENTLY', 'IF', 'NOT', 'EXISTS', 'ONLY'],
+            // `ANALYZE` is the option `VACUUM ANALYZE <t>` writes between the lead and the table.
+            // `FULL` must never join it: the plain signatures would read past it. `VERBOSE` asks
+            // `VACUUM`, `CLUSTER` and `REINDEX` for a report and changes nothing they do.
+            modifiers: ['UNIQUE', 'CONCURRENTLY', 'IF', 'NOT', 'EXISTS', 'ONLY', 'ANALYZE', 'VERBOSE'],
             leadFallback: [
                 'CREATE' => StatementKind::DdlOther,
                 'ALTER' => StatementKind::DdlOther,
@@ -531,7 +648,7 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                 // A session config command (SET lock_timeout, SET LOCAL statement_timeout).
                 // It must be recognized, not refused — a migration that sets its own timeouts is
                 // doing the right thing, and reporting it undetermined would refuse to lint the
-                // very migrations the lock-hygiene rules ask for. It carries its OWN kind rather
+                // very migrations the lock-hygiene rules ask for. It carries its own kind rather
                 // than Unknown, because "recognized, changes nothing" and "not recognized, could
                 // be anything" are opposite answers to a rule that must hedge over what it could
                 // not read.
@@ -557,7 +674,7 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                 'REVOKE' => StatementKind::DdlOther,
 
                 // `COMMENT ON COLUMN`/`COMMENT ON TABLE`, and it is not an exotic form: Laravel
-                // appends one to EVERY `->change()`. `compileComment()` fires on
+                // appends one to every `->change()`. `compileComment()` fires on
                 // `! is_null($column->comment) || $column->change`, so a plain
                 // `$table->string('endpoint', 1024)->change()` emits `comment on column … is NULL`
                 // beside its `alter table`. One unrecognized statement makes the whole migration
@@ -591,8 +708,10 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                 //
                 // `VACUUM` is deliberately absent, although its plain form is just as harmless.
                 // `VACUUM FULL` rewrites the table under an ACCESS EXCLUSIVE lock, the lead word cannot
-                // tell the two apart, and `Unknown` would pass the blocking one without a word. A
-                // migration that vacuums stays undetermined, with the statement named in the finding.
+                // tell the two apart, and `Unknown` would pass the blocking one without a word. The
+                // signatures read the statement instead, and one they cannot read stays undetermined.
+                // `CLUSTER`, `REINDEX` and `REFRESH` stay out for the same reason: each has a form
+                // that blocks and a lead word that does not say which.
                 'ANALYZE' => StatementKind::Unknown,
             ],
             unreservedNames: self::UNRESERVED_NAMES,

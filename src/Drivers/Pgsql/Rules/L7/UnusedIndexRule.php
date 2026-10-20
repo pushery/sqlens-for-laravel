@@ -23,13 +23,13 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * ## Why this one is EXPERIMENTAL rather than stable
  *
  * Not maturity. This rule answers from usage counters, which move with every query the database
- * serves and can be reset by anybody with the privilege, so its verdict depends on WHEN it is asked
+ * serves and can be reset by anybody with the privilege, so its verdict depends on when it is asked
  * and on what the application did in between — a direct tension with the package's third governing
  * principle, that the same state produces the same result.
  *
  * The tier is what keeps that tension out of everybody else's run. `experimental` is not admitted by
  * default, so a project that has not asked for this rule gets an audit whose determinism is intact.
- * A project that HAS asked for it has accepted a time-bounded question, knowingly.
+ * A project that has asked for it has accepted a time-bounded question, knowingly.
  *
  * That is a deliberate, named exception to the pre-1.0 default that a shipped rule is `stable`, and
  * the guard holding that rule carries this id with the reason beside it rather than being loosened.
@@ -110,6 +110,16 @@ final class UnusedIndexRule extends AbstractCatalogRule implements DeclaresJudge
                 'The index usage statistics for %s could not be read, so whether any of its indexes has ever '
                 .'been scanned is unknown. That is not a pass: a role that cannot see pg_stat_user_indexes and '
                 .'a table whose indexes are genuinely unused produce the same empty answer.',
+                $object->qualifiedName,
+            ), UndeterminedReason::IndexUsageWindowUnknown)];
+        }
+
+        if (! UnusedIndex::isCounting($object)) {
+            return [RuleVerdict::undetermined(sprintf(
+                'On %s the index scan counters were read, but this server hands new connections '
+                .'track_counts = off, so a scan made through them is not counted. A zero there says '
+                .'nothing about whether an index is read, and a DROP advised on it would rest on a '
+                .'counter that stopped counting. PG.L7.TRACK_COUNTS_OFF reports the setting itself.',
                 $object->qualifiedName,
             ), UndeterminedReason::IndexUsageWindowUnknown)];
         }

@@ -61,7 +61,7 @@ final class CallCollector extends NodeVisitorAbstract
     private array $calls = [];
 
     /**
-     * The enclosing NAMED function-likes, innermost last.
+     * The enclosing named function-likes, innermost last.
      *
      * Closures and arrow functions are deliberately not pushed: `Schema::create('t',
      * function (Blueprint $table) { ... })` is code that runs as part of `up()`, and

@@ -39,7 +39,7 @@ namespace Pushery\SQLens\Drivers\Mysql\Rules\L3\Support;
  * Without a positive control the `DO` result would have "proved" the point while only showing that
  * a query had been chosen which the limit never reaches.
  *
- * ## What MySQL does NOT have
+ * ## What MySQL does not have
  *
  * There is no counterpart to `statement_timeout` for DDL. That is a property of the engine, not a
  * gap in this package, and it is named in the rule's `limitations()`, which the rule registry and

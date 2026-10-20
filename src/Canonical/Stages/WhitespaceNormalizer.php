@@ -16,11 +16,11 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * so two runs that differ only in formatting produce the same canonical form —
  * the precondition for a meaningful later drift comparison.
  *
- * Literal-safe: whitespace INSIDE a string literal, a dollar-quoted body, a
+ * Literal-safe: whitespace inside a string literal, a dollar-quoted body, a
  * comment, or a quoted identifier is kept byte-exact — a default value `'a  b'` is
  * payload, not formatting noise. Line endings are unified (CRLF/CR → LF).
  *
- * This does NOT change keyword casing (that needs a per-driver keyword list and is
+ * This does not change keyword casing (that needs a per-driver keyword list and is
  * its own stage), and it is not a pretty-printer (that is the format suite).
  *
  * The literal/comment/dollar-quote/identifier scanning mirrors StatementSplitter;

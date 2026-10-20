@@ -11,6 +11,7 @@ use Pushery\SQLens\Deploy\Contracts\DeclaresOperationClass;
 use Pushery\SQLens\Drivers\Pgsql\PgTypeChangeMatrix;
 use Pushery\SQLens\Drivers\Pgsql\Remediation\RewriteAvoidanceTemplate;
 use Pushery\SQLens\Drivers\Pgsql\Rules\AbstractPgsqlSafetyRule;
+use Pushery\SQLens\Drivers\Pgsql\Rules\Support\ColumnTypeBefore;
 use Pushery\SQLens\Drivers\Pgsql\Rules\Support\ColumnTypeChange;
 use Pushery\SQLens\Drivers\Pgsql\TypeChangeImpact;
 use Pushery\SQLens\Findings\Confidence;
@@ -34,6 +35,11 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * (varchar → text) is silent, and a target it does not classify is UNDETERMINED with a
  * named reason, never a silent pass. A `USING` clause forces a rewrite unconditionally,
  * and that is decided here rather than from the matrix.
+ *
+ * Laravel's `->change()` names the column's type on every call, so its statement does not say
+ * that the type changes. Where an earlier statement of the same run created or retyped the
+ * column, the run says what the type was ({@see ColumnTypeBefore}), and the change is judged
+ * from the pair. Elsewhere it is a named question.
  *
  * Three-valued, so it overrides {@see verdict()} rather than {@see judge()}: a rule that
  * can honestly answer "I don't know" must be able to say so.
@@ -83,7 +89,7 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
      * impact that depends on something no lint run can see. Putting prose in the artifact would also
      * mean a schema change to a shipped file for a sentence only this rule reads.
      *
-     * The definitive answer belongs to the audit suite, which HAS a connection and could read
+     * The definitive answer belongs to the audit suite, which has a connection and could read
      * `TimeZone` — and that is not built here because a lint rule receives the server's VERSION on
      * the statement it judges and no session setting. Reading `TimeZone` would need a seam that does
      * not exist, and growing a private channel for one caveat is the wrong trade.
@@ -94,7 +100,7 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
      *
      * @var list<string>
      */
-    private const array CONDITIONAL_ON_SESSION_TIMEZONE = ['timestamp', 'timestamp with time zone'];
+    private const array CONDITIONAL_ON_SESSION_TIMEZONE = PgTypeChangeMatrix::DECIDED_BY_THE_SESSION;
 
     private readonly PgTypeChangeMatrix $matrix;
 
@@ -148,7 +154,7 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
     }
 
     /**
-     * The staged retyping — and NOT for every statement this rule looks at.
+     * The staged retyping — and not for every statement this rule looks at.
      *
      * The version-awareness this rule must have, expressed as an absence. A change the
      * matrix classifies as metadata-only produces no finding and gets no plan; and a change the
@@ -158,7 +164,8 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
      * expensive than saying nothing.
      *
      * So a payload exists exactly where a rewrite is established: a `USING` expression, which forces
-     * one whatever the types are, or a target the matrix knows rewrites.
+     * one whatever the types are, or a change the matrix knows rewrites, read from the pair where the
+     * run knows the column's type and from the target where it does not.
      */
     public function remediationFor(MigrationStatementView $statement): ?RemediationPayload
     {
@@ -168,8 +175,11 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
             return null;
         }
 
-        $rewrites = $change->hasUsingClause()
-            || ($this->matrix->classify($change->targetType()) === TypeChangeImpact::Rewrite && ! $change->restatesTheColumn());
+        $source = $this->knownSource($statement, $change);
+
+        $rewrites = $change->hasUsingClause() || ($source instanceof ColumnTypeBefore
+            ? $this->matrix->classifyFrom($source->type, $change->targetType()) === TypeChangeImpact::Rewrite
+            : $this->matrix->classify($change->targetType()) === TypeChangeImpact::Rewrite && ! $change->restatesTheColumn());
 
         if (! $rewrites) {
             return null;
@@ -244,7 +254,14 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
         //
         // That compound shape is what Laravel's `->change()` compiles to on every call, and it names
         // the column's type whatever changed. Whether the type differs from the column's current one
-        // is then not in the statement, which is what the branch below says.
+        // is then not in the statement. The run may know it, and where it does not, the branch below
+        // asks.
+        $source = $this->knownSource($statement, $change);
+
+        if ($source instanceof ColumnTypeBefore) {
+            return $this->verdictFrom($source, $change);
+        }
+
         $impact = $this->matrix->classify($change->targetType());
 
         // Laravel's `->change()` names the type on every call, so a rewrite the target alone would
@@ -278,6 +295,47 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
                 .'the source type is not in the statement — so whether it rewrites the table is unknown. '
                 .'Verify against the target column\'s current type before deploying.'
                 .$this->sessionTimeZoneCaveat($change->targetType()),
+                UndeterminedReason::UnclassifiedTypeChange,
+            ),
+        };
+    }
+
+    /**
+     * The type an earlier statement of the run gave the column of a `->change()`, or null.
+     *
+     * Only for that form. A `TYPE` clause on its own is somebody changing the type, judged from the
+     * target as it always was.
+     */
+    private function knownSource(MigrationStatementView $statement, ColumnTypeChange $change): ?ColumnTypeBefore
+    {
+        return $change->restatesTheColumn() ? ColumnTypeBefore::of($statement, $change->column) : null;
+    }
+
+    /** The verdict on a `->change()` whose column's type the run knows. */
+    private function verdictFrom(ColumnTypeBefore $source, ColumnTypeChange $change): ?RuleVerdict
+    {
+        return match ($this->matrix->classifyFrom($source->type, $change->targetType())) {
+            TypeChangeImpact::Rewrite => RuleVerdict::flag(
+                sprintf(
+                    'An earlier statement of this run left %1$s as %2$s, and this ALTER COLUMN … TYPE makes it '
+                    .'%3$s. That rewrites the whole table under an ACCESS EXCLUSIVE lock, for a full pass over '
+                    .'every row — an outage on a large, live table. If the change is unavoidable, take a '
+                    .'maintenance window or stage it through a new column.',
+                    $change->column,
+                    $source->type,
+                    $change->targetType(),
+                ).$this->sessionTimeZoneCaveat($change->targetType()),
+            ),
+            TypeChangeImpact::MetadataOnly => null,
+            TypeChangeImpact::Unknown => RuleVerdict::undetermined(
+                sprintf(
+                    'An earlier statement of this run left %1$s as %2$s, and this ALTER COLUMN … TYPE names %3$s. '
+                    .'Whether that rewrites the table turns on a length or precision the run does not show, or '
+                    .'on a conversion SQLens does not classify. Compare the column\'s current type before deploying.',
+                    $change->column,
+                    $source->type,
+                    $change->targetType(),
+                ).$this->sessionTimeZoneCaveat($change->targetType()),
                 UndeterminedReason::UnclassifiedTypeChange,
             ),
         };

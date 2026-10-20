@@ -23,7 +23,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
 /**
- * A migration that CHANGES the schema of an existing table and WRITES that table's data
+ * A migration that CHANGES the schema of an existing table and writes that table's data
  * in the same transaction. Laravel wraps `up()` in one transaction by default, so the
  * schema change's exclusive lock on the table is held for the whole data write too — the
  * lock window is the sum of both, not the schema change alone — and the two cannot be
@@ -40,7 +40,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * cannot fail together, is `MY.L3.MIXED_DDL_DML_NOT_ATOMIC`. It is deliberately the companion the
  * level-3 bundled-locks rule (`PG.L3.RISKY_OPS_SINGLE_TX`) names and defers to.
  *
- * Two deliberate non-findings. A table the SAME migration created is invisible outside
+ * Two deliberate non-findings. A table the same migration created is invisible outside
  * the transaction until commit, so creating it and seeding it is not the contended case —
  * exactly the carve-out the blocking-DDL rules make. And `CreateTable` is not a
  * schema CHANGE of an existing table, so a create-then-insert pair never trips it. The
@@ -88,7 +88,7 @@ final class DmlOnSchemaChangedTableRule extends AbstractLifecycleRule implements
     }
 
     /**
-     * An unbatched backfill writes every row it touches inside ONE transaction, so its cost is rows and
+     * An unbatched backfill writes every row it touches inside one transaction, so its cost is rows and
      * its danger is a transaction that grows until it blocks vacuum or exhausts the undo log. The line
      * is the lowest of the four, because the failure mode arrives long before the runtime does.
      */
@@ -199,7 +199,7 @@ final class DmlOnSchemaChangedTableRule extends AbstractLifecycleRule implements
     }
 
     /**
-     * Whether this statement is the one the finding lands on — the FIRST data write in the stream
+     * Whether this statement is the one the finding lands on — the first data write in the stream
      * that hits a table some schema-changing statement acts on in the same transaction.
      *
      * Read once, for the flag, the undetermined verdict AND the fix material. The three used to
@@ -231,7 +231,7 @@ final class DmlOnSchemaChangedTableRule extends AbstractLifecycleRule implements
      * migration itself created is excluded (uncontended until commit).
      *
      * With `$unresolvedContext`, the same walk over the statements whose transaction context
-     * could NOT be resolved. One walk, one definition of "schema change on an existing table";
+     * could not be resolved. One walk, one definition of "schema change on an existing table";
      * a second copy for the undetermined path would be the place the two silently diverge.
      *
      * @param  list<MigrationStatementDigest>  $stream

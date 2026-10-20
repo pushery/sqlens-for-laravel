@@ -52,7 +52,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * array of amounts carries exactly the same locale problem, and a silent miss would have looked
  * like a clean table.
  *
- * A DOMAIN over `money` is NOT reported, and cannot be. The catalog reports the domain's own name
+ * A domain over `money` is not reported, and cannot be. The catalog reports the domain's own name
  * (`CREATE DOMAIN eur AS money` yields a column of type `eur`), so nothing here can see the money
  * underneath — and there is no undetermined to emit either, because the rule has no way to know the
  * type is a domain at all rather than an ordinary user type it correctly has nothing to say about.
@@ -70,7 +70,7 @@ final class MoneyTypeRule extends AbstractCatalogRule implements DeclaresJudgedO
      * is `numeric(19, 4)` with the currency in a column of its own, and moving a populated column
      * there decides how every existing value lands.
      *
-     * The shared concern decides WHEN this is attached — only where this rule itself flagged — so the rule
+     * The shared concern decides when this is attached — only where this rule itself flagged — so the rule
      * only has to say what it concluded.
      */
     #[Override]
@@ -132,7 +132,7 @@ final class MoneyTypeRule extends AbstractCatalogRule implements DeclaresJudgedO
             return [];
         }
 
-        // ONE verdict for the table. A catalog finding is located at the object and results are
+        // One verdict for the table. A catalog finding is located at the object and results are
         // deduplicated by rule id and location, so a verdict per column would arrive as one with
         // the rest dropped without a word.
         return [RuleVerdict::flag(sprintf(

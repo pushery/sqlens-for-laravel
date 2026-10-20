@@ -30,8 +30,8 @@ use stdClass;
 /**
  * What this MySQL server will say about its own accounts.
  *
- * One statement over `mysql.user`, no lock, inside the session the catalog reader already sealed
- * read-only.
+ * A few statements per reading, over `mysql.user` and the grant tables beside it, no lock, inside the
+ * session the catalog reader already sealed read-only.
  *
  * ## MySQL degrades in the opposite shape from PostgreSQL, and that is why this is not shared code
  *
@@ -70,7 +70,7 @@ final readonly class MysqlSecurityReader implements SecurityReader
     /**
      * The prefix MySQL reserves for the accounts it creates itself.
      *
-     * Named once, and used by BOTH readings: the role reading marks such an account `system`, and the
+     * Named once, and used by both readings: the role reading marks such an account `system`, and the
      * grant reading marks everything granted to one as shipped by the engine. Two copies of this
      * literal would be two answers to one question the day 8.5 adds a fourth internal account — and
      * the half nobody updated fails silently, which is the worse direction here.
@@ -114,7 +114,7 @@ final readonly class MysqlSecurityReader implements SecurityReader
 
         // The role graph, read once and resolved in PHP: every account's attributes are already in
         // `$rows`, so a second query for them would ask the server something this reading holds.
-        $reach = $this->roleReach($skips);
+        $reach = $this->withMandatoryRoles($this->roleReach($skips), $rows);
 
         // Who this reading connected as, in MySQL's own `user@host` spelling. `current_user()` rather
         // than `user()`: the first is the account the server MATCHED, and a wildcard-host row can match
@@ -150,7 +150,7 @@ final readonly class MysqlSecurityReader implements SecurityReader
                 hashType: $this->hashType($row),
                 reachableRoles: $reach[$name.'@'.$host] ?? [],
                 // What those roles hold, unioned — what this account can BECOME by activating a role,
-                // which MySQL keeps as separate from what it IS as PostgreSQL does.
+                // which MySQL keeps as separate from what it is as PostgreSQL does.
                 reachableAttributes: array_merge([], ...array_map(
                     static fn (string $reached): array => $attributes[$reached] ?? [],
                     $reach[$name.'@'.$host] ?? [],
@@ -183,7 +183,7 @@ final readonly class MysqlSecurityReader implements SecurityReader
      *
      * Deliberately thin: `current_user()` gives an identity and nothing more — no plugin, no lock
      * state, no attributes. So the object says exactly that, with `Readability::partial` naming the
-     * fields it does NOT carry. Filling them with defaults would be the silent green this whole model
+     * fields it does not carry. Filling them with defaults would be the silent green this whole model
      * is built against: an account reported as unprivileged because nobody could read its privileges.
      *
      * @param  list<CatalogSkip>  $skips
@@ -275,7 +275,7 @@ final readonly class MysqlSecurityReader implements SecurityReader
                 // is the silent green this package exists to refuse.
                 //
                 // `concat_ws` skips NULLs, so one expression yields exactly the privileges the row
-                // carries, over ONE scan. Thirty union arms against `mysql.user` would be thirty
+                // carries, over one scan. Thirty union arms against `mysql.user` would be thirty
                 // chances to read the same small table in thirty different states.
                 //
                 // `target` is what follows ON in a GRANT or REVOKE for the row, written here because
@@ -327,7 +327,7 @@ final readonly class MysqlSecurityReader implements SecurityReader
             // A SET column (`tables_priv.Table_priv`) arrives comma-joined, and so does the generated
             // unpivot; the dynamic-privilege arm is a single name. One split covers all three.
             //
-            // The empty members are dropped BEFORE the row is recorded, and that order matters: the
+            // The empty members are dropped before the row is recorded, and that order matters: the
             // unpivot emits one row per account whether or not it holds anything, so an entry created
             // first and filled second would invent an empty grant for every account on the server —
             // and an empty grant is not nothing, it is a claim that the account was granted something.
@@ -389,7 +389,7 @@ final readonly class MysqlSecurityReader implements SecurityReader
                 // Decided in the collector above, from `Grant_priv` at global and database scope and
                 // from the `Grant` SET member at the finer ones — three spellings, one answer.
                 grantable: $parts['grantable'],
-                // A grant to one of MySQL's OWN accounts is part of what MySQL is, not of what this
+                // A grant to one of MySQL's own accounts is part of what MySQL is, not of what this
                 // project did. MySQL has no `pg_init_privs` to read the answer out of, so the
                 // reserved account prefix is the signal — the same one the role reading marks
                 // `system` by, named once above so the two cannot drift.
@@ -402,7 +402,7 @@ final readonly class MysqlSecurityReader implements SecurityReader
                 origin: $this->isEngineAccount($parts['user']) ? GrantOrigin::Initdb : GrantOrigin::Project,
                 // `GRANT ALL PRIVILEGES` leaves no trace of the word ALL — MySQL expands it into
                 // every column at once, so the only honest way to recognize it afterwards is to ask
-                // whether every column IS set. The artifact is the list of what "every" means at
+                // whether every column is set. The artifact is the list of what "every" means at
                 // this scope, and it is the same list the unpivot was generated from, so the
                 // question and the reading cannot disagree.
                 coversEveryPrivilege: $this->coversEveryStaticPrivilege($static, $scope, $parts['privileges']),
@@ -585,6 +585,75 @@ final readonly class MysqlSecurityReader implements SecurityReader
     }
 
     /**
+     * The role reach with the roles `@@mandatory_roles` names added to every account but themselves.
+     *
+     * MySQL grants a mandatory role to every account without writing a row to `mysql.role_edges`.
+     * Measured on MySQL 8.0: an account with no grant of its own lists the role in
+     * `information_schema.APPLICABLE_ROLES` as mandatory and reads what the role may after
+     * `SET ROLE ALL`, while `role_edges` holds nothing for it. A reach built from the edges alone left
+     * out a role every account can become. What a mandatory role reaches through its own edges comes
+     * with it.
+     *
+     * A global system variable needs no privilege to read, so this reading has no skip of its own.
+     *
+     * @param  array<string, list<string>>  $reach
+     * @param  list<object>  $rows
+     * @return array<string, list<string>>
+     */
+    #[RawSql(reason: 'reads @@mandatory_roles, the roles MySQL grants every account without a row in mysql.role_edges')]
+    private function withMandatoryRoles(array $reach, array $rows): array
+    {
+        /** @var list<object> $answer */
+        $answer = array_values($this->session->read(static fn (Connection $db): array => $db->select('select @@global.mandatory_roles as roles')));
+        $mandatory = $this->mandatoryRoleIdentities($this->text($answer[0] ?? new stdClass, 'roles'));
+
+        if ($mandatory === []) {
+            return $reach;
+        }
+
+        $granted = [];
+
+        foreach ($mandatory as $role) {
+            $granted = [...$granted, $role, ...($reach[$role] ?? [])];
+        }
+
+        foreach ($rows as $row) {
+            $account = $this->text($row, 'User').'@'.$this->text($row, 'Host');
+            $merged = array_values(array_unique([...($reach[$account] ?? []), ...array_diff($granted, [$account])]));
+            sort($merged);
+            $reach[$account] = $merged;
+        }
+
+        return $reach;
+    }
+
+    /**
+     * The identities a `@@mandatory_roles` value names, in the bare `user@host` spelling of the reach.
+     *
+     * The value is a comma-separated list in the spelling `GRANT` accepts: a name, bare or quoted with
+     * a backtick, a single or a double quote, and an optional `@host` that defaults to `%`.
+     *
+     * @return list<string>
+     */
+    private function mandatoryRoleIdentities(string $value): array
+    {
+        $identities = [];
+
+        foreach (explode(',', $value) as $item) {
+            if (preg_match('/^\s*(`[^`]+`|\'[^\']+\'|"[^"]+"|[^@\s]+)\s*(?:@\s*(`[^`]+`|\'[^\']+\'|"[^"]+"|\S+))?\s*$/', $item, $parts) === 1) {
+                $identities[] = $this->withoutIdentifierQuotes($parts[1]).'@'.$this->withoutIdentifierQuotes($parts[2] ?? '%');
+            }
+        }
+
+        return $identities;
+    }
+
+    private function withoutIdentifierQuotes(string $part): string
+    {
+        return (string) preg_replace('/^([`\'"])(.*)\1$/s', '$2', $part);
+    }
+
+    /**
      * The connecting account's own grants, parsed from `SHOW GRANTS`.
      *
      * MySQL answers this one in SQL text rather than in rows — `GRANT SELECT, INSERT ON `app`.* TO
@@ -648,7 +717,7 @@ final readonly class MysqlSecurityReader implements SecurityReader
     /**
      * The global privileges that carry the same authority PostgreSQL states as role attributes.
      *
-     * `Login` is set for every account in `mysql.user`, and that is not a shortcut: the table IS the
+     * `Login` is set for every account in `mysql.user`, and that is not a shortcut: the table is the
      * list of accounts that may connect. A locked or expired account is a different fact, and folding
      * either into "may not log in" would hide the state a rule wants to name.
      *
@@ -725,7 +794,7 @@ final readonly class MysqlSecurityReader implements SecurityReader
     /**
      * The stored routines this account can see, and what they run as.
      *
-     * ## `information_schema.ROUTINES` narrows SILENTLY, which is worse than refusing
+     * ## `information_schema.ROUTINES` narrows silently, which is worse than refusing
      *
      * The view shows a caller only the routines they hold a privilege on, and it does so without an
      * error: a restricted account gets a shorter list and a successful query. A reader that took that
@@ -751,12 +820,12 @@ final readonly class MysqlSecurityReader implements SecurityReader
     {
         $skips = [];
 
-        // BOTH questions in ONE session read, and that is not a micro-optimization. `ReaderSession`
-        // seals its session read-only and PROVES it by attempting a write; a second `read()` inside the
+        // Both questions in one session read, and that is not a micro-optimization. `ReaderSession`
+        // seals its session read-only and proves it by attempting a write; a second `read()` inside the
         // same reading re-enters that sequence, and the defense then reports its own probe as a write
         // the session accepted. Measured: the reading came back refused with "the catalog reader
         // session accepted a write" and no routines at all.
-        // A LIST of the two answers rather than a keyed pair, because `attempt()` is typed `list<T>`
+        // A list of the two answers rather than a keyed pair, because `attempt()` is typed `list<T>`
         // for every reader in the package and widening a shared contract for one caller is how a
         // helper stops being shared.
         /** @var list<list<object>> $answer */
@@ -768,7 +837,7 @@ final readonly class MysqlSecurityReader implements SecurityReader
                     .' SECURITY_TYPE as security_type, DEFINER as definer'
                     .' from information_schema.ROUTINES'
                     // The audited database's routines, as on PostgreSQL, where a catalog is one
-                    // database. On MySQL a schema IS a database, and every other one on a shared
+                    // database. On MySQL a schema is a database, and every other one on a shared
                     // server belongs to another application: read server-wide, an audit of one
                     // reported the definer routines of all of them as its own.
                     .' where ROUTINE_SCHEMA = database()'
@@ -862,7 +931,7 @@ final readonly class MysqlSecurityReader implements SecurityReader
                 get_object_vars((object) $row),
             )));
 
-            // `SHOW_ROUTINE` is checked FIRST because it is the RIGHT answer, not a fallback. It is
+            // `SHOW_ROUTINE` is checked first because it is the right answer, not a fallback. It is
             // the one privilege MySQL 8.0 added for exactly this question, and a project that grants
             // it has narrowed correctly — measured on 8.4: an account with `SHOW_ROUTINE ON *.*` and
             // no global SELECT sees every routine in the view.

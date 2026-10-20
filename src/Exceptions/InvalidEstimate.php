@@ -11,7 +11,7 @@ use Pushery\SQLens\Catalog\Statistics\EstimateSource;
  * A statistics number was built in a shape it cannot have.
  *
  * A wiring error rather than a user error, so it throws instead of becoming an `undetermined`: an
- * undetermined says "we looked and could not tell", and both cases here are a reader that HAD the
+ * undetermined says "we looked and could not tell", and both cases here are a reader that had the
  * answer and assembled it wrongly. Letting one through would put a number into a report that reads
  * like a measurement and is not one — and a report is exactly where that stops being visible.
  */

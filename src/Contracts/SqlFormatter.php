@@ -17,9 +17,9 @@ use Pushery\SQLens\Format\FormatStyle;
  *
  * ## `format()` never throws
  *
- * Every failure a formatter can meet — a missing binary, a version outside the measured window, a
- * timeout, an unparsable statement, a style option it cannot express — is an ordinary event on a
- * real machine, and each comes back as {@see FormatResult::undetermined()} with a named reason. A
+ * Every failure a formatter can meet — a missing binary, a timeout, an unparsable statement, output
+ * that no longer reads as the statement it was given, a style option it cannot express — is an
+ * ordinary event on a real machine, and each comes back as {@see FormatResult::undetermined()} with a named reason. A
  * suite formatting a hundred files must be able to report the two it could not.
  *
  * That is also why there is no `formatOrFail()`. An alternative that throws is an alternative
@@ -71,7 +71,7 @@ interface SqlFormatter
      * which says nothing at all when no file is at hand.
      *
      * `null` means the question could not be answered: the binary is absent, or it did not respond
-     * to the probe. It NEVER means "no version" for a backend that is present, and it never throws
+     * to the probe. It never means "no version" for a backend that is present, and it never throws
      * -- these backends are amplifiers, never a requirement, so a diagnostic that asks about one
      * must not be the thing that fails.
      *

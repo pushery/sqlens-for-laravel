@@ -16,11 +16,12 @@ use Pushery\SQLens\Drivers\DriverResolutionFailure;
 use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Drivers\UnsupportedDriverMessage;
 use Pushery\SQLens\Exceptions\UnknownReporterFormat;
-use Pushery\SQLens\Exceptions\UnreadableBaseline;
 use Pushery\SQLens\Lint\LintRunner;
 use Pushery\SQLens\Lint\ShadowClearance;
 use Pushery\SQLens\Reporting\Console\ConsoleReporter;
 use Pushery\SQLens\Reporting\ReporterManager;
+use Pushery\SQLens\Reporting\ReportText;
+use Pushery\SQLens\Rules\ServerVersion;
 use Pushery\SQLens\Subjects\CaptureMode;
 use Symfony\Component\Console\Output\OutputInterface;
 
@@ -74,7 +75,7 @@ final class LintCommand extends Command
 
     public function handle(LintRunner $runner, ReporterManager $reporters, Translator $translator, Repository $config, ShadowClearance $clearance, DriverManager $drivers): int
     {
-        // BEFORE the reporter, before the profile, before anything opens a connection: is the
+        // Before the reporter, before the profile, before anything opens a connection: is the
         // configuration one this package understands at all? An unknown key is a key that gets
         // IGNORED, and ignoring is silent — a `levl: 3` typo produces a green run that checked
         // less, and nothing on screen says so. The machinery for this existed and was tested from
@@ -83,7 +84,7 @@ final class LintCommand extends Command
             return ExitCode::Misconfiguration->value;
         }
 
-        // Resolve the reporter and the output stream BEFORE the run, so an unknown
+        // Resolve the reporter and the output stream before the run, so an unknown
         // format or an unwritable output file fails fast as a misconfiguration without
         // capturing anything.
         $format = $this->option('format');
@@ -113,11 +114,11 @@ final class LintCommand extends Command
             return ExitCode::Misconfiguration->value;
         }
 
-        // The lint half of the same hazard. `--output` is open and therefore already
-        // truncated, and this command has NINE early returns after this point: a bad profile, a bad
-        // level, a bad category, two `--file` conflicts, three `--roundtrip` refusals, a blocked
-        // production guard. Every one of them used to leave a zero-byte report behind that reads
-        // like a clean run. The `finally` covers the tenth too.
+        // The lint half of the same hazard. `--output` is open and therefore already truncated, and
+        // the command returns early from many places after this point: a bad profile, level or
+        // category, a `--file` or `--roundtrip` refusal and an unreadable baseline among them. Every
+        // one of them used to leave a zero-byte report behind that reads like a clean run. The
+        // `finally` covers them all, a return added later included.
         $reported = false;
 
         try {
@@ -143,7 +144,7 @@ final class LintCommand extends Command
         OutputInterface $output,
         bool &$reported,
     ): int {
-        // The active profile is resolved BEFORE the run — flag over SQLENS_PROFILE over
+        // The active profile is resolved before the run — flag over SQLENS_PROFILE over
         // config over the built-in default — and an unknown or empty value is named,
         // never a silent fall back to the lenient default that would let a run believe
         // it was strict when it was not. A valid selection is written to config, so the
@@ -212,6 +213,17 @@ final class LintCommand extends Command
             return ExitCode::Misconfiguration->value;
         }
 
+        // The pin flag, read the strict way the run reads a pin and the validator reads the setting.
+        // A pin the run cannot read would leave every version-dependent rule undetermined behind
+        // exit 0, so a value such as `18.x` is named here, before anything runs.
+        $assume = $this->option('assume-server-version');
+
+        if (is_string($assume) && $assume !== '' && ! ServerVersion::parsePin($assume, 'assumed') instanceof ServerVersion) {
+            $this->stderr()->writeln($this->translate('sqlens::messages.commands.invalid_assume_server_version', ['version' => $assume]));
+
+            return ExitCode::Misconfiguration->value;
+        }
+
         $connection = $this->option('connection');
         $roundtrip = $this->option('roundtrip') === true;
 
@@ -257,39 +269,38 @@ final class LintCommand extends Command
         $shadow = $files === [] && $this->option('shadow') === true;
 
         // Shadow mode creates and drops a database, so the production guard decides
-        // BEFORE anything is built — and its decision is passed down rather than
+        // before anything is built — and its decision is passed down rather than
         // re-derived, so there is exactly one guard. A blocked decision still runs:
         // the captor turns it into a named undetermined per migration, which is the
         // honest report of a run that was not allowed, never a silent nothing.
         $guard = $shadow ? $this->guardDecision($clearance, $drivers, $config, $connection) : null;
-        $assume = $this->option('assume-server-version');
 
-        // A baseline that cannot be read stops the run HERE, named, with the misconfiguration exit.
-        // The alternative is what this used to do: treat it as empty, so every accepted finding
-        // comes back at once and the reader sees a wall of new findings with nothing saying the
-        // file was unreadable. Loud for the wrong reason is not better than quiet.
-        try {
-            $outcome = $runner->run(
-                is_string($connection) ? $connection : null,
-                $this->migrationPaths(),
-                $shadow ? CaptureMode::Shadow : CaptureMode::Pretend,
-                is_string($assume) && $assume !== '' ? $assume : null,
-                $level,
-                $categoryValues,
-                strictTools: $this->strictToolsOverride(),
-                files: $files,
-                guard: $guard,
-                roundtrip: $roundtrip,
-                debt: $debt,
-            );
-        } catch (UnreadableBaseline $failure) {
-            $this->stderr()->writeln($failure->getMessage());
+        $outcome = $runner->run(
+            is_string($connection) ? $connection : null,
+            $this->migrationPaths(),
+            $shadow ? CaptureMode::Shadow : CaptureMode::Pretend,
+            is_string($assume) && $assume !== '' ? $assume : null,
+            $level,
+            $categoryValues,
+            strictTools: $this->strictToolsOverride(),
+            files: $files,
+            guard: $guard,
+            roundtrip: $roundtrip,
+            debt: $debt,
+        );
 
-            return ExitCode::Misconfiguration->value;
+        // A baseline that cannot be read stops the run, named, with the misconfiguration exit. The
+        // alternative is what this used to do: treat it as empty, so every accepted finding comes
+        // back at once and the reader sees a wall of new findings with nothing saying the file was
+        // unreadable. Loud for the wrong reason is not better than quiet.
+        if ($outcome->unreadableBaseline !== null) {
+            $this->stderr()->writeln($outcome->unreadableBaseline);
+
+            return $outcome->exitCode->value;
         }
 
         // A --file that did not resolve to a migration is a named misconfiguration, and the outcome
-        // carries WHICH one: with several named, the reason without the path sends a reader to the
+        // carries which one: with several named, the reason without the path sends a reader to the
         // first file in the list, which is usually not the one that failed.
         if ($outcome->fileFailure instanceof SingleFileFailure) {
             $this->stderr()->writeln($this->translate($outcome->fileFailure->translationKey(), ['file' => (string) $outcome->fileFailurePath]));
@@ -312,6 +323,12 @@ final class LintCommand extends Command
 
             return $outcome->exitCode->value;
         }
+
+        // What the shadow setup said beyond the reason each result carries: who holds the template,
+        // which line of the dump could not be split, which dump directive the replay did not run. A
+        // person reads it here, and no report compares it. Raw, because it quotes what the server
+        // and the dump said.
+        ReportText::lines($this->stderr(), $outcome->shadowNotes);
 
         $reporter->report($outcome->result, $outcome->context, $output);
         $reported = true;
@@ -371,7 +388,7 @@ final class LintCommand extends Command
 
     /**
      * The migration paths to lint: the repeated `--path` options, or null (the
-     * runner's default) when none are given. Null is NOT an empty list — an empty
+     * runner's default) when none are given. Null is not an empty list — an empty
      * list means "explicitly no paths" and skips; null means "the app's defaults".
      *
      * @return list<string>|null

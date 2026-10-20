@@ -16,12 +16,16 @@ use Pushery\SQLens\Today;
  * The immutable parameters of one SQLens run — the single source of the
  * reproducibility header every reporter prints and of a run's determinism claim.
  *
- * Determinism is a hard constraint on this VO: it carries NO timestamp, NO absolute
- * path, and NO hostname. A `generated_at` field would destroy every golden-file
- * check and every baseline, so "same state ⇒ same output" only holds because
- * nothing environment-varying lives here. Its array form has a fixed key order, and
- * the server and tool versions are emitted in a deterministic order regardless of
- * how they were collected.
+ * Determinism is a hard constraint on this VO: it carries no generation time and no
+ * absolute path. A `generated_at` field would destroy every golden-file check and
+ * every baseline, so "same state ⇒ same output" holds for everything a run decides.
+ * Four fields are deliberate exceptions, each with its reason where it is built:
+ * `instance` names the server and database that answered, the host as the server
+ * reported it; `run_day` is the UTC day the rules judged on; and `check_timings` and
+ * `time_budget_ms_consumed` are wall-clock measurements, which a deterministic
+ * comparison leaves out by name. Its array form has a fixed key order, and the server
+ * and tool versions are emitted in a deterministic order regardless of how they were
+ * collected.
  */
 final readonly class RunContext
 {
@@ -56,7 +60,7 @@ final readonly class RunContext
         // How many rules this run applied, and how many it did not — reported so a
         // withheld rule is a visible, counted choice and never a silent pass.
         //
-        // Hidden means withheld for ANY reason: the level, the category scope, the
+        // Hidden means withheld for any reason: the level, the category scope, the
         // maturity tier, the server's version window. It used to mean "held back by
         // the level gate", which is one of the four, so a run narrowed by category
         // reported those rules as neither active nor hidden — and the audit suite
@@ -87,7 +91,7 @@ final readonly class RunContext
         // full run that happened to find less.
         public array $activeCategories = [],
         public array $admittedStability = [],
-        // WHICH instance this run is about, once one was addressed. Null for a run that
+        // Which instance this run is about, once one was addressed. Null for a run that
         // addresses none — a lint run over files has no instance, and printing a blank
         // one would invent a subject. Projected from the audit's own resolution rather
         // than resolved here: the reporting layer renders, it does not decide.
@@ -96,7 +100,7 @@ final readonly class RunContext
         // than only in the findings, because the header is what gets read first and a
         // run that skipped half the catalog must not look complete at a glance.
         public array $skips = [],
-        // WHICH tenant this report is about, when the project declared tenancy. Null for a
+        // Which tenant this report is about, when the project declared tenancy. Null for a
         // single-database project, which is the ordinary case and needs no qualifier.
         //
         // In the header rather than only in the config, because the scope of the claim is part of
@@ -104,16 +108,16 @@ final readonly class RunContext
         // tenant database that is exactly the wrong conclusion.
         public ?string $tenant = null,
         /**
-         * WHICH rules actually got a subject to judge — not how many were selected.
+         * Which rules actually got a subject to judge — not how many were selected.
          *
-         * `activeRuleCount` above is decided BEFORE anything is read: it counts the rules that
+         * `activeRuleCount` above is decided before anything is read: it counts the rules that
          * survived the level, category, maturity and version gates. It reads exactly the same
          * whether the catalog reading returned every table or none, so a run whose reader came back
          * empty reports the same "12 rules active" as one that judged all twelve — over a report in
          * which nothing was checked. That is the gap this list closes, and it is the reason the
          * count could not close it.
          *
-         * A rule missing from here judged NOTHING, and its silence in the findings therefore means
+         * A rule missing from here judged nothing, and its silence in the findings therefore means
          * "never asked" rather than "asked and found nothing". Those are the two readings a report
          * has to be able to tell apart; without this field they are one.
          *
@@ -126,7 +130,7 @@ final readonly class RunContext
          */
         public ?array $evaluatedRuleIds = null,
         /**
-         * The session timeouts a preflight found IN FORCE, read back rather than requested.
+         * The session timeouts a preflight found in force, read back rather than requested.
          *
          * A set value is not an assurance; a read-back one is. Under transaction pooling a `SET`
          * is accepted, returns no error, and stops applying at the end of the transaction — so a
@@ -182,8 +186,8 @@ final readonly class RunContext
          * then looks the same as "an older SQLens wrote this report".
          *
          * Why it belongs in the reproducibility header rather than only in the findings: a blocked
-         * run reports every subject as `shadow_guard_blocked`, which says THAT the guard held it and
-         * not WHICH check did. The three are not interchangeable — a disallowed environment is a
+         * run reports every subject as `shadow_guard_blocked`, which says that the guard held it and
+         * not which check did. The three are not interchangeable — a disallowed environment is a
          * configuration decision, a production connection is a target mistake, and a missing
          * confirmation is a one-flag fix — and without this a reader has to guess between them. The
          * environment and the force flag travel with it for the same reason `strict_tools` and
@@ -200,7 +204,7 @@ final readonly class RunContext
          * - `null` — this producer has no gate to waive. A lint run has no such flag, so the
          *   question does not apply, and answering `false` would claim a fail-closed gate ran.
          * - `false` — a gate ran and nothing was waived. The verdict is the checks' own.
-         * - `true` — the run was blocked ONLY by checks that could not answer, the escape hatch was
+         * - `true` — the run was blocked only by checks that could not answer, the escape hatch was
          *   open, and the exit code is clean because somebody asked for it to be.
          *
          * It is in the reproducibility header because that last case is the one a deploy log has to
@@ -213,7 +217,7 @@ final readonly class RunContext
          */
         public ?bool $undeterminedWaiver = null,
         /**
-         * WHICH reasons a waiver named, when it named any — empty when it waived whatever could
+         * Which reasons a waiver named, when it named any — empty when it waived whatever could
          * not answer, `null` when there was no gate to waive.
          *
          * Deliberately not in {@see toArray()}, and that is a decision rather than an oversight:
@@ -234,12 +238,12 @@ final readonly class RunContext
         /**
          * Which POLICY a drift run applied — report or gate — or null on a producer that has none.
          *
-         * Separate from `mode` above and not a rename of it: that one says HOW the expectation side
+         * Separate from `mode` above and not a rename of it: that one says how the expectation side
          * was built (`shadow` — a real replay into a throwaway database), which is a statement about
          * method. This one says whether the run was allowed to block, which is a statement about
          * consequence. A reader needs both and they answer different questions.
          *
-         * Without it, a `report` run and a `gate` run over the SAME drifted database produce
+         * Without it, a `report` run and a `gate` run over the same drifted database produce
          * byte-identical documents. The exit codes differ — clean against findings-above-gate — but
          * the exit code is not what gets archived; the document is. A pipeline reading yesterday's
          * report cannot then tell a green run that found nothing from a green run that was never
@@ -295,7 +299,7 @@ final readonly class RunContext
          * a shadow provision. The two share a word and nothing else, which is why this one is
          * emitted as `guard_profile`.
          *
-         * NEVER omitted, and that is the whole reason it is a string rather than a nullable name: a
+         * Never omitted, and that is the whole reason it is a string rather than a nullable name: a
          * deactivated guard that does not appear in the output reads exactly like an active one. A
          * reader scanning a header for `guard` and finding nothing concludes the field is not
          * emitted by this version, not that the guardrails are off.
@@ -318,7 +322,7 @@ final readonly class RunContext
          * the 298 were missing. The first run that named the second path found a real defect
          * immediately.
          *
-         * The number does not fix that configuration and is not meant to. It makes EVERY
+         * The number does not fix that configuration and is not meant to. It makes every
          * misconfiguration of this shape visible at the place a reader already looks, which is worth
          * more than a check against the one that was reported.
          *
@@ -473,7 +477,50 @@ final readonly class RunContext
     }
 
     /**
-     * The ONE hand-written field list, so a second derivation cannot drop a field the first keeps.
+     * The same context, naming the server versions the run read.
+     *
+     * Derived like the ones above, because the commands that read a server assemble the context
+     * from configuration first and learn the version from the session they open. Without it their
+     * reports said "none addressed" about the database they had just read.
+     *
+     * @param  list<ReportedServerVersion>  $serverVersions
+     */
+    public function withServerVersions(array $serverVersions): self
+    {
+        return $this->copyWith(
+            undeterminedWaiver: $this->undeterminedWaiver,
+            undeterminedWaiverReasons: $this->undeterminedWaiverReasons,
+            driftMode: $this->driftMode,
+            comparedObjectTypes: $this->comparedObjectTypes,
+            expectation: $this->expectation,
+            guardProfile: $this->guardProfile,
+            subjectCount: $this->subjectCount,
+            serverVersions: $serverVersions,
+        );
+    }
+
+    /**
+     * The same context, naming the instance the run read.
+     *
+     * Derived like the server versions, and for the same reason: the deploy commands assemble the
+     * context from configuration and learn which server answered from the session they open.
+     */
+    public function withInstance(ReportedInstance $instance): self
+    {
+        return $this->copyWith(
+            undeterminedWaiver: $this->undeterminedWaiver,
+            undeterminedWaiverReasons: $this->undeterminedWaiverReasons,
+            driftMode: $this->driftMode,
+            comparedObjectTypes: $this->comparedObjectTypes,
+            expectation: $this->expectation,
+            guardProfile: $this->guardProfile,
+            subjectCount: $this->subjectCount,
+            instance: $instance,
+        );
+    }
+
+    /**
+     * The one hand-written field list, so a second derivation cannot drop a field the first keeps.
      *
      * There used to be exactly one `with…` method and therefore exactly one copy. A second arrived
      * with the drift policy, and two copies of twenty-two arguments is two places for a new field to
@@ -482,11 +529,13 @@ final readonly class RunContext
      * @param  list<string>|null  $undeterminedWaiverReasons
      * @param  list<string>|null  $comparedObjectTypes
      * @param  array{requested: bool, compared: bool, note: string}|null  $expectation
+     * @param  list<ReportedServerVersion>|null  $serverVersions  null keeps the ones this context has
+     * @param  ReportedInstance|null  $instance  null keeps the one this context names
      */
-    private function copyWith(?bool $undeterminedWaiver, ?array $undeterminedWaiverReasons, ?DriftRunMode $driftMode, ?array $comparedObjectTypes, ?array $expectation, ?string $guardProfile, ?int $subjectCount): self
+    private function copyWith(?bool $undeterminedWaiver, ?array $undeterminedWaiverReasons, ?DriftRunMode $driftMode, ?array $comparedObjectTypes, ?array $expectation, ?string $guardProfile, ?int $subjectCount, ?array $serverVersions = null, ?ReportedInstance $instance = null): self
     {
         return new self(
-            serverVersions: $this->serverVersions,
+            serverVersions: $serverVersions ?? $this->serverVersions,
             toolVersions: $this->toolVersions,
             mode: $this->mode,
             profile: $this->profile,
@@ -500,7 +549,7 @@ final readonly class RunContext
             hiddenRuleCount: $this->hiddenRuleCount,
             activeCategories: $this->activeCategories,
             admittedStability: $this->admittedStability,
-            instance: $this->instance,
+            instance: $instance ?? $this->instance,
             skips: $this->skips,
             tenant: $this->tenant,
             evaluatedRuleIds: $this->evaluatedRuleIds,
@@ -595,7 +644,7 @@ final readonly class RunContext
      *     guard: array{mode: string, environment: string, force: bool, guard: string}|null,
      * }
      *
-     * Note what is NOT here: the suppressed count. It belongs in the header a reader sees, but the
+     * Note what is not here: the suppressed count. It belongs in the header a reader sees, but the
      * authority for it is the RESULT, and a copy on this object could be set to a different number
      * with nothing to notice — a header saying "0 hidden" over a report that hid forty. Each
      * reporter reads it from the result it is already holding, so there is one source and no
@@ -666,11 +715,11 @@ final readonly class RunContext
             'drift_mode' => $this->driftMode?->value,
             'compared_object_types' => $this->comparedObjectTypes,
             'expectation' => $this->expectation,
-            // `guard_profile`, NOT `guard`: the header already carries a `guard` field, and it is
+            // `guard_profile`, not `guard`: the header already carries a `guard` field, and it is
             // the production guard's verdict on a shadow provision. Two unrelated facts under one
             // key is a consumer reading one and acting on the other.
             'guard_profile' => $this->guardProfile,
-            // The remediation payload's own contract, stated ONCE for the run.
+            // The remediation payload's own contract, stated once for the run.
             //
             // Every payload already carries these two beside itself, and that is the right place to
             // answer "what am I holding" for a payload in hand. It is the wrong place to answer the
@@ -688,7 +737,7 @@ final readonly class RunContext
             // categories. Named as a list rather than as a flag, so opting into two tiers reads as
             // two tiers.
             //
-            // In the header for the run that finds NOTHING. A preview rule that reports marks itself
+            // In the header for the run that finds nothing. A preview rule that reports marks itself
             // at the finding; the one that stays silent is invisible, and two runs over one unchanged
             // tree — one admitting preview, one not — otherwise produce identical headers over
             // different coverage.
@@ -702,7 +751,7 @@ final readonly class RunContext
             // Null on a producer with no time budget — not 0, which is a claim about a run that ran.
             'time_budget_ms_consumed' => $this->timeBudgetMsConsumed,
             // The denominator behind every count above, in the header since schema version 6 and
-            // AFTER every version-5 field, because the registers pin the key order. Null where the
+            // after every version-5 field, because the registers pin the key order. Null where the
             // producer states none, which is not zero: zero is a run that judged nothing.
             'subject_count' => $this->subjectCount,
             // After every version-7 field, and the position is the contract rather than tidiness —

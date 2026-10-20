@@ -15,7 +15,7 @@ use Pushery\SQLens\Contracts\Rule;
  *
  * "The config the framework would use" is doing real work in that sentence. Laravel
  * never reads `database.connections.<name>` verbatim: it runs the entry through
- * ConfigurationUrlParser (so a `url`-only connection HAS a driver, extracted from
+ * ConfigurationUrlParser (so a `url`-only connection has a driver, extracted from
  * the scheme) and, for a read/write split, merges the `write` block over the base.
  * Reading the raw array instead would report "no driver key" for a perfectly valid
  * url-based connection, and would miss a driver overridden on the write side.
@@ -82,6 +82,17 @@ final readonly class DriverManager
     }
 
     /**
+     * Whether a driver key names one of the reserved non-goal engines.
+     *
+     * Asked of the registry, which holds the one copy of that list, so a caller that has to refuse a
+     * reserved engine before it opens a connection never keeps a copy of its own.
+     */
+    public function isReserved(string $driver): bool
+    {
+        return $this->registry->isReserved($driver);
+    }
+
+    /**
      * The connection name a suite resolves when none is given explicitly:
      * `sqlens.connection` if set, otherwise the host's default connection
      * (`database.default`). `null` for `sqlens.connection` means "the host
@@ -101,7 +112,7 @@ final readonly class DriverManager
     }
 
     /**
-     * The configured connection NAMES, sorted so the message is deterministic.
+     * The configured connection names, sorted so the message is deterministic.
      * Names only: a host, a user or a password must never reach a finding.
      *
      * @param  array<string, mixed>  $connections
@@ -135,7 +146,7 @@ final readonly class DriverManager
         /** @var array<string, mixed> $connections */
         $connections = $this->config->get('database.connections', []);
 
-        // Laravel's own test is `Arr::get($connections, $name) === null`, NOT
+        // Laravel's own test is `Arr::get($connections, $name) === null`, not
         // `has()`: a connection configured as null exists as a key but is
         // "not configured" to the framework. Matching it here keeps SQLens from
         // reporting a different cause than the framework would for the same config.

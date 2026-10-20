@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Deploy\Drift;
 
+use Pushery\SQLens\Catalog\CatalogContext;
+
 /**
  * What one expectation comparison produced — a report, or a named reason there is none.
  *
@@ -14,20 +16,26 @@ namespace Pushery\SQLens\Deploy\Drift;
  * There is deliberately NO `isComplete()` helper, and its absence is load-bearing rather than an
  * omission. Both callers narrow with `$outcome->report instanceof DriftReport`, because a method
  * call cannot narrow a nullable in PHPStan: with a helper the report would stay `?DriftReport`
- * inside the very branch that exists because there IS one, and every use of it would take a null
+ * inside the very branch that exists because there is one, and every use of it would take a null
  * the type system had already been told could not arrive. The helper was written, shipped unused,
  * and removed — reading the property keeps the invariant in the types.
  */
 final readonly class ExpectationComparisonOutcome
 {
+    /**
+     * @param  CatalogContext|null  $live  what the live reading said about the server it read, the
+     *                                     version a report names among it; null when the comparison
+     *                                     never read the live database
+     */
     private function __construct(
         public ?DriftReport $report,
         public ?ShadowReferenceOutcome $reference,
+        public ?CatalogContext $live = null,
     ) {}
 
-    public static function compared(DriftReport $report, ShadowReferenceOutcome $reference): self
+    public static function compared(DriftReport $report, ShadowReferenceOutcome $reference, ?CatalogContext $live = null): self
     {
-        return new self($report, $reference);
+        return new self($report, $reference, $live);
     }
 
     public static function unavailable(ShadowReferenceOutcome $reference): self

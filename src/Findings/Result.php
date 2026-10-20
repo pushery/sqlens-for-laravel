@@ -86,7 +86,7 @@ final readonly class Result
 
     /**
      * The three-valued run summary. Any fail ⇒ fail; otherwise any undetermined
-     * ⇒ undetermined; otherwise pass. Undetermined NEVER collapses to pass — an
+     * ⇒ undetermined; otherwise pass. Undetermined never collapses to pass — an
      * empty run is the only way to a bare pass.
      */
     public function overallStatus(): Outcome
@@ -195,7 +195,7 @@ final readonly class Result
      *
      * ## Why an aggregate beside the histogram
      *
-     * `countsByDowntimeClass()` already answers "how many of each", and a deploy script CAN derive
+     * `countsByDowntimeClass()` already answers "how many of each", and a deploy script can derive
      * this from it. It should not have to: deriving means knowing the ORDER of the three classes,
      * which is this package's judgment rather than the consumer's, and every script that re-derives
      * it is free to get it wrong in its own way. One of them eventually treats `rewrite` as milder
@@ -301,7 +301,7 @@ final readonly class Result
     }
 
     /**
-     * Suppressed findings per GATE AXIS — the number a security review needs and the source count
+     * Suppressed findings per gate axis — the number a security review needs and the source count
      * cannot give.
      *
      * Per source answers "who hid it"; per axis answers "what was hidden". Those are different

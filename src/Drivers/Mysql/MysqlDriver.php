@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Drivers\Mysql;
 
 use Pushery\SQLens\Contracts\AcceptsRunClock;
+use Pushery\SQLens\Contracts\DeclaresMeasuredServerVersion;
 use Pushery\SQLens\Contracts\Driver;
 use Pushery\SQLens\Contracts\Rule;
+use Pushery\SQLens\Drivers\Mysql\Canonical\MysqlCanonicalization;
+use Pushery\SQLens\Drivers\Mysql\Rules\AbstractMysqlRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\MysqlRuleSet;
 use Pushery\SQLens\Rules\Convention\NamingConvention;
 use Pushery\SQLens\Rules\Lifecycle\LifecycleRuleSet;
@@ -29,7 +32,7 @@ use Pushery\SQLens\Tools\Tool;
  * versa. The two drivers never know about each other — that isolation is the
  * insurance for the later core+driver split, and it must never hold "only almost".
  */
-final class MysqlDriver implements AcceptsRunClock, Driver
+final class MysqlDriver implements AcceptsRunClock, DeclaresMeasuredServerVersion, Driver
 {
     /**
      * @param  string  $projectRoot  so a rule's finding location is repo-relative; the registry
@@ -106,7 +109,12 @@ final class MysqlDriver implements AcceptsRunClock, Driver
          * itself is not judged by a rule an application cannot act on. Null reads as Laravel's own
          * default, which is what an unconfigured project has anyway.
          */
-        private readonly ?string $migrationsTable = null) {}
+        private readonly ?string $migrationsTable = null,
+        /**
+         * The share of its ceiling a primary key may use before the near-ceiling rule reports it, from
+         * `sqlens.audit.key_ceiling.min_percent_used`. Null is the shipped default.
+         */
+        private readonly ?int $keyCeilingPercent = null) {}
 
     public function key(): string
     {
@@ -114,6 +122,15 @@ final class MysqlDriver implements AcceptsRunClock, Driver
     }
 
     public function minimumServerVersion(): string
+    {
+        return AbstractMysqlRule::MINIMUM_SERVER_VERSION;
+    }
+
+    /**
+     * The release the rules and the online DDL matrix were measured against and the gate's MySQL
+     * lane runs, every 8.4.x patch included. A 9.x innovation release is past it.
+     */
+    public function newestMeasuredServerVersion(): string
     {
         return '8.4';
     }
@@ -125,7 +142,7 @@ final class MysqlDriver implements AcceptsRunClock, Driver
      *
      * The lifecycle rules are the same objects the PostgreSQL driver serves, and they are appended
      * here rather than duplicated: a WHERE-less DELETE is a WHERE-less DELETE on either engine. What
-     * is NOT shared is the proof — each of them carries its own MySQL fixture pair, because a rule
+     * is not shared is the proof — each of them carries its own MySQL fixture pair, because a rule
      * registered for one engine and not the other is invisible until somebody runs the other one.
      *
      * @return iterable<Rule>
@@ -133,8 +150,8 @@ final class MysqlDriver implements AcceptsRunClock, Driver
     public function rules(): iterable
     {
         return [
-            ...MysqlRuleSet::shipped($this->projectRoot, $this->auditExpect, $this->moneyColumns, $this->unusedIndexMinDays, $this->naming, $this->documentation, $this->migrationsTable)->all(),
-            ...LifecycleRuleSet::forProjectRoot($this->projectRoot)->all(),
+            ...MysqlRuleSet::shipped($this->projectRoot, $this->auditExpect, $this->moneyColumns, $this->unusedIndexMinDays, $this->naming, $this->documentation, $this->migrationsTable, $this->keyCeilingPercent)->all(),
+            ...LifecycleRuleSet::forProjectRoot($this->projectRoot, new MysqlCanonicalization)->all(),
             // …and the security family, the same Core source the PostgreSQL driver composes, whole.
             // A rule of it with nothing to say on MySQL, such as one about PostgreSQL's PUBLIC
             // pseudo-role, is silent here as a matter of DATA rather than of registration: no subject

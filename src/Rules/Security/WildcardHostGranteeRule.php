@@ -43,12 +43,15 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
 final class WildcardHostGranteeRule extends AbstractMigrationSecurityRule
 {
     /**
-     * A grantee's host half: `… TO 'user'@'host'`, in either quoting style MySQL accepts.
+     * The grantee list of a grant: everything after `TO`, up to a trailing `WITH` or `AS` clause.
      *
-     * Anchored on `TO` so a `DEFINER = 'x'@'%'` clause — a different fact, owned by the routine
-     * rules — is not read as the grantee of this statement.
+     * Anchored on `TO` so a `DEFINER = 'x'@'%'` clause, a different fact owned by the routine
+     * rules, is never read as a grantee, and neither is the account a `GRANT PROXY ON` names before
+     * it. The hosts are then read off the whole list, for the reason the account statements read
+     * theirs with `preg_match_all`: `TO 'reporting'@'localhost', 'app'@'%'` creates the wildcard
+     * account in second place, and a first-match read went silent on it.
      */
-    private const string GRANTEE_HOST = '/\bTO\s+(?:[\'"`][^\'"`]*[\'"`]|[A-Za-z0-9_$]+)\s*@\s*[\'"`]([^\'"`]*)[\'"`]/i';
+    private const string GRANTEE_LIST = '/\bTO\s+(.*?)(?=\s+(?:WITH|AS)\b|\z)/is';
 
     /**
      * The statement that CREATES the wildcard account, which is where it usually enters a project.
@@ -73,7 +76,7 @@ final class WildcardHostGranteeRule extends AbstractMigrationSecurityRule
      * Every `@'host'` in a statement already known to be an account statement.
      *
      * Split from the lead check on purpose, and the split is the fix for a real defect. Anchoring
-     * the lead INSIDE the per-account pattern meant `preg_match_all` found exactly one account:
+     * the lead inside the per-account pattern meant `preg_match_all` found exactly one account:
      * after the first match the `RENAME USER` is consumed, and the second account no longer has it
      * in front. `RENAME USER 'a'@'localhost' TO 'a'@'%'` therefore reported `localhost` and stayed
      * silent — the statement that creates the wildcard read as the statement that fixes it.
@@ -119,6 +122,9 @@ final class WildcardHostGranteeRule extends AbstractMigrationSecurityRule
             .'CREATE USER or RENAME USER statement is invisible to this one',
             'a containerized or serverless deployment often has no stable client address to name, '
             .'which is a real reason to accept this id rather than a reason to narrow the rule',
+            'reads a host that is written: an account named without one, which MySQL takes as `%`, '
+            .'stays silent, because a PostgreSQL grantee has exactly that shape and the rule tells the '
+            .'engines apart by the statement alone',
         ];
     }
 
@@ -134,10 +140,10 @@ final class WildcardHostGranteeRule extends AbstractMigrationSecurityRule
 
         if (preg_match(self::ACCOUNT_STATEMENT, $canonical) === 1 && preg_match_all(self::ACCOUNT_HOST, $canonical, $matches) > 0) {
             $hosts = $matches[1];
-        } elseif (str_contains($upper, 'GRANT') && preg_match(self::GRANTEE_HOST, $canonical, $match) === 1) {
-            $hosts = [$match[1]];
+        } elseif (str_contains($upper, 'GRANT') && preg_match(self::GRANTEE_LIST, $canonical, $list) === 1 && preg_match_all(self::ACCOUNT_HOST, $list[1], $matches) > 0) {
+            $hosts = $matches[1];
         }
-        // The FIRST wildcard among the accounts, not the first account. A statement naming several
+        // The first wildcard among the accounts, not the first account. A statement naming several
         // is worth the finding as soon as one of them is reachable from anywhere, and which one it
         // is belongs in the message rather than in the decision.
         $host = array_find(

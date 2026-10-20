@@ -12,7 +12,7 @@ namespace Pushery\SQLens\Tools;
  * column, or change its JSON shape in the next major, and every one of those turns a mapped
  * finding into a wrong one — silently, because the parse still succeeds.
  *
- * The bounds are DERIVED FROM MEASUREMENT, never from a changelog. Whatever version the
+ * The bounds are derived from measurement, never from a changelog. Whatever version the
  * contract spike ran against is the minimum; the ceiling is the next major, because that is
  * where a tool is entitled to change what it promises.
  */
@@ -41,8 +41,8 @@ final readonly class ToolVersionWindow
     /**
      * The window as it appears in a finding — the reader has to know what to install.
      *
-     * Notation rather than prose, so it reads the same in all seven shipped locales and cannot
-     * drift from the bounds through a translation.
+     * Notation rather than prose: the bounds are stated once, as numbers, and no sentence around
+     * them can drift from them.
      */
     public function describe(): string
     {

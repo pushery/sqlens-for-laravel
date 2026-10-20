@@ -26,7 +26,7 @@ use Pushery\SQLens\Exceptions\InvalidRuleEvidence;
  * vocabulary, with the exemptions pinned to four composition roots. That is the right rule and this
  * is the shape it asks for: the READER stamps the fact, and the rule reads a boolean.
  *
- * ## What is deliberately NOT here
+ * ## What is deliberately not here
  *
  * The artifact records those too, with reasons, because the omissions are the part somebody will
  * otherwise re-add. `REFERENCES` is the sharpest: MySQL requires it on the PARENT table to create a

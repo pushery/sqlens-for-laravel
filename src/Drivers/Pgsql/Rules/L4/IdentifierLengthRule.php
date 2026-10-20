@@ -61,7 +61,7 @@ final class IdentifierLengthRule extends AbstractPgsqlSafetyRule implements Prov
      * The fix is an argument — but it is only a fix for a statement that has the problem, and only
      * for an index or a constraint.
      *
-     * The shape is read through {@see self::overLongNames()}, the SAME call the judgment makes
+     * The shape is read through {@see self::overLongNames()}, the same call the judgment makes
      * rather than a second copy of the condition. A copy is the failure this seam is guarded
      * against: it agrees on the day it is written and drifts silently afterwards, and what a
      * reader gets is a work order for a problem that is not there.
@@ -103,9 +103,9 @@ final class IdentifierLengthRule extends AbstractPgsqlSafetyRule implements Prov
             return null;
         }
 
-        // One sentence per offending name, in ONE verdict: the contract deduplicates a second
+        // One sentence per offending name, in one verdict: the contract deduplicates a second
         // verdict for the same statement by rule id and location, so a statement introducing three
-        // long names would report one and drop two WITHOUT SAYING SO.
+        // long names would report one and drop two without saying so.
         $described = [];
 
         foreach ($names as $name) {

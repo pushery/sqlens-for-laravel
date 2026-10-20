@@ -23,9 +23,14 @@ use Pushery\SQLens\Catalog\TableMembers;
 use Pushery\SQLens\Catalog\TablePrefix;
 use Pushery\SQLens\Catalog\Understanding\IndexComprehension;
 use Pushery\SQLens\Catalog\Usage\IndexUsageReading;
+use Pushery\SQLens\Catalog\Usage\KeyCounter;
+use Pushery\SQLens\Catalog\Usage\KeyCounterReading;
+use Pushery\SQLens\Catalog\Usage\KeyCounterState;
 use Pushery\SQLens\Contracts\CatalogPrivileges;
 use Pushery\SQLens\Contracts\CatalogReader;
+use Pushery\SQLens\Contracts\ReadsKeyCounters;
 use Pushery\SQLens\Engine\ResolvedServerVersion;
+use Pushery\SQLens\Findings\CompositeCredentialRedactor;
 use Pushery\SQLens\Rules\ServerVersion;
 use Pushery\SQLens\Subjects\SchemaObject;
 use Pushery\SQLens\Subjects\SchemaObjectType;
@@ -46,9 +51,11 @@ use Throwable;
  *
  * ## A fixed query battery, not a query per table
  *
- * Six statements, whatever the schema holds. The alternative — walk the tables, then ask about each
- * one's columns — turns a 400-table database into 1,600 round trips, and the reader whose whole
- * promise is not to burden a production instance would be the heaviest thing on it.
+ * The same statements whatever the schema holds: the session's own, the scope, version and privilege
+ * reads, and one per kind of object the request wants. The count never grows with the schema, and
+ * `tests/Postgres/CatalogQueryCountTest.php` holds that. The alternative — walk the tables, then ask
+ * about each one's columns — turns a 400-table database into 1,600 round trips, and the reader whose
+ * whole promise is not to burden a production instance would be the heaviest thing on it.
  *
  * ## What it never does
  *
@@ -56,7 +63,7 @@ use Throwable;
  * nothing is written. The session it runs through proves that about itself before the first of these
  * queries is issued ({@see ReaderSession}).
  */
-final readonly class PgsqlCatalogReader implements CatalogReader
+final readonly class PgsqlCatalogReader implements CatalogReader, ReadsKeyCounters
 {
     /**
      * The relation kinds this version maps, and to what.
@@ -78,7 +85,7 @@ final readonly class PgsqlCatalogReader implements CatalogReader
      *
      * A decision, not an oversight: v1 has no rule that reasons about a foreign table, and mapping
      * one would mean carrying a `postgres_fdw` setup through every fixture for a branch nothing
-     * reads. It is a NAMED skip so a schema that has one is told about it, rather than quietly
+     * reads. It is a named skip so a schema that has one is told about it, rather than quietly
      * returning a snapshot that is short one object.
      */
     private const string FOREIGN_TABLE_SKIP_REASON = 'foreign table not read in v1';
@@ -94,7 +101,7 @@ final readonly class PgsqlCatalogReader implements CatalogReader
     /**
      * The context every object read here carries, stamped with the connection it was read from.
      *
-     * Assigned rather than promoted so the instance is attached ONCE, at construction, instead of
+     * Assigned rather than promoted so the instance is attached once, at construction, instead of
      * at each of the several places that build a SchemaObject — one of which would eventually be
      * added without it, and a finding that named no instance would look exactly like one whose
      * instance happened to be the driver name.
@@ -167,7 +174,7 @@ final readonly class PgsqlCatalogReader implements CatalogReader
             $extensions = new ExtensionOwnershipFilter($request->includeExtensionObjects, $request->allowedExtensions);
 
             $objects = [];
-            // Asked BEFORE the reading, not inferred from it afterwards: on a managed instance the
+            // Asked before the reading, not inferred from it afterwards: on a managed instance the
             // reading can succeed and still be a statement about nothing, and by then an empty
             // result is indistinguishable from a clean schema.
             $skips = new PrivilegeProbe($this->privileges)->run($reader, $schemas);
@@ -229,7 +236,7 @@ final readonly class PgsqlCatalogReader implements CatalogReader
                         // spelling rather than cast to a bool, because a bool has no third value and
                         // the third value is the ordinary one.
                         'autovacuum_enabled' => $this->str($row, 'autovacuum_enabled'),
-                    ],
+                    ] + ($type === SchemaObjectType::Table ? $this->keySequence($row) : []),
                     $this->subjectContext,
                     fromExtension: $owner !== '',
                     isPartition: $this->bool($row, 'is_partition'),
@@ -304,7 +311,7 @@ final readonly class PgsqlCatalogReader implements CatalogReader
 
         [$context, $objects, $skips, $partitionParents] = $reading;
 
-        // Folded LAST, on the finished object list: the fold needs to see a partition's own
+        // Folded last, on the finished object list: the fold needs to see a partition's own
         // indexes to spot a divergent one, and those only exist once every query has run.
         if ($partitionParents !== null) {
             $objects = new PartitionResolver($partitionParents)->fold($objects);
@@ -319,11 +326,11 @@ final readonly class PgsqlCatalogReader implements CatalogReader
         // see in the snapshot.
         $objects = IndexComprehension::classify($objects, $skips);
 
-        // LAST, because it reads the comprehension verdict the line above writes: a rule asking
+        // Last, because it reads the comprehension verdict the line above writes: a rule asking
         // which indexes could cover a foreign key must not be handed one nobody can compare.
         $objects = TableMembers::attachTo($objects);
 
-        // The whole-reading budget, checked once at the end. Exceeding it is a NAMED
+        // The whole-reading budget, checked once at the end. Exceeding it is a named
         // undetermined and not an abort: the objects already read are worth having, and killing
         // the run would throw them away to report a problem the run itself caused.
         $elapsedMs = (int) ((hrtime(true) - $startedAt) / 1_000_000);
@@ -481,7 +488,7 @@ final readonly class PgsqlCatalogReader implements CatalogReader
     }
 
     /**
-     * The version a rule branches on, read from THIS session.
+     * The version a rule branches on, read from this session.
      *
      * `server_version_num` rather than the banner: it is the integer PostgreSQL itself compares on,
      * so a build suffix (`18.2 (Debian 18.2-1.pgdg120+1)`) cannot turn into a parse failure.
@@ -528,9 +535,16 @@ final readonly class PgsqlCatalogReader implements CatalogReader
                        SELECT o.option_value FROM pg_catalog.pg_options_to_table(c.reloptions) o
                        WHERE o.option_name = 'autovacuum_enabled'
                        LIMIT 1
-                   ), '')              AS autovacuum_enabled
+                   ), '')              AS autovacuum_enabled,
+                   -- The sequence that fills the key and where it stops. A schema fact rather than a
+                   -- reading of its position: a serial column widened to bigint keeps a sequence AS
+                   -- integer, measured on PostgreSQL 18, and only the sequence's maximum says so.
+                   ks.sequence_schema  AS key_sequence_schema,
+                   ks.sequence_name    AS key_sequence_name,
+                   ks.sequence_max     AS key_sequence_max
             FROM pg_class c
             JOIN pg_namespace n ON n.oid = c.relnamespace
+            {$this->keySequenceJoin()}
             WHERE n.nspname = ANY (?)
               -- Filtered here rather than after the fact, and the reason is not performance:
               -- pg_class also holds one relation per INDEX and one TOAST table per table with a
@@ -552,7 +566,7 @@ final readonly class PgsqlCatalogReader implements CatalogReader
      */
     private function readableRelkinds(): string
     {
-        // The foreign table is in the query and NOT in the map on purpose: it is read in order to be
+        // The foreign table is in the query and not in the map on purpose: it is read in order to be
         // skipped by name, which is the one case where "no mapping" is the answer rather than a gap.
         $kinds = [...array_keys(self::RELATION_KINDS), 'f'];
 
@@ -639,6 +653,29 @@ final readonly class PgsqlCatalogReader implements CatalogReader
     }
 
     /**
+     * The sequence that fills a table's primary key, and its maximum, as table attributes.
+     *
+     * Both null when no sequence fills the key, when the key spans more than one column, or when the
+     * table has none. `primary_key_sequence_max` is the sequence's own MAXVALUE, which can stop below
+     * what the key column holds.
+     *
+     * @param  array<string, scalar|null>  $row
+     * @return array{primary_key_sequence: string|null, primary_key_sequence_max: int|null}
+     */
+    private function keySequence(array $row): array
+    {
+        $name = $this->nullableStr($row, 'key_sequence_name');
+        $max = $row['key_sequence_max'] ?? null;
+
+        return [
+            'primary_key_sequence' => $name === null || $name === ''
+                ? null
+                : $this->canonicalizer->qualified($this->str($row, 'key_sequence_schema'), $name),
+            'primary_key_sequence_max' => is_numeric($max) ? (int) $max : null,
+        ];
+    }
+
+    /**
      * The sequence whose lifetime this column owns, canonicalized — or null when there is none.
      *
      * @param  array<string, scalar|null>  $row
@@ -673,7 +710,7 @@ final readonly class PgsqlCatalogReader implements CatalogReader
      * ordinary state, and the one where a zero count says nothing at all.
      *
      * Read through the session like every other query here, so it inherits the same timeouts and
-     * the same read-only promise. A failure is a NAMED unavailability rather than an exception: a
+     * the same read-only promise. A failure is a named unavailability rather than an exception: a
      * managed instance that hides the statistics views must not make the whole audit fall over, and
      * must not look like a database whose indexes are all unused either.
      */
@@ -699,11 +736,17 @@ final readonly class PgsqlCatalogReader implements CatalogReader
                 // start. A second clock in PHP could disagree with the one that stamped the reset
                 // by more than the threshold a rule compares against — and whole DAYS rather than
                 // an instant so two audits on one day still produce byte-identical output.
+                //
+                // Whether the counters count at all comes from the same statement: a server that hands
+                // new connections track_counts = off leaves every counter where it was, measured on
+                // PostgreSQL 18, and its value is the one a new connection gets rather than this
+                // session's own. A role without pg_read_all_settings still sees this row.
                 $reset = $this->rows($reader, <<<'SQL'
                     SELECT stats_reset::text AS reset_at,
                            CASE WHEN stats_reset IS NULL THEN NULL
                                 ELSE pg_catalog.FLOOR(EXTRACT(EPOCH FROM (pg_catalog.now() - stats_reset)) / 86400)::int
-                           END AS window_days
+                           END AS window_days,
+                           (SELECT s.reset_val FROM pg_catalog.pg_settings s WHERE s.name = 'track_counts') AS track_counts
                     FROM pg_stat_database WHERE datname = pg_catalog.current_database()
                     SQL, []);
             } catch (Throwable) {
@@ -726,8 +769,165 @@ final readonly class PgsqlCatalogReader implements CatalogReader
                 $scans,
                 $resetAt === '' ? null : $resetAt,
                 $this->wholeDays($reset[0]['window_days'] ?? null),
+                // Only an explicit off stops the counting. A value the reading could not see leaves
+                // the counters judged as before rather than every index undetermined.
+                counting: strcasecmp($this->nullableStr($reset[0] ?? [], 'track_counts') ?? 'on', 'off') !== 0,
             );
         });
+    }
+
+    /**
+     * How far the sequence behind each primary key that can run out has got.
+     *
+     * ## Which sequence, found without a name
+     *
+     * {@see self::keySequenceJoin()}, the lookup the catalog reading uses as well, so the two cannot
+     * disagree about which sequence feeds a key.
+     *
+     * ## Only the keys that can run out, and the keys a narrower column points at
+     *
+     * A row is read when the key column is a `smallint` or an `integer`, or when the sequence stops
+     * below the `bigint` ceiling. Measured on PostgreSQL 18: a `serial` column widened with `ALTER
+     * COLUMN ... TYPE bigint` keeps a sequence `AS integer`, and the insert after 2,147,483,647 fails
+     * with "reached maximum value of sequence"; an identity column widens its sequence with it.
+     *
+     * A `bigint` key on a `bigint` sequence cannot run out itself, and is read only when a
+     * single-column foreign key of `smallint` or `integer` references it: that column runs out when
+     * the parent's sequence passes its ceiling, and the parent's position is the only place that
+     * says when. Any other such key is left out, so no lock is taken for it.
+     *
+     * ## The position, and the lock it costs
+     *
+     * `pg_sequence_last_value()` answers NULL both for a sequence that has never handed out a value
+     * and for a role that holds neither SELECT nor USAGE on it, which is where `pg_monitor` stands
+     * (measured on 18). `has_sequence_privilege()` is read beside it and keeps the two apart. The
+     * call takes ROW EXCLUSIVE on the sequence until the transaction ends, measured, the lock every
+     * `nextval()` takes, and the CASE leaves a sequence the role may not read untouched. A lock that
+     * is not granted within the session's timeout makes the reading unavailable rather than the
+     * audit fail.
+     */
+    public function keyCounters(CatalogRequest $request): KeyCounterReading
+    {
+        return $this->session->read(function (Connection $reader) use ($request): KeyCounterReading {
+            try {
+                $schemas = new SchemaScope($request->schemas, self::SYSTEM_SCHEMAS)
+                    ->apply($this->defaultSchemas($reader), $this->existingSchemas($reader));
+
+                $rows = $this->rows($reader, <<<SQL
+                    SELECT n.nspname         AS schema,
+                           c.relname         AS name,
+                           ks.sequence_schema,
+                           ks.sequence_name,
+                           ks.sequence_max,
+                           pg_catalog.has_sequence_privilege(ks.sequence_oid, 'SELECT,USAGE') AS readable,
+                           CASE WHEN pg_catalog.has_sequence_privilege(ks.sequence_oid, 'SELECT,USAGE')
+                                THEN pg_catalog.pg_sequence_last_value(ks.sequence_oid)
+                           END               AS last_value
+                    FROM pg_catalog.pg_class c
+                    JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+                    {$this->keySequenceJoin()}
+                    WHERE n.nspname = ANY (?)
+                      AND c.relkind IN ('r', 'p')
+                      AND ks.sequence_oid IS NOT NULL
+                      AND (ks.key_type IN ('pg_catalog.int2'::pg_catalog.regtype, 'pg_catalog.int4'::pg_catalog.regtype)
+                           OR ks.sequence_max < 9223372036854775807
+                           OR EXISTS (
+                               SELECT 1
+                                 FROM pg_catalog.pg_constraint fk
+                                 JOIN pg_catalog.pg_attribute fa
+                                   ON fa.attrelid = fk.conrelid AND fa.attnum = fk.conkey[1]
+                                WHERE fk.contype = 'f'
+                                  AND fk.confrelid = c.oid
+                                  AND pg_catalog.array_length(fk.conkey, 1) = 1
+                                  AND fk.confkey[1] = ks.key_attnum
+                                  AND fa.atttypid IN ('pg_catalog.int2'::pg_catalog.regtype, 'pg_catalog.int4'::pg_catalog.regtype)))
+                    ORDER BY n.nspname, c.relname
+                    SQL, [$this->arrayLiteral($schemas)]);
+            } catch (Throwable $failure) {
+                return KeyCounterReading::unavailable(new CompositeCredentialRedactor()->redact($failure->getMessage()));
+            }
+
+            $counters = [];
+
+            foreach ($rows as $row) {
+                $sequence = $this->canonicalizer->qualified($this->str($row, 'sequence_schema'), $this->str($row, 'sequence_name'));
+                $last = $row['last_value'] ?? null;
+                $max = $row['sequence_max'] ?? null;
+
+                $counters[$this->canonicalizer->qualified($this->str($row, 'schema'), $this->str($row, 'name'))] = new KeyCounter(
+                    $sequence,
+                    match (true) {
+                        ! $this->bool($row, 'readable') => KeyCounterState::Withheld,
+                        is_numeric($last) => KeyCounterState::Read,
+                        default => KeyCounterState::Unused,
+                    },
+                    $this->bool($row, 'readable') && is_numeric($last) ? (int) $last : null,
+                    is_numeric($max) ? (int) $max : null,
+                );
+            }
+
+            return new KeyCounterReading($counters);
+        });
+    }
+
+    /**
+     * The sequence that fills the single-column primary key of the relation aliased `c`, as `ks`.
+     *
+     * One definition for both readings that need it: the catalog reading records which sequence it is
+     * and where it stops, and {@see self::keyCounters()} reads how far it has got. Two copies of this
+     * lookup would be free to disagree about which sequence feeds a key.
+     *
+     * Found by object id through `pg_depend`: the AUTO dependency `serial` and `OWNED BY` record, the
+     * INTERNAL one an identity column records, and failing both the dependency a `DEFAULT nextval(...)`
+     * records on the sequence it calls. `pg_get_serial_sequence()` would find the first two by name,
+     * and a name lookup in a schema the role holds no USAGE on is an error, which inside one
+     * transaction would end the whole reading. Nothing here takes a lock on the sequence.
+     */
+    private function keySequenceJoin(): string
+    {
+        return <<<'SQL'
+            LEFT JOIN LATERAL (
+                SELECT s.oid         AS sequence_oid,
+                       sn.nspname    AS sequence_schema,
+                       s.relname     AS sequence_name,
+                       sq.seqmax     AS sequence_max,
+                       a.atttypid    AS key_type,
+                       a.attnum      AS key_attnum
+                  FROM pg_catalog.pg_index i
+                  JOIN pg_catalog.pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0]
+                  JOIN LATERAL (
+                      SELECT q.sequence_oid
+                        FROM (
+                              SELECT d.objid AS sequence_oid, 0 AS preference
+                                FROM pg_catalog.pg_depend d
+                               WHERE d.classid = 'pg_catalog.pg_class'::pg_catalog.regclass
+                                 AND d.refclassid = 'pg_catalog.pg_class'::pg_catalog.regclass
+                                 AND d.refobjid = i.indrelid
+                                 AND d.refobjsubid = i.indkey[0]
+                                 AND d.deptype IN ('a', 'i')
+                              UNION ALL
+                              SELECT d.refobjid, 1
+                                FROM pg_catalog.pg_attrdef ad
+                                JOIN pg_catalog.pg_depend d
+                                  ON d.classid = 'pg_catalog.pg_attrdef'::pg_catalog.regclass
+                                 AND d.objid = ad.oid
+                                 AND d.refclassid = 'pg_catalog.pg_class'::pg_catalog.regclass
+                               WHERE ad.adrelid = i.indrelid
+                                 AND ad.adnum = i.indkey[0]
+                             ) q
+                        JOIN pg_catalog.pg_class qs ON qs.oid = q.sequence_oid AND qs.relkind = 'S'
+                       ORDER BY q.preference
+                       LIMIT 1
+                  ) k ON true
+                  JOIN pg_catalog.pg_class s ON s.oid = k.sequence_oid
+                  JOIN pg_catalog.pg_namespace sn ON sn.oid = s.relnamespace
+                  JOIN pg_catalog.pg_sequence sq ON sq.seqrelid = s.oid
+                 WHERE i.indrelid = c.oid
+                   AND i.indisprimary
+                   AND i.indnkeyatts = 1
+                 LIMIT 1
+            ) ks ON c.relkind IN ('r', 'p')
+            SQL;
     }
 
     /**
@@ -736,7 +936,17 @@ final readonly class PgsqlCatalogReader implements CatalogReader
      */
     private function indexes(Connection $reader, array $schemas): array
     {
-        $rows = $this->rows($reader, <<<'SQL'
+        $rows = $this->rows($reader, <<<'SQL_WRAP'
+            WITH builds AS MATERIALIZED (
+                -- The index builds running in this database, read once for the whole reading.
+                -- Without pg_read_all_stats the view still lists another role's build, with its
+                -- relation hidden: measured on PostgreSQL 18, such a row carries a NULL relid and
+                -- still names its database.
+                SELECT p.relid
+                  FROM pg_catalog.pg_stat_progress_create_index p
+                 WHERE p.datid = (SELECT d.oid FROM pg_catalog.pg_database d
+                                   WHERE d.datname = pg_catalog.current_database())
+            )
             SELECT n.nspname                              AS schema,
                    t.relname                              AS relation,
                    i.relname                              AS name,
@@ -744,6 +954,21 @@ final readonly class PgsqlCatalogReader implements CatalogReader
                    x.indisunique                          AS is_unique,
                    x.indisprimary                         AS is_primary,
                    x.indisvalid                           AS is_valid,
+                   -- Whether writes reach the index. Measured on PostgreSQL 18: the remains of a
+                   -- concurrent build that failed while building are not ready, and stay at zero
+                   -- bytes through every later insert; an invalid index that is ready grows with
+                   -- each one.
+                   x.indisready                           AS is_ready,
+                   -- Whether a build is running on this index's table. An invalid index is
+                   -- expected while its build runs, and the match is by table because a running
+                   -- REINDEX CONCURRENTLY reports the index it replaces, not the transient one that
+                   -- is invalid meanwhile. `unverifiable` is a build in this database whose
+                   -- relation this session may not see.
+                   CASE
+                       WHEN EXISTS (SELECT 1 FROM builds b WHERE b.relid = x.indrelid) THEN 'running'
+                       WHEN EXISTS (SELECT 1 FROM builds b WHERE b.relid IS NULL) THEN 'unverifiable'
+                       ELSE 'none'
+                   END                                    AS build_state,
                    -- Whether this unique index counts two NULLs as the same value. Measured on
                    -- 18.4, and it is the difference between a constraint that holds and one that
                    -- does not: under the default (NULLS DISTINCT) three rows sharing every other
@@ -786,7 +1011,7 @@ final readonly class PgsqlCatalogReader implements CatalogReader
             JOIN pg_am am ON am.oid = i.relam
             WHERE n.nspname = ANY (?)
             ORDER BY n.nspname, t.relname, i.relname
-            SQL, [$this->arrayLiteral($schemas)]);
+            SQL_WRAP, [$this->arrayLiteral($schemas)]);
 
         return array_map(function (array $row): SchemaObject {
             $relation = $this->canonicalizer->qualified($this->str($row, 'schema'), $this->str($row, 'relation'));
@@ -803,7 +1028,13 @@ final readonly class PgsqlCatalogReader implements CatalogReader
                     // used by nothing. It is carried here because the deploy suite's after-care is
                     // built on it — and because `information_schema` cannot express it at all.
                     'valid' => $this->bool($row, 'is_valid'),
-                    // Read for EVERY index, not only the unique ones. A flag that appears on some
+                    // False for the remains of a concurrent build that failed before writes
+                    // reached it, which no INSERT or UPDATE maintains.
+                    'ready' => $this->bool($row, 'is_ready'),
+                    // `running`, `unverifiable` or `none`, for every index: whether a build is
+                    // running on its table, may be running unseen, or is not running.
+                    'build_state' => $this->str($row, 'build_state'),
+                    // Read for every index, not only the unique ones. A flag that appears on some
                     // objects and not others cannot be relied on to be there when it matters, and
                     // a rule would have to know which absence means what.
                     'nulls_not_distinct' => $this->bool($row, 'nulls_not_distinct'),
@@ -882,7 +1113,7 @@ final readonly class PgsqlCatalogReader implements CatalogReader
                     // f = foreign key, c = check, p = primary key, u = unique, x = exclusion.
                     'contype' => $this->str($row, 'contype'),
                     'key_columns' => $this->str($row, 'key_columns'),
-                    // NOT VALID: the constraint exists and the existing rows were never checked
+                    // Not VALID: the constraint exists and the existing rows were never checked
                     // against it. A fact `information_schema` does not carry, and the whole point of
                     // the ADD CONSTRAINT … NOT VALID pattern this package recommends.
                     'validated' => $this->bool($row, 'validated'),
@@ -1192,11 +1423,11 @@ final readonly class PgsqlCatalogReader implements CatalogReader
      * A dependency on a pinned collation (`default`, `C`, `POSIX`, the builtin ones) is not recorded
      * in `pg_depend`, so those stay out as well; the database row covers the default one.
      *
-     * The two version functions are NOT interchangeable, and the difference is not cosmetic:
+     * The two version functions are not interchangeable, and the difference is not cosmetic:
      * `pg_database_collation_actual_version()` takes a database oid and
      * `pg_collation_actual_version()` takes a collation oid. Measured on PostgreSQL 18, handing the
      * second a database oid answers `ERROR: collation with OID … does not exist` — and would answer
-     * the WRONG collation's version silently if some collation happened to carry that oid. One
+     * the wrong collation's version silently if some collation happened to carry that oid. One
      * function per source, named at the source.
      *
      * @return list<SchemaObject>
@@ -1334,7 +1565,7 @@ final readonly class PgsqlCatalogReader implements CatalogReader
     /**
      * A PostgreSQL array literal for a schema list.
      *
-     * Bound as ONE parameter rather than expanded into a placeholder per schema: the query text is
+     * Bound as one parameter rather than expanded into a placeholder per schema: the query text is
      * then the same whatever the scope is, which is what lets the server reuse a plan and what keeps
      * the query COUNT fixed. The names are catalog identifiers, and a quote inside one is doubled
      * rather than trusted.

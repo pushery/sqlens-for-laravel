@@ -6,16 +6,17 @@ namespace Pushery\SQLens\Tools;
 
 use Closure;
 use Override;
-use Pushery\SQLens\Findings\CredentialRedactor;
+use Pushery\SQLens\Findings\CompositeCredentialRedactor;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
 use Throwable;
 
 /**
- * The real process runner: it searches the system `$PATH` for a binary and runs it
- * with `--version`. It never reaches the network — it only inspects `$PATH` entries on
- * disk and runs a LOCAL executable, with a bounded timeout so a version probe can
- * never hang a lint run.
+ * The real process runner: it searches the system `$PATH` for a binary, probes it with
+ * `--version`, and runs it for a lint. It only ever starts a LOCAL executable, each time
+ * with a bounded timeout, so a slow binary can never hang a run. What that executable
+ * connects to is its caller's statement: `pgls` is the one adapter handed a database, and
+ * the connection's password goes out to it as `PGPASSWORD`.
  */
 final readonly class SystemProcessRunner implements ProcessRunner
 {
@@ -85,7 +86,7 @@ final readonly class SystemProcessRunner implements ProcessRunner
         try {
             $process->run();
         } catch (Throwable) {
-            // A probe that hits its bound THROWS — `run()` does not merely return an unsuccessful
+            // A probe that hits its bound throws — `run()` does not merely return an unsuccessful
             // status for a timeout, which is what the previous comment here assumed. That made the
             // one thing the bound exists for, a binary that hangs, the one thing that took the run
             // down with it: `ToolLocator` calls this while resolving tools, so an uncaught timeout
@@ -163,11 +164,12 @@ final readonly class SystemProcessRunner implements ProcessRunner
         $exitCode = $process->getExitCode() ?? ToolRunResult::NO_EXIT_CODE;
 
         // A binary that could not be started reports itself through the exit code rather than an
-        // exception — measured, not assumed: a non-executable file and a path that does not exist
-        // both come back as 126 here, with no throw at all. 126 and 127 are POSIX-reserved for
-        // exactly this ("found but not executable", "not found"), so they are the start failure,
-        // not a verdict. Reading them as a tool's own answer would turn "the tool never ran" into
-        // "the tool ran and was unhappy" — the collapse this outcome exists to prevent.
+        // exception — measured, not assumed: a non-executable file comes back as 126 and a path
+        // that does not exist as 127 (dash as `/bin/sh`; some shells answer 126 for both), with no
+        // throw at all. 126 and 127 are POSIX-reserved for exactly this ("found but not
+        // executable", "not found"), so they are the start failure, not a verdict. Reading them as
+        // a tool's own answer would turn "the tool never ran" into "the tool ran and was unhappy" —
+        // the collapse this outcome exists to prevent.
         if ($exitCode === self::EXIT_NOT_EXECUTABLE || $exitCode === self::EXIT_NOT_FOUND) {
             return new ToolRunResult(
                 ToolRunOutcome::StartFailed,
@@ -304,7 +306,7 @@ final readonly class SystemProcessRunner implements ProcessRunner
 
         $environment = [...$environment, ...$explicit];
 
-        // The locale is forced AFTER the caller's variables rather than before, so a caller cannot
+        // The locale is forced after the caller's variables rather than before, so a caller cannot
         // set it — deliberately. Every other variable here is the caller's business; determinism
         // is not, and an adapter that could quietly re-localize its tool would be able to change
         // what a report says without changing what it checked.
@@ -336,7 +338,7 @@ final readonly class SystemProcessRunner implements ProcessRunner
             return '';
         }
 
-        return new CredentialRedactor()->redact(mb_strcut($trimmed, 0, self::STDERR_EXCERPT_BYTES));
+        return new CompositeCredentialRedactor()->redact(mb_strcut($trimmed, 0, self::STDERR_EXCERPT_BYTES));
     }
 
     /**

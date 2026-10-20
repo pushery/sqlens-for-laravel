@@ -12,7 +12,7 @@ use Pushery\SQLens\Contracts\SessionDefense;
 use Throwable;
 
 /**
- * Bounds the capture's OWN session before it asks the database anything.
+ * Bounds the capture's own session before it asks the database anything.
  *
  * This is the second half of "first, do no harm". A lint run may point at a
  * production connection, and a query without a time budget can sit behind a lock
@@ -20,7 +20,7 @@ use Throwable;
  * catalog read gets a budget.
  *
  * Session or transaction scope only. The tool never changes a global, and it never takes a lock
- * of its own; it only limits how long IT is willing to wait.
+ * of its own; it only limits how long it is willing to wait.
  *
  * The statements are per-engine, but the class stays driver-neutral: it switches
  * on the connection's driver KEY, never on a driver class, so the capture
@@ -55,7 +55,7 @@ use Throwable;
  * read fails with `25P02`, far from its cause. The connection's own setting for this is read first
  * and put back afterwards.
  *
- * ## Why this is NOT a duplicate of `SessionDefense`, and why it sets LESS
+ * ## Why this is not a duplicate of `SessionDefense`, and why it sets less
  *
  * {@see SessionDefense} bounds a session too, and on MySQL the two
  * emit byte-identical statements. On PostgreSQL this one deliberately sets two settings fewer,
@@ -118,7 +118,7 @@ final readonly class SessionGuard
             return static function (): void {};
         }
 
-        // Snapshot BEFORE applying, or the snapshot records our own bound and "restoring" would
+        // Snapshot before applying, or the snapshot records our own bound and "restoring" would
         // cement exactly what it is supposed to undo.
         $snapshot = $this->snapshot($connection);
 
@@ -321,7 +321,7 @@ final readonly class SessionGuard
      *
      * The two engines want opposite things and neither tolerates the other's form:
      *
-     * - PostgreSQL reports these settings WITH A UNIT (`5s`, `250ms`) and rejects the bare
+     * - PostgreSQL reports these settings with a unit (`5s`, `250ms`) and rejects the bare
      *   form on the way back, so the value has to be quoted.
      * - MySQL reports plain integers and rejects a quoted one for a numeric variable.
      *

@@ -24,7 +24,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * | shape | `attidentity` | default | `pg_depend` |
  * |---|---|---|---|
- * | `bigserial` | empty | `nextval('t_id_seq')` | `a` on THIS column |
+ * | `bigserial` | empty | `nextval('t_id_seq')` | `a` on this column |
  * | `GENERATED … AS IDENTITY` | `a` / `d` | none at all | `i` on this column |
  * | a shared or hand-managed sequence | empty | `nextval('s')` | nothing on this column |
  * | a sequence owned for cleanup only | empty | none | `a` on this column |

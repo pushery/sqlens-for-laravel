@@ -8,7 +8,7 @@ namespace Pushery\SQLens\Capture\Shadow;
  * Why the production guard held a database-creating run — never a bare boolean.
  *
  * A blocked run is undetermined, and an undetermined is never anonymous: the
- * report says WHICH check refused it, because the fix differs. A disallowed
+ * report says which check refused it, because the fix differs. A disallowed
  * environment is a configuration decision; a production connection is a target
  * mistake; a missing confirmation is a one-flag fix. Collapsing them into "not
  * allowed" would leave a user guessing which.

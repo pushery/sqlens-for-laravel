@@ -86,7 +86,7 @@ final readonly class UnenforcedConstraintCheck implements PostdeployCheck
                 'select tc.CONSTRAINT_SCHEMA as schema_name, tc.TABLE_NAME as table_name,'
                 .' tc.CONSTRAINT_NAME as constraint_name, cc.CHECK_CLAUSE as expression'
                 .' from information_schema.TABLE_CONSTRAINTS tc'
-                // LEFT, not INNER: a row whose expression cannot be read is still an unenforced
+                // Left, not INNER: a row whose expression cannot be read is still an unenforced
                 // constraint, and dropping it would turn a partial reading into a clean result.
                 .' left join information_schema.CHECK_CONSTRAINTS cc'
                 .'   on cc.CONSTRAINT_SCHEMA = tc.CONSTRAINT_SCHEMA'
@@ -127,10 +127,10 @@ final readonly class UnenforcedConstraintCheck implements PostdeployCheck
             );
         }
 
-        // A FAILURE, unlike its two neighbors. The name-based checks are undetermined because a name
+        // A failure, unlike its two neighbors. The name-based checks are undetermined because a name
         // proves nothing; `ENFORCED = NO` is a fact the catalog states outright, with no second
         // reading needed and no in-flight state that looks the same. Reporting a decided fact as
-        // undetermined would spend the three-valued contract on something that IS decided.
+        // undetermined would spend the three-valued contract on something that is decided.
         return $findings === []
             ? CheckResult::pass(self::ID)
             : CheckResult::fail(self::ID, $findings);

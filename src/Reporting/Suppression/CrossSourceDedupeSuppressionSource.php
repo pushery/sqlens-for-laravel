@@ -15,7 +15,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * migration and the grant sitting in the catalog arrive as two entries about one fact. The reader
  * fixes it once and sees it reported twice, which is how a report starts being skimmed.
  *
- * ## Identity is the whole difficulty, and the rule id is NOT it
+ * ## Identity is the whole difficulty, and the rule id is not it
  *
  * Merging on the rule id alone is the wrong merge: two different tables, one rule, collapsed into an
  * entry that is true of neither. So this matches on the rule id AND the schema object, and a finding
@@ -52,7 +52,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ## Why the CATALOG side wins
  *
- * The direction is fixed rather than decided per pair. A catalog finding is the state as it IS; a
+ * The direction is fixed rather than decided per pair. A catalog finding is the state as it is; a
  * migration finding is one route by which it got there, and there may be routes the run cannot see.
  * Hiding the state to keep the cause would leave a report that describes history rather than the
  * database — and a project that dropped the migration from its tree would then report nothing at all

@@ -108,7 +108,7 @@ final readonly class NotValidConstraintCheck implements PreflightCheck
         // was unreachable — the driver answers with objects, every time, and the coverage gate said
         // so by never entering it. A cast states the same requirement without a line nothing can
         // execute, and an unexecutable guard is worse than none: it looks like a check somebody made.
-        // The constraints THIS deploy validates, read once. Reporting one of them as an open debt
+        // The constraints this deploy validates, read once. Reporting one of them as an open debt
         // would be a false positive of the worst kind for a gate: it names a problem the very run
         // being gated is about to fix, and a gate that cries wolf about work already in the queue is
         // one people learn to click past.

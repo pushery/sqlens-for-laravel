@@ -84,7 +84,7 @@ final class ConstraintValidationPendingRule extends AbstractPgsqlSafetyRule impl
     /**
      * What kind of debt this rule's findings are, in the ledger.
      *
-     * The SAME word the catalog side would use for the same thing. A migration that leaves a
+     * The same word the catalog side would use for the same thing. A migration that leaves a
      * constraint unvalidated and a catalog that reports one unvalidated are one debt seen from two
      * places, and a ledger that spelled them differently would carry both and reconcile neither.
      *
@@ -265,7 +265,7 @@ final class ConstraintValidationPendingRule extends AbstractPgsqlSafetyRule impl
      * A constraint is named WITHIN its table: `ALTER TABLE public.orders ADD CONSTRAINT foo …`
      * qualifies the table and never the constraint, so a rule reading only the constraint target
      * gets a bare name. The catalog side has `nspname` and writes `public.foo` — and two spellings
-     * of one constraint are TWO debts, because an entry's identity hashes the object string. The
+     * of one constraint are two debts, because an entry's identity hashes the object string. The
      * account would double silently and the reconciliation could never converge: each side would
      * want to remove the other's entry, forever.
      *
@@ -325,7 +325,7 @@ final class ConstraintValidationPendingRule extends AbstractPgsqlSafetyRule impl
                         continue;
                     }
 
-                    // Qualified the SAME way as the constraint being judged, from that statement's own
+                    // Qualified the same way as the constraint being judged, from that statement's own
                     // table. Comparing a qualified name against a bare one would silence nothing and
                     // report every correctly split pair — the exact false positive this method exists
                     // to prevent.

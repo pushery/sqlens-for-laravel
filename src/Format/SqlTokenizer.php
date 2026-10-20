@@ -9,7 +9,7 @@ namespace Pushery\SQLens\Format;
  *
  * ## Why a tokenizer and not a regex
  *
- * A formatter's one unforgivable bug is changing what a statement MEANS, and every way to do that
+ * A formatter's one unforgivable bug is changing what a statement means, and every way to do that
  * runs through the same mistake: treating the inside of a string literal, a quoted identifier or a
  * comment as SQL. `where note = 'select 1'` contains a keyword that must not be upper-cased;
  * `"select"` is a column somebody named badly and not a keyword at all; a comment can contain
@@ -82,7 +82,7 @@ final readonly class SqlTokenizer
                 continue;
             }
 
-            // Line comment. It runs to the end of the line and NOTHING inside it is SQL. MySQL reads
+            // Line comment. It runs to the end of the line and nothing inside it is SQL. MySQL reads
             // `--` as a comment only when whitespace follows it: `5--1` is five minus minus one there.
             if (($char === '-' && $next === '-' && ($postgres || $at + 2 >= $length || ctype_space($sql[$at + 2])))
                 || (! $postgres && $char === '#')) {
@@ -120,7 +120,7 @@ final readonly class SqlTokenizer
                 continue;
             }
 
-            // A literal with a prefix is ONE token. `E 'x'` is not `E'x'` on PostgreSQL, and a space
+            // A literal with a prefix is one token. `E 'x'` is not `E'x'` on PostgreSQL, and a space
             // written between the two turns an escape string into a syntax error.
             if (($prefixed = self::prefixedLiteral($sql, $at, $postgres)) instanceof SqlToken) {
                 $tokens[] = $prefixed;

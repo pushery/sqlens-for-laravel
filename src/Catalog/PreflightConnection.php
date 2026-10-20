@@ -21,7 +21,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * That matters more here than it would in most tools. A package that audits security and reads with
  * more privilege than it needs has spent the credibility it is selling. So the fallback chain stops
  * rather than reaching for the powerful connection: a configured preflight connection, then the
- * audit connection, then a NAMED skip that says what to configure.
+ * audit connection, then a named skip that says what to configure.
  *
  * ## The case that is allowed but must not be silent
  *
@@ -63,7 +63,7 @@ final readonly class PreflightConnection
      *    package config end up in a repository, and a read-only role's password is still a password.
      * 2. `sqlens.connection` — the audit connection, when one is configured. A project that already
      *    told this package which connection to read has answered the question once.
-     * 3. Nothing. NOT `database.default`, and that is the whole point: falling through to it is
+     * 3. Nothing. Not `database.default`, and that is the whole point: falling through to it is
      *    exactly the silent use of the migration connection this resolution exists to prevent.
      */
     public static function resolve(Repository $config): self

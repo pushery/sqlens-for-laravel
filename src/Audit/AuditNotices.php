@@ -153,8 +153,13 @@ final readonly class AuditNotices
      * The skip already knows why it happened; this only moves it where a consumer can see it. A skip
      * that stayed inside the snapshot would make an incomplete audit and a complete one produce the
      * same output.
+     *
+     * `$explanation` is the sentence the language file holds for the reason: what it means for this
+     * object and what to do about it. The run header carries it as well; the finding carries it
+     * because a reporter that shows findings without the header, an annotation or a SARIF result,
+     * would otherwise pass on the reason id and no remedy.
      */
-    public static function skipped(CatalogSkip $skip, InstanceTarget $target, SubjectContext $context): Finding
+    public static function skipped(CatalogSkip $skip, InstanceTarget $target, SubjectContext $context, ?string $explanation = null): Finding
     {
         if ($skip->reason === SkipReason::NotComparable) {
             return self::notCompared($skip, $target, $context);
@@ -172,10 +177,11 @@ final readonly class AuditNotices
             // it. The registry advertised one id and the reports carried another.
             CatalogNotice::idFor($skip->reason),
             sprintf(
-                '%s was not read (%s)%s. Whatever a rule would have said about it is unknown, not fine.',
+                '%s was not read (%s)%s. Whatever a rule would have said about it is unknown, not fine.%s',
                 $skip->reference,
                 $skip->reason->value,
                 $skip->detail === null ? '' : ': '.$skip->detail,
+                $explanation === null ? '' : ' '.$explanation,
             ),
             // The reason the SkipReason itself names. This used to collapse every incomplete
             // reading onto `catalog_read_failed`, so a missing GRANT and a dropped socket were
@@ -266,8 +272,10 @@ final readonly class AuditNotices
      *
      * Reported per AREA rather than once per run: `pg_authid` withheld and `pg_policy` withheld are
      * different gaps with different fixes, and one collapsed sentence would name neither.
+     *
+     * `$explanation` is the reason's sentence, carried for the reason {@see self::skipped()} gives.
      */
-    public static function securitySkipped(CatalogSkip $skip, InstanceTarget $target, SubjectContext $context): Finding
+    public static function securitySkipped(CatalogSkip $skip, InstanceTarget $target, SubjectContext $context, ?string $explanation = null): Finding
     {
         return self::notice(
             SecurityNotice::idFor($skip->reference),
@@ -275,10 +283,11 @@ final readonly class AuditNotices
                 'the security reading could not cover %s (%s)%s. Every check that would have judged it '
                 .'is unanswered, not clean — on a managed instance this is the ordinary state, and it '
                 .'is stated rather than hidden so nobody reads the rest of this report as a complete '
-                .'security answer.',
+                .'security answer.%s',
                 $skip->reference,
                 $skip->reason->value,
                 $skip->detail === null ? '' : ': '.$skip->detail,
+                $explanation === null ? '' : ' '.$explanation,
             ),
             $skip->reason->undeterminedReason(),
             $target,
@@ -441,7 +450,7 @@ final readonly class AuditNotices
      * withheld rule gets a line naming itself, its window, and the version that excluded it.
      *
      * The reason distinguishes the two ways it happens, because the fixes differ. A rule outside a
-     * KNOWN version's window is structurally not applicable — nothing is wrong and nothing can be
+     * known version's window is structurally not applicable — nothing is wrong and nothing can be
      * done short of upgrading the server. A rule whose window could not be evaluated because the
      * version was unreadable is a gap in the reading, and that one is worth chasing.
      */
@@ -464,11 +473,11 @@ final readonly class AuditNotices
     }
 
     /**
-     * A rule that cannot answer HERE — withheld because its verdict is about the write path and this
+     * A rule that cannot answer here — withheld because its verdict is about the write path and this
      * instance is not on it.
      *
      * One notice per withheld RULE, not per object. The rule was withheld for the whole run, and a
-     * copy of the same sentence under every table would bury the findings that ARE about this
+     * copy of the same sentence under every table would bury the findings that are about this
      * instance. It is a finding rather than a log line for the reason everything else in this class
      * is: a check that did not run and a check that passed produce the same silence otherwise, and
      * on a replica that silence would read as "the server settings are fine".
@@ -550,14 +559,14 @@ final readonly class AuditNotices
      * run notice sent a reader looking at a connection definition when the notice was about a
      * baseline, an ignore list or a tenancy declaration.
      */
-    private static function runNotice(string $ruleId, string $message, UndeterminedReason $reason, RunContext $runContext): Finding
+    private static function runNotice(string $ruleId, string $message, UndeterminedReason $reason, RunContext $runContext, ?Location $location = null): Finding
     {
         return Finding::undetermined(
             $ruleId,
             self::PREFIX,
             $message,
             $reason,
-            Location::inCatalog('unknown', 'unresolved', 'connection', SchemaObjectType::Table),
+            $location ?? Location::inCatalog('unknown', 'unresolved', 'connection', SchemaObjectType::Table),
             Category::Safety,
             Level::Capturable,
             StabilityTier::Stable,
@@ -571,8 +580,8 @@ final readonly class AuditNotices
      *
      * MariaDB answers Laravel's `mysql` driver and does not share MySQL 8.4's semantics, so a
      * report produced against it would be confident, specific, and about another product. The
-     * run stops here: "nothing was checked" is what the shipped message says in all seven
-     * locales, and that is only true if nothing runs.
+     * run stops here: "nothing was checked" is what the shipped message says, and that is only
+     * true if nothing runs.
      */
     public static function unsupportedEngine(
         DriverResolutionFailure $failure,
@@ -615,7 +624,7 @@ final readonly class AuditNotices
         if ($failure->reason !== DriverResolutionReason::VersionBelowFloor) {
             // The attribution guard spoke instead of the floor — the banner names another
             // engine, or the driver's own declared minimum is unreadable. Reported rather than
-            // dropped: silence here would be a silent green introduced BY the wiring meant to
+            // dropped: silence here would be a silent green introduced by the wiring meant to
             // prevent one.
             return self::notice(
                 AuditNotice::ServerBelowFloor->id(),
@@ -661,10 +670,10 @@ final readonly class AuditNotices
      * Escalating it to a failure is a pre-deploy decision and is not made here. This layer's only
      * job is that nobody can fail to see it.
      *
-     * The direction matters more than the disagreement. A pin BELOW the real version means the
+     * The direction matters more than the disagreement. A pin below the real version means the
      * project is developing against an older engine than it runs on — every rule the newer server
      * would have admitted was still applied here, which is right, and the lint runs on the same
-     * project were not. A pin ABOVE it is the dangerous one: lint has been reporting against
+     * project were not. A pin above it is the dangerous one: lint has been reporting against
      * capabilities the production server does not have.
      */
     public static function assumedVersionSkew(
@@ -694,7 +703,11 @@ final readonly class AuditNotices
     }
 
     /**
-     * A rule id in the audit ignore list that no rule answers to.
+     * An entry that can match nothing: a rule id in the audit ignore list, in `sqlens.ignore` or in
+     * the baseline that no rule of the audit answers to.
+     *
+     * The sentence after the violation is the one of the file the entry is in, so a typo in the
+     * configuration is not explained with the baseline's reasons, or the other way round.
      *
      * A finding rather than an exception, so the run reports it the way it reports everything else
      * — with an id a pipeline can branch on and a message a person can act on. The exit code says
@@ -704,15 +717,24 @@ final readonly class AuditNotices
      * set unknowable, and the next release that changed the folding would silently un-suppress
      * findings nobody chose to un-suppress.
      */
-    public static function invalidIgnoreList(ConfigViolation $violation, RunContext $runContext): Finding
+    public static function invalidIgnoreList(ConfigViolation $violation, RunContext $runContext, string $file = 'sqlens.audit.ignore'): Finding
     {
         return self::runNotice(
             AuditNotice::InvalidIgnoreList->id(),
-            $violation->message().' Nothing was audited: an ignore list that names a rule which does '
-                .'not exist would silence nothing while looking set, and a rule believed to be off but '
-                .'still firing is read past for months.',
+            $violation->message().' '.match ($file === 'baseline') {
+                true => 'Nothing was audited: a baseline entry that no run can match suppresses nothing while '
+                    .'looking set, and unlike an ignore list it cannot be noticed from the output, because an '
+                    .'entry that matches nothing produces exactly what a matching entry produces once the code '
+                    .'is fixed.',
+                false => 'Nothing was audited: an ignore entry that names no rule the audit runs would silence '
+                    .'nothing while looking set, and a rule believed to be off but still firing is read past '
+                    .'for months.',
+            },
             UndeterminedReason::IgnoreListInvalid,
             $runContext,
+            // At the entry, in the file it is in. At the shared run location two broken entries were
+            // one finding, because the result keeps one per rule and location.
+            Location::inCallsite($file, 0, $violation->path, ''),
         );
     }
 
@@ -804,7 +826,7 @@ final readonly class AuditNotices
      * The project looks multi-tenant and has not said which tenant this report is about.
      *
      * A refusal rather than a guess, and the guess is what makes it one. Auditing whichever
-     * connection happened to be default produces a report about ONE tenant that is
+     * connection happened to be default produces a report about one tenant that is
      * indistinguishable from a report about the application — same header, same findings, same
      * exit code — so the reader draws a conclusion about their system from a statement about one
      * of their customers. There is no safe default here: every tenant is the wrong one to pick on
@@ -821,9 +843,11 @@ final readonly class AuditNotices
                 'This project looks multi-tenant (%s) and sqlens.audit.tenancy.mode is still "none". An audit '
                 .'across N tenant databases is not one statement, and auditing whichever connection happens to '
                 .'be default produces a report about a single tenant that reads exactly like a report about the '
-                .'application. Set mode to "explicit" and name the reference tenant, or set it to "none" '
-                .'deliberately if these signals are wrong — the check is a heuristic and saying so is a valid '
-                .'answer.',
+                .'application. Set mode to "explicit" and name the reference tenant. The same answer applies '
+                .'when these signals are wrong and the project has one database: name the connection it audits '
+                .'as the reference, and the report header says which database the findings describe. "none" '
+                .'cannot answer this, because it is the default and the signals are read on every run that is '
+                .'not "explicit".',
                 $signals,
             ),
             UndeterminedReason::NotConfigured,
@@ -904,7 +928,7 @@ final readonly class AuditNotices
         // the RUN rather than about one object -- there the name is the connection, and `Table` is
         // the placeholder those notices have always carried.
         //
-        // A caller that DOES know used to lose it here: `CatalogSkip` has carried its
+        // A caller that does know used to lose it here: `CatalogSkip` has carried its
         // `SchemaObjectType` from the start, described in its own docblock as "the axis a reader
         // groups by", and this method replaced it with `Table` for every skip. A consumer read
         // sixteen index skips reported as tables, which is the one axis that would have let them

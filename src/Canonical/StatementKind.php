@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Canonical;
 
 /**
- * What a canonical statement DOES — the classification a rule matches on instead
+ * What a canonical statement does — the classification a rule matches on instead
  * of the raw SQL, so no rule ever has to regex the grammar output. Driver-agnostic:
  * the recognition that assigns a kind lives in the classifier stage and reads its
  * patterns from the driver; this enum is only the vocabulary.
@@ -18,12 +18,13 @@ namespace Pushery\SQLens\Canonical;
  *
  * On which side of that line a statement falls is measured, not assumed: a `SET`
  * has a kind of its own ({@see self::SessionSetting}), a PostgreSQL `COMMENT ON` is
- * {@see self::DdlOther}, and an `ANALYZE` is `Unknown` on both engines. A `VACUUM`
- * and MySQL's `OPTIMIZE TABLE` are not recognized, and that is deliberate: `VACUUM
- * FULL` rewrites the table under an ACCESS EXCLUSIVE lock, an `OPTIMIZE TABLE` copies
- * a table that has a FULLTEXT index, the first word cannot tell either from its
- * harmless form, and an `Unknown` would let it pass without a word. They end as a
- * CanonicalizationFailure, which makes the whole migration undetermined.
+ * {@see self::DdlOther}, an `ANALYZE` is `Unknown` on both engines, and so is a plain
+ * `VACUUM`. A `VACUUM FULL`, a `CLUSTER` and MySQL's `OPTIMIZE TABLE` are
+ * {@see self::RebuildTable}, and PostgreSQL's `REINDEX` and `REFRESH MATERIALIZED VIEW`
+ * have kinds of their own. A `VACUUM` without FULL whose option list holds an option the
+ * signatures do not read is not recognized, and that is deliberate: a statement read in part
+ * is not read as harmless. It ends as a CanonicalizationFailure, which makes the whole
+ * migration undetermined, and so does a `REINDEX DATABASE` or a MySQL `REPAIR TABLE`.
  *
  * The set is a superset of the plan's list: `DropTable` and `TruncateTable` are
  * carried as their own kinds (not folded into DdlOther) because the destructive
@@ -47,7 +48,7 @@ enum StatementKind: string
      *
      * Its SIBLINGS are deliberately absent, and the reason has been re-measured since it was first
      * written here. It used to say `ALTER SCHEMA` was "the ownership case … adding cases no rule
-     * reads": that is now circular, because the ownership check DOES read a schema target — this
+     * reads": that is now circular, because the ownership check does read a schema target — this
      * kind is what carries one to it.
      *
      * The standing reason is narrower and holds:
@@ -76,6 +77,40 @@ enum StatementKind: string
     case AlterColumn = 'alter_column';
     case DropColumn = 'drop_column';
     case Rename = 'rename';
+    /**
+     * A maintenance statement that rewrites a whole table: PostgreSQL's `VACUUM FULL` and `CLUSTER`,
+     * and MySQL's `OPTIMIZE TABLE`.
+     *
+     * None changes the schema, and each costs what a rebuild costs, which grows with the table and
+     * not with the space it gives back. What the rebuild does to the table's availability is the
+     * engine's own answer: `VACUUM FULL` and `CLUSTER` hold an ACCESS EXCLUSIVE lock until they are
+     * done, and `OPTIMIZE TABLE` keeps an InnoDB table writable unless the table has a FULLTEXT
+     * index, which makes it a copy. So the kind is shared and each engine's rules read it in their
+     * own terms.
+     *
+     * It has its own case rather than sharing {@see self::DdlOther} or {@see self::Unknown}, because
+     * a lead word cannot tell either statement from its harmless sibling: a plain `VACUUM` and an
+     * `ANALYZE TABLE` are `Unknown`, and the signatures are what tell the rebuild apart.
+     */
+    case RebuildTable = 'rebuild_table';
+    /**
+     * PostgreSQL's `REINDEX INDEX` or `REINDEX TABLE`, which rebuilds an index that already exists.
+     *
+     * A kind of its own because its locks are neither a build's nor a rewrite's: without
+     * CONCURRENTLY it holds SHARE on the table, so writes wait and reads go on, and ACCESS EXCLUSIVE
+     * on each index it rebuilds, so a read that would use one waits. With CONCURRENTLY neither
+     * blocks, and PostgreSQL refuses the statement inside a transaction block.
+     */
+    case Reindex = 'reindex';
+    /**
+     * PostgreSQL's `REFRESH MATERIALIZED VIEW`, which runs the view's query again and replaces what
+     * the view holds.
+     *
+     * Without CONCURRENTLY it holds ACCESS EXCLUSIVE on the view for as long as the query runs, so
+     * every read of the view waits; with it, an EXCLUSIVE lock that lets reads through. Unlike the
+     * index forms, the concurrent refresh runs inside a transaction block.
+     */
+    case RefreshMaterializedView = 'refresh_materialized_view';
     /**
      * A session configuration command — `SET lock_timeout`, `SET LOCAL statement_timeout`,
      * `SET foreign_key_checks = 0`.

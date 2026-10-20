@@ -56,13 +56,13 @@ final readonly class CatalogRequest
         public bool $includeExtensionObjects = false,
         /**
          * Whether each partition is reported as its own object. Off by default: a partitioned
-         * table is ONE object to a rule, and reporting it as n multiplies every finding by the
+         * table is one object to a rule, and reporting it as n multiplies every finding by the
          * partition count — which makes the first audit of a real database unreadable, and the
          * second one unrun.
          */
         public bool $reportPartitionsIndividually = false,
         /**
-         * Extensions whose objects ARE this project's business, named one by one.
+         * Extensions whose objects are this project's business, named one by one.
          *
          * Per-extension rather than a single switch, because the two cases are not the same size: a
          * project that manages its own `citext` domains should not have to take PostGIS's hundred
@@ -76,7 +76,7 @@ final readonly class CatalogRequest
     /**
      * The request a project's configuration asks for, with the caller supplying only the scope.
      *
-     * The settings are read HERE rather than at each call site, because a config key whose value
+     * The settings are read here rather than at each call site, because a config key whose value
      * nothing reads is a setting that documents a behavior the package does not have.
      *
      * `$tablePrefix` is nullable rather than defaulted to `''` for the same reason the caller's
@@ -84,7 +84,7 @@ final readonly class CatalogRequest
      * distinguishable from "the caller did not say", which falls through to the configuration.
      *
      * `$schemas` overrides the configured scope rather than adding to it: a caller that names
-     * schemas (a `--schema` option, a test) is making a narrower statement about THIS run, and
+     * schemas (a `--schema` option, a test) is making a narrower statement about this run, and
      * merging the two would produce a scope neither of them asked for.
      *
      * @param  list<string>  $schemas
@@ -120,7 +120,7 @@ final readonly class CatalogRequest
      * ordinary Laravel project states it — and an audit that assumed no prefix on a project that has
      * one would report on a schema whose every table name the developer does not recognize.
      *
-     * The override exists for the setups where the config file does NOT carry the value the app
+     * The override exists for the setups where the config file does not carry the value the app
      * uses: a prefix set at runtime, per tenant. `null` is therefore the ordinary "not overridden",
      * distinct from an override of `''` that somebody deliberately wrote.
      */

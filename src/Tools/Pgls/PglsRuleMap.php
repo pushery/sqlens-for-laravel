@@ -53,7 +53,7 @@ final readonly class PglsRuleMap
         /**
          * The tool version this map was measured against.
          *
-         * It describes THAT build. The version window in {@see PglsTool} is drawn from it, and the
+         * It describes that build. The version window in {@see PglsTool} is drawn from it, and the
          * two move together — a map measured against one build and a window admitting another is
          * the state in which an adapter reads a report nobody has seen.
          */

@@ -13,7 +13,7 @@ use Pushery\SQLens\Canonical\CanonicalStatement;
  * A tool answers in line numbers against the text it was given, and that text is not a file
  * anyone has — it is assembled here. Without the spans, a finding at line 7 is a fact about a
  * string that exists for the length of one subprocess. The spans are what turn it back into
- * "the third statement of this migration", and they are recorded WHILE the document is built
+ * "the third statement of this migration", and they are recorded while the document is built
  * rather than reconstructed afterwards by counting semicolons: a second parse of the same text
  * is a second chance to disagree with the first.
  *

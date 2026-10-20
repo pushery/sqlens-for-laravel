@@ -21,7 +21,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
 /**
- * A MySQL server whose `lower_case_table_names` is a risk for THIS project.
+ * A MySQL server whose `lower_case_table_names` is a risk for this project.
  *
  * ## Why this rule cannot judge against the matrix, and does not try
  *
@@ -30,7 +30,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * everywhere. A rule asserting one would be wrong on half of all deployments.
  *
  * So this is a catalog rule rather than a matrix-expectation rule, and it judges against two things
- * the package CAN stand behind:
+ * the package can stand behind:
  *
  * 1. **A project statement.** `sqlens.audit.expect.lower_case_table_names` says what this project
  *    wants its servers to be. Unset — the shipped default — this trigger says nothing at all, which
@@ -43,7 +43,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * The value is fixed when the server is initialized and cannot be changed afterwards: moving it
  * means a new server and a dump/reload. A rule proposing `SET GLOBAL` here would be proposing
- * something MySQL refuses. So the finding proposes CONSISTENT NAMING — the thing a project can
+ * something MySQL refuses. So the finding proposes consistent naming — the thing a project can
  * actually do this afternoon — and says the switch is not available.
  */
 final class LowerCaseTableNamesRiskRule extends AbstractCatalogRule implements DeclaresJudgedObjectTypes, ProvidesSchemaObjectRemediation
@@ -57,7 +57,7 @@ final class LowerCaseTableNamesRiskRule extends AbstractCatalogRule implements D
      * cannot be changed afterwards"*. It shares the answer with every initdb-scoped server setting,
      * and the shared key is the point — one fact, one sentence, however many rules meet it.
      *
-     * The shared concern decides WHEN this is attached — only where this rule itself flagged — so the rule
+     * The shared concern decides when this is attached — only where this rule itself flagged — so the rule
      * only has to say what it concluded.
      */
     #[Override]
@@ -158,7 +158,7 @@ final class LowerCaseTableNamesRiskRule extends AbstractCatalogRule implements D
             return [];
         }
 
-        // Read through the collaborator rather than re-derived: this rule is NOT a setting rule —
+        // Read through the collaborator rather than re-derived: this rule is not a setting rule —
         // it judges against a project statement and the catalog, so it does not inherit
         // AbstractServerSettingRule's accessor — and a second copy of the key convention here is
         // exactly the drift the collaborator exists to prevent.

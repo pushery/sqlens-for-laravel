@@ -48,7 +48,8 @@ use Pushery\SQLens\Subjects\SubjectContext;
 final readonly class SecuritySubjects
 {
     /**
-     * Every account and every grant in the two readings, as subjects.
+     * Every role, grant, row-level security state, host-based access rule and routine in the readings,
+     * as subjects.
      *
      * Sorted by identity within each kind, so a run over an unchanged server produces the same order:
      * the readers already sort, and this keeps that property through the merge.
@@ -64,7 +65,7 @@ final readonly class SecuritySubjects
         SubjectContext $context,
         ConnectionSeparation $separation = new ConnectionSeparation,
     ): array {
-        // Resolved ONCE, from the role reading, and stamped onto every table subject. An RLS rule that
+        // Resolved once, from the role reading, and stamped onto every table subject. An RLS rule that
         // re-derived it per table would ask the same question of the same data as many times as the
         // project has tenant tables — and the four of them would each have their own version of the
         // answer, which is how two rules end up disagreeing about one server.
@@ -115,7 +116,7 @@ final readonly class SecuritySubjects
     }
 
     /**
-     * Whether the audited connection IS the table's owner, or can become it.
+     * Whether the audited connection is the table's owner, or can become it.
      *
      * Membership counts, and it is not a refinement: a role that is a member of the owner reaches
      * every object the owner holds by simply being a member — PostgreSQL applies an owner's exemption
@@ -203,7 +204,7 @@ final readonly class SecuritySubjects
                 'rls_policy_count' => count($state->policies),
                 'rls_locked_out' => $state->isLockedOut(),
                 'rls_always_true' => $state->hasAlwaysTruePolicy(),
-                // The offending policies BY NAME, comma-joined — the attribute bag is scalar-only by
+                // The offending policies by name, comma-joined — the attribute bag is scalar-only by
                 // contract, and a rule that reported a count would send somebody through the whole
                 // policy list to find the one that is wrong.
                 'rls_always_true_policies' => implode(',', $state->alwaysTruePolicyNames()),
@@ -240,13 +241,13 @@ final readonly class SecuritySubjects
      *
      * The RLS states have to carry one because they are `Table` subjects, indistinguishable from the
      * table subjects the ordinary catalog reader produces for every table in the schema. An HBA rule
-     * has {@see SchemaObjectType::HbaRule} to itself, so its existence IS the marker — a MySQL run
+     * has {@see SchemaObjectType::HbaRule} to itself, so its existence is the marker — a MySQL run
      * produces none of these subjects at all, which is how the five rules stay silent there without
      * any of them knowing what engine it is. What that arrangement cannot express — "supported, but
      * nobody could read it" — is stamped on the ROLE subject instead, because it has to be said on a
      * run that produced no HBA subjects whatsoever.
      *
-     * ## What is deliberately NOT here
+     * ## What is deliberately not here
      *
      * `options`. HBA options carry LDAP bind parameters and RADIUS secrets — and the reading does not
      * hold them either: the PostgreSQL reader never selects the column. So this is the second half of
@@ -352,12 +353,13 @@ final readonly class SecuritySubjects
      * It is the COMBINATION that is exploitable, and carrying both separately is what lets two rules
      * of different severity say two different true things about it rather than one rule guessing.
      *
-     * ## What is deliberately NOT here
+     * ## What is deliberately not here
      *
      * The body. `prosrc` is the likeliest place in a catalog to hold a credential, and the readers do
-     * not select it — so this is the second half of one decision rather than a redaction. The `SET`
-     * clauses ARE here, because `search_path=app, public` is configuration rather than code; a routine
-     * that put a secret in a SET clause would have put it in `pg_proc` for every reader on the server.
+     * not select it — so this is the second half of one decision rather than a redaction. Nor are the
+     * routine's other `SET` clauses: the subject carries its path alone, which is configuration
+     * rather than code. Another clause can hold any custom setting, a token among them, and a
+     * finding reaches readers `pg_proc` does not: CI logs, annotations, SARIF, an agent's transcript.
      *
      * @param  array<string, list<string>>  $creators  schema name => who may CREATE in it
      */
@@ -366,7 +368,7 @@ final readonly class SecuritySubjects
         $path = self::pathSchemas($routine);
 
         // The measurement done once here rather than per rule: which schemas
-        // in this routine's own path may somebody OTHER than its owner create in? That is a fact
+        // in this routine's own path may somebody other than its owner create in? That is a fact
         // about the catalog, not an opinion about which values count as safe — which is what makes
         // it answerable at all. A pinned path is not automatically a safe one.
         $writable = array_values(array_filter(
@@ -377,8 +379,8 @@ final readonly class SecuritySubjects
             ),
         ));
 
-        // `pg_temp` is the caller's OWN schema, and PostgreSQL searches it for tables, views and types
-        // FIRST unless the path names it later: left out, it is searched before everything the path
+        // `pg_temp` is the caller's own schema, and PostgreSQL searches it for tables, views and types
+        // first unless the path names it later: left out, it is searched before everything the path
         // lists. Only a path that ends in it keeps a caller's temporary table from standing in for one
         // the routine means. It is never searched for functions, whatever the path says.
         $temp = array_search('pg_temp', $path, true);
@@ -399,7 +401,8 @@ final readonly class SecuritySubjects
                 // MySQL — which has no per-routine search path — would read as "definer and unpinned",
                 // and the critical rule would fire on every definer routine on every MySQL server.
                 'search_path_configurable' => $routine->pathConfigurable,
-                'settings' => implode(',', $routine->settings),
+                // The path the routine pins, as the schemas it names, for the rule that quotes it.
+                'search_path' => implode(', ', $path),
                 // The two ways a PINNED path can still be unsafe, both as facts rather than verdicts:
                 // the schemas in it somebody else may create in, and whether `pg_temp` is anything but
                 // the last entry, missing included. Only a pinned path on an engine that has one can be
@@ -430,14 +433,14 @@ final readonly class SecuritySubjects
                 // and a rule asks with `str_contains(…, 'superuser')` on a value that cannot vary in
                 // order. `has()` on the object stays the readable form for anything that holds one.
                 'attributes' => self::joined($role->attributes),
-                // What the account can BECOME through membership, kept apart from what it HAS — the
+                // What the account can become through membership, kept apart from what it has — the
                 // engines do not inherit attributes, and a rule that conflated them would report a
                 // plain application role as a superuser.
                 'reachable_attributes' => self::joined($role->reachableAttributes),
                 'memberships' => implode(',', $role->memberships),
                 'reachable_roles' => implode(',', $role->reachableRoles),
                 // `reached=path;reached=path`, because the attribute bag is scalar-only by contract.
-                // The paths matter to a rule that has to tell somebody WHICH grant to revoke, and a
+                // The paths matter to a rule that has to tell somebody which grant to revoke, and a
                 // finding that named only the endpoint would leave them guessing on a chain.
                 'reachable_paths' => implode(';', array_map(
                     static fn (string $reached, string $path): string => $reached.'='.$path,
@@ -466,7 +469,7 @@ final readonly class SecuritySubjects
                 // the container would be a rule no unit test could put in a state.
                 'runtime_connection' => $separation->runtime,
                 'migration_connection' => $separation->migration,
-                // WHO each of those is, beside WHAT it is called. A project may file two connection
+                // Who each of those is, beside what it is called. A project may file two connection
                 // names that authenticate as one user against one host and one database, and the
                 // separation then exists in config/database.php and nowhere else. Null means the
                 // configuration did not say — which the rule reports as undetermined rather than
@@ -491,7 +494,7 @@ final readonly class SecuritySubjects
                 // reading that could not ask must not answer "owns nothing", which is exactly the
                 // shape a clean server has.
                 'owned_tables' => $role->ownedTables,
-                // The RLS reading's two states, carried on the ONE subject every run has. A rule that
+                // The RLS reading's two states, carried on the one subject every run has. A rule that
                 // has to say "nothing was checked" needs something to attach that to, and a run whose
                 // project named no tables has no table subject by construction — which is precisely the
                 // state that must not pass silently.
@@ -501,10 +504,14 @@ final readonly class SecuritySubjects
                 // that set the mode to `off` answered the question, and answering it must not produce
                 // the same line as never having been asked.
                 'rls_declined' => $rls->declined,
-                // …and WHY, when the answer was "the application separates them". A sentence rather
+                // …and why, when the answer was "the application separates them". A sentence rather
                 // than a fourth boolean: the rule quotes it, so the report carries the project's own
                 // words instead of a category nobody can act on.
                 'rls_application_separation' => $rls->applicationSeparation,
+                // …and the tenant column of a heuristic that found no table. Nothing was read, as for a
+                // project that set nothing, and the rule names the column rather than asking for the
+                // setting the project already made.
+                'rls_unmatched_tenant_column' => $rls->unmatchedTenantColumn,
                 // The HBA reading's two states, on the same subject and for the same reason. A refused
                 // reading produces NO hba subjects, so a rule that had to say "this server's
                 // authentication rules could not be read" would have nothing to attach it to — and an
@@ -545,7 +552,7 @@ final readonly class SecuritySubjects
                 'privileges' => self::joined($grant->privileges),
                 'other_privileges' => implode(',', $grant->otherPrivileges),
                 'grantable' => $grant->grantable,
-                // Whether the grant carries EVERY privilege the engine permits on this kind of
+                // Whether the grant carries every privilege the engine permits on this kind of
                 // object. Stamped by the reader rather than derived here, because answering it needs
                 // the engine's own vocabulary and this layer is engine-neutral by contract.
                 'all_privileges' => $grant->coversEveryPrivilege,

@@ -26,7 +26,7 @@ namespace Pushery\SQLens\Tools\Pgls;
  * The tool's security catalog has six rules. Four of them check ground this package has no rule
  * for at all — extensions in `public`, outdated extension versions, mutable function search paths,
  * unsupported `reg*` types — so they are pure addition and appear here not at all. Listing them
- * with a null counterpart would be a table of what is NOT overlapping, which is every rule that
+ * with a null counterpart would be a table of what is not overlapping, which is every rule that
  * exists and grows without bound.
  */
 final readonly class PglsDeduplicationMap
@@ -34,7 +34,7 @@ final readonly class PglsDeduplicationMap
     /**
      * PGLS rule name => the SQLens rule that says the same thing.
      *
-     * Each pair is a claim that the two rules fire on the SAME CONDITION, not merely on a related
+     * Each pair is a claim that the two rules fire on the same condition, not merely on a related
      * one. Where they differ in scope the entry does not belong here: a rule that fires more often
      * than ours would have its extra findings dropped as duplicates of a finding that never
      * existed, which is the one way this table can lose a real problem.

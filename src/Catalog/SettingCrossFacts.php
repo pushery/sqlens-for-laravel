@@ -4,20 +4,21 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Catalog;
 
-use Pushery\SQLens\Findings\CredentialRedactor;
+use Pushery\SQLens\Findings\CompositeCredentialRedactor;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Subjects\SchemaObject;
 
 /**
  * Facts measured beside the settings, so a rule about a variable can name what it already affects.
  *
- * ## Why this is one collaborator and not five
+ * ## Why this is one collaborator and not one per rule
  *
- * Five server-baseline rules need the same shape: a setting, plus something counted or listed from
- * the catalog that makes the setting concrete — the tables still on a legacy row format, the columns
- * that already rewrite themselves on update, whether the timezone tables are populated. Each of the
- * five specs invented its own attribute naming and its own way of telling "measured zero" from
- * "could not measure", and five conventions is five chances for one of them to collapse the two.
+ * Server-baseline rules on both engines, and some of the security rules, need the same shape: a
+ * setting, plus something counted or listed from the catalog that makes the setting concrete — the
+ * tables still on a legacy row format, the columns that already rewrite themselves on update,
+ * whether the timezone tables are populated. Each of the five specs that first needed it invented
+ * its own attribute naming and its own way of telling "measured zero" from "could not measure", and
+ * five conventions is five chances for one of them to collapse the two.
  *
  * So the fact travels as a triple — value, {@see CrossFactState}, and a reason when it is missing.
  *
@@ -38,7 +39,7 @@ final readonly class SettingCrossFacts
     /**
      * The accounts holding `FILE`, measured beside `local_infile`.
      *
-     * The one fact name that lives HERE rather than on the collector that produces it, and the
+     * The one fact name that lives here rather than on the collector that produces it, and the
      * asymmetry is the point rather than an oversight. Every other name is read by a rule in the
      * same driver namespace as its collector, so the constant can sit with the query. This one is
      * read by a rule in the CORE namespace, which may not name a driver — the split is mechanical
@@ -103,7 +104,7 @@ final readonly class SettingCrossFacts
     }
 
     /**
-     * A fact the collector could NOT measure, with the reason it could not.
+     * A fact the collector could not measure, with the reason it could not.
      *
      * The reason is required rather than optional: a rule turns this into an `undetermined` finding
      * and an undetermined without a named reason is not constructible anywhere else in this package.
@@ -125,7 +126,7 @@ final readonly class SettingCrossFacts
             'value' => null,
             'state' => CrossFactState::Unavailable,
             'reason' => $reason,
-            'detail' => $detail === null ? null : new CredentialRedactor()->redact($detail),
+            'detail' => $detail === null ? null : new CompositeCredentialRedactor()->redact($detail),
         ]);
     }
 
@@ -159,8 +160,8 @@ final readonly class SettingCrossFacts
      * The attributes to hang on a setting subject, flattened.
      *
      * Flattened rather than nested because {@see SchemaObject} carries
-     * scalars — and the flattening is done HERE, once, so the five rules that read these never agree
-     * on a key by coincidence.
+     * scalars — and the flattening is done here, once, so the rules that read these never agree on a
+     * key by coincidence.
      *
      * @return array<string, scalar|null>
      */

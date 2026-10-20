@@ -10,13 +10,13 @@ use Pushery\SQLens\Contracts\DriverCanonicalization;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
 /**
- * The database object a debt is about, named the ONE way the ledger records it.
+ * The database object a debt is about, named the one way the ledger records it.
  *
  * ## Why canonicalization is the whole point
  *
  * `"Public"."Orders"`, `public.orders` and `PUBLIC.ORDERS` are one object on PostgreSQL and the
  * ledger has to agree. Without that, a debt recorded by a run that saw one spelling and re-read by a
- * run that saw another is TWO debts: the account grows a duplicate every time the quoting changes,
+ * run that saw another is two debts: the account grows a duplicate every time the quoting changes,
  * and the number it reports stops meaning anything. That is the drift trap the comparator has to
  * avoid, arriving one layer earlier.
  *

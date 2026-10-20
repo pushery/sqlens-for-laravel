@@ -8,7 +8,7 @@ use Pushery\SQLens\Catalog\Canonical\CatalogObjectFingerprint;
 use Pushery\SQLens\Subjects\SchemaObject;
 
 /**
- * One reading of a live catalog: what was found, what was NOT, where it came from, and whether it
+ * One reading of a live catalog: what was found, what was not, where it came from, and whether it
  * is the whole picture.
  *
  * The four parts are inseparable on purpose. A collection of objects alone cannot be judged (which
@@ -18,7 +18,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * ## Determinism is a property of the type, not of the reader
  *
- * The objects and the skips are sorted HERE, on construction, rather than left to whichever order
+ * The objects and the skips are sorted here, on construction, rather than left to whichever order
  * the catalog query happened to return. Two readings of an unchanged database must serialize
  * byte-identically, or the drift comparator reports the ordering of a query plan as a schema change
  * — noise that trains its reader to ignore it. Sorting in one place means no reader can forget, and
@@ -65,13 +65,13 @@ final readonly class CatalogSnapshot
      *
      * ## Why the skip list needed this
      *
-     * It is where a reader looks to find out what could NOT be checked, and that purpose is defeated
+     * It is where a reader looks to find out what could not be checked, and that purpose is defeated
      * by volume. Measured on the smallest extension in the fixture tree: reading routines took the
      * list from 4 entries to 35, and 31 of those were `pg_trgm` saying the same thing 31 times.
      * PostGIS ships over a thousand functions, so a project using it would get a four-digit list —
      * in the one place the genuinely unread objects are supposed to stand out.
      *
-     * ## Why HERE, and why it applies to every kind
+     * ## Why here, and why it applies to every kind
      *
      * Same argument the sorting two lines above makes: one place means no reader can forget and no
      * reader can do it differently. Doing it in the PostgreSQL reader would have left the MySQL one
@@ -189,7 +189,7 @@ final readonly class CatalogSnapshot
                     'type' => $object->type->value,
                     'name' => $object->qualifiedName,
                     'parent' => $object->parent,
-                    // What the object IS, not merely that it exists. Without this a comparison over
+                    // What the object is, not merely that it exists. Without this a comparison over
                     // two readings sees a table appear or vanish and nothing else — not a changed
                     // column type, not a changed default, not a reordered index. The attributes
                     // arrive already canonicalized: the reader runs defaults and collations through

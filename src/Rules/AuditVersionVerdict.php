@@ -19,7 +19,7 @@ enum AuditVersionVerdict: string
     case Applicable = 'applicable';
 
     /**
-     * The version is known and the rule's window excludes it: the rule does NOT run, and that is
+     * The version is known and the rule's window excludes it: the rule does not run, and that is
      * correct rather than a gap. It is still named, so a shrinking rule set stays visible.
      */
     case Gated = 'gated';

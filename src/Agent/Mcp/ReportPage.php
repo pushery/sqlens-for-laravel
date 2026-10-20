@@ -20,7 +20,7 @@ use Pushery\SQLens\Config\ConfigSchema;
  *
  * In the same structured field, every time. A quiet truncation reads exactly like a database with
  * fewer problems than it has — and an agent acting on the short list would report the work as
- * finished. So the answer carries the total, what it returned, whether more remains, and WHY it
+ * finished. So the answer carries the total, what it returned, whether more remains, and why it
  * stopped where it did.
  *
  * One class rather than a convention per tool, because "how a page says it is a page" is precisely

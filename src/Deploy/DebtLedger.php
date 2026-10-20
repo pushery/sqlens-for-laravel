@@ -6,6 +6,8 @@ namespace Pushery\SQLens\Deploy;
 
 use Illuminate\Filesystem\Filesystem;
 use Pushery\SQLens\Exceptions\InvalidRunDay;
+use Pushery\SQLens\Exceptions\UnwritableDebtLedger;
+use Pushery\SQLens\Format\SafeFileWriter;
 use Pushery\SQLens\Today;
 
 /**
@@ -57,7 +59,7 @@ final readonly class DebtLedger
     ) {}
 
     /**
-     * A ledger from entries in ANY order.
+     * A ledger from entries in any order.
      *
      * @param  list<DebtEntry>  $entries
      */
@@ -95,7 +97,7 @@ final readonly class DebtLedger
 
         $schema = $decoded[self::SCHEMA_KEY] ?? null;
 
-        // The version is checked BEFORE the entries, and the order is the point: entries written in
+        // The version is checked before the entries, and the order is the point: entries written in
         // a shape this build does not understand would be dropped one by one and the run would end
         // with a plausible, smaller number. Refusing first is what stops that from being possible.
         if (! is_int($schema) || ! DebtLedgerSchema::supports($schema)) {
@@ -210,16 +212,26 @@ final readonly class DebtLedger
         return json_encode($root, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)."\n";
     }
 
-    /** Write the ledger, creating the directory it lives in when it is not there yet. */
+    /**
+     * Write the ledger, creating the directory it lives in when it is not there yet.
+     *
+     * Written beside the file and renamed over it, so a run killed halfway or a full disk leaves the
+     * account that was there rather than a cut-off one. A write that did not happen is a named
+     * failure: a recording run that carried on would report debts it never recorded.
+     *
+     * @throws UnwritableDebtLedger
+     */
     public function write(Filesystem $files, string $path): void
     {
         $directory = dirname($path);
 
-        if (! $files->isDirectory($directory)) {
-            $files->makeDirectory($directory, recursive: true);
+        if (! $files->isDirectory($directory) && ! @mkdir($directory, 0o755, true) && ! is_dir($directory)) {
+            throw UnwritableDebtLedger::at($path);
         }
 
-        $files->put($path, $this->toJson());
+        if (! SafeFileWriter::ensure($path, $this->toJson())) {
+            throw UnwritableDebtLedger::at($path);
+        }
     }
 
     /**

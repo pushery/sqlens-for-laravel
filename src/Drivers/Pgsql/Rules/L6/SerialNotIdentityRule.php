@@ -130,7 +130,7 @@ final class SerialNotIdentityRule extends AbstractCatalogRule implements Declare
     }
 
     /**
-     * ONE message for the table and every `serial` column on it.
+     * One message for the table and every `serial` column on it.
      *
      * A catalog finding is located at the object and results are deduplicated by rule id and
      * location, so a verdict per column would arrive as one with the rest dropped without a word.

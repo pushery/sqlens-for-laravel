@@ -28,7 +28,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * ## What it says when the same line also has a weak method
  *
  * It names it and points at the rule that reports it, rather than raising its own severity. The other
- * rule has already produced a finding about that line at ITS severity — `SEC.AUTH.HBA_TRUST` is
+ * rule has already produced a finding about that line at its severity — `SEC.AUTH.HBA_TRUST` is
  * `critical` — so escalating here would put two findings of the same weight on one line and leave a
  * reader to work out that they are the same problem.
  */

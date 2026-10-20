@@ -10,7 +10,7 @@ use Pushery\SQLens\Tools\ToolRunResult;
 /**
  * SQLFluff — a linter that also formats, and the only one here that answers for both dialects.
  *
- * ## Why it sits BELOW pgFormatter in the auto order
+ * ## Why it sits below pgFormatter in the auto order
  *
  * On PostgreSQL, pgFormatter is better at the thing both do. SQLFluff earns its place by covering
  * MySQL as well, which pgFormatter does not — so a project on MySQL gets a real formatter rather
@@ -122,7 +122,7 @@ final readonly class SqlFluffBackend extends ExternalSqlFormatter
      * project's own `.sqlfluff` would otherwise decide what this package's style says, and in-file
      * directives are the one setting that file cannot override.
      *
-     * AFTER the statement, not before it. A directive applies to the whole text wherever it stands,
+     * After the statement, not before it. A directive applies to the whole text wherever it stands,
      * and SQLFluff reports a refusal by line: two lines on top made `slect 1` a parse error on line 3
      * of a one-line file, and the refusal is passed through in the tool's own words. The newline in
      * front keeps a statement that ends in a comment from swallowing the first directive.
@@ -172,7 +172,7 @@ final readonly class SqlFluffBackend extends ExternalSqlFormatter
     public function unexpressible(FormatStyle $style): array
     {
         // SQLFluff's formatter takes its layout from configuration rather than from flags. Leading
-        // commas ARE expressible there — through the `.sqlfluff` at the project's root, which is the
+        // commas are expressible there — through the `.sqlfluff` at the project's root, which is the
         // project's file rather than this package's, and reaching into it would mean a library
         // editing a user's tool configuration.
         return $style->leadingCommas ? ['leading_commas (set it in your own .sqlfluff instead)'] : [];

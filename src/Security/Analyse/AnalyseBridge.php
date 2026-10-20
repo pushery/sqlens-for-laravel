@@ -33,7 +33,7 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * The `sqlens` format exists only where the extension was loaded, and it records whether PHPStan
  * analyzed every file to the end. {@see AnalyseResultTrace} is the contract.
  *
- * ## Every way this can fail to answer is NAMED
+ * ## Every way this can fail to answer is named
  *
  * Not configured, a path that is not there, a file that is not JSON, a document whose shape is not
  * PHPStan's, a result the extension did not write, an analysis PHPStan could not finish — each is an
@@ -273,9 +273,9 @@ final readonly class AnalyseBridge
 
     private function absolute(string $path): string
     {
-        // Repository-relative, like every other path this package accepts. An absolute one still
-        // works, because a CI step that knows its own workspace should not be forced to compute a
-        // relative path back to it.
+        // Repository-relative, like the other files a project keeps in its repository. An absolute
+        // one still works, because a CI step that knows its own workspace should not be forced to
+        // compute a relative path back to it.
         //
         // A STREAM URL is left alone as well, and that is a fix rather than a courtesy: `s3://…`
         // glued behind a project root becomes a path that cannot exist, so a project pointing this

@@ -32,7 +32,7 @@ final readonly class GuardManager
      * Arm everything this profile asks for, and answer which guards that was.
      *
      * The return value is what makes the "off is absent, not cheap" promise testable: an arm can
-     * assert that a null profile activated NOTHING without reaching into a container to count
+     * assert that a null profile activated nothing without reaching into a container to count
      * listeners.
      *
      * @return list<string> the class names activated, in activation order

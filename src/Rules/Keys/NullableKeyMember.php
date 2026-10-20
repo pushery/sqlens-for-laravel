@@ -28,9 +28,9 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * - **The column must be inside a UNIQUE key.** Outside one, a nullable foreign key constrains
  *   nothing and claims nothing, so there is no contradiction to report.
- * - **The key must have at least two columns.** A single-column nullable unique key IS the
+ * - **The key must have at least two columns.** A single-column nullable unique key is the
  *   optional-one-to-one idiom — `profile_id UNIQUE NULL`, `superseded_by_id UNIQUE NULL` — and it
- *   works precisely BECAUSE NULLs are distinct. Reporting it would be reporting the pattern for
+ *   works precisely because NULLs are distinct. Reporting it would be reporting the pattern for
  *   being itself.
  * - **Every member of the key must itself be a foreign-key column.** This is the narrowing that
  *   makes the rule shippable. A unique key mixing a foreign key with a payload column
@@ -148,7 +148,7 @@ final readonly class NullableKeyMember
 
         foreach (ForeignKeyIndexCoverage::parse($table->getString('unique_indexes') ?? '') as $index => $columns) {
             // A single-column nullable unique key is the optional-one-to-one idiom, and it works
-            // BECAUSE NULLs are distinct. Reporting it would be reporting the pattern for existing.
+            // because NULLs are distinct. Reporting it would be reporting the pattern for existing.
             if (count($columns) >= 2 && array_key_exists($index, $comparable)) {
                 $candidates[$index] = $columns;
             }

@@ -17,7 +17,7 @@ use Pushery\SQLens\Rules\ServerVersion;
  * must produce the same result on a dev Mac and in CI, even with no connection to
  * the target instance, so the assumed version is an explicit, versioned input rather
  * than whatever server happens to answer. When neither a pin nor a live version is
- * available, the result is a NAMED undetermined — never a silent default that would
+ * available, the result is a named undetermined — never a silent default that would
  * let a version-gated rule quietly pass.
  *
  * It is pure: the caller acquires the real version banner (through the one
@@ -44,7 +44,7 @@ final readonly class ServerVersionResolver
             $parsed = ServerVersion::parsePin($pin, $driver);
 
             // An unparsable pin is a configuration mistake, not a version to trust — it
-            // is undetermined under its OWN reason, never a fall-through to detection
+            // is undetermined under its own reason, never a fall-through to detection
             // and never merged with "nothing was pinned". Those two need opposite
             // advice, and merged they read as the same unremarkable line.
             return $parsed instanceof ServerVersion

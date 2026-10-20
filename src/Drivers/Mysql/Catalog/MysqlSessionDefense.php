@@ -15,7 +15,7 @@ use Pushery\SQLens\Contracts\SessionDefense;
  *    and DDL with `SQLSTATE 25006` while leaving reads untouched. That is the simpler, stronger
  *    shape, and MySQL is the engine that offers it.
  * 2. **`SET TRANSACTION` is refused inside an open transaction** (`SQLSTATE 25001`, "transaction
- *    characteristics can't be changed"). So anything of that form has to be issued BEFORE the read
+ *    characteristics can't be changed"). So anything of that form has to be issued before the read
  *    transaction opens — which is why the interface has a slot for it at all.
  * 3. **`SET LOCAL` is not MySQL's spelling.** The bounds are session-scoped here; there is no
  *    transaction-scoped variant to fall back on.
@@ -73,7 +73,7 @@ final readonly class MysqlSessionDefense implements SessionDefense
         return [];
     }
 
-    /** A write that creates nothing and touches no user data — it only has to BE a write. */
+    /** A write that creates nothing and touches no user data — it only has to be a write. */
     public function writeProbe(): string
     {
         return 'CREATE TEMPORARY TABLE sqlens_read_only_probe (id int)';
@@ -163,7 +163,7 @@ final readonly class MysqlSessionDefense implements SessionDefense
 
     public function isTimeout(string $sqlState, ?int $driverCode): bool
     {
-        // Through the ONE classifier. Both engines' answers used to live here, and both were
+        // Through the one classifier. Both engines' answers used to live here, and both were
         // wrong in opposite directions — see SessionDefense::isTimeout().
         return SessionTimeoutDetector::matchesTimeout($sqlState, $driverCode);
     }

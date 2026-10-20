@@ -35,7 +35,7 @@ use PHPStan\Type\Type;
  *     Order::query()          →  Illuminate\Database\Eloquent\Builder<Order>
  *     $order->lines()         →  Illuminate\Database\Eloquent\Relations\HasMany<Line, Order>
  *
- * The Eloquent case is the one a type check gets wrong by accident: `Eloquent\Builder` does NOT
+ * The Eloquent case is the one a type check gets wrong by accident: `Eloquent\Builder` does not
  * declare `whereRaw()` — it forwards through `__call` — so a collector that asked the class for the
  * method would be silent on every Eloquent call site in a codebase. It asks the SUBJECT's type
  * instead, which resolves through Larastan's knowledge, and a generic instantiation still answers
@@ -57,7 +57,7 @@ use PHPStan\Type\Type;
  *
  * A `whereRaw()` on a resolved, foreign class is **not** a call site: a codebase full of
  * repositories and collections would otherwise be collected wholesale. But a receiver that resolves
- * to NOTHING is a different statement — it may well be a query builder — so it is recorded as
+ * to nothing is a different statement — it may well be a query builder — so it is recorded as
  * `undetermined` with {@see UndeterminedReason::ReceiverTypeUnknown} rather than discarded. Silently
  * dropping it is exactly how a real call site disappears from a report that looks complete.
  *

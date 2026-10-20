@@ -22,7 +22,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * separate "asked and silent" from "never asked", which is why they travel as a set rather than as
  * a number.
  *
- * ## Why `appliesTo()` is NOT the seam this reads
+ * ## Why `appliesTo()` is not the seam this reads
  *
  * It is the obvious one and it carries none of the answer. `AbstractCatalogRule::appliesTo()` is
  * `final` and true for every schema object, deliberately — so recording there would mark every
@@ -39,7 +39,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * ## Why a rule with no subject is absent rather than recorded as skipped
  *
  * There is no moment at which such a rule is met: the loop walks SUBJECTS. Its absence from this set
- * IS the record, and the comparison that consumes it — one reading against another — is where
+ * is the record, and the comparison that consumes it — one reading against another — is where
  * absence becomes a statement. Inverting it (recording the skipped ones) would need the loop to
  * enumerate the rules a second time, and the second enumeration is where the two would drift on what
  * counts as a rule.
@@ -72,7 +72,7 @@ final readonly class RuleEvaluation
             // of a `continue` because every shipped catalog rule accepts every schema object today,
             // so a skip branch would be a statement nothing executes.
             foreach (array_filter($rules, static fn (Rule $rule): bool => $rule->appliesTo($object)) as $rule) {
-                // Recorded on the way IN, before the verdict, and only when this rule judges THIS
+                // Recorded on the way IN, before the verdict, and only when this rule judges this
                 // KIND of subject. Both halves are load-bearing. Recording only rules that produced
                 // a finding would collapse "judged and found nothing" back into "never ran", which
                 // is the distinction the set exists for; recording every rule the dispatcher offered

@@ -125,7 +125,7 @@ final readonly class DriftComparator
      * One member so far: PostgreSQL's database-scoped collation, which `pg_database` names after the
      * database itself. It is the same boundary the class docblock draws around roles, grants and
      * server settings, and it is drawn here for a sharper reason: on the two sides of a drift run
-     * that object CANNOT match, ever. The live side is the real database and the expectation side is
+     * that object cannot match, ever. The live side is the real database and the expectation side is
      * a throwaway one, so the names differ by construction.
      *
      * Measured 2026-08-18, on the first run of `sqlens:drift` against a real server: every run

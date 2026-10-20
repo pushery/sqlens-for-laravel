@@ -49,16 +49,20 @@ final readonly class IndexUsageReading
      *                                one clock both the counter and its reset point were stamped
      *                                by, and a second clock in PHP could disagree with it by more
      *                                than the threshold a rule is comparing against.
-     * @param  bool  $available  whether the statistics could be read at all. False is NOT the same
+     * @param  bool  $available  whether the statistics could be read at all. False is not the same
      *                           as an empty reading: a server that answered "no indexes have been
      *                           scanned" and one whose statistics view could not be read look
      *                           identical from the counts alone, and only one of them is a fact.
+     * @param  bool  $counting  whether the server counts the scans of new connections at all. False on
+     *                          a PostgreSQL server that hands them `track_counts = off`: a scan made
+     *                          there leaves the counter where it was, so a zero says nothing.
      */
     public function __construct(
         public array $scans = [],
         public ?string $statsResetAt = null,
         public ?int $windowDays = null,
         public bool $available = true,
+        public bool $counting = true,
     ) {}
 
     /** The reading a driver returns when it cannot answer at all. */

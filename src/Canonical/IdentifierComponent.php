@@ -11,7 +11,7 @@ namespace Pushery\SQLens\Canonical;
  *
  * `wasQuoted` records whether the source spelled the part with the driver's
  * identifier quote. A folding driver must preserve that distinction: PostgreSQL
- * `"Users"` is a deliberate mixed-case object and is NOT the same as unquoted
+ * `"Users"` is a deliberate mixed-case object and is not the same as unquoted
  * `Users` (which folds to `users`), so the two never share a canonical form.
  */
 final readonly class IdentifierComponent

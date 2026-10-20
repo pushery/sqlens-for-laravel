@@ -17,7 +17,7 @@ use Throwable;
  * A destructive migration operation — DROP SCHEMA, DROP TABLE, DROP COLUMN, TRUNCATE, a
  * mass UPDATE/DELETE with no WHERE, or a drop without a deploy window, on either engine —
  * is a real finding the rules always produce. Consent does not un-produce it; it moves it to the
- * suppressed list with a NAMED reason, so a run still shows that this migration
+ * suppressed list with a named reason, so a run still shows that this migration
  * destroys data. That is the whole point of the opt-in living here and not in the
  * rule: "the migration opted in" and "the rule never looked" are different facts,
  * and only one of them is true, so only one may be shown.
@@ -25,7 +25,7 @@ use Throwable;
  * Consent comes from two sources, most specific first:
  *
  *  - **The migration's own `#[SqlensAllowDestructive]`** — an in-code attribute with a
- *    mandatory reason, applying to THIS migration only. Its reason is the one shown,
+ *    mandatory reason, applying to this migration only. Its reason is the one shown,
  *    because a person wrote it about this exact operation. Read by reflection off the
  *    class the capture path already loaded (`class_exists` with autoload OFF), never by
  *    parsing the file, and fail-safe toward flagging: a malformed attribute (one missing
@@ -35,7 +35,7 @@ use Throwable;
  *    with a fixed reason naming the switch, so the report says WHERE the consent came
  *    from.
  *
- * It consents ONLY to the destructive family below — a rule id it does not recognize is
+ * It consents only to the destructive family below — a rule id it does not recognize is
  * never suppressed here, so this source can never hide an unrelated finding. Applying
  * the suppression (recording the source and reason on the hidden finding) is done here
  * because, unlike the ignore/annotation sources, the reason has two shapes and this is
@@ -107,8 +107,8 @@ final readonly class DestructiveOptInSuppressionSource
     /**
      * The reason on the migration's `#[SqlensAllowDestructive]`, or null when the class
      * carries none, was never loaded, or carries a malformed one (missing its mandatory
-     * reason) — the fail-safe direction, so a broken opt-in surfaces the finding rather
-     * than swallowing it.
+     * reason, or with one that is empty or only whitespace) — the fail-safe direction, so
+     * a broken opt-in surfaces the finding rather than swallowing it.
      */
     private function annotationReason(?string $migrationClass): ?string
     {
@@ -120,10 +120,13 @@ final readonly class DestructiveOptInSuppressionSource
             try {
                 // newInstance() enforces the mandatory reason: an opt-in without one
                 // throws here and is not honored, so the destruction stays flagged.
-                return $attribute->newInstance()->reason;
+                $optIn = $attribute->newInstance();
             } catch (Throwable) {
                 return null;
             }
+
+            // One whose reason is empty or only whitespace satisfied PHP and states nothing.
+            return $optIn->isReasoned() ? $optIn->reason : null;
         }
 
         return null;

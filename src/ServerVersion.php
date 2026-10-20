@@ -10,7 +10,7 @@ use PDO;
 use Pushery\SQLens\Drivers\DriverManager;
 
 /**
- * The ONE place SQLens learns which server it is looking at.
+ * The one place SQLens learns which server it is looking at.
  *
  * Every judgment that depends on the server — the per-driver version floor, the
  * "is this really MariaDB behind Laravel's mysql driver" question, the version
@@ -19,7 +19,7 @@ use Pushery\SQLens\Drivers\DriverManager;
  * eventually disagree.
  *
  * It never opens a connection. `getRawPdo()` hands back the PDO the connection is
- * ALREADY holding and resolves nothing; `getPdo()` would call the lazy connection
+ * already holding and resolves nothing; `getPdo()` would call the lazy connection
  * closure, which is a connect — and connecting to a production database to find
  * out its version is exactly the harm this package promises not to do. It also
  * runs no query at all: the banner is an attribute of an existing handle.

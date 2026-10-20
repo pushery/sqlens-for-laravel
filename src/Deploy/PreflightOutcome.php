@@ -19,7 +19,7 @@ use Pushery\SQLens\Reporting\Summary\AxisSummary;
  *
  * ## Why this exists rather than a report alone
  *
- * A predeploy verdict is TWO halves that travel as one result: findings about the migrations about
+ * A predeploy verdict is two halves that travel as one result: findings about the migrations about
  * to run, and findings about the instance they will run against. A caller that received only the
  * preflight report would have to run the lint half itself — and two resolutions of "which
  * migrations are pending" are two answers, one of which drifts.
@@ -38,7 +38,7 @@ final readonly class PreflightOutcome
      * @param  string|null  $connection  the connection the run addressed, or null when none resolved
      * @param  string|null  $refusal  why the run could not happen at all — set exactly when `report` is null
      * @param  array<string, int|null>|null  $sessionTimeouts  the bounds the session REPORTED, never the ones it asked for
-     * @param  Result|null  $result  BOTH halves as one verdict — findings about the migrations and
+     * @param  Result|null  $result  both halves as one verdict — findings about the migrations and
      *                               findings about the instance. Assembled once, in the service, because two
      *                               callers rendering it would be two chances to merge it differently, and a
      *                               consumer would then have to choose which document is "the" verdict.
@@ -85,7 +85,7 @@ final readonly class PreflightOutcome
     }
 
     /**
-     * Whether the deploy proceeds, over BOTH halves.
+     * Whether the deploy proceeds, over both halves.
      *
      * The instance checks decided it alone for a long time, while the findings about the pending
      * migrations went into the same document marked as blocking: a critical password literal in a

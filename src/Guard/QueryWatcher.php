@@ -11,7 +11,7 @@ use Pushery\SQLens\Guard\Contracts\QueryInspector;
 use Pushery\SQLens\Guard\Contracts\RuntimeGuard;
 
 /**
- * The ONE query listener the guard suite registers, however many query-based guardrails are on.
+ * The one query listener the guard suite registers, however many query-based guardrails are on.
  *
  * ## Why one and not N
  *
@@ -43,7 +43,7 @@ final readonly class QueryWatcher implements RuntimeGuard
     }
 
     /**
-     * The lifecycle events that end one accounting window, listened for BY NAME.
+     * The lifecycle events that end one accounting window, listened for by name.
      *
      * String class-names rather than imports, and that is a dependency decision rather than a style
      * one: `RequestHandled` lives in `illuminate/foundation` and the job events in
@@ -64,7 +64,7 @@ final readonly class QueryWatcher implements RuntimeGuard
 
     public function activate(GuardProfile $profile): void
     {
-        // Resolved ONCE, at activation, rather than per query. Which inspectors a profile wants
+        // Resolved once, at activation, rather than per query. Which inspectors a profile wants
         // cannot change during a request — the profile is immutable — so asking every query would
         // be the same answer computed four hundred times.
         $active = array_values(array_filter(

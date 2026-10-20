@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Catalog\Statistics;
 
 /**
- * What a statistics number is a statistic OF — the closed set of quantities this package reads
+ * What a statistics number is a statistic of — the closed set of quantities this package reads
  * about a stored object.
  *
  * The set is closed on purpose, and closing it is the point rather than a side effect. Provenance
@@ -89,7 +89,7 @@ enum EstimateSource: string
      * the rest of the package: {@see Estimate::exact()} will not build one, so an estimated row
      * count cannot be relabeled as a count no matter which driver is holding it.
      *
-     * False for the byte quantities does NOT mean they are always exact — it means an engine may be
+     * False for the byte quantities does not mean they are always exact — it means an engine may be
      * able to measure them, and which one can is that driver's knowledge rather than the core's.
      */
     public function isAlwaysEstimated(): bool

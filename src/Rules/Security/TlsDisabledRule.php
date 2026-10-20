@@ -29,7 +29,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * than by this setting. `critical` is reserved here for findings that need nothing else to be true —
  * this one needs somebody to be able to reach the wire.
  *
- * The combination that IS critical — TLS off AND an authentication rule accepting an open CIDR — is
+ * The combination that is critical — TLS off and an authentication rule accepting an open CIDR — is
  * a separate escalation, because it needs a fact from a different reader and must say so when that
  * reader could not answer.
  */
@@ -94,7 +94,7 @@ final class TlsDisabledRule extends AbstractSettingSecurityRule
     public function limitations(): array
     {
         return [
-            'reads the RUNNING value, not the file: a setting changed on disk and not yet reloaded is invisible here, and one changed only for this session would be read as the server\'s',
+            'reads the reset value, not the file: a setting changed on disk and not yet reloaded is invisible here, and defaults set with ALTER ROLE or ALTER DATABASE for the connecting role and its database are part of that value, while those set for other roles are not read',
             // "none of that topology is visible" was too strong in one direction and too weak in the
             // other: the pooler reading establishes whether a pooler is in the path, and no reading
             // reaches what any proxy does with TLS. Both halves are stated so a reader knows which

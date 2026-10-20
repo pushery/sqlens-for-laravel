@@ -303,7 +303,7 @@ final readonly class SelectStarInView
                 // wraps the definition itself, so counting it would put the definition's own SELECT
                 // at depth 1 and hide it — measured, this arm was red before the exception existed.
                 //
-                // It must IMMEDIATELY follow the `AS`, and that is the second measurement: a `WITH`
+                // It must immediately follow the `AS`, and that is the second measurement: a `WITH`
                 // clause spells `recent AS (SELECT …)`, whose parenthesis also stands after an `AS`
                 // and is a real nesting level. Accepting any post-`AS` parenthesis turned the CTE
                 // arm red, which is how the rule would have started reporting a subquery's star.

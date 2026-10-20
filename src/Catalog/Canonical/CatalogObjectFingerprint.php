@@ -17,7 +17,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * something moved. This answers the same question per object, so a comparator can walk two readings
  * and stop at the entries whose hashes differ instead of diffing every field of every one.
  *
- * ## The volatile register lives HERE, and the snapshot borrows it
+ * ## The volatile register lives here, and the snapshot borrows it
  *
  * Both the fingerprint and the snapshot's serialization have to ignore exactly the same attributes.
  * Two copies of that list would drift, and the failure would be quiet in the worst way: a hash that
@@ -26,7 +26,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * So there is one register, with a reason per entry, and the snapshot reads it from here.
  *
- * ## What is deliberately NOT normalized here
+ * ## What is deliberately not normalized here
  *
  * Nothing. By the time an object reaches this class its defaults and collations have already been
  * through {@see CatalogCanonicalizer} — the reader runs them as it reads. A second normalization at
@@ -53,7 +53,7 @@ final readonly class CatalogObjectFingerprint
         //
         // It is kept as a guard ahead of a reader that has not been written: the counter is real
         // noise the moment somebody selects it, and it would arrive under exactly this name. What
-        // it must NOT do is what it did until 2026-08-18 — the MySQL column reader emitted a
+        // it must not do is what it did until 2026-08-18 — the MySQL column reader emitted a
         // boolean called `auto_increment` ("does this column auto-increment"), the register matched
         // it by name, and a column that gained or lost AUTO_INCREMENT was therefore invisible to
         // every comparison. That boolean is now `auto_increments`; the two concepts have two names.
@@ -67,7 +67,7 @@ final readonly class CatalogObjectFingerprint
             .'reason — an operator upgrading an extension is not schema drift.',
 
         // The three below belong to MySQL's scheduled events, the one object type that rewrites its
-        // own catalog row BY RUNNING. Each reason is a measurement against MySQL 8.4.10 with the
+        // own catalog row by running. Each reason is a measurement against MySQL 8.4.10 with the
         // scheduler live, not a reading of the manual.
         'last_executed' => 'the wall-clock of an event\'s most recent run. Measured moving on every '
             .'execution of a one-second event, so two readings four seconds apart disagree about a '
@@ -78,8 +78,8 @@ final readonly class CatalogObjectFingerprint
             .'— so the live database and a freshly built shadow disagree permanently, for no '
             .'reason but their ages.',
 
-        // NOT called `status`, and the pair of names is the whole point — the same trap the
-        // `auto_increment` entry above documents. A RECURRING event's status IS schema: somebody
+        // Not called `status`, and the pair of names is the whole point — the same trap the
+        // `auto_increment` entry above documents. A RECURRING event's status is schema: somebody
         // ran ALTER EVENT ... DISABLE, and a comparison that could not see it would be worthless.
         // A ONE TIME event declared ON COMPLETION PRESERVE flips itself to DISABLED the moment it
         // fires (measured), which is a fact about execution wearing the same word. So the reader

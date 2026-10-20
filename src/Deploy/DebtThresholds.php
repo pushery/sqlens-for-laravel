@@ -20,7 +20,7 @@ use Pushery\SQLens\Severity\Severity;
  * ## What a threshold may and may not do
  *
  * It raises a severity. It never creates a finding, never removes one, and never changes a rule id.
- * The debt reported on day 1 and the debt reported on day 400 are the SAME finding about the same
+ * The debt reported on day 1 and the debt reported on day 400 are the same finding about the same
  * object — the older one is simply louder. A threshold that minted its own rule id would give one
  * problem two names in a project's history and break every baseline entry on the day it crossed.
  *
@@ -104,7 +104,7 @@ final readonly class DebtThresholds
      * The severity a debt of this age carries, given what the finding already said.
      *
      * Never lowers. A rule that considered a debt High on its own merits keeps High at any age —
-     * age is a reason to care MORE, and a threshold that could quiet a finding would make the
+     * age is a reason to care more, and a threshold that could quiet a finding would make the
      * report depend on how long somebody had been ignoring it.
      */
     public function escalate(Severity $base, int $ageInDays): Severity

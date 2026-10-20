@@ -11,7 +11,7 @@ use Pushery\SQLens\Rules\RuleVerdict;
 use Pushery\SQLens\Subjects\MigrationStatementView;
 
 /**
- * A catalog rule that can ALSO answer from a migration statement — the mirror image of
+ * A catalog rule that can also answer from a migration statement — the mirror image of
  * {@see JudgesSchemaObjects}, and the other half of "one rule, two subjects".
  *
  * ## Why an interface and not a branch on the base

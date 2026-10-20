@@ -42,10 +42,11 @@ use stdClass;
  *
  * ## Why it opens nothing
  *
- * Starting the server touches no database. Connections are opened INSIDE the services a tool call
+ * Starting the server touches no database. Connections are opened inside the services a tool call
  * reaches, for the length of that call, exactly as the CLI does it — a server holding an open
  * connection for the lifetime of an editor session would be a connection nobody asked for on a
- * machine that may be pointed at production.
+ * machine that may be pointed at production. {@see CallDeclaredTool} closes what a call opened once
+ * the call is answered.
  */
 final class SqlensMcpServer extends Server
 {

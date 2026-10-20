@@ -47,7 +47,7 @@ final readonly class MissingToolNotice
         //
         // ## Why these sentences are English in code and not in `lang/`
         //
-        // They WERE translation keys, and that was the wrong classification. A finding is the
+        // They were translation keys, and that was the wrong classification. A finding is the
         // MACHINE surface — JSON, SARIF, the baseline fingerprint, what an agent parses — and a
         // translated finding makes that surface depend on `app.locale`: the same tree reported
         // in German on a laptop and in English in CI, with the baseline unable to recognize its

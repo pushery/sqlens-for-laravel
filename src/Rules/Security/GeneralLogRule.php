@@ -76,7 +76,7 @@ final class GeneralLogRule extends AbstractSettingSecurityRule
      * here — a security check silent against production on the default path — cannot happen:
      * silence has to be asked for.
      *
-     * Note what does NOT gate it: the audit's `--profile` flag. That is a label the caller picks per
+     * Note what does not gate it: the audit's `--profile` flag. That is a label the caller picks per
      * invocation, and letting it withhold a security finding is the shape this package refuses
      * everywhere else. `app.env` is the application's own statement about itself, which is why it
      * does not speak for a server the same command is pointed at from outside.
@@ -149,7 +149,7 @@ final class GeneralLogRule extends AbstractSettingSecurityRule
     /**
      * What the server says about the destination, or an honest sentence when it would not say.
      *
-     * ## Read, but NOT required — and the difference decides whether this rule can be silenced
+     * ## Read, but not required — and the difference decides whether this rule can be silenced
      *
      * A required cross-fact makes the whole judgment `undetermined` when the fact is missing. That
      * is right for a fact the verdict TURNS on, and wrong here: `general_log = ON` is a finding on
@@ -191,7 +191,7 @@ final class GeneralLogRule extends AbstractSettingSecurityRule
     public function limitations(): array
     {
         return [
-            'reads the RUNNING value, not the file: a setting changed on disk and not yet reloaded is invisible here, and one changed only for this session would be read as the server\'s',
+            'reads the GLOBAL value, not the file: a setting changed on disk and not yet reloaded is invisible here, and a value set for one session is never read',
             'reads the DESTINATION (`log_output`) but not what happens to it. A file that ships to an aggregator and one that never leaves the host are the same `FILE` here, and who may read the `mysql.general_log` table is a grant question this rule does not ask',
             'says nothing about what is IN the statements. A project whose queries are fully parameterized still writes the parameters to this log, which is the part people are surprised by',
         ];

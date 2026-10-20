@@ -39,7 +39,7 @@ enum SignatureElementKind
      * and drops the other: a primary key is `PRIMARY` whatever its symbol, a `UNIQUE` that names its
      * index is that index, and a foreign key's index takes the constraint's name over its own. Read
      * as a target, the dropped name is an object a naming rule judges and nobody finds in the catalog.
-     * It still has to BE a name: a keyword in its place declines the signature, so
+     * It still has to be a name: a keyword in its place declines the signature, so
      * `ADD CONSTRAINT PRIMARY KEY` is left to the signature written for it.
      */
     case SkippedName;
@@ -50,7 +50,7 @@ enum SignatureElementKind
     /**
      * A parenthesized identifier list, captured IN ORDER — `(a, b)` for a key or a reference.
      *
-     * Order is the whole point. Index coverage is a LEFT PREFIX: an index on `(a, b)` answers a
+     * Order is the whole point. Index coverage is a left PREFIX: an index on `(a, b)` answers a
      * lookup on `(a)` and one on `(a, b)`, and answers nothing for `(b)`. A set would be useless
      * for that question and actively misleading to the next reader, who would assume it had been
      * considered.
@@ -59,7 +59,7 @@ enum SignatureElementKind
      * string — putting grammar back into a layer that is deliberately free of it is exactly what
      * this element exists to avoid.
      *
-     * **A PLAIN list, or none at all.** The element matches `(a)` and `(a, b)` and declines
+     * **a plain list, or none at all.** The element matches `(a)` and `(a, b)` and declines
      * everything else — `(a varchar_pattern_ops)`, `(lower(a))`, `(a DESC)`, `(a) INCLUDE (b)`.
      * A list with anything besides a comma between its members is not a column list this layer can
      * hand to a coverage question: an operator class swept in as a second column makes a
@@ -87,7 +87,7 @@ enum SignatureElementKind
      *
      * ## All or nothing, because a partial list is the dangerous answer
      *
-     * A member whose shape this element does not recognize makes the WHOLE list decline. A rule
+     * A member whose shape this element does not recognize makes the whole list decline. A rule
      * handed nine columns out of ten cannot tell that one is missing, and the finding it then makes
      * — "no money column here" — is wrong in the silent direction and permanent. Declining leaves
      * the statement classified and carrying no definitions, which every reader turns into "I cannot
@@ -138,7 +138,7 @@ enum SignatureElementKind
      * The test is per ASSIGNMENT, not per clause: `SET a = 1, b = other` yields `[b]` alone. A
      * clause-wide test would let one genuine move vouch for every literal beside it.
      *
-     * ## The discriminator is the separator BEFORE the name, and that was measured
+     * ## The discriminator is the separator before the name, and that was measured
      *
      * The obvious rule — an assigned name is one whose FOLLOWING token is preceded by `=` — holds
      * only when the value is itself an identifier. Measured against the real tokenizer, literals
@@ -147,7 +147,7 @@ enum SignatureElementKind
      * answer wearing the shape of a complete one.
      *
      * What does hold is the shape this element actually uses, and it is the same one
-     * {@see self::ColumnList} relies on: the FIRST assigned name follows the `SET` keyword across
+     * {@see self::ColumnList} relies on: the first assigned name follows the `SET` keyword across
      * whitespace, and every later one follows a comma. A name preceded by `=` is a value, a name
      * preceded by `(` is inside an expression, and neither is collected.
      *

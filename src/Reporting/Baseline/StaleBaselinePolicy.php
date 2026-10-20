@@ -51,7 +51,7 @@ enum StaleBaselinePolicy: string
     /**
      * Whether these stale entries end the run as a misconfiguration.
      *
-     * The whole decision lives HERE rather than as `->fails() && $stale !== []` at each runner,
+     * The whole decision lives here rather than as `->fails() && $stale !== []` at each runner,
      * because both suites read the same key from the same file and two spellings of one rule is
      * how they start disagreeing about what a rotten baseline costs. It answers about baseline
      * entries alone: an ignore rule that matched nothing is a different instruction with a notice

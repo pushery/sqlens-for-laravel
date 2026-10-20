@@ -49,7 +49,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ## Why level 8, where the other convention rules are
  *
- * Levels are cumulative, so a lower level reaches MORE consumers, not fewer. Level 6 is the type
+ * Levels are cumulative, so a lower level reaches more consumers, not fewer. Level 6 is the type
  * idiom band — `timestamptz`, `jsonb`, identity columns — and a statement about an index belongs to
  * none of that. Level 8 is "naming schemes and structural house style", which is what a deliberate
  * functional unique index is, and it is the band a consumer turns on when they want to be told about
@@ -100,7 +100,7 @@ final class UniqueCaseFoldedIndexRule extends AbstractCatalogRule implements Dec
     }
 
     /**
-     * Audit only, and deliberately NOT `Suite::Security`.
+     * Audit only, and deliberately not `Suite::Security`.
      *
      * The suite axis is independent of the category one, so a security suite membership would be
      * legal here — and it would put a finding about an intact schema in front of the reader who asked
@@ -124,7 +124,7 @@ final class UniqueCaseFoldedIndexRule extends AbstractCatalogRule implements Dec
         $folded = [];
 
         // `unique_indexes` carries every unique index that is not the primary key, and it carries
-        // them WITHOUT a comprehension filter — which is what makes this rule possible at all. The
+        // them without a comprehension filter — which is what makes this rule possible at all. The
         // comparable set deliberately excludes an index whose expression did not arrive, and that is
         // the exact set this rule is about.
         foreach (ForeignKeyIndexCoverage::parse($object->getString('unique_indexes') ?? '') as $index => $keyPositions) {

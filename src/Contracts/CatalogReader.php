@@ -13,7 +13,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * Reads a live database catalog into the one shape every suite downstream reasons about.
  *
  * It is the audit suite's counterpart to the capture layer: where a captor turns pending
- * MIGRATIONS into subjects, a reader turns what is ALREADY IN the database into them. One rule
+ * MIGRATIONS into subjects, a reader turns what is already in the database into them. One rule
  * engine, two sources — which is why the output is the same canonicalized `SchemaObject` view and
  * not a second, parallel model that would drift from the first.
  *
@@ -47,15 +47,15 @@ interface CatalogReader
      * whom that matters most is `sqlens:drift`, which answers the question "did this schema change".
      *
      * Measured before this method existed: the MySQL reader constructs six types and the PostgreSQL
-     * reader nine, and NEITHER constructs {@see SchemaObjectType::Routine}. A drift run over a
+     * reader nine, and neither constructs {@see SchemaObjectType::Routine}. A drift run over a
      * database whose stored procedure had been edited therefore reported no findings, and
      * `DriftReport::isConclusive()` returned true — the honest mechanism was built, correct, and
      * never fed.
      *
-     * ## This is scope, NOT a skip
+     * ## This is scope, not a skip
      *
      * The distinction is load-bearing and the class docblock above already draws it: a named skip on
-     * the snapshot means something IN SCOPE could not be delivered. A type this reader never reads is
+     * the snapshot means something in scope could not be delivered. A type this reader never reads is
      * not a failed reading, it is a reading nobody wrote yet — and folding the two together would
      * make every gate run permanently `undetermined`, which teaches a team to pass
      * `--allow-undetermined` forever and swallows the real, transient skips along with it.
@@ -70,7 +70,7 @@ interface CatalogReader
     /**
      * How often each index has been read, and since when the server has been counting.
      *
-     * A SECOND accessor rather than more fields on the snapshot, because the two answers have
+     * A second accessor rather than more fields on the snapshot, because the two answers have
      * different properties. A snapshot is deterministic by contract; usage counters move while the
      * schema stands still, and the window they cover starts wherever the server last reset them.
      * Merging them would put a moving value inside the structure the drift comparison relies on

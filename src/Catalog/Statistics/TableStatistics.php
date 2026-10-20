@@ -20,7 +20,7 @@ use Pushery\SQLens\Exceptions\InvalidStatisticsReading;
  * no row count is a question nobody could answer, and a gate that treated the second as the first
  * would wave through the migration it exists to weight.
  *
- * The "when were these statistics last refreshed" the deploy suite needs is NOT a field here. It
+ * The "when were these statistics last refreshed" the deploy suite needs is not a field here. It
  * lives inside each {@see Estimate}, because the numbers do not share an answer: on an engine that
  * computes sizes while it answers, the byte counts have no staleness at all while the row count is
  * as old as the last statistics run. One field would have had to be wrong about one of them.
@@ -72,8 +72,7 @@ final readonly class TableStatistics
      *
      * Three-valued, and the null is the answer worth having: at least one freshness could not be
      * read and nothing else was stale, so the reading cannot be certified either way. Answering
-     * `false` there would report statistics nobody looked at as sound — and this is the value a
-     * severity escalation reads before deciding how much to trust its own weighting.
+     * `false` there would report statistics nobody looked at as sound.
      */
     public function isStale(): ?bool
     {

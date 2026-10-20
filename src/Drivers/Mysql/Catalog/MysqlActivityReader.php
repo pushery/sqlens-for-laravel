@@ -27,19 +27,20 @@ use Throwable;
  * translation of it. The two engines withhold state in opposite ways, and a reader that assumed
  * either shape would be blind on the other.
  *
- * ## The silent narrowing here is by ROW, and its detector is a different view
+ * ## The silent narrowing here is by ROW, and its detector is the privilege itself
  *
  * Measured on MySQL 8.4.10 with a role holding only `SELECT` on the application schema: every
- * `performance_schema` view and `information_schema.INNODB_TRX` refuse LOUDLY (`42000`, error 1142
+ * `performance_schema` view and `information_schema.INNODB_TRX` refuse loudly (`42000`, error 1142
  * or 1227), which the error translator already turns into a named skip. Exactly one view does not:
- * `information_schema.PROCESSLIST` answers with the reading's OWN session and nothing else — one
+ * `information_schema.PROCESSLIST` answers with the reading's own session and nothing else — one
  * row where a privileged role sees the whole server, and no error at all.
  *
  * That narrowing cannot be detected from its own answer: one row is a quiet server and a blind role
- * equally. But `performance_schema.threads` is gated by the SAME `PROCESS` privilege and refuses
- * out loud — so the refusal of one view is the detector for the silence of the other. This reader
- * asks both and uses the first to qualify the second. No `SHOW GRANTS`, no parsing of grant strings:
- * the server says it, you only have to ask the right view.
+ * equally. So this reader asks for the privilege: `information_schema.USER_PRIVILEGES` records
+ * whether the connecting account holds `PROCESS`, and every account may read its own row. A sibling
+ * view's refusal is no detector, as `hasProcessPrivilege()` records with its measurement:
+ * `performance_schema.threads` answers to SELECT on `performance_schema`, not to `PROCESS`. No
+ * `SHOW GRANTS`, and no parsing of grant strings.
  *
  * ## Two lock layers, not one
  *
@@ -49,7 +50,7 @@ use Throwable;
  * one snapshot, because a migration blocked by either is blocked.
  *
  * `data_lock_waits` carries no relation of its own (thread, transaction and lock IDs only), so it is
- * joined to `data_locks` for the object. A wait chain that could not say WHICH table is queueing is
+ * joined to `data_locks` for the object. A wait chain that could not say which table is queueing is
  * nearly worthless to a preflight.
  */
 final readonly class MysqlActivityReader implements ActivityReader
@@ -69,7 +70,7 @@ final readonly class MysqlActivityReader implements ActivityReader
      * session announcing it may want something stronger later. It blocks a schema change and
      * nothing an application does.
      *
-     * A type absent from this map is NOT dropped — see {@see self::metadataWaits()}.
+     * A type absent from this map is not dropped — see {@see self::metadataWaits()}.
      */
     private const array LOCK_TYPES = [
         'SHARED' => LockMode::Shared,
@@ -95,7 +96,7 @@ final readonly class MysqlActivityReader implements ActivityReader
 
         $session = $this->session->withBudget($this->session->budget()->narrowedTo($request->budgetMilliseconds));
 
-        // FIRST, because its refusal is what qualifies everything the process list says. Asked after
+        // First, because its refusal is what qualifies everything the process list says. Asked after
         // the fact it would still work; asked first it makes the ordering of this method say why it
         // is here.
         $hasProcessPrivilege = $this->hasProcessPrivilege($session, $skips);
@@ -144,7 +145,7 @@ final readonly class MysqlActivityReader implements ActivityReader
             ? []
             : DatabaseErrorTranslator::attemptBounded(
                 fn (): array => array_values($session->read(
-                    // Bound TWICE — once per comparison in the query above.
+                    // Bound twice — once per comparison in the query above.
                     fn (Connection $db): array => $db->select(
                         $this->heldRelationQuery(count($request->objects)),
                         [...$request->objects, ...$request->objects],
@@ -161,10 +162,11 @@ final readonly class MysqlActivityReader implements ActivityReader
                 SchemaObjectType::Setting,
                 'information_schema.PROCESSLIST',
                 SkipReason::InsufficientPrivilege,
-                'this role holds no PROCESS privilege, so the server\'s state views answer about this '
-                .'session alone. The process list does NOT say so — it returns one row and no error, '
-                .'which is indistinguishable from a quiet server. performance_schema.threads is gated '
-                .'by the same privilege and refuses out loud, which is how the silence was detected.',
+                'no PROCESS privilege is recorded for this account in information_schema.USER_PRIVILEGES, '
+                .'so the server\'s state views answer about this session alone. The process list does NOT '
+                .'say so: it returns one row and no error, which is indistinguishable from a quiet server. '
+                .'GRANT PROCESS ON *.* widens it. A PROCESS privilege held through an activated role is '
+                .'not recorded there, so on such an account this note errs on the cautious side.',
             );
         }
 
@@ -221,7 +223,7 @@ final readonly class MysqlActivityReader implements ActivityReader
 
         $enabledFlag = $this->number($row, 'enabled');
 
-        // A switch this reader could not read is NOT an off switch, and not an on switch either.
+        // A switch this reader could not read is not an off switch, and not an on switch either.
         // Reported as unknown, the reading is partial and its silence is not trusted, without
         // inventing a state in either direction.
         if ($enabledFlag === null) {
@@ -284,7 +286,7 @@ final readonly class MysqlActivityReader implements ActivityReader
      * | grants                        | threads  | PROCESSLIST      |
      * |-------------------------------|----------|------------------|
      * | none                          | refused  | 1 row (narrowed) |
-     * | PROCESS only                  | REFUSED  | 3 rows (whole)   |
+     * | PROCESS only                  | refused  | 3 rows (whole)   |
      * | SELECT on performance_schema  | 40 rows  | 1 row (NARROWED) |
      * | both                          | 40 rows  | 3 rows           |
      *
@@ -343,7 +345,7 @@ final readonly class MysqlActivityReader implements ActivityReader
     /**
      * Long-running transactions, which on this engine is where a blocking session shows up.
      *
-     * This view is NOT live. InnoDB serves it from a cache it refuses to refresh more than once per
+     * This view is not live. InnoDB serves it from a cache it refuses to refresh more than once per
      * 100 ms, and that cache is global — so an answer here can be up to a tenth of a second old
      * because somebody else read the view, and reading it costs everyone else the same window.
      *
@@ -418,7 +420,7 @@ final readonly class MysqlActivityReader implements ActivityReader
     }
 
     /**
-     * Which of the focus tables each session currently HOLDS a metadata lock on.
+     * Which of the focus tables each session currently holds a metadata lock on.
      *
      * The opposite filter from {@see self::metadataLockQuery()}, which reports `PENDING` rows — the
      * waiters. A transaction sitting on the deploy's target table is not waiting for anything, so it
@@ -471,7 +473,7 @@ final readonly class MysqlActivityReader implements ActivityReader
     /**
      * Granted metadata locks on named tables only — the focus set is bound, never interpolated.
      *
-     * Matched TWO ways, for the reason the PostgreSQL sibling documents at length: a canonical target
+     * Matched two ways, for the reason the PostgreSQL sibling documents at length: a canonical target
      * keeps the qualification the source wrote, and a Laravel migration writes none, so comparing a
      * bare `orders` against the composed `db.orders` matched nothing and the branch went quiet on a
      * server that really was holding a metadata lock.
@@ -672,7 +674,7 @@ final readonly class MysqlActivityReader implements ActivityReader
         // happened. A refused view is empty for a reason that has nothing to do with replication,
         // and concluding from it would be the exact inference this package forbids everywhere else:
         // reading blindness as an answer. Measured on a role without SELECT on performance_schema,
-        // the reading previously reported BOTH "you may not read this" AND "this instance
+        // the reading previously reported both "you may not read this" and "this instance
         // replicates from nothing" — the second of which it could not know.
         if ($states === [] && ! $refused) {
             $skips[] = CatalogSkip::for(

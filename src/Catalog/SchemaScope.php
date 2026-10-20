@@ -33,7 +33,7 @@ namespace Pushery\SQLens\Catalog;
  *
  * `pg_catalog` and `information_schema` are the server's own bookkeeping; auditing them would report
  * hundreds of findings about tables nobody in the project wrote. They never appear in a snapshot —
- * but a config that explicitly NAMES one is refused rather than quietly narrowed, because silently
+ * but a config that explicitly names one is refused rather than quietly narrowed, because silently
  * removing a schema somebody asked for is the same silent no-op as the typo above. Filtering them
  * out of the DEFAULT scope is different and stays silent: nobody asked for them there, a
  * `search_path` did.
@@ -44,6 +44,13 @@ namespace Pushery\SQLens\Catalog;
  * gets those two, not every tenant that happens to exist — the connection and the schemas are an
  * explicit statement, and an audit that quietly widened its own scope would be reporting on
  * databases nobody asked about.
+ *
+ * ## A schema named twice is read once
+ *
+ * A list merged from two places can name a schema twice. The scope holds each schema once,
+ * because a reader counts what it can see against what it was asked for: MySQL's visibility probe
+ * counted one row against two names and reported an audited database as invisible to the
+ * account, sending the reader to grant a privilege that was already there.
  */
 final readonly class SchemaScope
 {
@@ -79,7 +86,7 @@ final readonly class SchemaScope
                 fn (string $schema): bool => ! $this->isSystem($schema) && in_array($schema, $existing, true),
             ));
 
-            // …but a default that leaves NOTHING is the typo's silent no-op arriving through the
+            // …but a default that leaves nothing is the typo's silent no-op arriving through the
             // other door: the reading would cover no schema and report a clean run. It happens with
             // an ordinary setup, which is why it is refused rather than tolerated.
             if ($schemas === []) {
@@ -102,7 +109,7 @@ final readonly class SchemaScope
             }
         }
 
-        return $this->requested;
+        return array_values(array_unique($this->requested));
     }
 
     private function isSystem(string $schema): bool

@@ -66,9 +66,9 @@ final readonly class RemediationStep
      * The step with its placeholders filled from a finding's own context.
      *
      * Only the names this class declares, and only from values the caller measured. An unknown
-     * placeholder is left standing rather than blanked: a template that quietly lost a table name
-     * would read as a complete statement about the wrong object, which is worse than one that
-     * visibly still has a hole in it.
+     * placeholder, or one whose value is empty, is left standing rather than blanked: a template
+     * that quietly lost a table name would read as a complete statement about the wrong object,
+     * which is worse than one that visibly still has a hole in it.
      *
      * Each value is written for the place it stands in, a string literal of the SQL or a string of
      * the snippet, and one that cannot be written safely there stands as its placeholder too. See

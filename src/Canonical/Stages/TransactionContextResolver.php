@@ -11,7 +11,7 @@ use Pushery\SQLens\Contracts\DriverCanonicalization;
 use Pushery\SQLens\Subjects\SubjectContext;
 
 /**
- * Resolves the transaction context ONCE, centrally, and hangs it on the statement
+ * Resolves the transaction context once, centrally, and hangs it on the statement
  * so no rule and no adapter ever reaches for Laravel's migrator internals again.
  * It reads three sources — the migration's `$withinTransaction` flag (already
  * lifted onto the RawStatement), the driver's DDL-transaction capability, and the

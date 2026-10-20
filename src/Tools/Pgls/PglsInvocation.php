@@ -11,7 +11,7 @@ use Pushery\SQLens\Catalog\SessionBudget;
  *
  * Small, because this tool takes far less steering than Squawk does: it reads a schema that is
  * already there, so there is no server version to assume and no transaction model to declare. The
- * one thing it genuinely needs is WHICH database — and that is required rather than defaulted,
+ * one thing it genuinely needs is which database — and that is required rather than defaulted,
  * for the reason spelled out on {@see PglsConnection}.
  */
 final readonly class PglsInvocation

@@ -40,9 +40,10 @@ use Override;
  * ## Why the names and descriptions stay English
  *
  * They are MACHINE surface — an agent reads them to choose a tool, not a person deciding what a
- * finding means. The seven-locale rule covers human-readable reporter and error text; protocol
- * metadata is not that, and translating it would make one server answer differently depending on a
- * setting the client cannot see. Deliberate, and written down here so nobody later "fixes" it.
+ * finding means. The package speaks one language everywhere (`ShippedLocale`), and this surface
+ * would stay English even if it spoke more: translating protocol metadata would make one server
+ * answer differently depending on a setting the client cannot see. Deliberate, and written down
+ * here so nobody later "fixes" it.
  */
 abstract class SqlensTool extends Tool
 {
@@ -64,7 +65,7 @@ abstract class SqlensTool extends Tool
      *
      * The SDK publishes an `inputSchema` and does not check a single argument against it — measured:
      * a missing required field and a wrongly typed one both arrive at the tool. So every tool
-     * validates its own input, and a tool that could be written WITHOUT doing so would be one hole
+     * validates its own input, and a tool that could be written without doing so would be one hole
      * away from a surface whose whole risk profile is what it accepts.
      *
      * And rules declared here are READABLE. A guard can walk every registered tool and hold each
@@ -78,16 +79,37 @@ abstract class SqlensTool extends Tool
     abstract public function rules(): array;
 
     /**
-     * The arguments, validated against {@see self::rules()}.
+     * The arguments, validated against {@see self::rules()}, an integer and a boolean in their own types.
      *
      * `final` on purpose: a tool that overrode this could quietly accept what the rules refuse, and
      * the guard reading those rules would certify something that never ran.
+     *
+     * The rules let a numeric string through `integer` and `1` or `"0"` through `boolean`, and every
+     * tool reads such a value with `is_int()` or `=== true`. Handed on as it arrived, a level sent as
+     * `"5"` was valid and then treated as never sent. Converted here, once, a value the rules accepted
+     * is the value the tool reads.
      *
      * @return array<string, mixed>
      */
     final protected function validated(Request $request): array
     {
-        return $request->validate($this->rules());
+        $rules = $this->rules();
+        $validated = $request->validate($rules);
+
+        foreach ($rules as $parameter => $parameterRules) {
+            if (! array_key_exists($parameter, $validated)) {
+                continue;
+            }
+
+            if (in_array('integer', $parameterRules, true)) {
+                $integer = filter_var($validated[$parameter], FILTER_VALIDATE_INT);
+                $validated[$parameter] = $integer === false ? $validated[$parameter] : $integer;
+            } elseif (in_array('boolean', $parameterRules, true)) {
+                $validated[$parameter] = filter_var($validated[$parameter], FILTER_VALIDATE_BOOLEAN);
+            }
+        }
+
+        return $validated;
     }
 
     /**

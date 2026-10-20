@@ -30,7 +30,7 @@ use Throwable;
  * How far behind the replicas are, immediately before a migration adds to their work.
  *
  * A schema change reaches a replica whenever it catches up. Until then an application reading from
- * replicas is running against the OLD schema — and the failures that produces during the window
+ * replicas is running against the old schema — and the failures that produces during the window
  * (a column that does not exist yet) look like application bugs rather than like a deploy still in
  * progress. On a large table the window is minutes.
  *
@@ -92,11 +92,11 @@ final readonly class ReplicationLagCheck implements PreflightCheck
         }
 
         try {
-            // `includeReplication: true`, and this ONE argument is the check.
+            // `includeReplication: true`, and this one argument is the check.
             //
             // The reader's default is `false`, and that default is right for the reader: on an
             // instance with no replicas the view is a round trip spent to be told so, and most
-            // callers are not asking about replication at all. But this check IS the caller that
+            // callers are not asking about replication at all. But this check is the caller that
             // asks — and building the request without the flag meant `$snapshot->replication` came
             // back empty on every real run, the early return below fired, and
             // `DEPLOY.PREFLIGHT.REPLICATION_LAG` could not be produced by any deploy against any

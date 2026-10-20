@@ -9,7 +9,7 @@ use Pushery\SQLens\Findings\Finding;
 /**
  * Merges the tool's findings into a run's own, so one problem is reported once.
  *
- * The rule is one-directional and it is the whole design: a SQLens finding is NEVER dropped or
+ * The rule is one-directional and it is the whole design: a SQLens finding is never dropped or
  * changed by anything the tool said. The set of own findings a run produces has to be identical
  * with the tool installed and without it — otherwise a laptop and a CI container would gate
  * differently on the same migration, which is the one difference nobody can reconstruct from a
@@ -24,7 +24,7 @@ final readonly class SquawkDeduplicator
 {
     public function __construct(
         private SquawkRuleMap $map,
-        /** The version stamped onto a confirmation, so a report says WHICH build agreed. */
+        /** The version stamped onto a confirmation, so a report says which build agreed. */
         private string $toolVersion,
     ) {}
 
@@ -36,12 +36,13 @@ final readonly class SquawkDeduplicator
      */
     public function merge(array $own, array $tool): SquawkDeduplication
     {
+        $covered = $this->coveredBy($own);
         $confirmed = [];
         $additional = [];
 
         foreach ($tool as $finding) {
             $key = $this->keyForTool($finding);
-            $match = $key === null ? null : $this->firstMatch($own, $key);
+            $match = $key === null ? null : ($covered[$key] ?? null);
 
             if ($match === null) {
                 // Nothing of ours covers this. It stands on its own, which is the entire point of
@@ -64,32 +65,40 @@ final readonly class SquawkDeduplicator
     }
 
     /**
-     * The index of the first own finding that covers the same ground at the same place.
+     * For each key an own finding carries, the index of the own finding that a tool finding on it
+     * confirms.
      *
-     * FIRST, by the order the run produced them, and that order is already deterministic — so
+     * Built once per merge, so a merge costs the findings on both sides rather than their product.
+     * First, by the order the run produced them, and that order is already deterministic — so
      * two runs over the same migration confirm the same finding. Where several own findings share
      * a group and a position, the tie is broken by rule id, which is stable and readable in a
-     * diff; picking "whichever came back first" would be stable only by accident.
+     * diff; picking "whichever came back first" would be stable only by accident. One rule that
+     * fires twice at one position keeps its first finding.
      *
      * @param  list<Finding>  $own
+     * @return array<string, int>
      */
-    private function firstMatch(array $own, string $key): ?int
+    private function coveredBy(array $own): array
     {
+        $groups = $this->ownGroups();
         $candidates = [];
 
         foreach ($own as $index => $finding) {
-            if ($this->keyForOwn($finding) === $key) {
-                $candidates[$finding->ruleId] = $index;
+            $group = $groups[$finding->ruleId] ?? null;
+
+            if ($group !== null) {
+                $candidates[$this->key($group, $finding)][$finding->ruleId] ??= $index;
             }
         }
 
-        if ($candidates === []) {
-            return null;
+        $covered = [];
+
+        foreach ($candidates as $key => $byRule) {
+            ksort($byRule);
+            $covered[$key] = array_values($byRule)[0];
         }
 
-        ksort($candidates);
-
-        return array_values($candidates)[0];
+        return $covered;
     }
 
     /** A tool finding's key: the group its rule belongs to, plus where it is. Null when neither exists. */
@@ -105,23 +114,28 @@ final readonly class SquawkDeduplicator
     }
 
     /**
-     * An own finding's key: the group the map says its rule belongs to, plus where it is.
+     * The group each of our rules belongs to: what an own finding's key is made of, with where it is.
      *
      * Read from the same map, in the other direction. A second table of "which of our rules
      * corresponds to which group" would be a second thing to keep in step, and the two would
-     * disagree the first time somebody edited one of them.
+     * disagree the first time somebody edited one of them. Where the map names one of our rules
+     * under several entries, the first entry with a group decides.
+     *
+     * @return array<string, string>
      */
-    private function keyForOwn(Finding $finding): ?string
+    private function ownGroups(): array
     {
+        $groups = [];
+
         foreach ($this->map->rules() as $rule) {
             $mapping = $this->map->for($rule);
 
-            if ($mapping?->sqlensRule === $finding->ruleId && $mapping->dedupeGroup !== null) {
-                return $this->key($mapping->dedupeGroup, $finding);
+            if ($mapping?->sqlensRule !== null && $mapping->dedupeGroup !== null) {
+                $groups[$mapping->sqlensRule] ??= $mapping->dedupeGroup;
             }
         }
 
-        return null;
+        return $groups;
     }
 
     /**

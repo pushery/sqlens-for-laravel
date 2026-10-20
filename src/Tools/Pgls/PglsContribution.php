@@ -23,7 +23,7 @@ use Pushery\SQLens\Tools\ToolFindingGate;
  *
  * The run's own findings are what they were with the tool and without it. This adds; it never
  * removes, re-ranks or re-decides one of them. A machine with the binary installed must not gate
- * differently from one without it — beyond having MORE checks, which is the entire point of an
+ * differently from one without it — beyond having more checks, which is the entire point of an
  * amplifier.
  *
  * ## Why a performance rule is skipped and an unknown security rule is not

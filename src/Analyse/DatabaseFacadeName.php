@@ -23,7 +23,7 @@ use PHPStan\Reflection\ReflectionProvider;
  *
  * ## Why the NAME rather than the resolved type
  *
- * A facade's subject IS a name. `$scope->getType()` on it answers "the facade class", which is true
+ * A facade's subject is a name. `$scope->getType()` on it answers "the facade class", which is true
  * and useless for telling `DB::select()` apart from `Orders::select()`.
  */
 final readonly class DatabaseFacadeName
@@ -42,13 +42,13 @@ final readonly class DatabaseFacadeName
             return true;
         }
 
-        // Laravel registers `DB` as a ROOT ALIAS in `config/app.php`, so `\DB::statement(…)` is
+        // Laravel registers `DB` as a root alias in `config/app.php`, so `\DB::statement(…)` is
         // ordinary application code — and `resolveName()` answers the alias, `DB`, not the facade's
         // fully qualified name. The comparison above therefore misses every call written that way,
         // and the miss is SILENT: with Larastan loaded the alias resolves, PHPStan is content, and
         // an obvious interpolation in an UPDATE produces no finding from anybody.
         //
-        // The repair that suggests itself — accept the bare name too — would report a project's OWN
+        // The repair that suggests itself — accept the bare name too — would report a project's own
         // class of that name, trading one silence for noise on ordinary code. Reflection answers the
         // question exactly instead: PHP's class aliasing is transparent to it, so the alias reflects
         // as the class it names while an unrelated `DB` reflects as itself. Measured on this tree:

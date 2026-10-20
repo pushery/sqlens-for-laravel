@@ -24,6 +24,11 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  * the wrong one, and both read as "fine" to somebody scanning the header. `inet_server_addr()`
  * returns NULL over a Unix socket — an ordinary local setup, not a fault — and a managed database
  * may withhold the rest, so the absent cases are the common ones rather than the exotic ones.
+ *
+ * The reason comes from the reader, which is the only place that knows it, and `describe()` shows
+ * a field without one as `unknown`. One reader leaves a field so on purpose: MySQL's `database()`
+ * is null for a session with no default schema, and the catalog reading refuses such a session
+ * before any finding is made.
  */
 final readonly class InstanceIdentity
 {
@@ -89,7 +94,7 @@ final readonly class InstanceIdentity
      * Whether every field was answered.
      *
      * Used to decide whether a report may state the instance plainly or has to qualify it. It is
-     * NOT a health check: a local socket connection is complete-minus-host and perfectly fine.
+     * not a health check: a local socket connection is complete-minus-host and perfectly fine.
      */
     public function isComplete(): bool
     {

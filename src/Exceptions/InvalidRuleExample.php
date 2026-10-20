@@ -26,6 +26,9 @@ final class InvalidRuleExample extends RuntimeException
         return new self("The rule-examples register \"{$path}\" is not valid JSON: {$reason}");
     }
 
+    /**
+     * @param  mixed  $declared  the file's `schema_version` as decoded, before its type is known
+     */
     public static function unsupportedSchemaVersion(string $origin, mixed $declared, int $supported): self
     {
         return new self(sprintf(

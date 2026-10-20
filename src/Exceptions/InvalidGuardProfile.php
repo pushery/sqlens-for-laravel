@@ -33,6 +33,9 @@ final class InvalidGuardProfile extends InvalidArgumentException
         ));
     }
 
+    /**
+     * @param  mixed  $value  what `sqlens.guard.profile` holds, named in the message by its type
+     */
     public static function notAName(mixed $value): self
     {
         return new self(sprintf(
@@ -83,6 +86,9 @@ final class InvalidGuardProfile extends InvalidArgumentException
         ));
     }
 
+    /**
+     * @param  mixed  $level  the profile's `logging.level` as configured, whatever its type
+     */
     public static function unknownLevel(string $profile, mixed $level): self
     {
         return new self(sprintf(
@@ -96,6 +102,9 @@ final class InvalidGuardProfile extends InvalidArgumentException
         ));
     }
 
+    /**
+     * @param  mixed  $value  what the profile holds under that key in place of a map
+     */
     public static function notASection(string $profile, string $key, mixed $value): self
     {
         return new self(sprintf(
@@ -107,6 +116,9 @@ final class InvalidGuardProfile extends InvalidArgumentException
         ));
     }
 
+    /**
+     * @param  mixed  $value  what the profile holds under that key in place of a positive integer
+     */
     public static function notPositive(string $profile, string $key, mixed $value): self
     {
         return new self(sprintf(

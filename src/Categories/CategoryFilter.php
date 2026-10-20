@@ -11,7 +11,7 @@ use Pushery\SQLens\Contracts\Rule;
  * one or more categories (safety, performance, idiom, convention, security,
  * privacy) without touching the level semantics — the two axes are orthogonal.
  *
- * It runs AFTER the level gate, over the rules that level already admitted, so the
+ * It runs after the level gate, over the rules that level already admitted, so the
  * order of the two axes is deterministic: level decides strictness, category then
  * decides subject. An empty selection means "every category" — the filter passes
  * the input straight through rather than inventing a meaning for "none".

@@ -111,7 +111,7 @@ final readonly class EscalationThresholds
      *
      * ## `matched_on` is not decoration
      *
-     * A step may declare BOTH `min_rows` and `min_bytes` — no shipped one does, and a project
+     * A step may declare both `min_rows` and `min_bytes` — no shipped one does, and a project
      * override may, which is why this matters now that the key is configurable. Deriving the
      * reported threshold from which KEY is present rather than from which COMPARISON matched put a
      * number in the report that was never reached: a step with `min_rows: 999999999` and

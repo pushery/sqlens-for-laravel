@@ -42,7 +42,7 @@ use PHPStan\Type\VerbosityLevel;
  *
  * ## The false-positive fence, which is the whole difficulty
  *
- * Five of the twelve statement sinks are ALSO declared on a query builder or the model — measured
+ * Five of the twelve statement sinks are also declared on a query builder or the model — measured
  * against the installed framework, not remembered ({@see RawSqlSinks::CONNECTION_ONLY_SINKS}). A
  * collector matching the bare name on any `MethodCall` would fire on every `$builder->select('id')`
  * and every `$model->update([...])` in the codebase.
@@ -51,7 +51,7 @@ use PHPStan\Type\VerbosityLevel;
  *
  *   - it resolves to a connection ⇒ collect and classify, the same as the facade form;
  *   - it resolves to something else ⇒ not a raw-SQL call site, and silence is correct;
- *   - it resolves to NOTHING ⇒ the name decides. A name only a connection declares is evidence by
+ *   - it resolves to nothing ⇒ the name decides. A name only a connection declares is evidence by
  *     itself and produces an honest `undetermined`; a name every builder shares is not, and a
  *     finding there would land on ordinary code in every project.
  *
@@ -147,7 +147,7 @@ final readonly class RawSqlConnectionCallCollector implements Collector
     /**
      * Is the receiver a database connection?
      *
-     * `isSuperTypeOf` rather than a name comparison, and BOTH the contract and the concrete class:
+     * `isSuperTypeOf` rather than a name comparison, and both the contract and the concrete class:
      * `DB::connection()` hands back `Illuminate\Database\Connection`, while a constructor parameter
      * is idiomatically typed `ConnectionInterface`. Listing only one would be silent on the other,
      * which is the shape of defect this class exists to remove.

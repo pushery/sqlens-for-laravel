@@ -34,6 +34,18 @@ final class ReportText
     }
 
     /**
+     * Each of the lines, as {@see line()} writes one. An empty list writes nothing.
+     *
+     * @param  list<string>  $texts
+     */
+    public static function lines(OutputInterface $out, array $texts): void
+    {
+        foreach ($texts as $text) {
+            self::line($out, $text);
+        }
+    }
+
+    /**
      * A machine document, whose own encoding already escapes every control character.
      *
      * Written below Laravel's console style when one is in front. A style can rewrite what passes

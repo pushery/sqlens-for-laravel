@@ -16,7 +16,7 @@ use RuntimeException;
  */
 final class UnreadablePrivacyDictionary extends RuntimeException
 {
-    public function __construct(public readonly string $path, string $why)
+    public function __construct(public readonly string $path, public readonly string $why)
     {
         parent::__construct(sprintf('The privacy dictionary at %s could not be read: %s.', $path, $why));
     }

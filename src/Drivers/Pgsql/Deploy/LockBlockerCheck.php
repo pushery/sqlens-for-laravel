@@ -44,12 +44,14 @@ use Throwable;
  * not delay, while one that wrote to it does; validating a constraint, like changing a maintenance
  * storage parameter such as `fillfactor`, takes SHARE UPDATE EXCLUSIVE, which no read and no write
  * delays. A `DROP INDEX` names only its index and takes ACCESS EXCLUSIVE
- * on the index's TABLE, which the catalog is asked for.
+ * on the index's TABLE, which the catalog is asked for. A `REINDEX` takes SHARE on the table and
+ * ACCESS EXCLUSIVE on each index it rebuilds, and a `REFRESH MATERIALIZED VIEW` ACCESS EXCLUSIVE
+ * on the view, each unless it runs concurrently.
  *
- * `CREATE INDEX CONCURRENTLY` is the other shape and needs its own branch: it waits for ALL older
- * transactions to finish, not only the ones on its own table. A long analytics query on an unrelated
- * schema delays it just as effectively, which is why filtering blockers by target would report a
- * clean instance for a build that cannot start.
+ * `CREATE INDEX CONCURRENTLY` and `REINDEX … CONCURRENTLY` are the other shape and need their own
+ * branch: they wait for ALL older transactions to finish, not only the ones on their own table. A
+ * long analytics query on an unrelated schema delays them just as effectively, which is why
+ * filtering blockers by target would report a clean instance for a build that cannot start.
  *
  * ## What the finding does and does not say
  *
@@ -57,7 +59,7 @@ use Throwable;
  * production statement carries literals, and a report that reproduces them has moved user data into
  * a file somebody pastes into a ticket.
  *
- * It is also NOT a verdict on the blocker. A long-running analytics query is a legitimate thing for
+ * It is also not a verdict on the blocker. A long-running analytics query is a legitimate thing for
  * a database to be doing; what the report says is that a migration is about to collide with it. The
  * threshold is the activity reader's, and it is deliberately low for a deploy — five seconds is
  * unremarkable at noon and is exactly the thing to know about in the minute before a migration.
@@ -104,6 +106,28 @@ final readonly class LockBlockerCheck implements PreflightCheck
         StatementKind::AddForeignKey,
         StatementKind::DropConstraint,
         StatementKind::Rename,
+        // `VACUUM FULL` and `CLUSTER`, which hold ACCESS EXCLUSIVE on every table they name for the
+        // whole rewrite.
+        StatementKind::RebuildTable,
+    ];
+
+    /**
+     * What the migration's lock on a relation is, weakest first, so a relation two statements name
+     * keeps the stronger one. Only the first lets a reader's lock through; the others decide which
+     * sentence the finding says.
+     *
+     * @var list<string>
+     */
+    private const array TAKES = [
+        // Adding a foreign key: writers wait, readers carry on.
+        'share_row_exclusive',
+        // A REINDEX: SHARE on the table and ACCESS EXCLUSIVE on each index it rebuilds. A reader of
+        // the table counts, because a query that used one of the indexes holds a lock on it, and the
+        // reading names the table.
+        'reindex',
+        'access_exclusive',
+        // A refresh of a materialized view, which only ever names the view.
+        'refresh',
     ];
 
     public function id(): string
@@ -141,7 +165,7 @@ final readonly class LockBlockerCheck implements PreflightCheck
             return CheckResult::undetermined(
                 self::ID,
                 UndeterminedReason::ActivityUnreadable,
-                'the catalog could not say which table a dropped index belongs to, so what is holding '
+                'the catalog could not say which table a dropped or rebuilt index belongs to, so what is holding '
                 .'locks on that table is unknown: '.new CredentialRedactor()->redact($failure->getMessage()),
             );
         }
@@ -172,7 +196,7 @@ final readonly class LockBlockerCheck implements PreflightCheck
         }
 
         // The CONCURRENTLY branch, and it is separate rather than a filter on the one above for the
-        // reason that makes it worth having: a concurrent build waits for EVERY older transaction,
+        // reason that makes it worth having: a concurrent build waits for every older transaction,
         // including ones on tables it never touches. Reporting only the blockers on its own target
         // would call an instance clean for a build that cannot start.
         if ($this->hasConcurrentBuild($context) && $snapshot->longRunningSessions !== []) {
@@ -207,28 +231,61 @@ final readonly class LockBlockerCheck implements PreflightCheck
     }
 
     /**
-     * The relations the pending migration will lock, each with whether that lock stops readers too.
+     * The relations the pending migration will lock, each with the lock it takes there.
      *
      * Read from the statements' own `targets`, which the capture already resolved. Parsing the SQL
      * here would be a second classification that can disagree with the one the report is built on.
-     * The one exception is a `DROP INDEX`: it names only its index, so its table is asked of the
-     * catalog ({@see IndexTables}).
+     * The one exception is an index named alone, by a `DROP INDEX` or a `REINDEX INDEX`: its table is
+     * asked of the catalog ({@see IndexTables}).
      *
-     * @return array<string, bool> relation => whether the lock taken there stops reads as well as writes
+     * @return array<string, string> relation => the lock taken there, one of {@see self::TAKES}
      */
     private function lockTargets(PreflightContext $context): array
     {
         $targets = [];
         $droppedIndexes = [];
+        $reindexedIndexes = [];
 
         foreach ($context->pending->statements as $statement) {
+            $concurrent = stripos($statement->canonicalSql ?? $statement->rawSql, 'concurrently') !== false;
+
             if ($statement->statementKind === StatementKind::DropIndex) {
                 // `DROP INDEX CONCURRENTLY` takes no lock that blocks the table, so only the plain
                 // form counts.
-                if (stripos($statement->canonicalSql ?? $statement->rawSql, 'concurrently') === false) {
+                if (! $concurrent) {
                     foreach ($statement->targets ?? [] as $target) {
                         if ($target->type === SchemaObjectType::Index) {
                             $droppedIndexes[] = $target->catalogName(new PgsqlCanonicalization);
+                        }
+                    }
+                }
+
+                continue;
+            }
+
+            // A concurrent REINDEX takes SHARE UPDATE EXCLUSIVE on the table, which no read and no
+            // write delays; the branch for concurrent builds below is where it waits.
+            if ($statement->statementKind === StatementKind::Reindex) {
+                if (! $concurrent) {
+                    foreach ($statement->targets ?? [] as $target) {
+                        if ($target->type === SchemaObjectType::Index) {
+                            $reindexedIndexes[] = $target->catalogName(new PgsqlCanonicalization);
+                        } elseif ($target->type === SchemaObjectType::Table && $target->isSubject()) {
+                            $this->take($targets, $target->catalogName(new PgsqlCanonicalization), 'reindex');
+                        }
+                    }
+                }
+
+                continue;
+            }
+
+            // A concurrent refresh takes EXCLUSIVE, which lets readers through, and a materialized
+            // view has no writer of its own to delay it.
+            if ($statement->statementKind === StatementKind::RefreshMaterializedView) {
+                if (! $concurrent) {
+                    foreach ($statement->targets ?? [] as $target) {
+                        if ($target->type === SchemaObjectType::MaterializedView) {
+                            $this->take($targets, $target->catalogName(new PgsqlCanonicalization), 'refresh');
                         }
                     }
                 }
@@ -246,7 +303,7 @@ final readonly class LockBlockerCheck implements PreflightCheck
                 continue;
             }
 
-            $stopsReaders = ! $this->addsOnlyAForeignKey($statement);
+            $take = $this->addsOnlyAForeignKey($statement) ? 'share_row_exclusive' : 'access_exclusive';
 
             foreach ($statement->targets ?? [] as $target) {
                 // TABLES the statement ACTS ON, and both halves of that are load-bearing.
@@ -270,16 +327,33 @@ final readonly class LockBlockerCheck implements PreflightCheck
                 // because that is what the activity views report a relation as and what the reader
                 // compares with `relname`. The canonical form quotes `"Orders"`, which never equals
                 // `Orders`, and a session holding that table went unreported.
-                $name = $target->catalogName(new PgsqlCanonicalization);
-                $targets[$name] = ($targets[$name] ?? false) || $stopsReaders;
+                $this->take($targets, $target->catalogName(new PgsqlCanonicalization), $take);
             }
         }
 
         foreach (IndexTables::of($context->session, $droppedIndexes) as $table) {
-            $targets[$table] = true;
+            $this->take($targets, $table, 'access_exclusive');
+        }
+
+        foreach (IndexTables::of($context->session, $reindexedIndexes) as $table) {
+            $this->take($targets, $table, 'reindex');
         }
 
         return $targets;
+    }
+
+    /**
+     * Record the lock a statement takes on a relation, keeping the stronger of two.
+     *
+     * @param  array<string, string>  $targets
+     */
+    private function take(array &$targets, string $relation, string $take): void
+    {
+        $strength = array_flip(self::TAKES);
+
+        if (! isset($targets[$relation]) || $strength[$take] > $strength[$targets[$relation]]) {
+            $targets[$relation] = $take;
+        }
     }
 
     /**
@@ -302,7 +376,7 @@ final readonly class LockBlockerCheck implements PreflightCheck
      * reader's. A reading that tells no modes apart names one relation and nothing about the mode, so
      * that lock is taken to be in the way of everything, as it was before the modes were read.
      *
-     * @param  array<string, bool>  $targets  relation => whether the lock taken there stops reads too
+     * @param  array<string, string>  $targets  relation => the lock taken there, one of {@see self::TAKES}
      */
     private function blockedTarget(LongRunningSession $session, array $targets): ?string
     {
@@ -317,7 +391,7 @@ final readonly class LockBlockerCheck implements PreflightCheck
                 continue;
             }
 
-            if ($targets[$relation] || $mode !== LockMode::Shared) {
+            if ($targets[$relation] !== 'share_row_exclusive' || $mode !== LockMode::Shared) {
                 return $relation;
             }
         }
@@ -325,11 +399,11 @@ final readonly class LockBlockerCheck implements PreflightCheck
         return null;
     }
 
-    /** Whether anything in the pending set builds an index concurrently. */
+    /** Whether anything in the pending set builds or rebuilds an index concurrently. */
     private function hasConcurrentBuild(PreflightContext $context): bool
     {
         foreach ($context->pending->statements as $statement) {
-            if ($statement->statementKind !== StatementKind::CreateIndex) {
+            if (! in_array($statement->statementKind, [StatementKind::CreateIndex, StatementKind::Reindex], true)) {
                 continue;
             }
 
@@ -344,16 +418,24 @@ final readonly class LockBlockerCheck implements PreflightCheck
         return false;
     }
 
-    private function blocker(PreflightContext $context, LongRunningSession $session, string $relation, bool $stopsReaders): Finding
+    private function blocker(PreflightContext $context, LongRunningSession $session, string $relation, string $take): Finding
     {
-        $collision = match ($stopsReaders) {
-            true => 'this deploy is about to take an ACCESS EXCLUSIVE lock on that table. The statement will '
+        $collision = match ($take) {
+            'share_row_exclusive' => 'this deploy is about to add a foreign key, which takes a SHARE ROW EXCLUSIVE lock on that '
+                .'table. The statement will not fail — it will QUEUE, and every write arriving behind it '
+                .'queues too, while reads carry on. Saves stop while nothing reports an error.',
+            'reindex' => 'this deploy is about to rebuild indexes of that table without CONCURRENTLY, which takes a '
+                .'SHARE lock on the table and an ACCESS EXCLUSIVE lock on each index it rebuilds. The statement '
+                .'will not fail — it will QUEUE, and every write arriving behind it queues too, and so does '
+                .'every read that uses one of those indexes. Saves stop while nothing reports an error.',
+            'refresh' => 'this deploy is about to refresh that materialized view without CONCURRENTLY, which takes an '
+                .'ACCESS EXCLUSIVE lock on it. The statement will not fail — it will QUEUE, and every read of '
+                .'the view arriving behind it queues too. The view stops answering while nothing reports an '
+                .'error.',
+            default => 'this deploy is about to take an ACCESS EXCLUSIVE lock on that table. The statement will '
                 .'not fail — it will QUEUE, and because PostgreSQL grants lock requests in order, every '
                 .'read arriving behind it queues too. The table stops answering while nothing reports '
                 .'an error.',
-            false => 'this deploy is about to add a foreign key, which takes a SHARE ROW EXCLUSIVE lock on that '
-                .'table. The statement will not fail — it will QUEUE, and every write arriving behind it '
-                .'queues too, while reads carry on. Saves stop while nothing reports an error.',
         };
 
         return $this->finding(

@@ -10,7 +10,7 @@ use Pushery\SQLens\Capture\PreScan\CallTarget;
  * One named catalog out of the bundled artifact — the entries a single detector
  * matches against.
  *
- * Order is the artifact's order, and matching returns the FIRST entry that hits.
+ * Order is the artifact's order, and matching returns the first entry that hits.
  * That makes a specific target (`Illuminate\Support\Facades\DB::table`) able to
  * sit in front of a broad one (`Illuminate\Support\Facades\DB`) and win, without
  * the detector needing to know about precedence.

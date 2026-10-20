@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Audit;
 
+use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
+
 /**
  * Whether this project looks like a multi-tenant one — asked of the configuration, never of a
  * database, and answered conservatively on purpose.
@@ -11,14 +13,14 @@ namespace Pushery\SQLens\Audit;
  * ## Why the question has to be asked at all
  *
  * "Audit the database" is ambiguous the moment there is more than one tenant database. A report
- * produced from whichever connection happened to be default describes ONE tenant, and it is
+ * produced from whichever connection happened to be default describes one tenant, and it is
  * indistinguishable from a report about the application — same header, same findings, same exit
  * code. The reader draws a conclusion about their system from a statement about one of its
  * customers.
  *
  * SQLens does not resolve that quietly. It asks the project to say which tenant its report is
  * about, and says so in the header. The alternative — looping over tenant connections and merging
- * the results — is deliberately NOT built: an aggregate over tenants is a different kind of claim
+ * the results — is deliberately not built: an aggregate over tenants is a different kind of claim
  * (it would have to say which tenants disagreed and why), and building the loop without that would
  * produce a report nobody could act on.
  *
@@ -45,7 +47,7 @@ namespace Pushery\SQLens\Audit;
 final readonly class TenancySignals
 {
     /**
-     * Packages whose presence IS the statement.
+     * Packages whose presence is the statement.
      *
      * A short list rather than a pattern: matching `*tenan*` would fire on a package that merely
      * mentions tenants in its name, and the cost of a wrong hit here is an error message about a
@@ -136,7 +138,7 @@ final readonly class TenancySignals
     }
 
     /**
-     * The name prefix shared by two or more connections ON THE SAME DRIVER, or null.
+     * The name prefix shared by two or more connections on the same driver, or null.
      *
      * Both halves are load-bearing. The DRIVER check is what stops `pgsql` + `mysql` — an ordinary
      * app with two engines — from reading as tenancy. The shared PREFIX is what stops two unrelated
@@ -171,7 +173,9 @@ final readonly class TenancySignals
             if (! is_array($config)) {
                 continue;
             }
-            if (! is_string($driver = $config['driver'] ?? null)) {
+            // Read the way the framework reads it: a connection configured by `url` alone carries its
+            // driver in the scheme and has no `driver` key.
+            if (! is_string($driver = EffectiveConnectionConfig::driverFor($config))) {
                 continue;
             }
             $underscore = strpos($name, '_');

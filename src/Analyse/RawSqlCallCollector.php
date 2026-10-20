@@ -33,7 +33,7 @@ use PHPStan\Type\VerbosityLevel;
  * The one question that decides this design: does `DB::statement(...)` resolve to a type, or must
  * SQLens carry its own facade resolution?
  *
- * It is answered, pinned, and NOT by this file. `tests/Feature/Analyse/PhpStanExtensionApiTest` runs
+ * It is answered, pinned, and not by this file. `tests/Feature/Analyse/PhpStanExtensionApiTest` runs
  * a real analyse against a real fixture project and asserts the result:
  *
  *     DB::connection('pgsql')->statement(…)   subject type  →  Illuminate\Database\Connection
@@ -77,7 +77,7 @@ final readonly class RawSqlCallCollector implements Collector
     public function __construct(
         /**
          * PHPStan's own reflection, and the reason it is a dependency rather than a static call:
-         * it is what answers whether a name that is NOT the facade's is nonetheless an alias OF it
+         * it is what answers whether a name that is not the facade's is nonetheless an alias of it
          * — the shape `\DB::statement(…)` takes in a normal Laravel application.
          *
          * Taken here rather than a ready-made {@see DatabaseFacadeName} so the constructor keeps the

@@ -32,7 +32,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * ## The one legitimate reason to keep `json`, stated rather than dismissed
  *
  * `jsonb` does not preserve the document as written. It drops insignificant whitespace, it does not
- * keep key ORDER, and it keeps only the LAST of duplicate keys. `json` keeps all three, byte for
+ * keep key ORDER, and it keeps only the last of duplicate keys. `json` keeps all three, byte for
  * byte.
  *
  * That matters when the stored document is evidence rather than data: a signed webhook payload

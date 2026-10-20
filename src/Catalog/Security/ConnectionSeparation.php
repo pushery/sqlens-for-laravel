@@ -13,7 +13,7 @@ namespace Pushery\SQLens\Catalog\Security;
  * into a state — and the states that matter here are precisely the awkward ones (nothing configured,
  * both the same, a name that resolves to nothing).
  *
- * Every field may be null, and null MEANS something different in each: an unset connection name is a
+ * Every field may be null, and null means something different in each: an unset connection name is a
  * question the project has not answered, and an unresolved role is a name that answers to nothing. The
  * rules tell those apart, which is why they are separate fields rather than one.
  */
@@ -90,7 +90,7 @@ final readonly class ConnectionSeparation
         // is "the runtime role" only on a run over the runtime connection: on one over the migration
         // connection it is the deploy's account, its own grant rows exist, and judging them would
         // send somebody to revoke a privilege their deploy depends on.
-        // MEMBERSHIP COUNTS, and it is not a refinement — the same sentence
+        // Membership counts, and it is not a refinement — the same sentence
         // {@see SecuritySubjects::ownedByConnection()} already makes about RLS ownership, applied to
         // the other half of the same question. `GRANT CREATE ON SCHEMA public TO app_writer` plus
         // `GRANT app_writer TO app` gives `app` the right to create; the grant row names

@@ -20,9 +20,17 @@ use Throwable;
  *
  * The tells are MySQL's own. `CONNECTION_ID()` is the server-side thread id and plays the part
  * `pg_backend_pid()` plays on PostgreSQL; a user-defined session variable plays the part of the
- * custom GUC. Both measurements run OUTSIDE a transaction, for the same reason as there: within one
+ * custom GUC. Both measurements run outside a transaction, for the same reason as there: within one
  * transaction a multiplexer is obliged to keep a single backend, so that is the one place the effect
  * cannot be seen.
+ *
+ * The variable is the weaker tell here, and against the products named above it shows nothing.
+ * ProxySQL stops multiplexing a connection once a statement carries an `@`, and RDS Proxy pins a
+ * session on a `SET` of a variable, so from then on the run stays on one backend; MaxScale's
+ * read/write split sends a `SET` of a user variable to every server it uses. In each the value comes
+ * back. Only the thread id can show such a pooler, and only when two statements land on two backends.
+ * So a `direct` verdict cannot say that no pooler is there, and where the port or the host already
+ * points at one, the reading says so beside the verdict.
  *
  * The conventional port differs — ProxySQL's default client port is 6033 — and, as on the other
  * engine, it never decides the verdict on its own.
@@ -40,6 +48,9 @@ final readonly class MysqlPoolerReader implements PoolerReader
 
     /** Host-name fragments that say somebody put a multiplexer there on purpose. */
     private const array POOLER_HOST_FRAGMENTS = ['proxysql', 'maxscale', 'proxy', 'pooler'];
+
+    /** What a `direct` verdict cannot rule out where a convention points at a pooler. */
+    private const string PINNING_CAVEAT = 'a pooler that pins the session on a user variable, as ProxySQL and RDS Proxy do, passes the variable test';
 
     /**
      * No session budget, and the reason is the one {@see PgsqlPoolerReader} carries at length.
@@ -88,7 +99,7 @@ final readonly class MysqlPoolerReader implements PoolerReader
             ]);
         }
 
-        return PoolerReading::direct($convention);
+        return PoolerReading::direct($convention === [] ? [] : [...$convention, self::PINNING_CAVEAT]);
     }
 
     /** @return list<string> */

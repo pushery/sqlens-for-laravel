@@ -50,7 +50,7 @@ final class HbaParseErrorRule extends AbstractHbaRule
         return Severity::Medium;
     }
 
-    /** The one rule in the family whose subject IS the broken line. */
+    /** The one rule in the family whose subject is the broken line. */
     #[Override]
     protected function judgesBrokenLines(): bool
     {

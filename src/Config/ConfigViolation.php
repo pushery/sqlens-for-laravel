@@ -18,7 +18,7 @@ use Pushery\SQLens\Findings\CredentialRedactor;
  * structured fields, so the phrasing could in principle be reworded at the reporter without breaking
  * a machine consumer.
  *
- * It will not be. This package ships ONE locale, deliberately: everything it emits goes to a
+ * It will not be. This package ships one locale, deliberately: everything it emits goes to a
  * terminal, a CI annotation, a SARIF file or an agent artifact, and none of those is a user
  * interface. `tests/Unit/LocaleParityTest.php` is inverted for exactly that reason and goes red if a
  * second locale directory appears, so a translation path built here would take the guard with it.
@@ -162,6 +162,9 @@ final readonly class ConfigViolation
         );
     }
 
+    /**
+     * @param  mixed  $found  the value the configuration holds, of whatever type it turned out to be
+     */
     public static function wrongType(string $path, string $expected, mixed $found): self
     {
         return new self(
@@ -172,6 +175,9 @@ final readonly class ConfigViolation
         );
     }
 
+    /**
+     * @param  mixed  $found  the value the configuration holds, described in the message as it was read
+     */
     public static function outOfRange(string $path, string $expected, mixed $found): self
     {
         return new self(

@@ -22,7 +22,7 @@ use Throwable;
  *
  * ## Why `ssl` is read again when the reading already carries it
  *
- * A rule judges ONE subject. `ssl` and `ssl_min_protocol_version` arrive as two separate setting
+ * A rule judges one subject. `ssl` and `ssl_min_protocol_version` arrive as two separate setting
  * subjects, and a rule reaching across to another subject would be reading a value nothing
  * established was measured in the same breath — the reading is assembled from several statements,
  * and on a pooled connection the halves can describe different backends. That is precisely the trap
@@ -53,13 +53,13 @@ final readonly class PgsqlSettingCrossFactCollector implements SettingCrossFactC
     /**
      * The session's effective `statement_timeout`, measured beside `lock_timeout`.
      *
-     * This name lives HERE rather than in the shared vocabulary, unlike the one above, and the rule
+     * This name lives here rather than in the shared vocabulary, unlike the one above, and the rule
      * in the docblock of {@see SettingCrossFacts::FILE_PRIVILEGE_ACCOUNTS} is what decides it: the
      * rule that reads it is a PostgreSQL rule in this same driver namespace, so the contract has one
      * home and the constant sits with the query that fills it.
      *
      * The pair is a different sentence from either half. `lock_timeout` bounds the wait in the lock
-     * QUEUE; `statement_timeout` bounds the run AFTERWARDS. Set the first no smaller than the
+     * queue; `statement_timeout` bounds the run afterwards. Set the first no smaller than the
      * second and the statement is aborted before the lock wait ever reaches its own limit — the
      * configuration reads like a safety net and is not one, and the failure afterwards looks like a
      * timeout on execution rather than a refused lock.
@@ -67,7 +67,7 @@ final readonly class PgsqlSettingCrossFactCollector implements SettingCrossFactC
     public const string STATEMENT_TIMEOUT = 'statement_timeout';
 
     /**
-     * WHICH LAYER set either timeout, for the deploy session that would inherit them.
+     * Which layer set either timeout, for the deploy session that would inherit them.
      *
      * Its own fact rather than packed into the one above, because a fact is a triple whose state
      * says whether it was measured, and two answers sharing one slot would have to be taken apart
@@ -143,7 +143,7 @@ final readonly class PgsqlSettingCrossFactCollector implements SettingCrossFactC
      * `lock_timeout`.
      *
      * Read as its own measurement rather than taken off the reading a rule already holds, for the
-     * reason the class docblock gives for `ssl`: a rule judges ONE subject, and reaching across to
+     * reason the class docblock gives for `ssl`: a rule judges one subject, and reaching across to
      * another one would use a value nothing established was measured in the same breath. On a
      * pooled connection the two halves can describe different backends, and the whole point of this
      * pair is that the two numbers are compared against each other.
@@ -198,8 +198,12 @@ final readonly class PgsqlSettingCrossFactCollector implements SettingCrossFactC
      * different files on three different change paths.
      *
      * `pg_db_role_setting` is the only place the first two are visible, and its rows are keyed by
-     * database oid and role oid with `0` meaning "all". Scoped to THIS database and the CURRENT
-     * role, because a setting on some other role is not what this deploy will inherit.
+     * database oid and role oid with `0` meaning "all". Scoped to this database and the role this
+     * audit connected as. A deploy that runs as another role inherits that role's settings, which
+     * this reading does not see, so the rule's text speaks for the role it read and no other.
+     *
+     * A setting counts by its NAME, the text before the `=` of one array element: a substring test
+     * read `deadlock_timeout=2s` as a `lock_timeout` override.
      *
      * Measured-empty is a real answer and says the pair came from the configuration file or the
      * built-in default, so it is written as an empty string rather than left off — an absent fact
@@ -238,7 +242,9 @@ final readonly class PgsqlSettingCrossFactCollector implements SettingCrossFactC
             }
 
             foreach (['statement_timeout', 'lock_timeout'] as $name) {
-                if (str_contains($config, $name.'=')) {
+                // An element starts the array or follows a comma, and is quoted when its value
+                // holds a comma or a space: `{"search_path=a, b",lock_timeout=3s}`.
+                if (preg_match('/(?:^\{|,)"?'.preg_quote($name, '/').'=/', $config) === 1) {
                     $found[$name.':'.$scope] = true;
                 }
             }

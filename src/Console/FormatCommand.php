@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Console;
 
+use Exception;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Config\Repository;
-use Illuminate\Contracts\Filesystem\FileNotFoundException;
 use Illuminate\Filesystem\Filesystem;
 use Pushery\SQLens\Capture\MigrationPaths;
 use Pushery\SQLens\Format\BackendDegradation;
@@ -32,7 +32,7 @@ use Symfony\Component\Console\Output\ConsoleOutputInterface;
  *
  * ## `--check` is not a dry run, it is a different question
  *
- * A dry run says what WOULD happen. `--check` answers whether anything would, and exits non-zero
+ * A dry run says what would happen. `--check` answers whether anything would, and exits non-zero
  * when the answer is yes. The distinction matters because the second is what a pipeline can act on:
  * it needs a verdict, not a report to read.
  *
@@ -54,7 +54,7 @@ use Symfony\Component\Console\Output\ConsoleOutputInterface;
  * other seven — a grammar somebody has to remember per command. Consistency beats elegance, so the
  * collision stays and is named here rather than discovered.
  *
- * ## The report does NOT go through the shared Result model, and that is a decision
+ * ## The report does not go through the shared Result model, and that is a decision
  *
  * `console`, `json` and `github` are this command's own narrow set, resolved here rather than
  * through `ReporterManager`. Not a shortcut around the reporter contract — a measurement of it. A
@@ -66,7 +66,7 @@ use Symfony\Component\Console\Output\ConsoleOutputInterface;
  * to withhold — a reader is then told two things that are not true so that a transport can be
  * reused. `sqlens:doctor` reached the same conclusion for the same reason and holds its own pair.
  *
- * What IS shared is everything that can be: the misconfiguration rule for an unknown format, the
+ * What is shared is everything that can be: the misconfiguration rule for an unknown format, the
  * exit-code vocabulary, and the workflow-command escaping ({@see WorkflowCommandEscaping}).
  */
 final class FormatCommand extends Command
@@ -113,14 +113,14 @@ final class FormatCommand extends Command
 
     public function handle(Repository $config, FormatterRegistry $formatters, DialectResolver $dialects, MigrationPaths $paths, Filesystem $filesystem): int
     {
-        // FIRST, before the reporter, before the profile, before anything opens a connection. A
+        // First, before the reporter, before the profile, before anything opens a connection. A
         // misconfiguration that surfaces after twenty seconds of catalog reading is one people
         // check for less often — and a key this package does not know is one it IGNORES, silently.
         if ($this->refusesInvalidConfig()) {
             return ExitCode::Misconfiguration->value;
         }
 
-        // BEFORE anything is resolved, scanned or written. A typo in `--format` must not first
+        // Before anything is resolved, scanned or written. A typo in `--format` must not first
         // rewrite two hundred files and then complain about the option it was told at the start —
         // the same placement rule the strict-backend refusal below follows, for the same reason.
         //
@@ -196,7 +196,7 @@ final class FormatCommand extends Command
 
         $resolution = $formatters->resolve($backend, $dialect, $settings->style);
 
-        // NAMED before anything is formatted, and the strict refusal happens here rather than after
+        // Named before anything is formatted, and the strict refusal happens here rather than after
         // the loop: a run that is going to fail because a backend is missing should not first
         // rewrite two hundred files with a different one.
         $strict = $this->strictToolsOverride() ?? (bool) $config->get('sqlens.strict_tools', false);
@@ -214,7 +214,7 @@ final class FormatCommand extends Command
             // The whole point of strict tool mode: on a machine where the preferred backend is
             // absent, "it formatted fine" and "it formatted with what the project asked for" are
             // different answers, and a pipeline that cannot tell them apart is checking less than
-            // it reports. A DELIBERATELY unavailable backend never reaches here — the registry only
+            // it reports. A deliberately unavailable backend never reaches here — the registry only
             // passes over one it wanted.
             return ExitCode::UndeterminedInStrictMode->value;
         }
@@ -253,7 +253,7 @@ final class FormatCommand extends Command
         if ($files === []) {
             // Silence over an empty scan reads as "everything is formatted", which is the one answer
             // a formatter must not give when it looked at nothing. The message names the extension
-            // deliberately: a project whose SQL lives in migration heredocs will find NOTHING here,
+            // deliberately: a project whose SQL lives in migration heredocs will find nothing here,
             // and needs to be told that rather than left believing its files are clean.
             $this->report('sqlens:format: no .sql files were found in the configured paths. This '
                 .'suite formats `.sql` files only — SQL inside a PHP migration\'s heredoc is not '
@@ -262,7 +262,7 @@ final class FormatCommand extends Command
             return ExitCode::Misconfiguration->value;
         }
 
-        // TWO flags, not one, and they are deliberately not the same question.
+        // Two flags, not one, and they are deliberately not the same question.
         //
         //   --check  is a VERDICT: it moves the exit code.
         //   --diff   is a VIEW:    it shows the work and leaves the exit code alone.
@@ -291,16 +291,21 @@ final class FormatCommand extends Command
             // The judgment is the point: a bare read answers `false` for a file it cannot open, and
             // cast to a string that becomes an empty statement, which the formatter would quite
             // correctly call "the statement is empty" — sending a reader to look at their SQL when
-            // the problem is a mode bit.
+            // the problem is a mode bit. Under Laravel's error handler, which every `php artisan`
+            // installs, the same refusal arrives as an ErrorException thrown out of the read, so
+            // that is caught as well; uncaught it ended the run at the first such file.
             //
             // The seam also makes the case reproducible regardless of who the process runs as: a
             // `0000` file is unreadable for an ordinary user and perfectly readable for root. No other
             // filesystem state reaches this branch: {@see SqlFileScanner} only yields paths where
             // `is_file()` holds, so a dangling symlink or a directory named `x.sql` is filtered out
             // before the read.
+            //
+            // Both arrive as an Exception, FileNotFoundException for a file that is gone and the
+            // ErrorException the error handler makes of the warning, so that is the type caught here.
             try {
                 $original = $filesystem->get($file);
-            } catch (FileNotFoundException) {
+            } catch (Exception) {
                 $original = false;
             }
 
@@ -315,7 +320,7 @@ final class FormatCommand extends Command
             $lastVersion ??= $result->toolVersion;
 
             if (! $result->isFormatted()) {
-                // NAMED, never skipped. A formatter that passed over what it could not parse would
+                // Named, never skipped. A formatter that passed over what it could not parse would
                 // report a clean tree while leaving the one file somebody needs to look at untouched.
                 $undetermined[] = ['path' => $this->shown($file), 'reason' => $result->reason?->value.($result->detail === null ? '' : ' — '.$result->detail)];
 
@@ -328,7 +333,7 @@ final class FormatCommand extends Command
                 continue;
             }
 
-            // Written BEFORE the file counts as changed. The writer answers false when the file could
+            // Written before the file counts as changed. The writer answers false when the file could
             // not be replaced, and a run that listed it as reformatted anyway ended clean over a tree it
             // had not touched. A false can also mean the file already holds these bytes, which here
             // only happens when something wrote the same result meanwhile, so the file is read again
@@ -350,7 +355,7 @@ final class FormatCommand extends Command
         return $this->verdict(
             $format,
             [
-                // The mode names what the run DID, and it is what tells a machine reader whether
+                // The mode names what the run did, and it is what tells a machine reader whether
                 // `formatted` above means "was" or "would be". `--check --diff` reports `check`,
                 // because the mode follows the exit code and `--diff` never moves one.
                 'mode' => $writes ? 'write' : ($this->option('check') === true ? 'check' : 'diff'),
@@ -390,7 +395,7 @@ final class FormatCommand extends Command
             $this->emitConsole($run, $scanned, $changed, $undetermined);
         }
 
-        // An undetermined file moves the exit code in BOTH modes. In `--check` it is obvious; in a
+        // An undetermined file moves the exit code in both modes. In `--check` it is obvious; in a
         // write run it matters more, because the tree now holds a mix of formatted files and one
         // nobody could format, and a clean exit would say otherwise.
         if ($undetermined !== []) {
@@ -409,7 +414,7 @@ final class FormatCommand extends Command
      */
     private function emitConsole(array $run, int $scanned, array $changed, array $undetermined): void
     {
-        // The WORDING follows what happened to the files; the EXIT CODE follows what was asked.
+        // The wording follows what happened to the files; the exit code follows what was asked.
         // Under `--diff` nothing was written, so "rewritten" would be a lie — and nothing was
         // gated either, so a non-zero exit would be a different lie.
         //
@@ -458,7 +463,7 @@ final class FormatCommand extends Command
      * STDERR and is not a stream inconsistency. A degradation notice still reaches a human while the
      * file a pipeline reads holds nothing but JSON.
      *
-     * EVERY scanned file appears, including the unchanged ones. The console names only what moved,
+     * Every scanned file appears, including the unchanged ones. The console names only what moved,
      * because a human reading two hundred `unchanged` lines stops reading; a machine filtering them
      * costs nothing, and their absence would make "did this run even look at that file?"
      * unanswerable from the artifact.
@@ -568,7 +573,7 @@ final class FormatCommand extends Command
      * Emit one annotation per entry, up to the cap, then say how many were withheld.
      *
      * The last line is the whole reason this helper exists. GitHub drops everything past its limit
-     * WITHOUT saying so, which turns a truncated list into a shorter list — the silent-green shape
+     * without saying so, which turns a truncated list into a shorter list — the silent-green shape
      * this package refuses everywhere else.
      *
      * @param  list<array{path: string, message: string}>  $entries

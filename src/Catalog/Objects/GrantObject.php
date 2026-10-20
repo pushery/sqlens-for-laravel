@@ -67,7 +67,7 @@ final readonly class GrantObject
     ) {}
 
     /**
-     * Build a canonical grant from the privileges KEYED BY THE ENGINE'S OWN NAME for each.
+     * Build a canonical grant from the privileges keyed by the engine's own name for each.
      *
      * The key is what makes the unmapped ones recoverable without a second list to keep in step: an
      * entry whose value is {@see Privilege::Other} still knows it was called `PROCESS`, so the reader
@@ -79,7 +79,7 @@ final readonly class GrantObject
      *                                                   {@see self::isStructural()}. Empty for an
      *                                                   engine whose privileges all map onto
      *                                                   canonical cases.
-     * @param  bool  $coversEveryPrivilege  whether this grant carries EVERY privilege its engine
+     * @param  bool  $coversEveryPrivilege  whether this grant carries every privilege its engine
      *                                      permits on this kind of object — `GRANT ALL PRIVILEGES`,
      *                                      whether or not it was written that way. Answered by the
      *                                      READER, because only a driver may hold an engine's
@@ -177,7 +177,7 @@ final readonly class GrantObject
     /**
      * Whether it hands out the power to change the schema rather than the data in it.
      *
-     * Asked here so the definition cannot drift between the rules that use it — but in TWO halves,
+     * Asked here so the definition cannot drift between the rules that use it — but in two halves,
      * because one of them is not the same question on both engines.
      *
      * **The canonical half** is stated here and holds everywhere. `CREATE` makes an account able to

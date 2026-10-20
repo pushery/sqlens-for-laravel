@@ -20,7 +20,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * All of this lived in {@see AbstractSafetyRule}, whose own docblock states the reason it cannot
  * stay there: *"Every rule in this family is a safety rule; that is what the family means."* The
- * category is `final` on that class, deliberately — the family IS the meaning.
+ * category is `final` on that class, deliberately — the family is the meaning.
  *
  * A security rule over a migration needs the same machinery and a different meaning. Extending the
  * safety base would either silently file it under `Safety` or require un-finalizing the one line
@@ -31,7 +31,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * The pattern is the one this package already uses for cross-cutting capability — the difference is
  * only that a contract cannot carry an implementation and this must.
  *
- * ## What did NOT change
+ * ## What did not change
  *
  * Every method here is byte-identical to the one it replaced, including the `final` markers: what a
  * lint rule dispatches on must not be overridable per rule. The extraction is mechanical, and the
@@ -45,7 +45,7 @@ trait ReadsMigrationStatements
 
     /**
      * Where a rule's page lives. Kept as an alias of {@see RuleDocumentationUrl::BASE} so the
-     * host is one string across BOTH rule families — the safety rules and the capture rules,
+     * host is one string across both rule families — the safety rules and the capture rules,
      * which are not safety rules and once carried the address as a literal.
      */
     public const string DOCUMENTATION_BASE = RuleDocumentationUrl::BASE;
@@ -88,7 +88,7 @@ trait ReadsMigrationStatements
     }
 
     /**
-     * The slug of a rule id: lowercased, with BOTH separators — the dots between
+     * The slug of a rule id: lowercased, with both separators — the dots between
      * segments and the underscores inside one — folded to dashes.
      *
      * The underscore is the part that is easy to get wrong, and it was: a slug that
@@ -144,7 +144,7 @@ trait ReadsMigrationStatements
      * A migration statement always; a live schema object only for a rule that says it judges one.
      *
      * The `final` stays: what a lint rule dispatches on must not be overridable per rule, or the
-     * one thing every rule in the family shares stops being shared. What a rule MAY do is declare
+     * one thing every rule in the family shares stops being shared. What a rule may do is declare
      * a second subject by implementing {@see JudgesSchemaObjects} — an opt-in the twenty rules that
      * have nothing to say about a live table never see.
      */

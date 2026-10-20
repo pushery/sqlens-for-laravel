@@ -43,7 +43,7 @@ final readonly class PgsqlInstanceIdentityReader implements InstanceIdentityRead
     public function read(string $connection): InstanceIdentity
     {
         try {
-            // Every field is read INSIDE the try, and there is deliberately no separate "no row
+            // Every field is read inside the try, and there is deliberately no separate "no row
             // came back" branch: this statement selects constants, so a server that answered at all
             // answered with a row. A branch for the impossible case would be a guard that guards
             // nothing — and if a driver ever did return nothing, the property access raises and the
@@ -87,10 +87,33 @@ final readonly class PgsqlInstanceIdentityReader implements InstanceIdentityRead
             // Unix-domain socket, so this is not a restriction at all — there is no address to
             // report — and it is every developer machine connecting over a socket, the most ordinary
             // local setup there is.
-            unavailable: $host === null ? ['host' => UndeterminedReason::LocalSocketConnection] : [],
+            unavailable: $this->socketGaps($host, $port),
         );
     }
 
+    /**
+     * The fields a Unix-domain socket leaves unanswered, each named as such.
+     *
+     * `inet_server_addr()` and `inet_server_port()` are both documented to return NULL over a
+     * socket, so a connection without an address has no port either, and both get the reason.
+     * Over TCP both answer and nothing is named.
+     *
+     * @return array<string, UndeterminedReason>
+     */
+    private function socketGaps(?string $host, ?int $port): array
+    {
+        if ($host !== null) {
+            return [];
+        }
+
+        return $port === null
+            ? ['host' => UndeterminedReason::LocalSocketConnection, 'port' => UndeterminedReason::LocalSocketConnection]
+            : ['host' => UndeterminedReason::LocalSocketConnection];
+    }
+
+    /**
+     * @param  mixed  $row  the row `selectOne()` answered: an object, or null when the server returned none
+     */
     private function text(mixed $row, string $key): ?string
     {
         $value = is_object($row) ? ($row->{$key} ?? null) : null;
@@ -98,6 +121,9 @@ final readonly class PgsqlInstanceIdentityReader implements InstanceIdentityRead
         return is_scalar($value) && (string) $value !== '' ? (string) $value : null;
     }
 
+    /**
+     * @param  mixed  $row  the row `selectOne()` answered: an object, or null when the server returned none
+     */
     private function int(mixed $row, string $key): ?int
     {
         $value = is_object($row) ? ($row->{$key} ?? null) : null;

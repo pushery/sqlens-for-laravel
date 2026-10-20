@@ -21,9 +21,9 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * honesty boundary every rule reading this form has to respect, and stating it here — once —
  * keeps it out of the rules.
  *
- * What the statement DOES settle is small and worth having:
+ * What the statement does settle is small and worth having:
  *
- * - the TYPE NAME the column ends up with, which decides whether MySQL has a non-rebuilding path
+ * - the type name the column ends up with, which decides whether MySQL has a non-rebuilding path
  *   at all (VARCHAR does, and only VARCHAR — {@see self::$typeName});
  * - whether the statement carries a POSITION clause (`AFTER x` / `FIRST`), which is the one
  *   operation the SQL names outright.
@@ -34,7 +34,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * ## Why it parses the CANONICAL form and not the grammar output
  *
  * The canonicalization has already normalized identifier quoting and folded keyword casing, so
- * `VARCHAR` is `VARCHAR` however the migration spelled it, and a column actually NAMED `varchar`
+ * `VARCHAR` is `VARCHAR` however the migration spelled it, and a column actually named `varchar`
  * is quoted and cannot be mistaken for the type. Matching Laravel's raw grammar instead would
  * make this break the day the framework changes a space.
  */

@@ -14,7 +14,7 @@ use Pushery\SQLens\Contracts\SqlFormatter;
  * the refusal arrives already shaped as a {@see FormatResult}, so a command can report it through
  * exactly the path a formatting failure takes.
  *
- * ONE non-nullable field rather than two nullable ones, and the difference is not cosmetic. Two
+ * One non-nullable field rather than two nullable ones, and the difference is not cosmetic. Two
  * nullables describe four states where the class has two, so a caller who has ruled out the refusal
  * still holds a `?SqlFormatter` and has to write a branch for the pair that cannot occur — a branch
  * no run can enter, which the 100% floor then reports as an uncovered line for as long as it exists.

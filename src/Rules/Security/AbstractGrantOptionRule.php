@@ -35,8 +35,8 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * reading is to look up the account's other grants — and that would be two readings that can
  * disagree, plus a readability question the finding would have to carry.
  *
- * It is not needed. A grant that is BOTH re-grantable and broad is one subject: `privileges` and
- * `grantable` sit on the same row of the same reading. So the split is "how much does THIS grant
+ * It is not needed. A grant that is both re-grantable and broad is one subject: `privileges` and
+ * `grantable` sit on the same row of the same reading. So the split is "how much does this grant
  * hand on", which is answerable from what the rule already has, and which is also the sharper
  * statement — an account that may re-grant `SELECT` on one table is a different problem from one
  * that may re-grant the ability to change the schema.

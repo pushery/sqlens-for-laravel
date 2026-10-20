@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Catalog\Canonical;
 
+use Pushery\SQLens\Canonical\QuotedSpan;
+
 /**
  * Brings two catalogs onto one form, so a rule never regexes an engine's spelling and a drift
  * comparison never reports quoting as a change.
@@ -76,27 +78,33 @@ final readonly class CatalogCanonicalizer
             return null;
         }
 
-        // Every transform below runs OUTSIDE string literals only, and that is the load-bearing
+        // Every transform below runs outside string literals only, and that is the load-bearing
         // part rather than a refinement. Applied to the whole expression they reach into the
         // default's VALUE: `'a  b'` lost its second space, `'a::b'` lost its tail, and `'now'` —
         // a real PostgreSQL default, not a contrivance — came back as `'NOW'`. A normalization
         // step that quietly edits the value it is normalizing is the worst shape a comparison
         // layer can take, because the diff it then prints is one it caused itself.
-        // The fallback rides on the same line rather than in a guard below, and that is not style.
-        // The pattern is a literal constant, so `preg_split` cannot fail on it — a guard would be a
-        // branch no run can enter, the coverage floor would name it, and the next reader would have
-        // to work out whether the case is impossible or merely untested.
-        $parts = preg_split("/('(?:[^']|'')*')/", trim($expression), -1, PREG_SPLIT_DELIM_CAPTURE) ?: [trim($expression)];
+        //
+        // The literals are found by a scan rather than a pattern. A pattern that matches a quoted
+        // literal recurses once per character inside it, so PCRE gives up on a literal of some ten
+        // thousand characters with its JIT on and fifty thousand with it off, and an expression
+        // it gave up on had no literal left to protect: the whole default, value included, was
+        // folded, and how long a default could grow before that happened was a setting of the
+        // machine. The scan reads a literal the way every other stage does ({@see QuotedSpan}),
+        // whatever its length. A literal that never closes runs to the end of the expression,
+        // because what follows an opening quote may be the value.
+        $expression = trim($expression);
+        $canonical = '';
+        $from = 0;
 
-        foreach ($parts as $index => $part) {
-            if ($index % 2 === 1) {
-                continue; // a quoted literal — the user's value, never ours to touch
-            }
-
-            $parts[$index] = $this->foldOutsideLiterals($part);
+        while (($quote = strpos($expression, "'", $from)) !== false) {
+            $end = QuotedSpan::endOfLiteral($expression, $quote, "'", false) ?? strlen($expression);
+            // The literal is copied as it stands: the user's value, never ours to touch.
+            $canonical .= $this->foldOutsideLiterals(substr($expression, $from, $quote - $from)).substr($expression, $quote, $end - $quote);
+            $from = $end;
         }
 
-        return trim(implode('', $parts));
+        return trim($canonical.$this->foldOutsideLiterals(substr($expression, $from)));
     }
 
     /** The three normalizations, applied to one stretch of expression that holds no literal. */
@@ -186,7 +194,7 @@ final readonly class CatalogCanonicalizer
      * Both refusals are load-bearing, for different reasons. Collapsing whitespace **corrupts string
      * literals** — `'a  b'` and `'a b'` are different values, and no amount of care about SQL keeps a
      * text-level rewrite from meeting one. Stripping comments would hide a real edit: a routine whose
-     * only change is a comment IS a changed routine, edited by somebody for a reason, and drift
+     * only change is a comment is a changed routine, edited by somebody for a reason, and drift
      * exists to say so.
      *
      * ## Why the minimum suffices

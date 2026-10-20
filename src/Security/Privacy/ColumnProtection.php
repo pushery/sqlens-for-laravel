@@ -11,7 +11,7 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  *
  * ## Why a boolean would be the wrong shape
  *
- * The rule this feeds reports a column only when it is NOT protected, so a wrong `false` is a
+ * The rule this feeds reports a column only when it is not protected, so a wrong `false` is a
  * `critical`-shaped accusation against a column that is fine. Every way of not knowing — no model,
  * a model that will not construct, a custom cast nobody may execute, two models that disagree —
  * would have to collapse into one of the two answers, and both collapses are indefensible:

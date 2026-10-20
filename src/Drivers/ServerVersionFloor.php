@@ -12,12 +12,12 @@ use Pushery\SQLens\Rules\ServerVersion as ParsedVersion;
  * Decides whether the server behind a connection is new enough for the driver's
  * rules to mean anything.
  *
- * A supported engine on a too-old server is a DIFFERENT case from an unknown
+ * A supported engine on a too-old server is a different case from an unknown
  * driver, and it gets its own reason and its own sentence. Folding the two
  * together would swallow the cause: one says "upgrade the server", the other says
  * "this engine is out of scope", and those are different actions.
  *
- * The version string is HANDED IN and never fetched here — see {@see self::check()} for why
+ * The version string is handed in and never fetched here — see {@see self::check()} for why
  * that is a structural guarantee rather than a style. "There is no version at all" belongs to
  * the caller: both suites already name that case, and this unit answering it too would be the
  * same gap reported twice under a second name.
@@ -40,13 +40,26 @@ final readonly class ServerVersionFloor
      * would be reported as a MySQL below 8.4, telling a MariaDB operator to upgrade a MySQL
      * they do not run. Confident, specific, and about the wrong product.
      *
-     * Kept HERE rather than borrowed from {@see EngineIdentity}, even though that unit ships
+     * Kept here rather than borrowed from {@see EngineIdentity}, even though that unit ships
      * the same predicate. The two answer different questions about the same string: that one
-     * decides WHICH engine is speaking and refuses the run; this one only refuses to judge a
+     * decides which engine is speaking and refuses the run; this one only refuses to judge a
      * version it cannot attribute, and it has to keep doing so even where the identity check
      * does not run — the `--file` fast path, and any caller that has a pin but no server.
      */
     private const string MARIADB_VENDOR_MARKER = 'mariadb';
+
+    /**
+     * Whether a banner names an engine other than the one the driver key claims: MariaDB's
+     * handshake prefix, or its vendor marker.
+     *
+     * Public because {@see MeasuredServerVersion} has to leave the same banners alone, for the same
+     * reason, and a second copy of the two markers would be free to disagree with this one.
+     */
+    public static function namesAnotherEngine(string $banner): bool
+    {
+        return str_starts_with($banner, self::MARIADB_HANDSHAKE_PREFIX)
+            || str_contains(strtolower($banner), self::MARIADB_VENDOR_MARKER);
+    }
 
     /**
      * The failure to report, or null when the version meets the driver's floor.
@@ -66,14 +79,13 @@ final readonly class ServerVersionFloor
      */
     public function check(Driver $driver, string $banner): ?DriverResolutionFailure
     {
-        // A banner this unit cannot attribute to the driver's own engine is NOT
+        // A banner this unit cannot attribute to the driver's own engine is not
         // judged against the floor. Parsing a MariaDB handshake yields 5.5.5, which
         // is below every floor SQLens has — reporting that as "upgrade your MySQL"
         // would be confident, wrong advice about a server that is not MySQL at all.
-        // Deciding WHICH engine it actually is belongs to the engine-identity check;
+        // Deciding which engine it actually is belongs to the engine-identity check;
         // this unit only refuses to pretend it knows.
-        if (str_starts_with($banner, self::MARIADB_HANDSHAKE_PREFIX)
-            || str_contains(strtolower($banner), self::MARIADB_VENDOR_MARKER)) {
+        if (self::namesAnotherEngine($banner)) {
             return DriverResolutionFailure::unknownServerVersion(
                 $driver->key(),
                 'the banner names another engine, so it does not describe the engine the driver claims',

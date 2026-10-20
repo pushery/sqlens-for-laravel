@@ -9,7 +9,7 @@ use Pushery\SQLens\Subjects\MigrationSql;
 
 /**
  * Where a statement came from — the migration file, class, statement index and
- * direction. Raw SQL is visible ONLY as provenance, never as a working surface:
+ * direction. Raw SQL is visible only as provenance, never as a working surface:
  * once a statement is canonical, rules read the canonical form, and the origin is
  * how a finding points back at the source without regexing grammar internals.
  */

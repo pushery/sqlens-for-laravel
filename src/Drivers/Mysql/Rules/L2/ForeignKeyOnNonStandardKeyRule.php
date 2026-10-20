@@ -23,7 +23,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
 /**
  * A foreign key pointing at columns that no unique key of the target table covers.
  *
- * ## This is not a deprecation warning. On MySQL 8.4 the statement FAILS
+ * ## This is not a deprecation warning. On MySQL 8.4 the statement fails
  *
  * The behavior was measured against a real MySQL 8.4.10 rather than read out of a release note,
  * and it is stronger than "deprecated": `restrict_fk_on_non_standard_key` is **ON by default**, and
@@ -50,7 +50,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  * {@see UndeterminedReason::ForeignKeyTargetKeyUnknown}: not flagged, because the ordinary
  * `constrained()` onto a primary key is fine and flagging it would be crying wolf; not passed,
  * because "I did not look" is not "it is fine". The audit suite reads the live catalog and settles
- * it. When the migration creates the target table itself, everything needed IS in the capture and
+ * it. When the migration creates the target table itself, everything needed is in the capture and
  * the rule answers outright.
  */
 final class ForeignKeyOnNonStandardKeyRule extends AbstractMysqlRule implements DerivesDowntimeClass, ProvidesRemediation

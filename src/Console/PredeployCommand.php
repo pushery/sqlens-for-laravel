@@ -53,11 +53,10 @@ final class PredeployCommand extends Command
     protected $description = 'Check the target database immediately before a deploy: read-only, fail-closed, bounded.';
 
     public function handle(
-        PreflightRuns $preflight,
         ReporterManager $reporters,
         Repository $config,
     ): int {
-        // FIRST, before the reporter, before the profile, before anything opens a connection. A
+        // First, before the reporter, before the profile, before anything opens a connection. A
         // misconfiguration that surfaces after twenty seconds of catalog reading is one people
         // check for less often — and a key this package does not know is one it IGNORES, silently.
         if ($this->refusesInvalidConfig()) {
@@ -117,6 +116,12 @@ final class PredeployCommand extends Command
             return ExitCode::Misconfiguration->value;
         }
 
+        // Resolved here rather than taken as a parameter. Building it builds the escalation table
+        // from `sqlens.preflight.thresholds`, and a parameter is built before the first line of this
+        // method: an override naming no operation would end the command there, as an exception,
+        // instead of being refused above with the misconfiguration exit.
+        $preflight = $this->laravel->make(PreflightRuns::class);
+
         $outcome = $preflight->run(
             connection: is_string($requested) && $requested !== '' ? $requested : null,
             profile: $profile->profile,
@@ -136,13 +141,13 @@ final class PredeployCommand extends Command
             return ExitCode::Misconfiguration->value;
         }
 
-        // `--allow-undetermined` opens exactly one door and no other: a run whose ONLY blockers
+        // `--allow-undetermined` opens exactly one door and no other: a run whose only blockers
         // could not answer proceeds. A real failure still blocks, because that is a fact about the
         // database rather than about this gate's reach. What counts as "only undetermined" is the
         // outcome's own answer, so this command and the MCP tool cannot disagree about whether a
         // deploy proceeds.
         //
-        // Decided HERE rather than at the exit-code line further down, because the report has to
+        // Decided here rather than at the exit-code line further down, because the report has to
         // carry it. A waived run and an earned one otherwise produce the same exit code, the same
         // green tick and the same document — and "predeploy passed" then means two different
         // things nobody can tell apart afterwards. The exit code below reuses this value instead
@@ -162,7 +167,7 @@ final class PredeployCommand extends Command
 
         $verdict = $outcome->verdict($waiver);
 
-        // Both halves as ONE result, and both come from the service. Assembling them here as well
+        // Both halves as one result, and both come from the service. Assembling them here as well
         // would be a second merge of one run, free to differ from the one the MCP tool renders —
         // and a consumer would then have to choose which document is "the" verdict.
         $reporter->report(
@@ -189,10 +194,11 @@ final class PredeployCommand extends Command
      * Everything that is not the report goes to STDERR, so `--format=json` leaves STDOUT parseable.
      *
      * No empty-line guard. It used to have one and nothing could enter it: every call site passes
-     * either an exception message, a check id joined to its reason, or a `CatalogSkip`'s detail —
-     * and a skip is never built without one, which is the point of `SkipReason`. Measured at all
-     * five call sites, then removed. A guard nothing can trigger is a question every future reader
-     * has to answer before concluding it is dead.
+     * a line with text in it, an exception message, a check id joined to its reason, a translated
+     * sentence or a `CatalogSkip`'s detail — and a skip is never built without one, which is the
+     * point of `SkipReason`. Read at every call site, the one `ResolvesRunBudget` adds included, then
+     * removed. A guard nothing can trigger is a question every future reader has to answer before
+     * concluding it is dead.
      */
     private function outputErrorLine(string $line): void
     {

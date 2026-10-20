@@ -31,6 +31,9 @@ namespace Pushery\SQLens\Generation;
  */
 enum AgentContextFormat: string
 {
+    /** The project's migrations, the subject every format's guidance is scoped to. */
+    public const string MIGRATION_GLOB = 'database/migrations/**/*.php';
+
     /** A section inside the project's own Claude instructions file. */
     case Claude = 'claude';
 

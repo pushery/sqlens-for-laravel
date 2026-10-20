@@ -26,7 +26,7 @@ use Pushery\SQLens\Generation\RuleCatalogSnapshot;
  *
  * ## Compact, and what compact is not
  *
- * One line per rule instead of a block. It is NOT a shorter list: a rule missing from an agent's
+ * One line per rule instead of a block. It is not a shorter list: a rule missing from an agent's
  * context is a rule that agent will break, and it will do so silently, because nothing in the file
  * says what is absent.
  */
@@ -34,7 +34,7 @@ final readonly class CopilotInstructionsRenderer implements MetadataRenderer
 {
     public function __construct(
         private string $generatorVersion,
-        private string $migrationGlob = 'database/migrations/**/*.php',
+        private string $migrationGlob = AgentContextFormat::MIGRATION_GLOB,
     ) {}
 
     public function family(): string

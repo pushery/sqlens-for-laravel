@@ -71,13 +71,14 @@ final class UuidV4PrimaryKeyRule extends AbstractCatalogRule implements Declares
     /**
      * The generators that produce a random value.
      *
-     * `gen_random_uuid()` is core; `uuid_generate_v4()` comes from the uuid-ossp extension and is
-     * still widely installed. Both are named because a project that migrated from the extension to
-     * core, or never did, is judged the same way.
+     * `gen_random_uuid()` is core, and `uuidv4()` is the name PostgreSQL 18 gives the same random
+     * value beside `uuidv7()`. `uuid_generate_v4()` comes from the uuid-ossp extension and is still
+     * widely installed. All three are named because a project is judged by the value its key gets,
+     * whichever name produces it.
      *
      * @var list<string>
      */
-    private const array RANDOM_GENERATORS = ['gen_random_uuid', 'uuid_generate_v4'];
+    private const array RANDOM_GENERATORS = ['gen_random_uuid', 'uuidv4', 'uuid_generate_v4'];
 
     /** The time-ordered generator PostgreSQL 18 introduced. */
     private const string SORTED_GENERATOR = 'uuidv7';
@@ -194,7 +195,7 @@ final class UuidV4PrimaryKeyRule extends AbstractCatalogRule implements Declares
     /**
      * No server-side default: the answer depends on what the project says about its own code.
      *
-     * Declaring `server` does NOT conjure a default the catalog did not show. The two disagree in
+     * Declaring `server` does not conjure a default the catalog did not show. The two disagree in
      * that case, and the honest answer is still that this rule cannot see which generator runs —
      * saying otherwise would resolve a contradiction by picking the side that was easier to state.
      */

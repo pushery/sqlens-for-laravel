@@ -110,7 +110,7 @@ final class GetFindingsTool extends SqlensTool
         );
 
         return ToolAnswer::of([
-            // Suppressed findings are NOT here, and the count says how many there were. What the
+            // Suppressed findings are not here, and the count says how many there were. What the
             // baseline accepted stays accepted — an agent that saw them would go and fix things
             // somebody already decided to live with.
             'path' => $path,

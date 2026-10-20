@@ -13,7 +13,7 @@ use LogicException;
  * silent no-op here would make findings unresolvable or hide a rule from every
  * run.
  *
- * This is deliberately NOT how "a rule cannot evaluate a subject" is handled —
+ * This is deliberately not how "a rule cannot evaluate a subject" is handled —
  * that is an undetermined finding with a named reason, never an exception.
  */
 final class InvalidRule extends LogicException

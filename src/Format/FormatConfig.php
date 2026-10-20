@@ -24,7 +24,7 @@ final readonly class FormatConfig
         public ?string $pgFormatterPath,
         public ?string $sqlFluffPath,
         /**
-         * The backends this project has DECIDED not to use, by name.
+         * The backends this project has decided not to use, by name.
          *
          * A third state beside "look on the search path" (null) and "it is here" (a path), and the
          * one the other two cannot express: `false` says the project does not want this backend at
@@ -41,7 +41,7 @@ final readonly class FormatConfig
         public array $disabledBackends = [],
         /**
          * Which files a run may find. Its own object because it is the only part of this block that
-         * decides what gets WRITTEN — see {@see FormatDiscovery} for why that makes it a safety
+         * decides what gets written — see {@see FormatDiscovery} for why that makes it a safety
          * surface rather than a convenience one.
          */
         public FormatDiscovery $discovery = new FormatDiscovery,
@@ -102,6 +102,9 @@ final readonly class FormatConfig
         return $off;
     }
 
+    /**
+     * @param  mixed  $value  the configured value as read, before it is known to be an integer
+     */
     private static function positiveInt(mixed $value, int $default): int
     {
         // The config validator refuses a non-positive value before any run starts, so this is the

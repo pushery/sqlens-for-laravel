@@ -36,7 +36,7 @@ use Pushery\SQLens\Attributes\RawSql;
 final readonly class RawSqlReason
 {
     /**
-     * The run's policy, because WHAT counts as a reason is a configured question.
+     * The run's policy, because what counts as a reason is a configured question.
      *
      * Read here rather than in the rule, and the placement is the whole design: a reason the mode
      * refuses is simply not collected, so the rule downstream needs no second notion of "reasoned"
@@ -70,7 +70,7 @@ final readonly class RawSqlReason
      * rule off wherever the policy annotation is on.
      *
      * The run's placeholder policy applies here too — an `interpolation: 'todo'` is not an answer
-     * under {@see AnalysePolicy::Strict} any more than a `reason: 'todo'` is. What does NOT apply is
+     * under {@see AnalysePolicy::Strict} any more than a `reason: 'todo'` is. What does not apply is
      * the other argument's verdict: a `reason:` the policy refuses leaves this one standing, because
      * they answer different questions and one being unsatisfactory says nothing about the other.
      *
@@ -114,7 +114,7 @@ final readonly class RawSqlReason
      * would mean evaluating project code during analysis. The consequence lands in the safe
      * direction: a reason written that way does not count, so the finding stays visible.
      *
-     * ## Why a concatenation of literals IS read, when a constant is not
+     * ## Why a concatenation of literals is read, when a constant is not
      *
      * The two used to be refused together, on one sentence about evaluating project code. That
      * sentence is true of a constant and false of `'a ' . 'b'`, which is finished text sitting in

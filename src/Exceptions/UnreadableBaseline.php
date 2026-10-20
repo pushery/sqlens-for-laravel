@@ -95,6 +95,11 @@ final class UnreadableBaseline extends RuntimeException
         ));
     }
 
+    public static function notReadable(string $path): self
+    {
+        return new self(sprintf('The baseline at "%s" could not be read. Check its permissions for the user running artisan.', $path));
+    }
+
     public static function invalidJson(string $path, string $reason): self
     {
         return new self(sprintf('The baseline at "%s" is not valid JSON: %s', $path, $reason));

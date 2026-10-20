@@ -31,7 +31,7 @@ use Pushery\SQLens\Severity\SeverityGate;
  *
  *   The reason breakdown is an OPEN enumeration and its growth does not bump the
  *   version, which is the one deliberate exception to the rule above. It is not an
- *   inconsistency: the map always carries EVERY reason this build knows, zeros
+ *   inconsistency: the map always carries every reason this build knows, zeros
  *   included, so a consumer reading it learns the producer's whole vocabulary from
  *   the payload itself — the ambiguity a bump exists to resolve cannot arise. Naming
  *   a newly distinguished failure is also not a contract change; it is the taxonomy
@@ -39,7 +39,7 @@ use Pushery\SQLens\Severity\SeverityGate;
  *   stopped meaning anything. REMOVING or renaming a reason key is a different
  *   matter, and does bump.
  * - `findings` reuses each Finding's own deterministic projection, and `suppressed`
- *   lists every hidden finding WHOLE, with the source and reason that hid it.
+ *   lists every hidden finding whole, with the source and reason that hid it.
  *   Suppression removes a finding from the gate, never from the record: a hidden
  *   finding a consumer cannot see or explain is indistinguishable from one that
  *   never happened.
@@ -51,7 +51,7 @@ use Pushery\SQLens\Severity\SeverityGate;
 final readonly class JsonEnvelope
 {
     /**
-     * The envelope schema version. It lives HERE and nowhere else: four separate
+     * The envelope schema version. It lives here and nowhere else: four separate
      * changes add a field to this report, and if each bumped the version itself the
      * published number would depend on the order they merged in — and every other
      * change's pin test would be red until it rebased. One version, one source.
@@ -75,7 +75,7 @@ final readonly class JsonEnvelope
      */
     public const array RUN_FIELDS_ADDED_IN_V4 = [
         'evaluated_rules',
-        // What a preflight session reported IN FORCE. Declared here for the same reason
+        // What a preflight session reported in force. Declared here for the same reason
         // `evaluated_rules` is: a run field that appears without being announced is the silent
         // contract change the version register exists to prevent.
         'session_timeouts',
@@ -307,7 +307,7 @@ final readonly class JsonEnvelope
      * The per-finding fields version 5 introduces: the ledger's account of a debt, on the finding
      * that reports it.
      *
-     * A debt has always BEEN a finding here — the notice builders use the same factories every rule
+     * A debt has always been a finding here — the notice builders use the same factories every rule
      * uses. What it could not do was say so in a form a machine reads: the kind, the age and the
      * state reached a consumer only as English prose inside `message`, so getting the age off a
      * finding meant parsing the sentence "open since 94 days".
@@ -382,7 +382,7 @@ final readonly class JsonEnvelope
      */
     public const array FIELDS_ADDED_IN_V3 = [
         'blocked_by',
-        // Present only when a payload existed and was REFUSED — never for a rule that produced
+        // Present only when a payload existed and was refused — never for a rule that produced
         // none. Declared rather than shipped quietly for the reason the register exists at all: a
         // field a consumer cannot see coming is a contract change wearing an unchanged version.
         'remediation_refusal',

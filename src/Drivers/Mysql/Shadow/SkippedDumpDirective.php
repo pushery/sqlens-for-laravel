@@ -6,8 +6,8 @@ namespace Pushery\SQLens\Drivers\Mysql\Shadow;
 
 /**
  * A statement from a `schema:dump` that is a client directive, not schema SQL, and
- * is therefore NOT replayed into the shadow database — recorded rather than
- * silently swallowed.
+ * is therefore not replayed into the shadow database — recorded on the
+ * {@see SchemaDumpPlan} rather than silently swallowed.
  *
  * A version-gated conditional comment such as `/*!40101 SET NAMES … *​/` sets
  * client session state (character set, collation, SQL mode) that the shadow
@@ -24,4 +24,27 @@ final readonly class SkippedDumpDirective
         public string $directive,
         public string $reason,
     ) {}
+
+    /**
+     * What a person reading the run should know about this directive, or null when leaving it out
+     * changes nothing the shadow database keeps.
+     *
+     * A directive that sets the SQL mode or the time zone to a value does: the dump's statements ran
+     * under the shadow session's own setting instead, and a routine or trigger keeps the SQL mode it
+     * was created under. The replay sets the foreign-key and unique checks itself, and a character
+     * set or a saved variable changes nothing the shadow keeps.
+     */
+    public function note(): ?string
+    {
+        if (preg_match('/\b(sql_mode|time_zone)\s*=\s*\'/i', $this->directive, $setting) !== 1) {
+            return null;
+        }
+
+        return sprintf(
+            'The schema dump\'s %s was not replayed (%s), so the dump\'s statements ran under the shadow session\'s own %s.',
+            $this->directive,
+            $this->reason,
+            strtolower($setting[1]),
+        );
+    }
 }

@@ -39,14 +39,14 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * old default. Nothing among the existing tables reveals that, which is why the database level is
  * judged as its own subject rather than skipped as redundant.
  *
- * ## What it deliberately does NOT say
+ * ## What it deliberately does not say
  *
  * Which `utf8mb4` collation the object carries. That is a separate decision with separate
  * consequences and it has its own rule and its own id ({@see LegacyCollationRule}), so the two can
  * be ignored, baselined and fixed independently. Chaining them under one id would mean an
  * ignore-list entry for the encoding silences the sorting complaint too.
  *
- * ## It does NOT share an implementation with the lint rule, and that is not a shortcut
+ * ## It does not share an implementation with the lint rule, and that is not a shortcut
  *
  * {@see CopyAlterCharsetRule} judges
  * `ALTER TABLE … CONVERT TO CHARACTER SET` — which is the FIX for what this rule reports, and it
@@ -68,7 +68,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
 final class CharsetNotUtf8mb4Rule extends AbstractCatalogRule implements DeclaresJudgedObjectTypes
 {
     /**
-     * BOTH, and the second was missed on the first pass: the rule judges a database-default COLLATION
+     * Both, and the second was missed on the first pass: the rule judges a database-default collation
      * subject as well as a table, and the branch that decides which lives behind
      * {@see TextEncoding::isDatabaseDefault()} — invisible to a guard reading only this file's own
      * type checks. Declaring `Table` alone was the mirror of the over-claim: the run would have said
@@ -196,7 +196,7 @@ final class CharsetNotUtf8mb4Rule extends AbstractCatalogRule implements Declare
     }
 
     /**
-     * ONE message for the table and everything on it.
+     * One message for the table and everything on it.
      *
      * Not one per column, and the reason is not brevity. A catalog finding is located at the object,
      * and results are deduplicated by rule id and location — so forty column verdicts would arrive

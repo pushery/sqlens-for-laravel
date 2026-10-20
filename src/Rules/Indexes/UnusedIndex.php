@@ -29,7 +29,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * ## Why the elapsed time is never printed
  *
- * The finding carries `stats_reset` and the configured minimum, and NOT the live "it has been 34
+ * The finding carries `stats_reset` and the configured minimum, and not the live "it has been 34
  * days" — because that number changes between two audits of an unchanged database, and this
  * package's reports are supposed to be diffable. The verdict does still depend on the clock, once,
  * at the threshold. That is inherent to asking a time-bounded question, and it is precisely why
@@ -37,7 +37,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * ## Never reported, whatever the counter says
  *
- * A primary key or a unique index. Dropping either changes what the schema ALLOWS, and "nobody
+ * A primary key or a unique index. Dropping either changes what the schema allows, and "nobody
  * queried it" is not an argument about a constraint — the index exists to refuse a write, and it
  * has been doing that silently the whole time.
  */
@@ -74,12 +74,24 @@ final readonly class UnusedIndex
      * Whether this table's statistics were read at all.
      *
      * An absent attribute means the reading could not be made — `performance_schema` off, a role
-     * without the privilege — and NOT that no index was used. The projection leaves it absent
+     * without the privilege — and not that no index was used. The projection leaves it absent
      * precisely so the two cannot be confused here.
      */
     public static function wasRead(SchemaObject $table): bool
     {
         return $table->hasAttribute('index_scans');
+    }
+
+    /**
+     * Whether the server counts the scans of new connections at all.
+     *
+     * False where a PostgreSQL server hands them `track_counts = off`: a scan made there leaves the
+     * counter where it was, so the counts were read and still say nothing. An absent attribute
+     * counts as counting, because only a reading that saw the setting off can say otherwise.
+     */
+    public static function isCounting(SchemaObject $table): bool
+    {
+        return $table->getBool('index_stats_counting') !== false;
     }
 
     /**

@@ -19,10 +19,10 @@ final readonly class StatementToken
          * The last SYMBOL character before this token — `(`, `,`, `)`, `=` — or null when only
          * whitespace (or nothing) stood in front of it.
          *
-         * The token stream deliberately drops punctuation, and for naming what a statement DOES
+         * The token stream deliberately drops punctuation, and for naming what a statement does
          * that is right: no kind and no target turns on a comma. One question does turn on it, and
          * it is the one a column list answers. Without this, `(a, b)` and `(a varchar_pattern_ops)`
-         * are the SAME two identifier tokens, so an index carrying a non-default operator class
+         * are the same two identifier tokens, so an index carrying a non-default operator class
          * reads as a two-column index — and a foreign key on `(a)` then looks covered by an index
          * that answers no equality lookup at all. That is the silent, permanent direction of error
          * this package names as its cardinal sin, and one character of context is what tells the
@@ -49,5 +49,15 @@ final readonly class StatementToken
          * Counting two of them is the same pass.
          */
         public int $depth = 0,
+        /**
+         * The size written directly behind this word, `(255)` or `(8,2)` without its spaces, or null
+         * when none follows it.
+         *
+         * Numbers are not tokens, so a column type read from the stream lost its size: `varchar(255)`
+         * and `varchar(50)` arrived as the same `varchar`, and a rule comparing two columns could not
+         * tell them apart. Only a group of one or two numbers is kept, the shape a size takes, so a
+         * table body or an argument list behind a name is not.
+         */
+        public ?string $sizeAfter = null,
     ) {}
 }

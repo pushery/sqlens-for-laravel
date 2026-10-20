@@ -31,7 +31,7 @@ enum DebtMode: string
      * Null rather than a fallback to {@see self::Check}: a value this build does not know is almost
      * always a typo or a rename, and silently doing the safe thing means the operator believes they
      * asked for a recording run and got a checking one. The caller turns this into a named
-     * configuration error listing what IS accepted.
+     * configuration error listing what is accepted.
      */
     public static function tryParse(string $value): ?self
     {

@@ -9,9 +9,9 @@ use Pushery\SQLens\Contracts\DriverCanonicalization;
 
 /**
  * A parsed, canonicalized identifier reference — one object name, optionally
- * schema-qualified. It collapses quoting variants of the SAME object to a single
+ * schema-qualified. It collapses quoting variants of the same object to a single
  * canonical spelling (`"users"` and `users` under PostgreSQL, `` `users` `` and
- * `users` under MySQL all become `users`) and folds case per the driver, WITHOUT
+ * `users` under MySQL all become `users`) and folds case per the driver, without
  * touching qualification: `public.users` never collapses to `users`, because that
  * would silently assume a `search_path`. Resolving qualified <-> unqualified is
  * the audit suite's configuration, not this layer's guess; the schema/name split

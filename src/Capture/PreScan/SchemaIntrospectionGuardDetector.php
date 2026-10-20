@@ -31,7 +31,7 @@ use Pushery\SQLens\Rules\VersionWindow;
  *      really exists, so the guard runs its else branch — or nothing at all.
  *      The `alter table` is never emitted.
  *   2. The introspection SELECT itself IS written to the pretend log. So the
- *      statement list is NON-EMPTY yet contains none of the migration's real
+ *      statement list is non-empty yet contains none of the migration's real
  *      DDL.
  *
  * A capture that trusted either half would report a clean pass over work it
@@ -74,7 +74,7 @@ final readonly class SchemaIntrospectionGuardDetector implements PreScanDetector
             versionWindow: VersionWindow::unbounded(),
             downtimeClass: null,
             downtimeClassRationale: 'A pre-scan hit describes no DDL — it is the reason a migration was not captured at all — so it has no downtime behavior to classify.',
-            messagePrefix: 'Schema introspection guard',
+            messagePrefix: 'sqlens.lint',
             documentationUrl: RuleDocumentationUrl::for(self::RULE_ID),
             suites: PreScanMetadataAudit::defaultSuites(),
             badExample: <<<'PHP'

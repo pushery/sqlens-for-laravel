@@ -31,7 +31,7 @@ use Pushery\SQLens\Contracts\DriverCanonicalization;
  * A string literal, quoted identifier and driver delimiter are all single
  * characters here (as PostgreSQL and MySQL declare them).
  *
- * A stored routine is ONE statement however many semicolons its body holds.
+ * A stored routine is one statement however many semicolons its body holds.
  * `CREATE TRIGGER … BEGIN …; …; END` reaches the server in one piece, so a `;`
  * inside a `BEGIN … END` block of a routine definition, a PostgreSQL
  * `BEGIN ATOMIC` body included, does not end the statement. Only the default

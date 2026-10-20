@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Deploy;
 use Pushery\SQLens\Contracts\ReplicaProbe;
 
 /**
- * Whether an instance will accept writes, and — when it will not — WHICH setting is holding the
+ * Whether an instance will accept writes, and — when it will not — which setting is holding the
  * door shut and what kind of situation that is.
  *
  * ## Why this is not a boolean
@@ -16,7 +16,7 @@ use Pushery\SQLens\Contracts\ReplicaProbe;
  * says "is this a replica", and the shadow captor needs nothing more — it refuses either way.
  *
  * A deploy gate needs more, and the difference is what a reader does next. A standby is a
- * connection pointed at the WRONG HOST; a read-only primary is a SETTING somebody chose. Both
+ * connection pointed at the wrong host; a read-only primary is a setting somebody chose. Both
  * refuse `migrate --force`, and a report that merged them would send an operator to edit a config
  * flag on a machine they should not be talking to at all. So the two travel separately, and the
  * variable that decided it travels with them — an operator who is told `super_read_only` does not

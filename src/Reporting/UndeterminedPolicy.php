@@ -29,7 +29,7 @@ use Pushery\SQLens\Findings\Result;
  * undetermined even under strict mode) is not part of this policy: the deploy
  * commands apply it through {@see UndeterminedWaiver}.
  *
- * What it does NOT escalate is decided upstream, by the outcome, and never here by a
+ * What it does not escalate is decided upstream, by the outcome, and never here by a
  * list of rule ids: a `not_applicable` result is a check with nothing to run against,
  * not one that could not run. That is where a boundary the package draws on purpose
  * belongs — an index read completely and left out of a comparison by design reports

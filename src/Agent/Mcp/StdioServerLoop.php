@@ -29,7 +29,7 @@ use Throwable;
  * ({@see McpSdkAvailability}) and which tools this session exposes
  * ({@see McpToolPolicy::forSession()}). This file asks them and puts the pieces on the process.
  *
- * Everything else that CAN be exercised in process — the guards, the exit codes, the operator's
+ * Everything else that can be exercised in process — the guards, the exit codes, the operator's
  * line — lives in the command, behind {@see ServesMcp}. The split is what keeps the exclusion to
  * the wiring rather than a whole command.
  *
@@ -50,7 +50,7 @@ final class StdioServerLoop implements ServesMcp
      * Enable these tools for this run, one name at a time.
      *
      * Separate from the configuration on purpose: the config says what a PROJECT has adopted, this
-     * says what an operator is doing in THIS session. There is no "all" — see
+     * says what an operator is doing in this session. There is no "all" — see
      * {@see McpToolPolicy::alsoEnabling()}.
      *
      * @param  list<string>  $tools
@@ -81,7 +81,7 @@ final class StdioServerLoop implements ServesMcp
         // without it the process dies with an empty stream and the client reports only "server
         // disconnected".
         //
-        // Registered HERE rather than inside the shield, and the placement is the point. A shutdown
+        // Registered here rather than inside the shield, and the placement is the point. A shutdown
         // function cannot be unregistered, so putting it beside the output buffer would leave one
         // behind for every engage/release cycle. This file is the one place a process really is a
         // server — and the one place a per-process registration belongs. What it calls,
@@ -106,7 +106,7 @@ final class StdioServerLoop implements ServesMcp
         // The registry decides what exists; the policy decides what this project exposes. The
         // server is handed the answer rather than either of the two questions — it must not be a
         // third place where "which tools" is decided.
-        $exposed = ToolRegistry::declared()->exposedTo(McpToolPolicy::forSession($container, $this->config, $this->sessionEnables));
+        $exposed = ToolRegistry::bound($container)->exposedTo(McpToolPolicy::forSession($container, $this->config, $this->sessionEnables));
 
         new SqlensMcpServer($transport, $exposed)->start();
 

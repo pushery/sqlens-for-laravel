@@ -22,10 +22,11 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * existing row holds a null, and it holds an ACCESS EXCLUSIVE lock for that scan. On a
  * large, live table that is an outage.
  *
- * Since PostgreSQL 12 the scan can be avoided: add a `CHECK (col IS NOT NULL)`
- * constraint first (NOT VALID, then VALIDATE CONSTRAINT under a weaker lock), and the
- * later `SET NOT NULL` trusts the validated check and skips the full scan. The finding
- * names that cheaper path.
+ * On PostgreSQL 18 the scan moves under a weaker lock: the not-null constraint is added
+ * `NOT VALID` and validated afterwards, and the validation reads the rows under SHARE
+ * UPDATE EXCLUSIVE, which lets reads and writes go on. The finding names that path and the
+ * remediation hands it over. The PostgreSQL 12 detour through a `CHECK (col IS NOT NULL)`
+ * still works, and the second exception below still recognizes it.
  *
  * Two exceptions, both silent:
  *
@@ -39,12 +40,12 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *    recommends. The check has to be one PostgreSQL trusts: added without `NOT VALID`, or
  *    validated by name after it, and before the `SET NOT NULL` ({@see NotNullCheckProof}). A
  *    check on another table, one never validated, or one that comes after proves nothing, and
- *    the table is scanned. This is detected within the SAME migration; a check added in an
+ *    the table is scanned. This is detected within the same migration; a check added in an
  *    earlier migration is not visible here (cross-migration state is not carried), a
  *    documented limit that the `#[SqlensIgnore]` annotation covers.
  *
  * Detection is on the canonical form — no rewrite claim, because `SET NOT NULL` scans
- * but does NOT rewrite the table — never Laravel's raw grammar.
+ * but does not rewrite the table — never Laravel's raw grammar.
  */
 final class SetNotNullScanRule extends AbstractPgsqlSafetyRule implements ProvidesRemediation
 {
@@ -64,13 +65,13 @@ final class SetNotNullScanRule extends AbstractPgsqlSafetyRule implements Provid
     }
 
     /**
-     * The sequence that makes the scan unnecessary — the same NOT VALID trick in front of a third
-     * statement.
+     * The sequence that moves the scan under a weaker lock: the not-null constraint added
+     * `NOT VALID`, then validated.
      *
-     * Since PostgreSQL 12, `SET NOT NULL` will TRUST a validated `CHECK (col IS NOT NULL)` and skip
-     * reading every row. So this hands over the constraint template's own sequence rather than an
-     * enum-flavored copy of it: one place keeps the `NOT VALID` reasoning, and the column comes
-     * from the SAME reading {@see judge()} uses.
+     * On 18 a not-null constraint accepts `NOT VALID` itself, so the PostgreSQL 12 detour through a
+     * throwaway `CHECK` is not needed. This hands over the constraint template's own sequence
+     * rather than a copy of it: one place keeps the `NOT VALID` reasoning, and the column comes
+     * from the same reading {@see judge()} uses.
      */
     public function remediationFor(MigrationStatementView $statement): ?RemediationPayload
     {
@@ -127,8 +128,9 @@ final class SetNotNullScanRule extends AbstractPgsqlSafetyRule implements Provid
         }
 
         return 'SET NOT NULL scans the whole table to prove no row is null, under an ACCESS EXCLUSIVE '
-            .'lock — an outage on a large, live table. Add a CHECK (col IS NOT NULL) constraint first '
-            .'(NOT VALID, then VALIDATE CONSTRAINT under a weaker lock), and the later SET NOT NULL '
-            .'trusts it and skips the scan. It does not rewrite the table, only scans it.';
+            .'lock — an outage on a large, live table. Add the not-null constraint NOT VALID instead '
+            .'(ADD CONSTRAINT name NOT NULL col NOT VALID), then VALIDATE CONSTRAINT it in a later '
+            .'migration, which reads the same rows under a weaker lock that lets reads and writes go on. '
+            .'It does not rewrite the table, only scans it.';
     }
 }

@@ -10,7 +10,7 @@ namespace Pushery\SQLens\Format;
  * ## Why an external backend is checked at all
  *
  * pgFormatter and SQLFluff are better formatters than the built-in core, and neither is ours. Both
- * were measured writing a DIFFERENT statement: pgFormatter 5.11 turns `U&'d\0061t'` into
+ * were measured writing a different statement: pgFormatter 5.11 turns `U&'d\0061t'` into
  * `U & 'd\0061t'`, a syntax error, and SQLFluff 4.3.0 on MySQL reads `5--1` as a comment and moves
  * it in front of the `SELECT`. A file is written from what the backend prints, so without a check
  * sqlens commits whatever a tool release gets wrong, and nothing in the run says so.
@@ -20,10 +20,11 @@ namespace Pushery\SQLens\Format;
  * Both sides are read with the dialect's tokenizer, which splits tokens where the server does, and
  * compared in two sequences:
  *
- * - **Code.** Every token that is not whitespace or a comment, in order. A bare word may change case,
- *   because keywords and unquoted identifiers are case-insensitive to the server, and `!=` may become
- *   `<>`, which is the same operator. A string, a quoted identifier, a number or any other operator
- *   has to stay byte for byte.
+ * - **Code.** Every token that is not whitespace or a comment, in order. A bare word may change case
+ *   where the server ignores it: any word on PostgreSQL, which folds an unquoted identifier, and only
+ *   a reserved keyword on MySQL, where an unreserved keyword can be a table name and MySQL on Linux
+ *   compares table names by case. `!=` may become `<>`, which is the same operator. A string, a
+ *   quoted identifier, a number or any other operator has to stay byte for byte.
  * - **Comments.** In order, with the whitespace inside them normalized. A comment may move to another
  *   line; it may not disappear, and code may not end up inside one — that shows up as a code token
  *   missing from the first sequence.
@@ -49,7 +50,7 @@ final readonly class StatementIdentity
     /**
      * The code tokens and the comments of a statement, each as [normalized, as written] pairs.
      *
-     * A dollar-quoted body is compared as ONE token, byte for byte, unless the statement says it is
+     * A dollar-quoted body is compared as one token, byte for byte, unless the statement says it is
      * SQL or PL/pgSQL (`LANGUAGE sql`, `LANGUAGE plpgsql`, or a `DO` block without a language, which
      * is PL/pgSQL). Such a body is read like the statement around it, so pgFormatter may lay it out
      * and re-case its keywords. A body in any other language is data: reflowed Python is broken
@@ -85,7 +86,7 @@ final readonly class StatementIdentity
             }
 
             $code[] = [match (true) {
-                $token->kind === SqlTokenKind::Word => strtoupper($token->text),
+                $token->kind === SqlTokenKind::Word => self::comparableWord($token, $dialect),
                 $token->text === '!=' => '<>',
                 default => $token->text,
             }, $token->text];
@@ -96,6 +97,15 @@ final readonly class StatementIdentity
         }
 
         return [$code, $comments];
+    }
+
+    /**
+     * A word as the server compares it: case-insensitive, except a word on MySQL that a formatter may
+     * not upper-case, which can name a table whose case MySQL on Linux keeps.
+     */
+    private static function comparableWord(SqlToken $token, Dialect $dialect): string
+    {
+        return $dialect !== Dialect::Mysql || $token->mayUpperCaseIn($dialect) ? strtoupper($token->text) : $token->text;
     }
 
     /**

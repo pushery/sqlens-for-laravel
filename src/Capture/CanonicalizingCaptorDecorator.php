@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Capture;
 
+use Closure;
 use Pushery\SQLens\Canonical\CanonicalizationFailure;
 use Pushery\SQLens\Canonical\CanonicalizationPipeline;
 use Pushery\SQLens\Canonical\Canonicalizer;
@@ -21,7 +22,7 @@ use Pushery\SQLens\Subjects\CaptureMode;
 use Pushery\SQLens\Subjects\SubjectContext;
 
 /**
- * Wraps a captor so that every statement it produces reaches a rule ONLY in
+ * Wraps a captor so that every statement it produces reaches a rule only in
  * canonical form — bindings inlined, then run through the canonicalization
  * pipeline — and no rule ever sees raw grammar output.
  *
@@ -38,7 +39,7 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * a dev Mac and in CI.
  *
  * It decorates rather than replaces: the inner captor (pretend today, shadow
- * later) owns HOW the SQL is obtained; this owns turning what it obtained into
+ * later) owns how the SQL is obtained; this owns turning what it obtained into
  * the one form the rules read. A second capture mode gets canonicalization for
  * free by being wrapped, with no second canonicalizing path to drift. Both modes
  * hand over each statement the way PDO receives it, so the substitution runs
@@ -51,15 +52,25 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * `DROP TABLE` behind a `CREATE INDEX` would pass. So each entry is split here,
  * with the {@see StatementSplitter} every batch in this package goes through,
  * and each statement it holds is canonicalized and judged on its own.
+ *
+ * A session setting can change how the server reads text: under MySQL's `ANSI_QUOTES` a double
+ * quote names an object, and under `NO_BACKSLASH_ESCAPES` a backslash is an ordinary character.
+ * The substitution, the splitter and the canonicalization all lex by the engine's default reading,
+ * so a captured statement is first handed to the translation the caller passes, which rewrites it
+ * into that reading with the same meaning. Without one, the text is read as it is.
  */
 final readonly class CanonicalizingCaptorDecorator implements Captor
 {
+    /**
+     * @param  (Closure(string): string)|null  $toDefaultReading  rewrites a captured statement into the reading the canonicalization lexes by
+     */
     public function __construct(
         private Captor $inner,
         private BindingSubstitutor $substitutor,
         private Canonicalizer $canonicalizer,
         private SubjectContext $context,
         private DriverCanonicalization $syntax,
+        private ?Closure $toDefaultReading = null,
     ) {}
 
     /**
@@ -72,12 +83,15 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
      * pipeline. Its driver must be the one the canonicalization describes — a
      * mismatch would canonicalize with one engine's rules under another's label —
      * so the caller resolves both from the same driver.
+     *
+     * @param  (Closure(string): string)|null  $toDefaultReading  the connection's own reading translated into the default one, when its session reads text differently
      */
     public static function forDriver(
         Captor $inner,
         DriverCanonicalization $canonicalization,
         BindingFormatter $formatter,
         SubjectContext $context,
+        ?Closure $toDefaultReading = null,
     ): self {
         return new self(
             $inner,
@@ -85,6 +99,7 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
             CanonicalizationPipeline::forDriver($canonicalization),
             $context,
             $canonicalization,
+            $toDefaultReading,
         );
     }
 
@@ -111,7 +126,7 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
      *
      * If any statement of a captured result cannot be rendered — an
      * unrepresentable binding, an unbalanced placeholder count, a statement the
-     * pipeline rejects — the WHOLE migration becomes undetermined with the named
+     * pipeline rejects — the whole migration becomes undetermined with the named
      * reason. A partial canonical sequence read as whole is worse than none: a
      * rule would conclude from statements the migration does not actually run.
      */
@@ -202,7 +217,13 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
      */
     private function statementsIn(CapturedStatement $statement): array|SubstitutionFailure
     {
-        $substituted = $this->substitutor->substitute($statement->rawSql, $statement->bindings);
+        // Translated before a placeholder or a delimiter is looked for, because both are found by the
+        // default reading. The captured entry keeps the text the server received.
+        $rawSql = $this->toDefaultReading instanceof Closure
+            ? ($this->toDefaultReading)($statement->rawSql)
+            : $statement->rawSql;
+
+        $substituted = $this->substitutor->substitute($rawSql, $statement->bindings);
 
         if ($substituted instanceof SubstitutionFailure) {
             return $substituted;

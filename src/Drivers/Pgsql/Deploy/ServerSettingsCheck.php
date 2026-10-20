@@ -44,7 +44,7 @@ use Pushery\SQLens\Subjects\SubjectContext;
  *
  * ## The trap this check exists inside, and why it reads `reset_val`
  *
- * SQLens bounds its OWN session on purpose — `lock_timeout` and `statement_timeout` are set by the
+ * SQLens bounds its own session on purpose — `lock_timeout` and `statement_timeout` are set by the
  * session defense before any read happens. So `SHOW lock_timeout` inside a SQLens run answers with
  * SQLens' value, not the server's, and a check that believed it would report this package's hygiene
  * back to the project as its production configuration. The judgments therefore read
@@ -80,7 +80,7 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * ## Why `lock_timeout = 0` is a finding here and not in `lint`
  *
  * Unbounded `lock_timeout` is an ordinary, defensible server setting. What makes it a finding is
- * WHEN this check runs: `sqlens:predeploy` runs immediately before `migrate --force`, so a DDL
+ * when this check runs: `sqlens:predeploy` runs immediately before `migrate --force`, so a DDL
  * statement is pending by construction. A DDL blocked behind a long transaction with no lock timeout
  * waits forever — and because `ALTER TABLE` queues an ACCESS EXCLUSIVE request, every read arriving
  * behind it queues too. The instance stops serving the table while nothing appears to be wrong.
@@ -149,7 +149,7 @@ final readonly class ServerSettingsCheck implements PreflightCheck
         // contract changes.
         $reading = new PgsqlServerSettingsReader($context->session)->read();
 
-        // Read into a local, and asked about THAT. `succeeded()` says the same thing, but the
+        // Read into a local, and asked about that. `succeeded()` says the same thing, but the
         // analyzer cannot see through it to the property — and a nullsafe here would quietly write
         // "could not be read ()" on the day the two disagree.
         if ($reading->failure instanceof UndeterminedReason) {
@@ -171,7 +171,7 @@ final readonly class ServerSettingsCheck implements PreflightCheck
         $reported = [];
         $unreadable = [];
 
-        // Whether anything is actually about to run. Read ONCE, here, rather than per judgment: the
+        // Whether anything is actually about to run. Read once, here, rather than per judgment: the
         // four messages argue from the same fact, and two readings of one fact is two chances for a
         // report to contradict itself.
         $pending = ! $context->pending->isEmpty();
@@ -228,7 +228,7 @@ final readonly class ServerSettingsCheck implements PreflightCheck
             }
         }
 
-        // Fail-closed, and partially: the findings that WERE established still travel, because
+        // Fail-closed, and partially: the findings that were established still travel, because
         // throwing them away would make a run that saw three of four problems report none of them.
         // What the undetermined verdict says is that the check cannot claim the settings are fine —
         // which is a different sentence from "there is nothing here".
@@ -289,7 +289,7 @@ final readonly class ServerSettingsCheck implements PreflightCheck
      *
      * ## Each message is in two halves, and the reason is a false sentence somebody read
      *
-     * The first half says what the setting IS and what it does. The second says what that means for
+     * The first half says what the setting is and what it does. The second says what that means for
      * the change about to run — and only the second is true when a change is actually pending. A
      * consumer ran this gate after a deploy, with nothing pending, and read three findings arguing
      * from "a migration is about to run" in the same report whose first line said no migration was

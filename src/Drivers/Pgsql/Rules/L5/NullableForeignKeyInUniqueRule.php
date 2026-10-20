@@ -41,7 +41,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * The preview tier exists so a rule added in a release cannot start failing somebody's pipeline
  * over code nobody touched. Before 1.0 a new rule arrives in a minor, which a `^0.N` constraint
  * does not install on its own, so this package's default is `stable` before 1.0 and flips to
- * `preview` after — at ONE named place ({@see RuleMetadataDefaults::DEFAULT_STABILITY}), so the flip
+ * `preview` after — at one named place ({@see RuleMetadataDefaults::DEFAULT_STABILITY}), so the flip
  * is one line rather than a sweep, and a machine guard holds it.
  *
  * Overriding it here would add this rule to the exceptions that guard carries, each with a reason
@@ -120,7 +120,7 @@ final class NullableForeignKeyInUniqueRule extends AbstractCatalogRule implement
     }
 
     /**
-     * ONE message for the table and every key on it.
+     * One message for the table and every key on it.
      *
      * A catalog finding is located at the object and results are deduplicated by rule id and
      * location, so a verdict per index would arrive as one with the rest dropped without a word.
@@ -141,8 +141,9 @@ final class NullableForeignKeyInUniqueRule extends AbstractCatalogRule implement
             .'rows sharing every other column and carrying a NULL there all insert. So the constraint holds for '
             .'exactly the rows that never needed it. A key made only of foreign keys is a relationship, and a '
             .'relationship with a missing side is not one. Either make the column NOT NULL, or declare the key '
-            .'UNIQUE ... NULLS NOT DISTINCT (Blueprint: ->nullsNotDistinct()) so the NULL rows collide the way '
-            .'the key says they should.',
+            .'UNIQUE ... NULLS NOT DISTINCT so the NULL rows collide the way the key says they should. The '
+            .'Blueprint method ->nullsNotDistinct() writes the clause from Laravel 12.3 on; on 12.0 to 12.2 it is '
+            .'accepted and ignored, and the index comes out without it, so write that index with DB::statement() there.',
             $object->qualifiedName,
             count($broken) === 1 ? 'a unique key' : count($broken).' unique keys',
             count($broken) === 1 ? 'has' : 'have',

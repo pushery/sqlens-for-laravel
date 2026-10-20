@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Findings;
 
+use Pushery\SQLens\ProjectPath;
 use Pushery\SQLens\Subjects\MigrationAnchor;
 use Pushery\SQLens\Subjects\MigrationDirection;
 use Pushery\SQLens\Subjects\SchemaObjectType;
@@ -20,7 +21,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * Two determinism rules are enforced here, because they are the classic breakage
  * points: file paths are stored relative to the project root (an absolute path
  * would differ between a dev Mac and CI), and the sort key is stable across runs.
- * A catalog location NEVER carries a DSN or password — only the connection name;
+ * A catalog location never carries a DSN or password — only the connection name;
  * naming which instance was audited is a deliberate statement (read/write split).
  */
 final readonly class Location
@@ -55,7 +56,7 @@ final readonly class Location
     ): self {
         return new self(
             kind: LocationKind::Migration,
-            file: self::relativize($file, $projectRoot),
+            file: ProjectPath::relative($file, $projectRoot),
             line: $line,
             migrationClass: $migrationClass,
             statementIndex: $statementIndex,
@@ -91,7 +92,7 @@ final readonly class Location
             kind: LocationKind::Catalog,
             // Repo-relative, the same way a callsite is: a reporter writes this path into SARIF,
             // and an absolute path from somebody's machine is no use to a reader of a pull request.
-            file: $anchor instanceof MigrationAnchor ? self::relativize($anchor->file, $projectRoot) : null,
+            file: $anchor instanceof MigrationAnchor ? ProjectPath::relative($anchor->file, $projectRoot) : null,
             line: $anchor?->line,
             driver: $driver,
             instance: $instance,
@@ -108,7 +109,7 @@ final readonly class Location
     ): self {
         return new self(
             kind: LocationKind::Callsite,
-            file: self::relativize($file, $projectRoot),
+            file: ProjectPath::relative($file, $projectRoot),
             line: $line,
             method: $method,
         );
@@ -186,18 +187,5 @@ final readonly class Location
         };
 
         return array_filter($projection, static fn (string|int|null $value): bool => $value !== null);
-    }
-
-    /**
-     * Strip a leading project root so the stored path is relative. Pure string
-     * work — no Foundation base_path(), so the fast path stays connection-free.
-     */
-    private static function relativize(string $path, string $projectRoot): string
-    {
-        $root = rtrim($projectRoot, '/').'/';
-
-        return str_starts_with($path, $root)
-            ? substr($path, strlen($root))
-            : ltrim($path, '/');
     }
 }

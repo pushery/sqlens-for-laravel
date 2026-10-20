@@ -99,7 +99,7 @@ final readonly class AnalyseRuleCatalog
      * **Severity `High`, like its interpolation sibling and for a sharper reason.** An identifier is
      * part of the statement's grammar and has no binding form at all, so there is no safe way to
      * pass user input through — only an allowlist. Where the interpolation rule reports a value that
-     * SHOULD have been bound, this reports one that CANNOT be.
+     * should have been bound, this reports one that cannot be.
      */
     private static function dynamicIdentifier(): AnalyseRuleMetadata
     {
@@ -191,13 +191,13 @@ final readonly class AnalyseRuleCatalog
      *
      * **`stable` rather than `preview`, and the question was put rather than skipped.** The
      * package's own breaking-change detector raises it on any new rule: *ship it as `preview` if
-     * its false-positive behavior is not settled yet.* This one HAS a false-positive class and it
+     * its false-positive behavior is not settled yet.* This one has a false-positive class and it
      * is written down in the example register — a call reached through a variable or a container
      * binding is invisible to the collectors, so an annotation covering only such a call reads as
      * stale, and the rule then asks somebody to delete something true.
      *
      * It ships stable anyway, for three reasons that hold together. That false-positive class is
-     * the SAME syntactic limit {@see UnjustifiedRawSqlRule} has, and that rule is stable. The
+     * the same syntactic limit {@see UnjustifiedRawSqlRule} has, and that rule is stable. The
      * severity is `info`, so a false positive costs a line in a report rather than a red build.
      * And the consuming project this was built for runs a hand-written check with the identical
      * limit as a hard gate today — shipping the replacement behind an opt-in would ask them to

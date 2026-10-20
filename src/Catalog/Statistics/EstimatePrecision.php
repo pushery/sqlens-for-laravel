@@ -12,7 +12,7 @@ namespace Pushery\SQLens\Catalog\Statistics;
  * a consumer can act on. A number is either something the server computed while answering, or
  * something it remembered from the last time somebody asked it to look.
  *
- * This is NOT a field anybody sets. {@see Estimate} derives it from the freshness, which follows
+ * This is not a field anybody sets. {@see Estimate} derives it from the freshness, which follows
  * from which factory built the value, so there is no second place for it to be stated and therefore
  * no way for two statements to disagree. A precision a call site passed would be a precision a call
  * site could pass wrongly — and there is exactly one way to pass it wrongly, the way that launders

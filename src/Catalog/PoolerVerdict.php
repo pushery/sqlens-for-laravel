@@ -36,7 +36,15 @@ namespace Pushery\SQLens\Catalog;
  */
 enum PoolerVerdict: string
 {
-    /** The session keeps one backend. Settings read through it belong to one server. */
+    /**
+     * The session keeps one backend. Settings read through it belong to one server.
+     *
+     * Measured, and the measurement wins over a configuration that looks like a pooler: a session
+     * pool keeps one backend for the whole session and is direct for this purpose, and only the
+     * measurement tells it from a transaction pool. A pooler port or host travels beside the
+     * verdict as a signal, with the one thing the measurement cannot rule out: a transaction pool
+     * under no load can hand back the same backend twice.
+     */
     case None = 'none';
 
     /**
@@ -48,8 +56,7 @@ enum PoolerVerdict: string
     case Transaction = 'transaction';
 
     /**
-     * The probe could not answer — it errored, or the configuration says pooler while the behavior
-     * says otherwise and neither side is conclusive.
+     * The probe could not answer: it failed before it measured anything.
      *
      * Reported, never silently treated as {@see self::None}. Whoever reads the report has to be able
      * to tell "SQLens checked and this is a direct connection" from "SQLens could not check".

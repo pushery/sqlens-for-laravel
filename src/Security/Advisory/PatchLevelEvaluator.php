@@ -41,7 +41,7 @@ final readonly class PatchLevelEvaluator
             }
         }
 
-        // Named with the FIRST candidate, which is the most specific reading. A message that said
+        // Named with the first candidate, which is the most specific reading. A message that said
         // "neither 8.4 nor 8 is known" would be true and useless; a reader wants the cycle they
         // believe they are running.
         return new PatchAssessment(PatchVerdict::CycleUnknown, $reported, $candidates[0][0], null, $data);

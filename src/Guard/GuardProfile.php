@@ -26,7 +26,7 @@ use Pushery\SQLens\Exceptions\InvalidGuardProfile;
  *
  * `phpstan.neon.dist` runs `checkOctaneCompatibility: true`, so a guard object holding request state
  * on a container singleton is a gate failure rather than a production incident. Nothing here changes
- * after construction, and the cumulative slow-query accounting that DOES need per-request state
+ * after construction, and the cumulative slow-query accounting that does need per-request state
  * lives in the guardrail that owns it rather than in the profile it reads.
  */
 final readonly class GuardProfile
@@ -238,7 +238,7 @@ final readonly class GuardProfile
     }
 
     /**
-     * A boolean that DEFAULTS TO FALSE and refuses anything that is not one.
+     * A boolean that defaults to false and refuses anything that is not one.
      *
      * No coercion, deliberately. `'false'` is truthy in PHP, so a project writing it in an
      * environment-driven config would turn a guardrail on while believing it had turned it off —

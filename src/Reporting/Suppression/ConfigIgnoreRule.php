@@ -77,7 +77,7 @@ final readonly class ConfigIgnoreRule
 
     /**
      * A path filter narrows an ignore to part of the repo. A finding with no file
-     * — a catalog object, say — is therefore NOT covered by a path-scoped ignore:
+     * — a catalog object, say — is therefore not covered by a path-scoped ignore:
      * the entry says "here", and a catalog object is not there.
      */
     private function matchesPath(Finding $finding): bool

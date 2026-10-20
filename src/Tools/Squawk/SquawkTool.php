@@ -105,7 +105,7 @@ final readonly class SquawkTool implements Tool
     /**
      * The rules SQLens has no rule of its own for — read from the shipped map.
      *
-     * Deliberately NOT every rule the tool has. A rule we already cover is not a check somebody
+     * Deliberately not every rule the tool has. A rule we already cover is not a check somebody
      * loses by not installing it, and counting it would inflate the number in the one direction
      * that would make this package look better.
      */

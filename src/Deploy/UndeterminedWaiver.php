@@ -53,7 +53,7 @@ final readonly class UndeterminedWaiver
      * Waives whatever could not answer, which is what `--allow-undetermined` has always meant.
      *
      * Kept as its own state rather than "a list containing every case": the flag is a decision
-     * about THIS run made by somebody watching it, and it must not start meaning something
+     * about this run made by somebody watching it, and it must not start meaning something
      * narrower the day a case is added to the enum.
      */
     public static function everyReason(): self
@@ -92,7 +92,7 @@ final readonly class UndeterminedWaiver
     }
 
     /**
-     * The reasons this waiver NAMED on this run, for the line a person reads, wherever they came
+     * The reasons this waiver named on this run, for the line a person reads, wherever they came
      * from: an unanswered check, or a finding about a migration that could not be determined.
      *
      * Empty when it waives whatever could not answer. `--allow-undetermined` and `true` are not a
@@ -126,7 +126,7 @@ final readonly class UndeterminedWaiver
      * Is this waiver open at all — for every reason, or for a named few?
      *
      * Separate from {@see opensForReasons()} on purpose, and the difference is what gets reported
-     * rather than what gets decided. `opensForReasons()` answers about THIS run's unanswered checks and is what
+     * rather than what gets decided. `opensForReasons()` answers about this run's unanswered checks and is what
      * the exit code turns on; this answers about the waiver itself, which is the fact a deploy log
      * needs even on a run where nothing went unanswered. Collapsing them would make an escape hatch
      * invisible exactly when it changed nothing — and an escape hatch nobody can see used is the
@@ -138,7 +138,7 @@ final readonly class UndeterminedWaiver
     }
 
     /**
-     * Does this waiver cover EVERY reason an answer could not be given on this run?
+     * Does this waiver cover every reason an answer could not be given on this run?
      *
      * Every one, not any: the caller has already established that the run is blocked by nothing
      * else, so a single uncovered reason is a question the deploy is about to proceed past

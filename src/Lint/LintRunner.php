@@ -25,6 +25,7 @@ use Pushery\SQLens\Capture\PendingResolution;
 use Pushery\SQLens\Capture\PendingSkipReason;
 use Pushery\SQLens\Capture\SessionGuard;
 use Pushery\SQLens\Capture\Shadow\GuardDecision;
+use Pushery\SQLens\Capture\Shadow\ShadowNoteRecorder;
 use Pushery\SQLens\Capture\Shadow\ShadowSweepRecorder;
 use Pushery\SQLens\Capture\SingleFileFailure;
 use Pushery\SQLens\Capture\SingleFileResolver;
@@ -57,6 +58,7 @@ use Pushery\SQLens\Drivers\DriverResolutionFailure;
 use Pushery\SQLens\Drivers\DriverResolutionReason;
 use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Drivers\EngineIdentity;
+use Pushery\SQLens\Drivers\MeasuredServerVersion;
 use Pushery\SQLens\Drivers\ServerVersionFloor;
 use Pushery\SQLens\Engine\ResolvedServerVersion;
 use Pushery\SQLens\Engine\ServerVersionResolver;
@@ -106,7 +108,7 @@ use Throwable;
  * The lint suite's spine: it drives one run from a connection and a set of migration
  * paths to a three-valued result, a reproducibility header, and an exit code — the
  * whole pipeline (pending resolution → capture → canonicalization → rules → findings)
- * wired into ONE pass, so the console command stays a thin translation of options in
+ * wired into one pass, so the console command stays a thin translation of options in
  * and a report out.
  *
  * It refuses to guess and it never greens silently: an unsupported engine stops the
@@ -146,7 +148,7 @@ final readonly class LintRunner implements LintRuns
      * @param  list<string>  $files  the migration files this run judges instead of the pending set — the DB-free fast path, and empty means the pending set
      * @param  list<string>|null  $categories  category values to scope to (null = the config's, empty = all)
      * @param  bool  $applyBaseline  whether to suppress against the configured baseline; the baseline command turns this OFF, because it is WRITING that baseline and must see every finding, not the ones the previous baseline already accepted (config and annotation suppression still apply — those findings are handled by other means and need no baselining)
-     * @param  bool|null  $includeVendorMigrations  whether a migration discovered inside `vendor/` is enumerated. Null reads `sqlens.security.include_vendor_migrations`, which is what every ordinary caller wants. `sqlens:predeploy` passes TRUE and does not read the config, because a package's migration really does run during a deploy and really can take a lock — see PreflightService for that reasoning. A caller that NAMED its paths gets them unfiltered regardless.
+     * @param  bool|null  $includeVendorMigrations  whether a migration discovered inside `vendor/` is enumerated. Null reads `sqlens.security.include_vendor_migrations`, which is what every ordinary caller wants. `sqlens:predeploy` passes TRUE and does not read the config, because a package's migration really does run during a deploy and really can take a lock — see PreflightService for that reasoning. A caller that named its paths gets them unfiltered regardless.
      * @param  list<Finding>  $crossSuiteFindings  what the AUDIT half of the same security run reported, so the cross-source dedupe can see the catalog side this pass does not produce. Empty for every caller that runs the lint suite on its own, which is the honest answer there: a lone lint run has no catalog half, and a layer that hides a migration finding on its behalf would be hiding it for nobody
      */
     public function run(?string $connection, ?array $migrationPaths, CaptureMode $mode, ?string $assumeServerVersion = null, ?int $level = null, ?array $categories = null, bool $applyBaseline = true, ?bool $strictTools = null, array $files = [], ?GuardDecision $guard = null, bool $roundtrip = false, ?DebtMode $debt = null, ?bool $includeVendorMigrations = null, array $crossSuiteFindings = []): LintOutcome
@@ -217,7 +219,7 @@ final readonly class LintRunner implements LintRuns
             ?? $this->config->get('sqlens.security.include_vendor_migrations') === true);
 
         // ────────────────────────────────────────────────────────────────────────────────────
-        // The connect the run ALREADY makes, moved above the one banner read instead of 180 lines
+        // The connect the run already makes, moved above the one banner read instead of 180 lines
         // below it.
         //
         // The banner is still acquired exactly once and threaded from here — that has not changed
@@ -228,16 +230,16 @@ final readonly class LintRunner implements LintRuns
         // a MariaDB and a null banner really is no proof. Measured against a reachable MySQL 8.4
         // whose connection answers 8.4.10 from a query one line later.
         //
-        // This is NOT a new connection. `boundSourceSession()` opened exactly this one, on exactly
-        // this branch, unconditionally — it has moved, not appeared. And it moved EARLIER, so the
+        // This is not a new connection. `boundSourceSession()` opened exactly this one, on exactly
+        // this branch, unconditionally — it has moved, not appeared. And it moved earlier, so the
         // session budget is applied from a sooner point rather than a later one.
         //
         // It also closes the handle-replacement window structurally. The old comment below warned
         // that forcing the connection open between the read and the check could REPLACE the PDO,
         // so a second read would answer where the first did not; the answer at the time was to
-        // freeze the FIRST (null) value and let the check use it. That is backwards — the stale
+        // freeze the first (null) value and let the check use it. That is backwards — the stale
         // header was the defect, not the more accurate check — and it is what produced this bug.
-        // With the force now happening BEFORE the only read, there is no interval left in which
+        // With the force now happening before the only read, there is no interval left in which
         // two reads could disagree.
         //
         // Three guards on it, and each one is load-bearing:
@@ -245,7 +247,7 @@ final readonly class LintRunner implements LintRuns
         //  - `$file === null`: the single-file fast path returns before any of this and must stay
         //    connectionless. `tests/Feature/Lint/FastPathNoDatabaseTest.php` counts ATTEMPTS with a
         //    spy, so a regression here is red rather than quiet.
-        //  - a driver this build supports: opening a `sqlite` connection CREATES THE FILE, and
+        //  - a driver this build supports: opening a `sqlite` connection creates the file, and
         //    sqlite is a reserved non-goal engine that is refused a few lines below anyway. Read
         //    from the configuration, which needs no connection to answer.
         //  - a failed connect is swallowed: an unreachable server is named by the pending
@@ -255,11 +257,11 @@ final readonly class LintRunner implements LintRuns
 
         // The server version is resolved once — flag → config → detected → undetermined —
         // and drives both the header (which version, from where) and rule activation.
-        // Acquired ONCE, here, and threaded from here on — never read a second time inside the
+        // Acquired once, here, and threaded from here on — never read a second time inside the
         // findings block.
         //
         // BETWEEN the open above and this line there is deliberately nothing. The session bounding
-        // that used to sit here comes AFTER, and the order is not cosmetic: `SessionGuard` runs
+        // that used to sit here comes after, and the order is not cosmetic: `SessionGuard` runs
         // statements, and a statement can make Laravel RECONNECT — replacing the handle and with it
         // the banner. Measured while building this change: with the bounding in between, a test
         // that injects a MariaDB banner through `setPdo()` had it silently swapped for the real
@@ -283,7 +285,19 @@ final readonly class LintRunner implements LintRuns
 
         $strict = $this->resolveStrictTools($strictTools);
 
-        // BEFORE the engine is resolved, and that placement is the whole point. An id in a baseline
+        // A baseline that cannot be READ stops the run here, before the engine is resolved, for the
+        // reason the paragraph below gives: the file is the project's own. The refusal carries the
+        // reason rather than a finding, as an unsupported engine's does, so every caller ends on the
+        // misconfiguration exit with the file named. Thrown out of the run instead, it would reach only
+        // the callers that catch it, and every other one would end on Laravel's exit 1, which reads as
+        // findings above the gate, or answer an MCP client with a generic error.
+        try {
+            $baselineViolations = $applyBaseline ? $this->baselineViolations() : [];
+        } catch (UnreadableBaseline $failure) {
+            return $this->unreadableBaseline($failure, $this->buildContext($connectionName, $today, $mode, $resolvedVersion, $activeLevel, 0, 0, $activeCategories, [], $strict, $roundtrip, guard: $guard), $connectionName);
+        }
+
+        // Before the engine is resolved, and that placement is the whole point. An id in a baseline
         // that names no rule suppresses nothing while looking set, and — unlike an ignore list — it
         // cannot be noticed from the output: an entry matching nothing produces exactly what a
         // matching entry produces once the code is fixed. The audit half has refused this since the
@@ -297,12 +311,15 @@ final readonly class LintRunner implements LintRuns
         // The ignore list is checked whatever the baseline flag says: the two are different files
         // answering different questions, and `--no-baseline` is an exit from the baseline, not a
         // license to stop reading `sqlens.ignore`.
+        //
+        // Kept apart by the file each list came from, because the refusal names that file: an
+        // ignore-list typo explained with the baseline's sentence sends a reader to the wrong file.
         $configViolations = [
-            ...$applyBaseline ? $this->baselineViolations() : [],
-            ...$this->ignoreViolations(),
+            'baseline' => $baselineViolations,
+            'sqlens.ignore' => $this->ignoreViolations(),
         ];
 
-        if ($configViolations !== []) {
+        if ($configViolations['baseline'] !== [] || $configViolations['sqlens.ignore'] !== []) {
             $configured = EffectiveConnectionConfig::driverForConnection($this->config, $connectionName);
 
             return $this->refusedConfig(
@@ -325,7 +342,7 @@ final readonly class LintRunner implements LintRuns
             return $this->unsupported($driver, $this->buildContext($connectionName, $today, $mode, $resolvedVersion, $activeLevel, 0, 0, $activeCategories, [], $strict, $roundtrip, guard: $guard), $connectionName);
         }
 
-        // Hand the run's day to the driver, so the rules it builds judge on the SAME reading the
+        // Hand the run's day to the driver, so the rules it builds judge on the same reading the
         // header names. The `instanceof` is the whole reason this is a separate interface rather than
         // a parameter on `Driver::rules()`: two of that method's five callers only ENUMERATE rules
         // and have no run at all, and a required parameter would make them invent a date — inside an
@@ -335,20 +352,20 @@ final readonly class LintRunner implements LintRuns
             $driver = $driver->withRunClock($today);
         }
 
-        // The external tools, diagnosed once and only those with jurisdiction over THIS driver:
+        // The external tools, diagnosed once and only those with jurisdiction over this driver:
         // an available tool's version reaches the header, a missing one becomes a named result
         // (never a silent loss of rules), and — when the run is strict — a fixable absence fails
         // it. A tool that could never have spoken here is absent from all three, because naming
         // it would state a loss the project does not have and, under a strict profile, fail its
         // build for an install that could not have helped.
         //
-        // Diagnosed AFTER the driver is known, therefore: reading it earlier would have meant
+        // Diagnosed after the driver is known, therefore: reading it earlier would have meant
         // filtering later, at each of the three consumers, and two of them would eventually be
         // one consumer too few.
         $diagnostics = $this->toolLocator->diagnoseFor($driver->key());
         $toolVersions = $this->toolVersions($diagnostics);
 
-        // The supported-version floor, decided ONCE — late enough that the driver, which
+        // The supported-version floor, decided once — late enough that the driver, which
         // declares the floor, is known; early enough to reach both the run header above the
         // findings and the notice among them.
         //
@@ -388,7 +405,7 @@ final readonly class LintRunner implements LintRuns
         // objects rather than a second reading of the run's settings.
         $toolGate = new ToolFindingGate($gate, $categoryFilter);
 
-        // The version axis, last and three-valued: a rule outside a KNOWN version's
+        // The version axis, last and three-valued: a rule outside a known version's
         // window produces no finding; under an UNKNOWN version a version-independent rule
         // still runs, while a version-dependent one becomes an undetermined finding
         // (emitted below) — never a silent skip and never a guess against a default.
@@ -409,7 +426,7 @@ final readonly class LintRunner implements LintRuns
             : [];
         $activeRules = array_values(array_filter($activeRules, static fn (Rule $rule): bool => ! $rule instanceof StatisticsDependent));
 
-        // Hidden is EVERYTHING this run did not apply, not only what the level gate held back.
+        // Hidden is everything this run did not apply, not only what the level gate held back.
         //
         // It used to be `count($gate->hidden($registry))`, which counts one of the four axes. A run
         // narrowed by `--category`, or one whose rules fell outside the server's version window,
@@ -419,19 +436,19 @@ final readonly class LintRunner implements LintRuns
         //
         // Defined as total-minus-active so the two suites cannot drift: the audit says the same
         // thing with the same arithmetic, and `active + hidden == registered` is an invariant a
-        // test can hold both of them to. WHY each rule is missing is not lost — the version gate
+        // test can hold both of them to. Why each rule is missing is not lost — the version gate
         // and the statistics axis each report their own named undetermined finding.
-        $context = $this->buildContext($connectionName, $today, $mode, $resolvedVersion, $activeLevel, count($activeRules), count($registry->all()) - count($activeRules), $activeCategories, $toolVersions, $strict, $roundtrip, $floorFailure, $guard);
+        $context = $this->buildContext($connectionName, $today, $mode, $resolvedVersion, $activeLevel, count($activeRules), count($registry->all()) - count($activeRules), $activeCategories, $toolVersions, $strict, $roundtrip, $floorFailure, $guard, $driver);
 
         // The resolved version rides into the rule context — the detected version or the
         // pin alike, or a named "could not determine". A rule branches only on the version
         // itself, never on its source, so a pin and a live read produce the same verdict
         // (the determinism the pin exists to guarantee); the source travels only so a
-        // version-windowed data source can report the run's OWN reason for having none.
+        // version-windowed data source can report the run's own reason for having none.
         $subjectContext = $this->captors->subjectContextFor($driver->key())->withResolvedServerVersion($resolvedVersion);
 
         // Strict tool mode: a tool the platform can run but that is not installed fails
-        // the run BEFORE any capture — a green CI without it would just be a run with
+        // the run before any capture — a green CI without it would just be a run with
         // fewer rules. The missing tools are still named as findings, and the exit is
         // the misconfiguration code. A platform with no build for the tool never trips
         // this (it is a documented degradation, not a fixable absence).
@@ -444,11 +461,13 @@ final readonly class LintRunner implements LintRuns
         // Everything after this point — canonicalization, rules, gates, suppression,
         // the reporter — is the same code either way.
         //
-        // A shadow capture reports what its orphan sweep did through this recorder, because the
-        // capture run it returns has passed through decorators that build new runs.
+        // A shadow capture reports what its orphan sweep did, and what its setup said for a person
+        // (a refusal's detail, a dump directive it did not replay), through these recorders, because
+        // the capture run it returns has passed through decorators that build new runs.
         $sweepRecorder = new ShadowSweepRecorder;
+        $noteRecorder = new ShadowNoteRecorder;
         $captor = $mode === CaptureMode::Shadow && $guard instanceof GuardDecision
-            ? $this->captors->shadow($connectionName, $guard, $roundtrip, $sweepRecorder)
+            ? $this->captors->shadow($connectionName, $guard, $roundtrip, $sweepRecorder, $noteRecorder)
             : $this->captors->pretend($connectionName);
 
         // A driver the manager supports but the factory has no capture wiring for
@@ -457,7 +476,7 @@ final readonly class LintRunner implements LintRuns
             return $this->unsupported($captor, $context, $connectionName);
         }
 
-        // The subject source is the ONLY thing the fast path changes: a single --file
+        // The subject source is the only thing the fast path changes: a single --file
         // migration instead of the pending set. A file that does not resolve to a
         // migration is a named misconfiguration, never a silent empty run.
         if ($files !== []) {
@@ -466,7 +485,7 @@ final readonly class LintRunner implements LintRuns
             foreach ($files as $index => $named) {
                 $single = $this->resolveSingleFile($named, $migrationPaths, $connectionName);
 
-                // The FIRST failure ends the run, rather than linting the rest and mentioning it.
+                // The first failure ends the run, rather than linting the rest and mentioning it.
                 // A run that silently judged three of four files and exited 2 would leave the
                 // reader with a report whose denominator is wrong — and this is a misconfiguration,
                 // which is a thing to fix before running, not a partial result to interpret.
@@ -474,7 +493,7 @@ final readonly class LintRunner implements LintRuns
                     return $this->fileMisconfiguration($single, $named, $context, $connectionName);
                 }
 
-                // Numbered in the order they were NAMED. The pending path numbers by migration
+                // Numbered in the order they were named. The pending path numbers by migration
                 // name; here the caller's order is the only one there is, and a pre-commit hook
                 // hands them over in the order git staged them.
                 $subjects[] = $single->withOrderIndex($index);
@@ -486,18 +505,18 @@ final readonly class LintRunner implements LintRuns
             // before the banner read that needs the handle. It used to happen here, and here was
             // 180 lines too late for the one value that depends on it.
 
-            // The FIRST point at which the engine can be identified, and the last one before any
+            // The first point at which the engine can be identified, and the last one before any
             // rule reasons about it. Laravel's connection is lazy, so every earlier anchor sees
             // no banner at all — one of them was tried, and it would have refused the run for
             // every healthy MySQL user, from the check meant to protect them.
             //
-            // A refusal here is deliberate and is not a new decision: the shipped message in all
-            // seven locales already says "Nothing was checked", which is only true if nothing
-            // runs. MariaDB answers Laravel's `mysql` driver without sharing MySQL 8.4 semantics,
-            // so every rule below would produce advice that is confident, specific and about the
-            // wrong product. Still before `resolvePending()`'s first catalog query, before the
-            // capture, and before any shadow database is created.
-            // The banner acquired at the TOP, threaded — never read a second time here.
+            // A refusal here is deliberate and is not a new decision: the shipped message already
+            // says "Nothing was checked", which is only true if nothing runs. MariaDB answers
+            // Laravel's `mysql` driver without sharing MySQL 8.4 semantics, so every rule below
+            // would produce advice that is confident, specific and about the wrong product. Still
+            // before `resolvePending()`'s first catalog query, before the capture, and before any
+            // shadow database is created. The banner acquired at the TOP, threaded — never read a
+            // second time here.
             //
             // This called `detectedBanner()` again and it was wrong, measurably: between that
             // first read and this line the run forces the connection open, and forcing it can
@@ -545,7 +564,7 @@ final readonly class LintRunner implements LintRuns
 
         // Kept for the outcome. Six of this method's seven exits are failure paths with no capture
         // at all, and null is the right answer there rather than a missing one — so only the exit
-        // that HAS a run carries these out.
+        // that has a run carries these out.
         $pendingFiles = array_map(
             static fn (PendingMigration $migration): string => $migration->file,
             $resolution->migrations,
@@ -600,9 +619,9 @@ final readonly class LintRunner implements LintRuns
 
         $findings = [
             ...$findings,
-            ...$this->annotationNotices($annotationReferences, $connectionName, $subjectContext),
-            ...$this->deprecatedSuppressionNotices($annotationReferences, $connectionName, $subjectContext),
-            ...$this->undescribedToolRuleNotices($annotationReferences, $connectionName, $subjectContext),
+            ...$this->annotationNotices($annotationReferences, $subjectContext),
+            ...$this->deprecatedSuppressionNotices($annotationReferences, $subjectContext),
+            ...$this->undescribedToolRuleNotices($annotationReferences, $subjectContext),
         ];
 
         // A pin that disagreed with the connected server is its own finding — the
@@ -620,7 +639,7 @@ final readonly class LintRunner implements LintRuns
             $findings[] = $this->unreadablePinFinding($resolvedVersion->unreadablePin, $connectionName, $subjectContext);
         }
 
-        // The floor, decided far above, reported HERE — among the findings, after they were
+        // The floor, decided far above, reported here — among the findings, after they were
         // produced. That placement is the whole of the decision: the run continues, says
         // unmistakably what its verdicts are worth, and lets the reader act on them anyway.
         // Refusing instead would take a qualified report away from exactly the readers least
@@ -652,7 +671,7 @@ final readonly class LintRunner implements LintRuns
             $findings[] = $this->statisticsUnavailableFinding($rule, $connectionName, $subjectContext);
         }
 
-        // What the external tool adds, folded in HERE — after the rules produced their own
+        // What the external tool adds, folded in here — after the rules produced their own
         // verdicts and before suppression touches anything.
         //
         // Before suppression because de-duplication has to happen first: a baseline written from
@@ -669,7 +688,7 @@ final readonly class LintRunner implements LintRuns
             }
         }
 
-        // The debt pass runs HERE — after the rules and the tool contribution, before suppression,
+        // The debt pass runs here — after the rules and the tool contribution, before suppression,
         // and after every early return above.
         //
         // After the early returns is not an accident of placement. A run that was SKIPPED (no
@@ -686,7 +705,7 @@ final readonly class LintRunner implements LintRuns
         // while a suppressed debt finding came through anyway.
         $findings = [...$findings, ...$this->debtFindings($debt, $findings, $registry->all(), $driver->key(), $subjectContext, $files !== [], $today)];
 
-        // A configured baseline whose file is not there. Appended HERE, with the debt notices and
+        // A configured baseline whose file is not there. Appended here, with the debt notices and
         // before suppression, for the same reason they are: it is a finding, and a finding that
         // bypassed the suppression chain would be a second pipeline that drifts from the first.
         //
@@ -725,7 +744,7 @@ final readonly class LintRunner implements LintRuns
             $this->baselineScope($activeRules, $toolGate, $readMigrations, $existingMigrations, $files !== []),
         );
 
-        // …and each one is NAMED, because "kept in the file" without a word is the same silence as
+        // …and each one is named, because "kept in the file" without a word is the same silence as
         // deleting it: nobody learns that this run checked less than the last one.
         //
         // Added to the VISIBLE findings rather than to `$findings`, which the resolver has already
@@ -761,6 +780,7 @@ final readonly class LintRunner implements LintRuns
             examined: true,
             staleBaselineBreaks: $staleBreaks,
             unreadMigrations: array_values(array_diff($existingMigrations, $readMigrations)),
+            shadowNotes: $noteRecorder->notes(),
         );
     }
 
@@ -795,17 +815,18 @@ final readonly class LintRunner implements LintRuns
     /**
      * Open the source connection, and say whether it opened.
      *
-     * Split out of {@see self::boundSourceSession()} so the connect can happen BEFORE the banner
+     * Split out of {@see self::boundSourceSession()} so the connect can happen before the banner
      * read that depends on it  while the bounding still happens immediately after.
      *
      * A reserved engine is never opened. `sqlite` is refused a few lines further down as a non-goal
-     * driver — and opening one CREATES THE FILE, so connecting first to learn a version nobody will
+     * driver — and opening one creates the file, so connecting first to learn a version nobody will
      * use would leave a database behind on a run that refuses. The key is read from the
-     * configuration, which answers without a connection.
+     * configuration, which answers without a connection, and the reserved set is the registry's,
+     * asked through the manager.
      */
     private function openSource(string $connectionName): bool
     {
-        if (in_array($this->driverKey($connectionName), ['mariadb', 'sqlite', 'sqlsrv'], true)) {
+        if ($this->drivers->isReserved($this->driverKey($connectionName))) {
             return false;
         }
 
@@ -915,19 +936,13 @@ final readonly class LintRunner implements LintRuns
      * Reuses the audit half's check rather than repeating it — a second implementation would be a
      * second thing to keep in step, and the two would disagree exactly once, quietly.
      *
-     * A baseline that cannot be READ falls through silently: it has its own refusal further along
-     * with its own message, and answering here would replace "this file is unparseable" with "its
-     * rule ids could not be checked" — the less useful half of the same news, arriving first.
-     *
      * @return list<ConfigViolation>
+     *
+     * @throws UnreadableBaseline when the file cannot be read, which the run turns into its refusal
      */
     private function baselineViolations(): array
     {
-        try {
-            $baseline = new ConfiguredBaseline($this->config, $this->projectRoot())->forRun();
-        } catch (UnreadableBaseline) {
-            return [];
-        }
+        $baseline = new ConfiguredBaseline($this->config, $this->projectRoot())->forRun();
 
         return BaselineRuleIds::violations($baseline, $this->drivers->everyRule(), $this->drivers->everyToolPrefix());
     }
@@ -952,7 +967,7 @@ final readonly class LintRunner implements LintRuns
      * @param  list<RuleIdReference>  $references  what {@see annotationReferences()} collected
      * @return list<Finding>
      */
-    private function annotationNotices(array $references, string $connectionName, SubjectContext $subjectContext): array
+    private function annotationNotices(array $references, SubjectContext $subjectContext): array
     {
         if ($references === []) {
             return [];
@@ -964,11 +979,14 @@ final readonly class LintRunner implements LintRuns
             fn (ConfigViolation $violation): Finding => Finding::undetermined(
                 RunnerNotice::AnnotationUnknownRule->value,
                 RunnerNotice::MESSAGE_PREFIX,
-                $violation->message().' The annotation carries a reason, so it reads as a decision '
-                    .'somebody weighed — and it suppresses nothing. The run continues: a migration that '
-                    .'shipped years ago must not fail a run because a rule was renamed since.',
+                $violation->message().' The finding it was written to hide is still reported, and the '
+                    .'annotation carries a reason, so it reads as a decision somebody weighed while it '
+                    .'suppresses nothing. The run continues: a migration that shipped years ago must not fail '
+                    .'a run because a rule was renamed since.',
                 UndeterminedReason::NotConfigured,
-                Location::inCallsite('annotation', 0, 'connection '.$connectionName, $this->projectRoot()),
+                // At the annotation itself, which names its migration class: two stale annotations are
+                // two notices rather than one location the result keeps a single finding for.
+                Location::inCallsite('annotation', 0, $violation->path, $this->projectRoot()),
                 RunnerNotice::AnnotationUnknownRule->category(),
                 RunnerNotice::AnnotationUnknownRule->level(),
                 RunnerNotice::AnnotationUnknownRule->stability(),
@@ -1032,7 +1050,7 @@ final readonly class LintRunner implements LintRuns
      * @param  list<RuleIdReference>  $annotationReferences
      * @return list<Finding>
      */
-    private function deprecatedSuppressionNotices(array $annotationReferences, string $connectionName, SubjectContext $subjectContext): array
+    private function deprecatedSuppressionNotices(array $annotationReferences, SubjectContext $subjectContext): array
     {
         $references = [
             ...ConfigIgnoreReferences::of($this->config->get('sqlens.ignore')),
@@ -1043,23 +1061,28 @@ final readonly class LintRunner implements LintRuns
             return [];
         }
 
-        $notices = $this->ruleIdValidator()->deprecationNotices($references);
+        $validator = $this->ruleIdValidator();
+        $findings = [];
 
-        return array_map(
-            fn (string $notice): Finding => Finding::undetermined(
-                RunnerNotice::SuppressionDeprecatedRule->value,
-                RunnerNotice::MESSAGE_PREFIX,
-                $notice,
-                UndeterminedReason::NotConfigured,
-                Location::inCallsite('suppression', 0, 'connection '.$connectionName, $this->projectRoot()),
-                RunnerNotice::SuppressionDeprecatedRule->category(),
-                RunnerNotice::SuppressionDeprecatedRule->level(),
-                RunnerNotice::SuppressionDeprecatedRule->stability(),
-                RunnerNotice::SuppressionDeprecatedRule->documentationUrl(),
-                $subjectContext,
-            ),
-            $notices,
-        );
+        // One reference at a time, so each notice is located at the suppression it is about.
+        foreach ($references as $reference) {
+            foreach ($validator->deprecationNotices([$reference]) as $notice) {
+                $findings[] = Finding::undetermined(
+                    RunnerNotice::SuppressionDeprecatedRule->value,
+                    RunnerNotice::MESSAGE_PREFIX,
+                    $notice,
+                    UndeterminedReason::NotConfigured,
+                    Location::inCallsite('suppression', 0, $reference->describe(), $this->projectRoot()),
+                    RunnerNotice::SuppressionDeprecatedRule->category(),
+                    RunnerNotice::SuppressionDeprecatedRule->level(),
+                    RunnerNotice::SuppressionDeprecatedRule->stability(),
+                    RunnerNotice::SuppressionDeprecatedRule->documentationUrl(),
+                    $subjectContext,
+                );
+            }
+        }
+
+        return $findings;
     }
 
     /**
@@ -1097,7 +1120,7 @@ final readonly class LintRunner implements LintRuns
      * @param  list<RuleIdReference>  $annotationReferences
      * @return list<Finding>
      */
-    private function undescribedToolRuleNotices(array $annotationReferences, string $connectionName, SubjectContext $subjectContext): array
+    private function undescribedToolRuleNotices(array $annotationReferences, SubjectContext $subjectContext): array
     {
         $references = [
             ...ConfigIgnoreReferences::of($this->config->get('sqlens.ignore')),
@@ -1108,21 +1131,28 @@ final readonly class LintRunner implements LintRuns
             return [];
         }
 
-        return array_map(
-            fn (string $notice): Finding => Finding::undetermined(
-                RunnerNotice::SuppressionToolRuleUndescribed->value,
-                RunnerNotice::MESSAGE_PREFIX,
-                $notice,
-                UndeterminedReason::NotConfigured,
-                Location::inCallsite('suppression', 0, 'connection '.$connectionName, $this->projectRoot()),
-                RunnerNotice::SuppressionToolRuleUndescribed->category(),
-                RunnerNotice::SuppressionToolRuleUndescribed->level(),
-                RunnerNotice::SuppressionToolRuleUndescribed->stability(),
-                RunnerNotice::SuppressionToolRuleUndescribed->documentationUrl(),
-                $subjectContext,
-            ),
-            $this->ruleIdValidator()->undescribedToolRules($references),
-        );
+        $validator = $this->ruleIdValidator();
+        $findings = [];
+
+        // One reference at a time, so each notice is located at the suppression it is about.
+        foreach ($references as $reference) {
+            foreach ($validator->undescribedToolRules([$reference]) as $notice) {
+                $findings[] = Finding::undetermined(
+                    RunnerNotice::SuppressionToolRuleUndescribed->value,
+                    RunnerNotice::MESSAGE_PREFIX,
+                    $notice,
+                    UndeterminedReason::NotConfigured,
+                    Location::inCallsite('suppression', 0, $reference->describe(), $this->projectRoot()),
+                    RunnerNotice::SuppressionToolRuleUndescribed->category(),
+                    RunnerNotice::SuppressionToolRuleUndescribed->level(),
+                    RunnerNotice::SuppressionToolRuleUndescribed->stability(),
+                    RunnerNotice::SuppressionToolRuleUndescribed->documentationUrl(),
+                    $subjectContext,
+                );
+            }
+        }
+
+        return $findings;
     }
 
     /**
@@ -1140,7 +1170,7 @@ final readonly class LintRunner implements LintRuns
      *
      * {@see ConfigIgnoreReferences} is the one place that turns the configured list into
      * references, so this run and the catalog build cannot form different opinions about the same
-     * file. What to DO about a violation stays here; what the file says does not.
+     * file. What to do about a violation stays here; what the file says does not.
      *
      * ## Checked against every driver's rules, and against the shipped emittable ids
      *
@@ -1161,40 +1191,59 @@ final readonly class LintRunner implements LintRuns
      * The refusal for a configuration that names rules which do not exist: no findings about
      * migrations, one notice per violation, and the misconfiguration exit.
      *
-     * @param  list<ConfigViolation>  $violations
+     * Each notice is located at the file its entry is in and at the entry itself, and says, in that
+     * file's terms, why the run stopped. Located at the file alone, two broken entries shared one
+     * location, and the result, which keeps one finding per rule and location, reported only the
+     * first: a project with three typos fixed one per run.
+     *
+     * @param  array{baseline: list<ConfigViolation>, 'sqlens.ignore': list<ConfigViolation>}  $violations
      */
     private function refusedConfig(array $violations, RunContext $context, string $connectionName, string $configuredDriver, bool $strict, ResolvedServerVersion $resolvedVersion): LintOutcome
     {
-        $findings = array_map(
-            // UNDETERMINED, not a fail, and that is the same choice the audit half makes. The run
-            // did not find a problem in a migration — it could not run at all, which is what the
-            // third value is for. It also decides whether a reader ever sees this: a fail is level
-            // gated, so a refusal reported as one vanishes from a run at a lower level, and the
-            // command would exit non-zero while the report said nothing about why. Measured.
-            fn (ConfigViolation $violation): Finding => Finding::undetermined(
-                RunnerNotice::InvalidConfigReference->value,
-                RunnerNotice::MESSAGE_PREFIX,
-                $violation->message().' Nothing was linted: a baseline that names a rule which does not '
-                    .'exist suppresses nothing while looking set, and — unlike an ignore list — it cannot be '
-                    .'noticed from the output, because an entry that matches nothing produces exactly what a '
-                    .'matching entry produces once the code is fixed.',
-                UndeterminedReason::NotConfigured,
-                Location::inCallsite('baseline', 0, 'connection '.$connectionName, $this->projectRoot()),
-                RunnerNotice::InvalidConfigReference->category(),
-                RunnerNotice::InvalidConfigReference->level(),
-                RunnerNotice::InvalidConfigReference->stability(),
-                RunnerNotice::InvalidConfigReference->documentationUrl(),
-                // Built from the CONFIGURED driver name rather than from a resolved driver: this
-                // refusal happens before the engine is resolved, on purpose, and a finding about
-                // the project's own files does not need the engine to be supported to be true. The
-                // name is what `database.connections.<name>.driver` says, which is all a reader
-                // needs to know which run this was.
-                new SubjectContext($configuredDriver, $context->profile->value, $strict, $resolvedVersion, $connectionName),
-            ),
-            $violations,
-        );
+        // Built from the CONFIGURED driver name rather than from a resolved driver: this refusal
+        // happens before the engine is resolved, on purpose, and a finding about the project's own
+        // files does not need the engine to be supported to be true. The name is what
+        // `database.connections.<name>.driver` says, which is all a reader needs to know which run
+        // this was.
+        $subjectContext = new SubjectContext($configuredDriver, $context->profile->value, $strict, $resolvedVersion, $connectionName);
+        $findings = [];
+
+        foreach ($violations as $file => $fileViolations) {
+            foreach ($fileViolations as $violation) {
+                // UNDETERMINED, not a fail, and that is the same choice the audit half makes. The run
+                // did not find a problem in a migration — it could not run at all, which is what the
+                // third value is for. It also decides whether a reader ever sees this: a fail is level
+                // gated, so a refusal reported as one vanishes from a run at a lower level, and the
+                // command would exit non-zero while the report said nothing about why. Measured.
+                $findings[] = Finding::undetermined(
+                    RunnerNotice::InvalidConfigReference->value,
+                    RunnerNotice::MESSAGE_PREFIX,
+                    $violation->message().' '.$this->configRefusalReason($file),
+                    UndeterminedReason::NotConfigured,
+                    Location::inCallsite($file, 0, $violation->path, $this->projectRoot()),
+                    RunnerNotice::InvalidConfigReference->category(),
+                    RunnerNotice::InvalidConfigReference->level(),
+                    RunnerNotice::InvalidConfigReference->stability(),
+                    RunnerNotice::InvalidConfigReference->documentationUrl(),
+                    $subjectContext,
+                );
+            }
+        }
 
         return new LintOutcome(Result::of($findings), $context, ExitCode::Misconfiguration, $connectionName);
+    }
+
+    /** Why an entry that can match nothing stops the run, in the terms of the file it is written in. */
+    private function configRefusalReason(string $file): string
+    {
+        if ($file === 'baseline') {
+            return 'Nothing was linted: a baseline entry that no run can match suppresses nothing while looking set, '
+                .'and — unlike an ignore list — it cannot be noticed from the output, because an entry that '
+                .'matches nothing produces exactly what a matching entry produces once the code is fixed.';
+        }
+
+        return 'Nothing was linted: an ignore entry that names no rule silences nothing while looking set, and a '
+            .'rule believed to be off but still reporting is read past for months.';
     }
 
     /** The unsupported-engine outcome: no findings, the failure carried, misconfiguration exit. */
@@ -1203,6 +1252,14 @@ final readonly class LintRunner implements LintRuns
         $result = Result::of([]);
 
         return new LintOutcome($result, $context, $this->exitCodes->resolve($result, $context, true), $connectionName, $failure);
+    }
+
+    /** The unreadable-baseline outcome: no findings, the reason carried, misconfiguration exit. */
+    private function unreadableBaseline(UnreadableBaseline $failure, RunContext $context, string $connectionName): LintOutcome
+    {
+        $result = Result::of([]);
+
+        return new LintOutcome($result, $context, $this->exitCodes->resolve($result, $context, true), $connectionName, unreadableBaseline: $failure->getMessage());
     }
 
     /**
@@ -1265,7 +1322,7 @@ final readonly class LintRunner implements LintRuns
      * @param  list<string>  $activeCategories
      * @param  array<string, string>  $toolVersions
      */
-    private function buildContext(string $connectionName, Today $today, CaptureMode $mode, ResolvedServerVersion $resolvedVersion, int $level, int $activeRules, int $hiddenRules, array $activeCategories, array $toolVersions, bool $strictTools, bool $roundtrip, ?DriverResolutionFailure $floorFailure = null, ?GuardDecision $guard = null): RunContext
+    private function buildContext(string $connectionName, Today $today, CaptureMode $mode, ResolvedServerVersion $resolvedVersion, int $level, int $activeRules, int $hiddenRules, array $activeCategories, array $toolVersions, bool $strictTools, bool $roundtrip, ?DriverResolutionFailure $floorFailure = null, ?GuardDecision $guard = null, ?Driver $driver = null): RunContext
     {
         $base = $this->contextCollector->collect(ReportingCaptureMode::from($mode->value));
 
@@ -1279,7 +1336,7 @@ final readonly class LintRunner implements LintRuns
             // It states a PREMISE of the run, not a finding, which is why suppressing the
             // notice does not remove it: baselining a finding hides the finding, it does not
             // make the server newer.
-            serverVersions: [new ReportedServerVersion($connectionName, $this->headerVersion($resolvedVersion, $floorFailure), $resolvedVersion->source)],
+            serverVersions: [new ReportedServerVersion($connectionName, $this->headerVersion($resolvedVersion, $floorFailure, $driver), $resolvedVersion->source)],
             toolVersions: $toolVersions,
             mode: ReportingCaptureMode::from($mode->value),
             profile: $base->profile,
@@ -1294,13 +1351,13 @@ final readonly class LintRunner implements LintRuns
             activeCategories: $activeCategories,
             admittedStability: $base->admittedStability,
             // Null for every run that asked no guard — a pretend lint creates nothing. Passed
-            // through rather than re-derived: the decision the captor obeyed IS the one the header
+            // through rather than re-derived: the decision the captor obeyed is the one the header
             // reports, so the two can never describe different runs.
             guard: $guard,
             // From the base rather than read again: the collector owns that read, and this runner
             // already has its answer in hand.
             guardProfile: $base->guardProfile,
-            // The SAME reading the rules got, not a second one. This method is handed the value the
+            // The same reading the rules got, not a second one. This method is handed the value the
             // run created at its door, so the day in the header is the day that was judged on rather
             // than a re-read that agrees on every run but the one that matters.
             today: $today,
@@ -1314,7 +1371,7 @@ final readonly class LintRunner implements LintRuns
     }
 
     /**
-     * The versions of the tools that WERE found — name => version — for the header. A
+     * The versions of the tools that were found — name => version — for the header. A
      * missing tool contributes nothing here (it is reported as a finding instead), so
      * the header lists exactly what actually ran.
      *
@@ -1382,7 +1439,7 @@ final readonly class LintRunner implements LintRuns
      * account off — a project that has not adopted it should not be told about a file it never
      * created.
      *
-     * @param  list<Finding>  $findings  the run's findings so far; debts are derived FROM them
+     * @param  list<Finding>  $findings  the run's findings so far; debts are derived from them
      * @param  list<Rule>  $rules  the rules that ran, so a finding can be traced to the one claiming it
      * @return list<Finding>
      */
@@ -1402,7 +1459,7 @@ final readonly class LintRunner implements LintRuns
             $debt = DebtMode::Check;
         }
 
-        // Passed on WITHOUT narrowing, deliberately. The registry answers `DriverCanonicalization`
+        // Passed on without narrowing, deliberately. The registry answers `DriverCanonicalization`
         // or a named failure, and a guard here would be an unreachable branch in the middle of the
         // run: the same registry decides whether the driver is known at all, so a driver with no
         // canonicalization is refused at RESOLUTION — exit 2, with a message about the engine —
@@ -1539,8 +1596,8 @@ final readonly class LintRunner implements LintRuns
             );
         }
 
-        // The write, and the only one this package makes outside a report. It happens after the
-        // findings are built, so a recording run reports exactly what it wrote.
+        // The write. It happens after the findings are built, so a recording run reports exactly what
+        // it wrote, and a write that did not happen throws rather than leaving that report untrue.
         if ($debt === DebtMode::Record && ! $reconciliation->isSettled()) {
             DebtLedger::of($reconciliation->recorded)->write(new Filesystem, $absolute);
         }
@@ -1560,7 +1617,7 @@ final readonly class LintRunner implements LintRuns
      * for them to describe. Giving those a `debt_kind` would invent one out of the fact that none
      * could be read.
      *
-     * The age is deliberately NOT computed here. This side reconciles what a run owes against the
+     * The age is deliberately not computed here. This side reconciles what a run owes against the
      * file and holds no reference date; {@see DebtContext::unaged()} says so by name rather than by
      * passing a zero that would read as "recorded today".
      */
@@ -1736,10 +1793,9 @@ final readonly class LintRunner implements LintRuns
     }
 
     /**
-     * The baseline the run suppresses against: the file at `sqlens.baseline.path`, or
-     * an empty baseline when none is configured or present. A broken baseline is NOT
-     * applied — the findings it would have accepted stay visible (the safe direction),
-     * never silently hidden.
+     * The baseline the run suppresses against: the file at `sqlens.baseline.path`, or an empty
+     * baseline when none is configured or present. A file that cannot be read never gets this far:
+     * the run refused it before the engine was resolved, with the reason named.
      */
     private function baselineFile(): BaselineFile
     {
@@ -1840,17 +1896,23 @@ final readonly class LintRunner implements LintRuns
     }
 
     /**
-     * The header's version string, marked when the run reasons from an unsupported version.
+     * The header's version string, marked when the run reasons from an unsupported version, or from
+     * one newer than the driver's rules were measured against.
      *
      * Loud on purpose: a notice a reader scrolls past defeats the whole point, because acting
      * on the report is exactly what this warns against.
+     *
+     * The second mark is quieter, and so is its premise. Above the newest measured version the
+     * rules are applied as written and their verdicts stand; the mark says which release they
+     * describe. The driver is null on the paths that stop before one is resolved, and those carry
+     * neither mark.
      */
-    private function headerVersion(ResolvedServerVersion $resolvedVersion, ?DriverResolutionFailure $floorFailure): string
+    private function headerVersion(ResolvedServerVersion $resolvedVersion, ?DriverResolutionFailure $floorFailure, ?Driver $driver): string
     {
         $version = $resolvedVersion->headerVersion();
 
         if ($floorFailure?->reason !== DriverResolutionReason::VersionBelowFloor) {
-            return $version;
+            return new MeasuredServerVersion()->headerVersion($driver, $resolvedVersion->version, $version);
         }
 
         return sprintf(
@@ -1861,25 +1923,27 @@ final readonly class LintRunner implements LintRuns
     }
 
     /**
-     * Whether the version this run REASONS FROM clears the driver's floor.
+     * Whether the version this run reasons from clears the driver's floor.
      *
      * A pin is what every finding in a lint report describes, so the pin is what gets judged
-     * when one is set. The other direction — a pin ABOVE a below-floor live server — is not
+     * when one is set. The other direction — a pin above a below-floor live server — is not
      * judged here, and that is not silence either: `LINT.VERSION_SKEW` already names both.
      *
      * Only asked when a version actually resolved. "No version at all" and "an unreadable pin"
      * are different cases, and both already carry notices of their own; a floor verdict on top
      * would be the same gap reported twice under a second name.
      *
-     * The RAW string goes in on BOTH paths, never the normalized form — and the pin path is not
-     * the obvious half. A MariaDB banner normalizes to a plain number below every floor SQLens
-     * has, so a normalized input makes the floor unit's attribution guard blind and it reports
-     * "upgrade your MySQL" about a product the operator does not run.
+     * The raw string goes in on both paths, never the normalized form. A MariaDB banner normalizes
+     * to a plain number below every floor SQLens has, so a normalized input makes the floor unit's
+     * attribution guard blind and it reports "upgrade your MySQL" about a product the operator does
+     * not run.
      *
-     * Found by the wiring proof rather than by reading: six of its seven arms passed on a first
-     * version that handed the PARSED pin over here, and the seventh — a project pinning
-     * `5.5.68-MariaDB` — produced exactly that wrong advice. Normalizing costs nothing here
-     * either, because the floor unit parses whatever it is given.
+     * Found by the wiring proof rather than by reading, while a pin could still carry a vendor
+     * suffix: six of its seven arms passed on a first version that handed the PARSED pin over here,
+     * and the seventh — a project pinning `5.5.68-MariaDB` — produced exactly that wrong advice.
+     * `parsePin` refuses every suffixed pin now, so such a pin no longer resolves and the floor is
+     * never asked about it; the banner is where the raw string still decides. Handing it over raw
+     * costs nothing, because the floor unit parses whatever it is given.
      */
     private function floorFailure(Driver $driver, ResolvedServerVersion $resolvedVersion, ?string $banner, ?string $pin): ?DriverResolutionFailure
     {
@@ -1896,8 +1960,8 @@ final readonly class LintRunner implements LintRuns
 
         $failure = is_string($judged) && $judged !== '' ? new ServerVersionFloor()->check($driver, $judged) : null;
 
-        // ONLY a genuine below-floor verdict is reported from here. The floor unit also refuses to
-        // judge a banner it cannot attribute — but on THIS path that refusal cannot arrive:
+        // Only a genuine below-floor verdict is reported from here. The floor unit also refuses to
+        // judge a banner it cannot attribute — but on this path that refusal cannot arrive:
         //
         //   · a pin cannot carry a vendor suffix at all (`parsePin` rejects every suffixed string,
         //     measured, so an unattributable pin never resolves and the floor is never asked), and
@@ -1940,7 +2004,7 @@ final readonly class LintRunner implements LintRuns
     /**
      * A version-dependent rule the run could not judge, because no server version could
      * be determined (a fast-path run without a pin, an unreachable server). It carries
-     * the rule's OWN id and metadata — a reader sees which rule was left unchecked and
+     * the rule's own id and metadata — a reader sees which rule was left unchecked and
      * why, and the level and severity axes stay separate — with a named reason that
      * points at the pin, never a silent skip and never a guessed default.
      *
@@ -1971,7 +2035,7 @@ final readonly class LintRunner implements LintRuns
 
     /**
      * A statistics-dependent rule the run could not judge, because statistics are on
-     * but no reader is available in this build. It carries the rule's OWN id and
+     * but no reader is available in this build. It carries the rule's own id and
      * metadata — a reader sees which rule was left unchecked and why — with the named
      * `StatisticsUnavailable` reason, never a silent skip and never a guessed pass.
      */
@@ -2043,7 +2107,7 @@ final readonly class LintRunner implements LintRuns
      * The below-floor notice — an `undetermined`, never a `fail`.
      *
      * A fail would say the schema is wrong. Nothing about the schema is wrong: what is
-     * uncertain is whether THIS package's verdicts apply to THIS server, and the third value
+     * uncertain is whether this package's verdicts apply to this server, and the third value
      * exists for exactly that distinction. Under `strict_undetermined` it lifts the run to
      * exit 3, which is the pipeline's way of asking a human — never exit 1, which would tell
      * a pipeline the migrations breached a gate.
@@ -2072,7 +2136,7 @@ final readonly class LintRunner implements LintRuns
      * flag behavior this server does not have, AND may stay silent about behavior it does.
      * Which of the two happened cannot be known from here, so both are stated.
      *
-     * There is only ONE arm, and that is the caller's doing rather than a simplification: it
+     * There is only one arm, and that is the caller's doing rather than a simplification: it
      * hands over a below-floor verdict and nothing else, because the other outcomes of the floor
      * unit cannot arrive on this path. See {@see self::floorFailure()} for why.
      */

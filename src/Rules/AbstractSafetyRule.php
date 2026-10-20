@@ -27,14 +27,14 @@ use Pushery\SQLens\Contracts\Rule;
  * **Identity is derived once, from the id.** The message prefix and the documentation
  * URL both come from `<AREA>.L<level>.<SLUG>`, so an id and its URL cannot drift apart and
  * nobody hand-maintains a link table. The slug is the id lowercased with dots AND
- * underscores turned into dashes — the SAME slug the fixture directories use and the
+ * underscores turned into dashes — the same slug the fixture directories use and the
  * same one every already-shipped rule declares, so one id has one slug everywhere: from
  * an id a reader reaches both the page and the fixture without knowing which family the
  * rule belongs to.
  *
  * **Stability defaults from one named place.** Rules written before 1.0 are `stable`,
  * because the preview obligation exists to protect a published API and there is not yet
- * one to protect. Every rule added AFTER 1.0 starts as `preview` — and that switch is a
+ * one to protect. Every rule added after 1.0 starts as `preview` — and that switch is a
  * single constant here, not a decision repeated in dozens of files.
  */
 abstract class AbstractSafetyRule implements Rule

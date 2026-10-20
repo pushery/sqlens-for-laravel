@@ -17,17 +17,17 @@ use Pushery\SQLens\Catalog\Understanding\TopLevelList;
  * ## Left prefix, not "contains"
  *
  * A B-tree index on `(a, b)` serves a lookup on `a`, and on `(a, b)` — not on `b` alone. So a
- * foreign key on `(a)` is covered by an index on `(a, b)`, and a foreign key on `(a, b)` is NOT
+ * foreign key on `(a)` is covered by an index on `(a, b)`, and a foreign key on `(a, b)` is not
  * covered by an index on `(a)`. Order matters in both directions, and a "does the index mention
  * these columns" test would be wrong in the direction that reports a table as safe while it scans.
  *
- * ## What deliberately does NOT count as coverage
+ * ## What deliberately does not count as coverage
  *
  * Only indexes the reading already judged comparable are offered here — a partial index, an
  * expression index and one with a non-default operator class are excluded upstream. That exclusion
  * is the cautious direction: those indexes exist, and treating them as coverage would leave the
  * rule silent about a table that really does scan. The opposite mistake — reporting a foreign key
- * that IS covered — is loud and self-correcting; this one is silent and permanent.
+ * that is covered — is loud and self-correcting; this one is silent and permanent.
  */
 final readonly class ForeignKeyIndexCoverage
 {
@@ -98,7 +98,7 @@ final readonly class ForeignKeyIndexCoverage
     }
 
     /**
-     * Whether the needle is the LEFT prefix of the haystack — the whole matching rule.
+     * Whether the needle is the left prefix of the haystack — the whole matching rule.
      *
      * @param  list<string>  $needle
      * @param  list<string>  $haystack

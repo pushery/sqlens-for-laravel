@@ -9,7 +9,7 @@ namespace Pushery\SQLens\Tools;
  *
  * ## Why this is a class and not four lines in the runner
  *
- * It was those four lines, and they were wrong in a way nothing could see. They named ONE prefix
+ * It was those four lines, and they were wrong in a way nothing could see. They named one prefix
  * for any unavailable tool — correct by accident while exactly one tool was registered, and wrong
  * in both directions the moment a second one was:
  *
@@ -21,7 +21,7 @@ namespace Pushery\SQLens\Tools;
  * Neither is visible in a report. Both look like ordinary output.
  *
  * The lines lived inside a long private method, which is the other half of why they survived: there
- * was nowhere to point a test. Naming the rule gives it one — and a test that registers TWO tools
+ * was nowhere to point a test. Naming the rule gives it one — and a test that registers two tools
  * can finally fail, which is the thing no test in this suite could do before.
  */
 final readonly class UnverifiableToolPrefixes
@@ -29,7 +29,7 @@ final readonly class UnverifiableToolPrefixes
     /**
      * The prefixes to shield, one per unavailable tool, de-duplicated and in registration order.
      *
-     * Each prefix is asked of its OWN tool. That is the entire correction, and it is why a tool
+     * Each prefix is asked of its own tool. That is the entire correction, and it is why a tool
      * added later cannot be miscredited: a `Tool` that does not answer is a type error rather than
      * a silently wrong entry.
      *

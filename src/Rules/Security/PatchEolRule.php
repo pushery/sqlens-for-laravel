@@ -37,13 +37,13 @@ final class PatchEolRule extends AbstractPatchLevelRule
 
     protected function judges(PatchVerdict $verdict): bool
     {
-        // Only the verdicts that answer THIS rule's question, which is "is the series in support?".
+        // Only the verdicts that answer this rule's question, which is "is the series in support?".
         //
         // `PatchLevelUnknown` is deliberately not among them, and that is the difference between an
         // honest silence and a noisy one. When the data records no patch level, the support question
         // still got a real answer — the series runs until its recorded date — and reporting an
         // undetermined here would attach "could not check" to a check that succeeded. Worse, the
-        // bundled file records no patch level for ANY cycle, so it would be an undetermined on every
+        // bundled file records no patch level for any cycle, so it would be an undetermined on every
         // audit run this package ever performs: under `strict_undetermined` that is a permanently
         // red pipeline, and a signal that fires always is a signal nobody reads.
         //

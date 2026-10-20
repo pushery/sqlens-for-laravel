@@ -10,7 +10,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
 /**
  * Folds a partitioned table's partitions onto the table itself.
  *
- * A partitioned table is ONE object to a rule and n objects in a catalog. Left unfolded, every
+ * A partitioned table is one object to a rule and n objects in a catalog. Left unfolded, every
  * finding about it is reported once per partition — and a monthly-partitioned events table with
  * three years of history turns one finding into thirty-six. The first audit of a real database is
  * then unreadable, and there is no second one.
@@ -64,7 +64,7 @@ final readonly class PartitionResolver
                 continue;
             }
 
-            // Everything a partition OWNS — its columns, its indexes — moves to the parent rather
+            // Everything a partition owns — its columns, its indexes — moves to the parent rather
             // than being dropped. Dropping it would make a divergent partition invisible, which is
             // the one thing worth knowing about a partition set.
             if (isset($this->parentOf[$object->parent ?? ''])) {
@@ -130,11 +130,13 @@ final readonly class PartitionResolver
         arsort($tally);
         $typical = array_key_first($tally);
 
-        // With no count shared by at least two partitions there is no majority to diverge FROM, and
+        // With no count shared by at least two partitions there is no majority to diverge from, and
         // naming one of them would be a coin flip presented as a finding. Two partitions with
         // different index counts is the honest example: neither is the odd one out. Found by the
-        // test — the first version picked whichever the tally happened to order first.
-        if ($tally[$typical] < 2) {
+        // test — the first version picked whichever the tally happened to order first. A tie at the
+        // top is the same coin: with half the partitions on one count and half on another, the sort
+        // keeps the first partition's count, and the other half is named whichever half has the index.
+        if ($tally[$typical] < 2 || count(array_keys($tally, $tally[$typical], true)) > 1) {
             return [];
         }
 

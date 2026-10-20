@@ -40,7 +40,7 @@ final readonly class DriftExcludeFile
      * Where the accepted-differences file lives when a project has not said otherwise —
      * repository-relative, never absolute.
      *
-     * Here rather than on a command, because TWO commands read this file: `sqlens:drift` judges it
+     * Here rather than on a command, because two commands read this file: `sqlens:drift` judges it
      * and `sqlens:postdeploy --expect-shadow` honors it. A default living on one of them is a
      * default the other has to restate, and a restated constant is one that drifts — at which point
      * a difference a project accepted keeps coming back through the other command, which is the one
@@ -49,7 +49,7 @@ final readonly class DriftExcludeFile
     public const string DEFAULT_PATH = 'sqlens-drift-excludes.json';
 
     /**
-     * The configured path, resolved against the repository root — the ONE resolution both readers
+     * The configured path, resolved against the repository root — the one resolution both readers
      * make.
      *
      * The config value is repository-relative on purpose: an absolute one would put a decision log
@@ -176,6 +176,9 @@ final readonly class DriftExcludeFile
         return $entries;
     }
 
+    /**
+     * @param  mixed  $row  one element of the file's entries as decoded, before its shape is checked
+     */
     private static function entry(string $path, int $index, mixed $row): DriftExcludeEntry
     {
         if (! is_array($row) || array_is_list($row)) {
@@ -206,7 +209,7 @@ final readonly class DriftExcludeFile
         //
         // Whitespace is trimmed first, because " " passes `is_string` and an empty-looking field is
         // exactly what somebody types to get past a validator. And the generator's own placeholder
-        // is refused BY NAME — that is what makes `--update-excludes` produce a file a person must
+        // is refused by name — that is what makes `--update-excludes` produce a file a person must
         // edit rather than one they can commit and forget.
         if (! is_string($reason) || trim($reason) === '' || trim($reason) === DriftExcludes::UNEXPLAINED) {
             throw UnreadableDriftExcludes::entryWithoutReason($path, $index, $type->value.' `'.$name.'`');

@@ -30,11 +30,12 @@ use Pushery\SQLens\ShippedLocale;
  *  - **No payload** becomes a named line — `no remediation template for this rule` — because an
  *    absent block and a rule nobody wrote a template for look identical, and only one of them is
  *    something a reader can go and fix.
- *  - **A CATALOG finding** gets a different line, because its absence is not a gap. It judges a
- *    state read off a live database, and the seam takes a migration statement — there was never a
- *    statement to write a template against. Printing "no template" there sends a reader looking for
- *    work that does not exist, so the line says what the absence IS and what to do instead.
- *  - **A refused payload** says so, and says it was OUR defect rather than theirs. Rendering it as
+ *  - **A CATALOG finding** without material gets the same named line, and one more. A catalog rule
+ *    carries material where it can describe the state it wants as a plan, through
+ *    `ProvidesSchemaObjectRemediation`, so a rule without one is a template nobody wrote, the same
+ *    gap as for a statement. What differs is the next step: the remedy is a migration the reader has
+ *    not written yet, and the lint path judges it before it runs.
+ *  - **A refused payload** says so, and says it was our defect rather than theirs. Rendering it as
  *    "no template" would file a bug in this package under the reader's own migration.
  *
  * ## It renders; it never applies
@@ -57,18 +58,13 @@ final readonly class RemediationRenderer
     public const string NO_TEMPLATE = 'no remediation template for this rule';
 
     /**
-     * The line a CATALOG finding carries instead, and the difference is a decision rather than a
-     * shade of wording.
+     * The line a CATALOG finding without material used to carry.
      *
-     * A catalog rule judges a `SchemaObject` read out of a live database. The remediation seam takes
-     * a migration statement, so no catalog rule can carry material — not because nobody wrote a
-     * template, but because there is no statement to write one against. Printing NO_TEMPLATE there
-     * reads as a gap somebody should go and fill, and a reader who believes it goes looking for work
-     * that does not exist.
+     * It said there was no statement to write a template against, which stopped being true when
+     * catalog rules gained plans through `ProvidesSchemaObjectRemediation`. Such a finding now carries
+     * {@see self::NO_TEMPLATE} and the next step.
      *
-     * So the absence says what it is, and says what to do instead. The remedy for a state finding is
-     * a migration the reader has not written yet — and once they write it, the lint path judges it
-     * before it runs, which is the sentence that turns a dead end into the next step.
+     * @deprecated no longer printed; read NO_TEMPLATE for every finding without material
      */
     public const string NO_SEQUENCE_FOR_A_STATE = 'no fix sequence — this finding is about a state, not a statement';
 
@@ -118,16 +114,16 @@ final readonly class RemediationRenderer
         }
 
         if (! $finding->remediation instanceof RemediationPayload) {
-            // Two different absences, and only one of them is somebody's homework. The location is
-            // what tells them apart — a catalog finding was read off a live database and never had a
-            // statement — so nothing new has to be threaded onto the finding to make the distinction.
+            // One absence, a template nobody wrote, and two next steps. The location tells them apart:
+            // a catalog finding was read off a live database, so its remedy is a migration still to
+            // be written, and the lint path judges that migration before it runs.
             //
             // Scoped to CATALOG deliberately. A callsite finding is a third case with its own answer,
             // and giving it this line on the strength of a matching shape would be a claim nobody
             // measured.
             return $finding->location->kind === LocationKind::Catalog
                 ? [
-                    '- **Fix material:** '.self::NO_SEQUENCE_FOR_A_STATE.'.',
+                    '- **Fix material:** '.self::NO_TEMPLATE.'.',
                     '  The remedy is a migration you have not written yet. Write it, and '
                     .'`sqlens:lint` judges it before it runs.',
                     '',
@@ -158,7 +154,9 @@ final readonly class RemediationRenderer
         }
 
         foreach ($payload->steps as $step) {
-            $lines = [...$lines, ...$this->step($step, $payload->subject)];
+            foreach ($this->step($step, $payload->subject) as $line) {
+                $lines[] = $line;
+            }
         }
 
         if ($payload->verification !== null) {
@@ -213,7 +211,7 @@ final readonly class RemediationRenderer
      * A strategy called one thing at the terminal and another in the report would be two answers
      * to one question, and the labels live here.
      *
-     * `$expanded` is the `--show-remediation` switch. Without it a finding gets ONE line, because a
+     * `$expanded` is the `--show-remediation` switch. Without it a finding gets one line, because a
      * multi-step SQL sequence printed under every finding turns a lint report into something nobody
      * reads to the end — and an unread report gates nothing. The line still says the material exists
      * and how to get it, which is the whole job of a default that hides something.

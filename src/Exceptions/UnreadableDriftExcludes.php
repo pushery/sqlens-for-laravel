@@ -63,7 +63,7 @@ final class UnreadableDriftExcludes extends RuntimeException
     }
 
     /**
-     * A version this build does not know — in EITHER direction, and the message says which.
+     * A version this build does not know — in either direction, and the message says which.
      *
      * A newer file comes from a build that could express something this one cannot, so reading the
      * parts we recognize would silently drop the rest. An older one would need a migration path, and

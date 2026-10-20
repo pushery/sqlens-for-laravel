@@ -25,7 +25,7 @@ final readonly class StatementTarget
         public SchemaObjectType $type,
         public Identifier $identifier,
         /**
-         * What this target is TO the statement — see {@see TargetRole}.
+         * What this target is to the statement — see {@see TargetRole}.
          *
          * Defaulted, and that is what keeps the change small: every signature with one target of a
          * type declares nothing, every one of the 118 constructor calls in this repository is

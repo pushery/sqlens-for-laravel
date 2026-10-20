@@ -28,13 +28,13 @@ use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
  * casually — every environment file, every teammate's machine and every seeded fixture points at
  * the old name — and the reason for taking it is invisible from the refusal, which says
  * "production connection" rather than which word made it say so. A false positive common enough
- * to meet ordinary projects is therefore fixed HERE, by naming the coincidence, and not by asking
+ * to meet ordinary projects is therefore fixed here, by naming the coincidence, and not by asking
  * the project to change around it. See {@see self::COINCIDENCES}.
  *
  * It never connects. Reading a connection's config is enough, and a detector that
  * had to open the very connection it is protecting would be a contradiction.
  *
- * This is the LAST line, not the only one: the guard also requires an allowed
+ * This is the last line, not the only one: the guard also requires an allowed
  * environment and an explicit confirmation. A project whose production connection
  * is named something this cannot recognize is still protected by those.
  */
@@ -71,7 +71,7 @@ final readonly class ProductionConnectionDetector
      * the direction of this heuristic's error is not a preference — a false positive costs a
      * developer a refused run, a false negative costs a production database.
      *
-     * ## Why a hand-typed list is acceptable HERE, when it usually is not
+     * ## Why a hand-typed list is acceptable here, when it usually is not
      *
      * A missing entry can only produce a false POSITIVE: a name that is refused when it need not
      * have been, loudly, with a message. It can never let a production database through. That
@@ -92,7 +92,7 @@ final readonly class ProductionConnectionDetector
     }
 
     /**
-     * WHY the connection was read as production — the segment that matched and the marker it
+     * Why the connection was read as production — the segment that matched and the marker it
      * matched — or null when nothing did.
      *
      * The verdict alone is not actionable. A refused run says "production connection", and somebody
@@ -144,7 +144,7 @@ final readonly class ProductionConnectionDetector
      * The first segment of $name that carries a production marker, and the marker it carried.
      *
      * Segments are split on the separators names actually use — underscore, dash,
-     * dot, whitespace — and a segment matches when it IS a marker or starts with
+     * dot, whitespace — and a segment matches when it is a marker or starts with
      * one (so `prod`, `production`, `prod2` and `live1` match). Substring matching
      * anywhere in the name was rejected: it flags `reproduce` and `improved`, and a
      * detector that cries wolf gets worked around, which is worse than one that is

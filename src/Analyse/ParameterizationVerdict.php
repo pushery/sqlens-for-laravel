@@ -56,7 +56,7 @@ final readonly class ParameterizationVerdict
     /**
      * Something non-constant was visibly assembled into the SQL text.
      *
-     * `$identifierQuoted` says the assembly went through `Grammar::wrap()`. It does NOT soften the
+     * `$identifierQuoted` says the assembly went through `Grammar::wrap()`. It does not soften the
      * verdict — see the property for why — it only lets a rule downstream give advice that can be
      * followed.
      */

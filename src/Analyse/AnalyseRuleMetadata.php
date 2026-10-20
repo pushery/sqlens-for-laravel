@@ -18,7 +18,7 @@ use Pushery\SQLens\Severity\Severity;
  *
  * The registry export already unions three families, because a producer that the export cannot see
  * is a set of ids with no documentation page and nothing to notice the gap. An analyse rule is a
- * PHPStan rule: it judges a CALL SITE in PHP source rather than a `Subject`, so it cannot implement
+ * PHPStan rule: it judges a call site in PHP source rather than a `Subject`, so it cannot implement
  * the engine's `Rule` contract — and `CaptureRuleMetadata` names the capture layer and carries the
  * example pair that layer's docs generator needs. Reusing either would have been a name that lies.
  *

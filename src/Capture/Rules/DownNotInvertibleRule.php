@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Capture\Rules;
 use Pushery\SQLens\Capture\CaptureResult;
 use Pushery\SQLens\Capture\CaptureRuleMetadata;
 use Pushery\SQLens\Capture\CaptureSection;
-use Pushery\SQLens\Findings\CredentialRedactor;
+use Pushery\SQLens\Findings\CompositeCredentialRedactor;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
@@ -24,7 +24,7 @@ use Pushery\SQLens\Subjects\CaptureMode;
  * somebody is allowed to break. The roundtrip does exactly that, and this rule is
  * what turns its outcome into an answer.
  *
- * The section is the whole distinction. THREE different things can go wrong in a
+ * The section is the whole distinction. Three different things can go wrong in a
  * roundtrip and they are never conflated:
  *
  *   - `up` fails      → `CAP.L0.MIGRATE_ERROR`: the migration itself is broken, and
@@ -32,14 +32,14 @@ use Pushery\SQLens\Subjects\CaptureMode;
  *   - `down` fails    → `CAP.L0.DOWN_FAILED`: the reverse leg raised an error. What
  *                       `down()` would have left behind is unknown, so nothing can
  *                       be said about invertibility.
- *   - `up again` fails → THIS rule: both legs ran, and the schema `down()` left is
+ *   - `up again` fails → this rule: both legs ran, and the schema `down()` left is
  *                       one the migration cannot be applied to a second time.
  *
  * Reading the third as the first would tell a user their migration is broken when it
  * is their rollback that is; reading it as the second would blame an error that
  * never happened. Each case gets its own id, its own message and its own page.
  *
- * The false positive worth naming is the DELIBERATELY irreversible migration — a
+ * The false positive worth naming is the deliberately irreversible migration — a
  * data migration whose `down()` cannot restore what it consumed is a legitimate
  * design, not a defect. That case is silenced with a suppression annotation on the
  * migration class, which is a decision recorded in the code rather than a rule
@@ -121,18 +121,27 @@ final readonly class DownNotInvertibleRule implements CaptureRule
     }
 
     /**
-     * The driver message, made safe and deterministic: credentials redacted first,
-     * then the project root relativized out so the same failure reads identically on
-     * every machine.
+     * The driver message, made safe and deterministic: the project root relativized
+     * out so the same failure reads identically on every machine, then credentials
+     * redacted.
      */
     private function detail(CaptureResult $result, string $projectRoot): string
     {
-        $detail = (new CredentialRedactor)->redact($result->failureDetail ?? 'the capture recorded no further detail');
+        $detail = $result->failureDetail ?? 'the capture recorded no further detail';
 
-        // Two passes, and they catch different things. `CredentialRedactor` knows the values
-        // this application configured — it takes the connection's own host, user and password out
-        // of the text. It cannot know a password somebody typed straight into a migration, because
-        // that value appears in no configuration.
+        // The project root comes out first. The configured values are taken out wherever a host, a
+        // user or a database name stands as a word of its own, and a project often lives in a
+        // directory named like its database: redacted first, that name would cut the root apart and
+        // leave the rest of the absolute path in the message.
+        $detail = str_replace(rtrim($projectRoot, '/').'/', '', $detail);
+
+        $detail = new CompositeCredentialRedactor()->redact($detail);
+
+        // Two passes, and they catch different things. `CompositeCredentialRedactor` takes out the
+        // values this application's connections are configured with, and then the coordinates a
+        // driver prints by their form: the host, user and database of the connection block Laravel
+        // appends to an error. Neither half could know a password somebody typed straight into a
+        // migration, because that value appears in no configuration and in no shape a driver prints.
         //
         // `SecretLiteralMask` is the other half: it finds a secret by the shape of the statement
         // (`PASSWORD '…'`, `IDENTIFIED BY '…'`) rather than by knowing its value. A database error
@@ -150,6 +159,6 @@ final readonly class DownNotInvertibleRule implements CaptureRule
         $detail = RowValueMask::in($detail);
 
         // The sentence around the detail ends it with a period of its own.
-        return rtrim(str_replace(rtrim($projectRoot, '/').'/', '', $detail), '.');
+        return rtrim($detail, '.');
     }
 }

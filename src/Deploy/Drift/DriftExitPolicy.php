@@ -17,7 +17,7 @@ use Pushery\SQLens\Console\ExitCode;
  *
  * `DriftCommand` answers no case inline. Under the shipped defaults an unbuildable reference is the
  * ordinary CI outcome rather than an edge: the reference is a shadow replay,
- * `deploy.shadow.allowed_environments` is `['local', 'testing']`, so in a `ci` environment the
+ * `capture.shadow.allowed_environments` is `['local', 'testing']`, so in a `ci` environment the
  * production guard refuses and no reference is built. Report mode never blocks, and this case is no
  * exception — as the command's class docblock (*"the default prints everything and exits clean"*)
  * and the `--allow-undetermined` help text say too.
@@ -48,7 +48,7 @@ final readonly class DriftExitPolicy
         }
 
         // A real finding blocks, and the hatch does not reach it. `--allow-undetermined` opens
-        // exactly one door: a run blocked ONLY by checks that could not answer. A finding is a fact
+        // exactly one door: a run blocked only by checks that could not answer. A finding is a fact
         // about the database rather than a statement about this run's reach.
         if ($entries > 0) {
             return ExitCode::FindingsAboveGate;
@@ -56,7 +56,7 @@ final readonly class DriftExitPolicy
 
         // Nothing to compare against: the run did not establish that there is no drift, it
         // established that it could not look. Those are different results and only one of them is
-        // good news, so an empty finding list here is NOT clean.
+        // good news, so an empty finding list here is not clean.
         //
         // An unbuildable reference joins this arm rather than getting its own, because it is the same
         // statement about reach with a wider subject — no object type could be read instead of some.

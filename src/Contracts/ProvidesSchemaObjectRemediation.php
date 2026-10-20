@@ -31,10 +31,10 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * It carries {@see RemediationSubject::SchemaObject}, and that is not a
  * formality: the fields do not all mean the same thing here. There is no deploy whose effect a
  * downtime class could describe, and no "this migration" for a step to edit — the fix for a state
- * IS a new migration. A payload that gets either wrong is REFUSED by the validator rather than
+ * is a new migration. A payload that gets either wrong is refused by the validator rather than
  * rendered, so this contract cannot quietly produce a template that reads like a statement's.
  *
- * ## The precondition is WRITTEN, not encoded in the return type
+ * ## The precondition is written, not encoded in the return type
  *
  * A rule is asked only about an object it itself reported on. That is a promise the caller keeps,
  * and it is stated here in prose on purpose. The lint side left the same precondition implicit and

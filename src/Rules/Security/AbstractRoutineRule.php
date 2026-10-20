@@ -16,7 +16,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
 /**
  * The shape both "this routine runs as somebody else" rules have.
  *
- * Two of them, and they split on ONE flag: whether the routine pins its own `search_path`. Everything
+ * Two of them, and they split on one flag: whether the routine pins its own `search_path`. Everything
  * before that split is identical, and identical logic written twice is logic that stops being
  * identical the first time one copy is fixed.
  *

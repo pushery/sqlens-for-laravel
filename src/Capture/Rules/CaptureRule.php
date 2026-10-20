@@ -10,7 +10,7 @@ use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Subjects\SubjectContext;
 
 /**
- * A level-0 rule that judges a migration's CAPTURE OUTCOME rather than its SQL.
+ * A level-0 rule that judges a migration's capture outcome rather than its SQL.
  *
  * The standard rule engine dispatches over three subject kinds (captured SQL, a
  * catalog object, a raw-SQL callsite), and that set is deliberately sealed. But

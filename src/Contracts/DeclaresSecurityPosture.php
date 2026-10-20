@@ -25,7 +25,7 @@ use Pushery\SQLens\Severity\Severity;
  *
  * ## The two axes stay apart
  *
- * `severity()` is NOT the level. A rule's level says how strict a project has to be before the rule
+ * `severity()` is not the level. A rule's level says how strict a project has to be before the rule
  * is asked at all; its severity says how bad the answer is when it fires. A security rule is
  * deliberately reachable at level 0 and still gated by `security.min_severity` — the two axes cross
  * rather than nest, and a rule that folded one into the other would make the security suite
@@ -36,13 +36,13 @@ interface DeclaresSecurityPosture
     /**
      * How bad it is when this rule fires — the security axis, never the level.
      *
-     * Nullable, and NOT because null is acceptable here. It is the signature every rule already
+     * Nullable, and not because null is acceptable here. It is the signature every rule already
      * inherits from `RuleMetadataDefaults`, where null is the correct answer for the safety rules
      * that are gated by level instead. PHP will not let a subclass re-declare an inherited concrete
      * method as abstract, and narrowing the type on the interface makes the inherited one
      * incompatible — so the type system cannot state "a security rule has a real severity" at all.
      *
-     * It is therefore stated where it CAN be enforced: an arch test walks every implementation of
+     * It is therefore stated where it can be enforced: an arch test walks every implementation of
      * this contract and fails on a null. Written down here because a nullable type beside a rule
      * that must never be null reads like an oversight, and the next person to see it should know it
      * was measured rather than missed.
@@ -50,7 +50,7 @@ interface DeclaresSecurityPosture
     public function severity(): ?Severity;
 
     /**
-     * What this rule does NOT see.
+     * What this rule does not see.
      *
      * The honesty slot, and it earns its place by being answerable rather than aspirational: a
      * security rule that reports a clean result over a surface it never examined is the one failure

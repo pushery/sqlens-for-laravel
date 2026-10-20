@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Config;
 use Pushery\SQLens\Reporting\RunProfile;
 
 /**
- * Resolves WHICH profile a run uses, in one fixed, deterministic order:
+ * Resolves which profile a run uses, in one fixed, deterministic order:
  *
  *     --profile flag  →  SQLENS_PROFILE env  →  config  →  built-in default
  *
@@ -48,7 +48,7 @@ final readonly class ProfileSelector
     /**
      * Resolve the active profile. Each argument is the value that source supplied,
      * or null when the source did not set it at all (the flag was absent, the env
-     * var was unset, the config key was missing). An empty string is NOT null — it
+     * var was unset, the config key was missing). An empty string is not null — it
      * is a value the user provided, and an empty value is rejected.
      */
     public function select(?string $flag, ?string $env, ?string $config, ?string $commandDefault = null): ProfileSelection
@@ -57,10 +57,10 @@ final readonly class ProfileSelector
             $flag !== null => [$flag, 'flag'],
             $env !== null => [$env, 'env'],
             $config !== null => [$config, 'config'],
-            // A command that exists for ONE place answers for that place when nobody said
+            // A command that exists for one place answers for that place when nobody said
             // otherwise: `sqlens:predeploy` runs on a deploy host, and falling back to the profile
             // of a developer laptop there is how a gate ends up lenient on the one server where it
-            // matters. It sits BELOW all three user-set sources, so a flag, the environment and a
+            // matters. It sits below all three user-set sources, so a flag, the environment and a
             // configured profile still win in that order.
             $commandDefault !== null => [$commandDefault, 'command default'],
             default => [self::BUILT_IN_DEFAULT, 'default'],

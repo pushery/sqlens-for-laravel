@@ -34,11 +34,16 @@ use Pushery\SQLens\Exceptions\InvalidRunDay;
  * tag, a pipeline, an advisory date — is already UTC, so UTC is the reading that needs no
  * conversion.
  *
- * ## Why {@see self::of()} exists and is not a test seam
+ * ## What {@see self::of()} is for, and what it is not
  *
- * A run has to be reproducible on the day it mattered. Pinning the day is how a boundary judgment
- * gets re-examined at all, and it is the only way the arm that proves this mechanism can be written:
- * a test that could not pin the day would be asserting against the clock it runs under.
+ * It turns a day written down somewhere into a value of this type, read strictly: the debt ledger
+ * checks a review date through it, and the tests pin the day they judge on, because an arm that
+ * could not pin the day would be asserting against the clock it runs under.
+ *
+ * No run takes its day from it. Every entry point reads the clock, and no setting or option pins the
+ * day of a run the way `assume_server_version` pins a server version. A boundary judgment in an old
+ * report is re-examined from the day its header carries as `run_day`, not by replaying the run on
+ * that day.
  */
 final readonly class Today
 {

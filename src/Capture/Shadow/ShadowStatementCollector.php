@@ -12,7 +12,7 @@ use Pushery\SQLens\Capture\CaptureSection;
  * execution order.
  *
  * Every statement, and that is the point of the window rather than a gap in it. The runner
- * applies its own session limits BEFORE the listener exists and resets this collector right
+ * applies its own session limits before the listener exists and resets this collector right
  * before the migration's method runs, so what arrives here is what the migration sent: its
  * `SET lock_timeout`, a transaction bracket it wrote itself, a query that reads the migrations
  * table. The pretend path keeps all of them, and so does this one. A filter that told session

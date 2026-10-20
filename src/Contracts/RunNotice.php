@@ -18,7 +18,7 @@ use Pushery\SQLens\Severity\Severity;
  * the axes a report shows. They differ only in which suite produced them.
  *
  * The contract exists because the registry export — the artifact that answers "does every finding
- * this package can emit have a page" — has to see ALL of them. A second notice family that the
+ * this package can emit have a page" — has to see all of them. A second notice family that the
  * export did not know about would be a family of ids with no page and nothing to notice the gap,
  * which is precisely the drift the export was built to make impossible.
  */

@@ -49,7 +49,7 @@ use Pushery\SQLens\Tools\ToolRunResult;
  * so `typecheck` and `plpgsql_check` add nothing at the database for this subcommand.
  *
  * The reason is suppression. A `postgres-language-server.jsonc` sitting in the working directory
- * IS read and DOES change the result — measured: one finding became zero, with nothing anywhere
+ * is read and does change the result — measured: one finding became zero, with nothing anywhere
  * saying so. Since SQLens maps this tool's output into its own report, such a file would silence a
  * SQLens finding without passing through the baseline or the ignore list, which are the two places
  * a suppression is supposed to be visible.
@@ -71,7 +71,7 @@ final readonly class PglsRunner
     /**
      * The exit codes the tool's contract uses: nothing found, and something found.
      *
-     * Measured, and the second one is doing more work than it looks: a connection failure ALSO
+     * Measured, and the second one is doing more work than it looks: a connection failure also
      * exits 1, with plain text where the report should be. So the exit code alone cannot separate
      * "found problems" from "never got there" — {@see read()} does that on the output instead.
      */

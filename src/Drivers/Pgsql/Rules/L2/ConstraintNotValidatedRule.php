@@ -71,7 +71,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * the migration just created locks nothing live, so a statement whose tables are all
  * new is beneath notice. The second is narrower and is what the incident above turns
  * on: this form differs from `NOT VALID` in exactly one thing, the scan of rows
- * ALREADY in the altered table. A table born empty in this migration has none, so the
+ * already in the altered table. A table born empty in this migration has none, so the
  * locks — including the one on a live referenced table — are taken and released
  * identically either way, and the advice would split one migration into two without
  * shortening anything. `Schema::create()` with `foreignId()->constrained()` is that

@@ -32,7 +32,7 @@ use Pushery\SQLens\Rules\VersionWindow;
  *
  * - **Materialization and iteration** fire wherever they appear in `up()`/`down()`.
  *   Reading rows in a migration means the migration is about those rows.
- * - **Predicates** (`count`, `exists`, `sum`, …) fire ONLY inside a condition.
+ * - **Predicates** (`count`, `exists`, `sum`, …) fire only inside a condition.
  *   A count that is merely logged changes no SQL, and flagging it would make the
  *   detector noise — a rule that flags everything gets switched off, and then it
  *   protects nothing. That is the FP boundary, and it is drawn here on purpose.
@@ -82,7 +82,7 @@ final readonly class ResultDependentDetector implements PreScanDetector
             versionWindow: VersionWindow::unbounded(),
             downtimeClass: null,
             downtimeClassRationale: 'A pre-scan hit describes no DDL — it is the reason a migration was not captured at all — so it has no downtime behavior to classify.',
-            messagePrefix: 'Result-dependent migration',
+            messagePrefix: 'sqlens.lint',
             documentationUrl: RuleDocumentationUrl::for(self::RULE_ID),
             suites: PreScanMetadataAudit::defaultSuites(),
             badExample: <<<'PHP'
@@ -138,7 +138,7 @@ final readonly class ResultDependentDetector implements PreScanDetector
      */
     private function hitFor(string $file, array $call): ?PreScanHit
     {
-        // The exemptions cover the METHOD-NAME collision only — `Config::get` is
+        // The exemptions cover the method-name collision only — `Config::get` is
         // not a query read. They deliberately do not reach the loop arm below:
         // `Schema::table` is exempt from being called a query read and is exactly
         // what the loop arm is looking for.

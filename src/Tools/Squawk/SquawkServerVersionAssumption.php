@@ -8,7 +8,7 @@ use Pushery\SQLens\Engine\ResolvedServerVersion;
 use Pushery\SQLens\Rules\ServerVersion;
 
 /**
- * Which PostgreSQL version the tool is told to judge against — the SAME one the core rules used.
+ * Which PostgreSQL version the tool is told to judge against — the same one the core rules used.
  *
  * The pin is not re-derived here. The run already resolved a version, from a configured
  * `assume_server_version` or from the server itself, and this reads that decision rather than
@@ -23,7 +23,7 @@ use Pushery\SQLens\Rules\ServerVersion;
 final readonly class SquawkServerVersionAssumption
 {
     /**
-     * The shape the tool accepts, and it is strict on OUR side for a measured reason.
+     * The shape the tool accepts, and it is strict on our side for a measured reason.
      *
      * Handed something non-numeric, the tool exits 2 with "Invalid number in version" — measured.
      * That would arrive as a failed run, which is true and useless: the cause is a version string

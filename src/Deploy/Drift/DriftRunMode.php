@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Deploy\Drift;
 
 /**
- * Whether a drift run REPORTS or BLOCKS.
+ * Whether a drift run reports or blocks.
  *
  * The default is report, and that is a survival decision rather than a courtesy. The first drift
  * run on a grown production database finds a decade of hand-made objects, and a gate that turns red
@@ -38,9 +38,10 @@ enum DriftRunMode: string
             return self::Gate;
         }
 
-        // Anything that is not the literal string `gate` is report — including a typo, a null, and
-        // an array. Erring toward the gate on an unreadable value would put a project into blocking
-        // mode it never asked for, which is the one direction this enum must never fail in.
+        // The configuration check refuses every value but `report` and `gate` before a command gets
+        // here. A caller that skipped it still never reaches the gate by accident: anything that is
+        // not the literal string `gate` reads as report, because erring toward the gate on an
+        // unreadable value would put a project into blocking mode it never asked for.
         return $configured === self::Gate->value ? self::Gate : self::Report;
     }
 }

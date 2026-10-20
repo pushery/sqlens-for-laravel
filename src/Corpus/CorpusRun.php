@@ -13,7 +13,7 @@ use Pushery\SQLens\Levels\Level;
  *
  * ## The one rule that shapes everything here
  *
- * The measurement must use the SAME engine `sqlens:lint` uses. A second code path that "does
+ * The measurement must use the same engine `sqlens:lint` uses. A second code path that "does
  * roughly the same analysis" would measure itself: it would drift from the shipped runner exactly
  * where the shipped runner is subtle, and it would drift silently, because both would keep passing
  * their own tests.

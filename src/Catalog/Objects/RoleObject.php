@@ -92,7 +92,7 @@ final readonly class RoleObject
          * the role at the end.
          *
          * A finding that says "this account reaches superuser" and stops is not resolvable: the person
-         * fixing it has to know WHICH grant to revoke, and on a three-step chain that is two grants
+         * fixing it has to know which grant to revoke, and on a three-step chain that is two grants
          * they cannot see from the endpoint alone. The shortest path per role, because a diamond offers
          * several and the shortest is the one somebody acts on first.
          *
@@ -102,8 +102,8 @@ final readonly class RoleObject
         /**
          * What each reachable role holds itself, keyed like {@see self::$reachablePaths}.
          *
-         * `$reachableAttributes` is the union over all of them, which answers WHETHER the account can
-         * become something and not THROUGH WHICH role. A finding that printed the first path it had
+         * `$reachableAttributes` is the union over all of them, which answers whether the account can
+         * become something and not through which role. A finding that printed the first path it had
          * named a membership that grants nothing whenever a harmless role sorted before the one with
          * the attribute, and the advice beside it was to revoke exactly that membership.
          *
@@ -124,7 +124,7 @@ final readonly class RoleObject
         /**
          * Whether this is the account the audit itself connected as.
          *
-         * The rules about dangerous attributes judge THIS account and no other, and the distinction is
+         * The rules about dangerous attributes judge this account and no other, and the distinction is
          * what keeps them usable: every PostgreSQL server has a `postgres` superuser and every MySQL
          * server a `root`, so a rule reporting every privileged account would report one on a database
          * created thirty seconds ago. What a project can act on is the role its application connects
@@ -134,7 +134,7 @@ final readonly class RoleObject
         /** Whether the account is locked or its password expired — it exists and cannot be used as is. */
         public bool $usable,
         /**
-         * How many ordinary tables this role OWNS in the application's schemas, or null when the
+         * How many ordinary tables this role owns in the application's schemas, or null when the
          * reading did not establish it.
          *
          * Ownership is a DDL right for which no grant exists: an owner may `ALTER` and `DROP` its
@@ -263,7 +263,7 @@ final readonly class RoleObject
      *
      * A typed question rather than a `=== ''` in each rule, because the empty string is exactly the
      * value a reader is tempted to treat as "absent" and skip past. It is not absent here: MySQL
-     * accepts `''@'host'` as a real account, and anyone connecting from a matching host under ANY
+     * accepts `''@'host'` as a real account, and anyone connecting from a matching host under any
      * name it does not otherwise know is authenticated as it. The reader keeps those rows on purpose.
      *
      * PostgreSQL answers false by construction: `pg_authid.rolname` is the catalog key and cannot be
@@ -288,7 +288,7 @@ final readonly class RoleObject
     }
 
     /**
-     * Whether the host is a pattern over host NAMES, such as `%.example.com`.
+     * Whether the host is a pattern over host names, such as `%.example.com`.
      *
      * MySQL matches it against the name the client's address resolves to, so the account accepts
      * every host whose name fits. Two narrower shapes are deliberately not one:

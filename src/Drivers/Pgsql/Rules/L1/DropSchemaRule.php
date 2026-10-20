@@ -69,7 +69,7 @@ final class DropSchemaRule extends AbstractPgsqlSafetyRule implements DeclaresLi
     }
 
     /**
-     * A considered `none`, and NOT the staged drop its table-shaped sibling points at.
+     * A considered `none`, and not the staged drop its table-shaped sibling points at.
      *
      * `DropTableRule` can offer a sequence because the object is the whole subject: stop reading
      * one table, then drop that one table. A schema is a container, so the sequence it needs is
@@ -78,7 +78,7 @@ final class DropSchemaRule extends AbstractPgsqlSafetyRule implements DeclaresLi
      * reads one statement and never the catalog, so ordering that list would be inventing it.
      *
      * `strategy: none` is a CONCLUSION rather than a blank: a rule looked, and there is nothing
-     * standard to recommend. What the reason CAN say is how the last step is made safe, which is
+     * standard to recommend. What the reason can say is how the last step is made safe, which is
      * the part that does not depend on the contents — `RESTRICT` is the default precisely because
      * it refuses while the retirement is unfinished, and `CASCADE` is the waiver of that check.
      */

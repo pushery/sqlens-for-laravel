@@ -28,7 +28,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * ## Why `money` is somebody else's finding
  *
  * PostgreSQL has a type literally called `money`, and it is not the answer — but it is also not
- * this rule's business. It needs no name heuristic at all (the type IS the finding), it fails for a
+ * this rule's business. It needs no name heuristic at all (the type is the finding), it fails for a
  * different reason (its input and output hang on `lc_monetary`, and it carries no currency), and it
  * has a different remediation story. It lives in {@see MoneyTypeRule} under its own id, so a
  * project can accept one and not the other.
@@ -40,7 +40,7 @@ final class FloatForMoneyRule extends AbstractCatalogRule implements DeclaresJud
     /**
      * Why there is no standard sequence here.
      *
-     * The shared concern decides WHEN this is attached — only where this rule itself flagged — so the rule
+     * The shared concern decides when this is attached — only where this rule itself flagged — so the rule
      * only has to say what it concluded.
      */
     #[Override]

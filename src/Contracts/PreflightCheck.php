@@ -36,7 +36,7 @@ interface PreflightCheck
     /**
      * Whether this check has anything to say about the given driver.
      *
-     * Asked BEFORE the run rather than answered inside it. A check that ran and returned "not for
+     * Asked before the run rather than answered inside it. A check that ran and returned "not for
      * me" would have opened a session, spent budget and produced a result somebody has to classify;
      * asked here it costs nothing and the report can say plainly that it did not apply.
      */

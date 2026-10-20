@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Catalog\Activity;
 
 /**
- * What a held lock BLOCKS, said in a way both engines can answer.
+ * What a held lock blocks, said in a way both engines can answer.
  *
  * The cases are not translations of PostgreSQL's eight lock modes or of MySQL's metadata-lock
  * names. They are the distinctions a deploy gate acts on, and there are exactly this many because
@@ -85,21 +85,21 @@ enum LockMode: string
     }
 
     /**
-     * Whether a lock in this mode is compatible with an ONLINE index build.
+     * Whether an ONLINE index build can run past a lock in this mode without waiting for it.
      *
-     * The distinction a migration written to be online turns on, and the one place where the modes
-     * genuinely disagree: PostgreSQL's `CREATE INDEX CONCURRENTLY` takes a maintenance lock, so it
-     * proceeds alongside ordinary readers and writers and waits only behind another maintenance
-     * operation or an exclusive lock. A preflight that reported every held lock as "in the way"
-     * would tell a project its online migration must wait when it need not, and the advice nobody
-     * follows twice is the advice that was wrong once.
+     * The distinction a migration written to be online turns on. `CREATE INDEX CONCURRENTLY` waits
+     * for every transaction that has modified the table, before each of its two scans, and after the
+     * second for every transaction holding a snapshot older than that scan. So a writer's lock is in
+     * its way even though the two locks never conflict, and a maintenance or exclusive lock is in its
+     * way because they do. A reader's lock is not, with one caveat this mode cannot carry: a query
+     * still running, or a transaction at REPEATABLE READ, holds the old snapshot the last wait is for.
      *
-     * This is deliberately NOT a `blocksSchemaChange()` predicate. That one was written first and
+     * This is deliberately not a `blocksSchemaChange()` predicate. That one was written first and
      * answered `true` for every case — which is both a method that cannot fail and, worse, untrue:
      * an ordinary `SELECT`'s lock does not block a concurrent index build at all.
      */
     public function allowsOnlineIndexBuild(): bool
     {
-        return $this === self::Shared || $this === self::SharedWrite;
+        return $this === self::Shared;
     }
 }

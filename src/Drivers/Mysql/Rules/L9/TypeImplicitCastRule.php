@@ -33,13 +33,13 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * PostgreSQL sibling never reaches a MySQL catalog, and a rule that went looking for it here would
  * be a check that cannot fail.
  *
- * ## What DOES survive is the interesting half
+ * ## What does survive is the interesting half
  *
  * Also measured on 8.4.10, both created without complaint:
  *
  * ```
  * varchar(50)  referencing  varchar(100)   -- created. Same type, different length: no conversion.
- * timestamp    referencing  datetime       -- created. DIFFERENT types, converted on every compare.
+ * timestamp    referencing  datetime       -- created. Different types, converted on every compare.
  * ```
  *
  * The first is why the comparison is the BASE type and not the declared one: a length difference is

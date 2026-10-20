@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Drivers\Pgsql\Shadow;
 
+use DateTimeImmutable;
 use Illuminate\Database\ConnectionInterface;
 use Pushery\SQLens\Attributes\RawSql;
+use Pushery\SQLens\Capture\Shadow\ShadowDatabaseName;
 use Pushery\SQLens\Contracts\ShadowDatabaseCatalog;
 use Pushery\SQLens\Exceptions\ShadowProvisioningUndetermined;
 use Pushery\SQLens\Findings\UndeterminedReason;
@@ -23,9 +25,11 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  * quoting is defense in depth, not the only barrier.
  *
  * No session timeout is set on this connection: a `CREATE DATABASE … TEMPLATE` of
- * a real schema can take longer than the tight per-statement capture budget, and
- * the whole provisioning is instead bounded by `capture.shadow.timeout`. This
- * connection is a maintenance link, not a capture session.
+ * a real schema can take longer than the tight per-statement capture budget, so it
+ * runs on the server's own defaults. Nothing bounds the provisioning as a whole:
+ * `capture.shadow.timeout` budgets each statement on the shadow database's own
+ * connection, not this one. This connection is a maintenance link, not a capture
+ * session.
  */
 final readonly class ConnectionMaintenanceGateway implements MaintenanceGateway, ShadowDatabaseCatalog
 {
@@ -66,6 +70,18 @@ final readonly class ConnectionMaintenanceGateway implements MaintenanceGateway,
         sort($names);
 
         return $names;
+    }
+
+    #[RawSql(reason: 'reads the server clock, which a shadow database is named by and the orphan sweep ages it by')]
+    public function serverTime(): DateTimeImmutable
+    {
+        // clock_timestamp() rather than now(): now() is the start of the current transaction, and
+        // this reading must be the moment it is taken.
+        $row = $this->maintenance->selectOne(
+            "select pg_catalog.to_char(pg_catalog.clock_timestamp() at time zone 'UTC', 'YYYYMMDDHH24MISS') as stamp"
+        );
+
+        return ShadowDatabaseName::serverTimeFrom(is_object($row) ? $row->stamp ?? null : null);
     }
 
     #[RawSql(reason: 'asks whether this role may create a database before the harness tries, so a refusal is reported rather than discovered as a crash')]

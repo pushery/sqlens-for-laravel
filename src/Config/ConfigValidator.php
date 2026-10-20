@@ -6,7 +6,7 @@ namespace Pushery\SQLens\Config;
 
 /**
  * Walks the raw `sqlens` config array against the ConfigSchema and collects
- * EVERY violation — unknown keys, missing keys, wrong types, out-of-range
+ * every violation — unknown keys, missing keys, wrong types, out-of-range
  * values — never stopping at the first. Any violation means the run exits
  * with the misconfiguration code before a single check executes: a config the
  * user believes in but the tool silently ignores is the most expensive kind of
@@ -66,7 +66,7 @@ final class ConfigValidator
      * The half that was actually load-bearing is untouched. An UNKNOWN key is still fatal,
      * because a typo that silently enables nothing is the failure this validator exists for.
      *
-     * A RETIRED key is not unknown and is not treated as one: it was written correctly against a
+     * A retired key is not unknown and is not treated as one: it was written correctly against a
      * schema that has since moved, so it is named and ignored — see
      * {@see ConfigSchema::RETIRED_TOP_LEVEL_KEYS}.
      */
@@ -133,15 +133,15 @@ final class ConfigValidator
     }
 
     /**
-     * Validate the `profiles` map. It is deliberately NOT a schema section: a
+     * Validate the `profiles` map. It is deliberately not a schema section: a
      * section demands every declared key be present, while a profile is a PARTIAL
      * override — naming only what the environment changes is the whole point, and
      * requiring all six everywhere would make three profiles into three copies of
      * the base config.
      *
-     * What IS enforced: the profile name must be one SQLens knows (a typo must not
+     * What is enforced: the profile name must be one SQLens knows (a typo must not
      * silently fall back to a lenient default), and every key inside must be one
-     * of the overridable settings, validated against the SAME leaf spec as its
+     * of the overridable settings, validated against the same leaf spec as its
      * base-config counterpart — so a profile can never accept a value the root
      * would reject.
      *
@@ -322,33 +322,80 @@ final class ConfigValidator
     }
 
     /**
-     * The checks that need TWO keys of one section in hand at once.
+     * The checks that need two keys of one section in hand at once.
      *
      * Deliberately here and not in the schema: a leaf rule is asked about one value and cannot see
      * its neighbor, and giving it the whole section would make every rule able to reach anywhere.
-     * There is one such rule today, and it exists because the value it guards is the entire point
-     * of the mode it belongs to.
+     * There are two such rules: the reason the `application` RLS mode is the entire point of, and the
+     * order of the debt bands, which no single band can see.
      *
      * @param  array<array-key, mixed>  $value
      * @return list<ConfigViolation>
      */
     private function crossKeyViolations(string $section, array $value): array
     {
+        if ($section === 'deploy.debt.thresholds') {
+            return $this->debtBandOrderViolations($value);
+        }
+
         if ($section !== 'security.rls' || ($value['mode'] ?? null) !== 'application') {
             return [];
         }
 
         $reason = $value['reason'] ?? null;
+        $expected = 'a sentence saying how separation is enforced, because the mode is `application`';
 
-        // `application` says separation happens somewhere this package cannot read. The sentence IS
+        // `application` says separation happens somewhere this package cannot read. The sentence is
         // the answer — without it the mode would be a way to silence the check while saying nothing,
         // which is the one thing the whole SEC.RLS family refuses.
-        return is_string($reason) && trim($reason) !== ''
-            ? []
-            : [ConfigViolation::missingKey(
-                'sqlens.security.rls.reason',
-                'a sentence saying how separation is enforced, because the mode is `application`',
-            )];
+        if (is_string($reason) && trim($reason) !== '') {
+            return [];
+        }
+
+        // The shipped config carries the key with null, so an empty reason is a value out of range.
+        // Calling it missing would send the reader looking for a line that is already there.
+        return array_key_exists('reason', $value)
+            ? [ConfigViolation::outOfRange('sqlens.security.rls.reason', $expected, $reason)]
+            : [ConfigViolation::missingKey('sqlens.security.rls.reason', $expected)];
+    }
+
+    /**
+     * The debt bands in the order their names promise: notice, then warning, then error.
+     *
+     * A debt's band is read loudest first, so an `error` that starts before `warning` does not make the
+     * configuration fail anywhere: it makes the warning band unreachable, and a finding jumps from
+     * notice to error without a word about why. Overriding one band beside the two shipped ones is how
+     * such a pair comes about. Equal numbers stay allowed, because two bands starting on the same day
+     * is a choice the louder band settles. A band that is missing or not a number is left to its own
+     * leaf rule, so the order is only asked of the numbers present.
+     *
+     * @param  array<array-key, mixed>  $value
+     * @return list<ConfigViolation>
+     */
+    private function debtBandOrderViolations(array $value): array
+    {
+        $violations = [];
+        $quieter = null;
+
+        foreach (['notice', 'warning', 'error'] as $band) {
+            $days = $value[$band] ?? null;
+
+            if (! is_int($days)) {
+                continue;
+            }
+
+            if ($quieter !== null && $days < $quieter['days']) {
+                $violations[] = ConfigViolation::outOfRange(
+                    'sqlens.deploy.debt.thresholds.'.$band,
+                    sprintf('a number of days not below the %s band (%d), because a louder band that starts earlier hides the quieter one', $quieter['band'], $quieter['days']),
+                    $days,
+                );
+            }
+
+            $quieter = ['band' => $band, 'days' => $days];
+        }
+
+        return $violations;
     }
 
     /** @return list<ConfigViolation> */
@@ -393,7 +440,7 @@ final class ConfigValidator
 
     /**
      * An unknown top-level key — with one special case: a dotted key whose
-     * dot-expansion IS a known path gets the dot-notation-trap message with the
+     * dot-expansion is a known path gets the dot-notation-trap message with the
      * exact nested rewrite instead of a generic "unknown key".
      */
     private function unknownTopLevelKey(string $key): ConfigViolation

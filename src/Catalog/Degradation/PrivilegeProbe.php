@@ -13,14 +13,14 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
 use Throwable;
 
 /**
- * Asks what this role may read BEFORE reading it, so an under-privileged audit says so.
+ * Asks what this role may read before reading it, so an under-privileged audit says so.
  *
  * ## The failure this exists to catch is silent on both engines, in different ways
  *
  * Measured on a real PostgreSQL 18 and MySQL 8.4, with a role holding nothing but `USAGE`:
  *
  * - **MySQL filters `information_schema` by privilege, without a word.** The same query that
- *   returns a database's tables to `root` returns ZERO ROWS to a role with no grants. No error, no
+ *   returns a database's tables to `root` returns zero rows to a role with no grants. No error, no
  *   warning — a clean, empty, complete-looking audit of a database the reader could not see. This is
  *   the single most dangerous shape in this package's problem space, and nothing but a probe finds
  *   it: the reading itself succeeded.

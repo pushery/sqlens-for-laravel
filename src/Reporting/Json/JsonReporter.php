@@ -26,11 +26,12 @@ final class JsonReporter implements Reporter
     public function report(Result $result, RunContext $context, OutputInterface $out): void
     {
         // JSON_INVALID_UTF8_SUBSTITUTE: captured SQL can contain invalid UTF-8 (a
-        // latin1 column value, a truncated multibyte sequence). It must NOT abort the
+        // latin1 column value, a truncated multibyte sequence). It must not abort the
         // whole report — the bad bytes become U+FFFD and serialization continues.
         // JSON_THROW_ON_ERROR still catches genuine structural bugs (they cannot come
         // from bad UTF-8 once it is substituted). Unescaped slashes and unicode keep
-        // paths and non-ASCII readable; no timestamp, no absolute path in the data.
+        // paths and non-ASCII readable; no generation time and no absolute path in the data, and
+        // RunContext names the fields that do vary between two runs.
         ReportText::document($out, json_encode(
             JsonEnvelope::for($result, $context)->toArray(),
             JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,

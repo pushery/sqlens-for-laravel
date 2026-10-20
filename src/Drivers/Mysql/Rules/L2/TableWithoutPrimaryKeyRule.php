@@ -143,7 +143,7 @@ final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements Decl
     }
 
     /**
-     * The class for THIS statement.
+     * The class for this statement.
      *
      * A `DROP PRIMARY KEY` gets it from the matrix — that statement really does rebuild the
      * table. A `CREATE TABLE` gets NONE, and that absence is a statement of its own: creating a
@@ -169,7 +169,7 @@ final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements Decl
      * On a `CREATE TABLE` the table is EMPTY. Adding the key costs nothing at all right now, and
      * everything later: the same key added to a populated table is a `COPY` ALTER. That asymmetry is
      * the whole content of the advice, and it is why this is still a `none` rather than a one-line
-     * migration statement — WHICH key is a schema decision. A surrogate `id BIGINT UNSIGNED
+     * migration statement — which key is a schema decision. A surrogate `id BIGINT UNSIGNED
      * AUTO_INCREMENT` is usually right and the reason says so; a linter that emitted it would be
      * choosing somebody's clustering order for them, which on InnoDB decides physical row order.
      *
@@ -206,7 +206,7 @@ final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements Decl
     }
 
     /**
-     * The same considered `none`, about a table that is unkeyed RIGHT NOW rather than about a
+     * The same considered `none`, about a table that is unkeyed right now rather than about a
      * statement that would leave it so — and the first implementer of the second seam.
      *
      * The conclusion is not new here, which is why this rule was chosen to go first: the lint side
@@ -265,10 +265,10 @@ final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements Decl
     }
 
     /**
-     * Which keyless case this statement is, if any — read ONCE, for the verdict and the material.
+     * Which keyless case this statement is, if any — read once, for the verdict and the material.
      *
      * The two flags carry different prose and different reason keys, so neither caller can be
-     * derived from the other's answer; what they CAN share is the reading that decides which case
+     * derived from the other's answer; what they can share is the reading that decides which case
      * it is, and that is the copy worth not making.
      *
      * @return 'after_a_drop'|'on_create'|'undetermined'|null
@@ -320,8 +320,15 @@ final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements Decl
         }
 
         $name = $object->getString('logical_name') ?? $object->qualifiedName;
+        $state = TableKeyState::inCatalog($object);
 
-        return match (TableKeyState::inCatalog($object)) {
+        // A key MySQL generated and the reading session hides is a key all the same, and an unkeyed
+        // reading cannot tell it from none.
+        if ($state === TableKeyState::Unkeyed && $object->getBool('generated_primary_key_hidden') === true) {
+            return [RuleVerdict::undetermined($this->hiddenKeyMessage($name), UndeterminedReason::TableKeyUndetermined)];
+        }
+
+        return match ($state) {
             TableKeyState::Keyed => [],
             TableKeyState::Unkeyed => [RuleVerdict::flag($this->liveTableMessage($name))],
             TableKeyState::Undetermined => [RuleVerdict::undetermined(
@@ -442,6 +449,16 @@ final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements Decl
             .'not be settled: the nullability of at least one indexed column was not read. InnoDB promotes '
             .'the first UNIQUE index whose columns are all NOT NULL, so that is the fact the answer turns '
             .'on. Note that sql_require_primary_key demands a real PRIMARY KEY either way.',
+            $table,
+        );
+    }
+
+    private function hiddenKeyMessage(string $table): string
+    {
+        return sprintf(
+            '%s shows no primary key, and the session that read it has show_gipk_in_create_table_and_information_schema '
+            .'OFF, which hides the invisible primary key MySQL generates for a table created without one. Whether this '
+            .'table has such a key could not be settled. Read it with the setting ON, the default, to tell the two apart.',
             $table,
         );
     }

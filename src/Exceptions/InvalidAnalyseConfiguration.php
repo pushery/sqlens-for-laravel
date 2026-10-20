@@ -38,7 +38,7 @@ final class InvalidAnalyseConfiguration extends RuntimeException
     /**
      * `policy` arrived as boolean true — NEON's `on` or `yes`.
      *
-     * The mirror image of the `off` case, and the one that must NOT be guessed. `false` has exactly
+     * The mirror image of the `off` case, and the one that must not be guessed. `false` has exactly
      * one plausible reading (the mode called `off`); `true` has two (`documented` and `strict`) and
      * picking either would leave a project under a duty it did not choose.
      *

@@ -42,7 +42,7 @@ interface Tool
      * (`pgsql`, `mysql`).
      *
      * Part of the contract rather than a detail of whoever asks, and the distinction it draws is
-     * NOT the one `supportsCurrentPlatform()` draws. A missing platform build is a tool that
+     * not the one `supportsCurrentPlatform()` draws. A missing platform build is a tool that
      * would have helped and cannot; an inapplicable driver is a tool that was never going to
      * help here. The first is a named degradation, the second is silence — reporting "squawk
      * was not found, it would have added PostgreSQL rules" on a MySQL run states a loss that
@@ -83,7 +83,7 @@ interface Tool
      * mark SQUAWK suppressions unverifiable, so a stale baseline line stops being reported and
      * nobody ever deletes it, while the PGLS ones lose the protection entirely.
      *
-     * Asking the tool makes the mapping impossible to get wrong, and makes a NEW tool that forgets
+     * Asking the tool makes the mapping impossible to get wrong, and makes a new tool that forgets
      * to answer a type error rather than a silent miscredit.
      */
     public function findingIdPrefix(): string;
@@ -91,7 +91,7 @@ interface Tool
     /**
      * How many checks are simply absent without this tool.
      *
-     * A COUNT rather than a boolean, because that is what makes an absence arguable. "Not
+     * A count rather than a boolean, because that is what makes an absence arguable. "Not
      * installed" invites a shrug; "seventeen checks nobody is running" is a decision somebody
      * has to make on purpose. It is read from the package's own map of what the tool covers,
      * never from the binary — asking the binary would make the number depend on whether the

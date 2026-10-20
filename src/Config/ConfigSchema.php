@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Config;
 
 use BackedEnum;
+use Pushery\SQLens\Audit\IgnoreList;
 use Pushery\SQLens\Audit\ServerLifetime;
 use Pushery\SQLens\Capture\PreScan\IndirectCallDetector;
 use Pushery\SQLens\Capture\PreScan\SideEffectFacadeDetector;
+use Pushery\SQLens\Capture\Shadow\ShadowDatabaseName;
 use Pushery\SQLens\Catalog\PrefixScope;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Deploy\Drift\DriftRunMode;
+use Pushery\SQLens\Deploy\EscalationThresholds;
 use Pushery\SQLens\Exceptions\UndeclaredConfigPath;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Format\FormatDiscovery;
@@ -26,7 +29,7 @@ use Pushery\SQLens\Severity\Severity;
 
 /**
  * The declarative schema for the `sqlens` config key: which keys exist, what
- * each accepts, and the expectation text a violation reports. This is the ONE
+ * each accepts, and the expectation text a violation reports. This is the one
  * owner of the config surface — the suppression, baseline, and reporting layers
  * consume the sections declared here and never re-describe them.
  *
@@ -53,6 +56,7 @@ final readonly class ConfigSchema
         'categories',
         'stability',
         'profile',
+        'environment_profile',
         'strict_tools',
         'strict_undetermined',
         'allow_destructive',
@@ -100,10 +104,10 @@ final readonly class ConfigSchema
     ];
 
     /**
-     * Sections whose CHILD KEYS are names a project chooses, not names this schema knows.
+     * Sections whose child keys are names a project chooses, not names this schema knows.
      *
      * `guard.profiles` holds one entry per profile a project defines, so its keys cannot be listed
-     * — but everything INSIDE each entry can be, and must be: the whole point of the guard schema
+     * — but everything inside each entry can be, and must be: the whole point of the guard schema
      * is that a typo in a profile is a configuration error rather than a silently disabled
      * guardrail.
      *
@@ -158,11 +162,12 @@ final readonly class ConfigSchema
         'catalog' => ['session', 'budget_ms', 'schemas', 'table_prefix', 'prefix_scope', 'report_partitions_individually', 'include_extension_objects', 'extensions'],
         'catalog.session' => ['statement_timeout', 'lock_timeout', 'idle_in_transaction_timeout', 'application_name'],
         'catalog.extensions' => ['allow'],
-        'audit' => ['ignore', 'tenancy', 'uuid_generated_by', 'money_columns', 'unused_index', 'expect', 'naming', 'documentation'],
+        'audit' => ['ignore', 'tenancy', 'uuid_generated_by', 'money_columns', 'unused_index', 'key_ceiling', 'expect', 'naming', 'documentation'],
         'audit.tenancy' => ['mode', 'reference'],
         'audit.ignore' => ['rules', 'objects', 'pairs'],
         'audit.money_columns' => ['extra', 'ignore'],
         'audit.unused_index' => ['min_observation_days'],
+        'audit.key_ceiling' => ['min_percent_used'],
         'audit.naming' => ['pattern', 'exempt', 'foreign_key_suffix'],
         'audit.documentation' => ['require_table_comments', 'require_column_comments', 'exempt'],
         'audit.expect' => ['lower_case_table_names'],
@@ -220,7 +225,7 @@ final readonly class ConfigSchema
      * timeout-hygiene rules understand. These are engine names, but they are only strings
      * here: the neutral core imports no driver, so it keeps its own copy rather than reach
      * across the boundary for the driver's authoritative list. A test pins the two lists
-     * together (the driver's own KNOWN set against this) so they cannot drift apart.
+     * together (the driver's own known set against this) so they cannot drift apart.
      *
      * @var list<string>
      */
@@ -250,7 +255,7 @@ final readonly class ConfigSchema
      * and a project would believe it had enabled a tool that does not exist. A typo must be an
      * error naming the real names, never a switch that quietly does nothing.
      *
-     * It is also the ONE place a new tool becomes configurable. A tool class that is not named
+     * It is also the one place a new tool becomes configurable. A tool class that is not named
      * here cannot be turned on by any configuration, which is what keeps the surface from growing
      * by accident.
      *
@@ -318,7 +323,7 @@ final readonly class ConfigSchema
     public const int MCP_MAX_FINDINGS_CEILING = 10_000;
 
     /**
-     * The options each tool section carries — PER TOOL, and it did not start that way.
+     * The options each tool section carries — per tool, and it did not start that way.
      *
      * This was one shared list, with a note saying a second tool needing different options would
      * be telling us something about the design rather than about itself. The second tool arrived
@@ -439,6 +444,7 @@ final readonly class ConfigSchema
             'security.privacy.ignore_columns-item' => 'a QUALIFIED column name — for example "orders.iban". Unqualified would silence every column with that name, including ones nobody looked at',
             'stability-item' => 'one of: '.$this->enumValues(StabilityTier::class),
             'profile' => 'one of: '.$this->enumValues(RunProfile::class).', or null (each command then uses its own default)',
+            'environment_profile' => 'SQLENS_PROFILE as the configuration loaded it: a string, or null when the variable is unset',
             'strict_tools', 'strict_undetermined' => 'a boolean',
             'allow_destructive' => 'a boolean — whether destructive operations are allowed project-wide (shown as a named suppression, never hidden)',
             'use_statistics' => 'a boolean — whether checks may reason about the server\'s table statistics',
@@ -471,15 +477,16 @@ final readonly class ConfigSchema
             'capture.shadow.orphan_after_seconds' => 'a whole number of seconds — how old a leaked shadow database must be before a later run removes it. Anything below 3600 is raised to 3600: the age is what stops one parallel worker dropping the throwaway database another is migrating into, and lowering it trades a disk-space annoyance for the one mistake this path must never make',
             'capture.shadow.connection' => 'a database connection name or null (null = the run\'s resolved connection)',
             'capture.shadow.direct_connection' => 'a database connection name to provision through (bypassing a transaction pooler), or null',
-            'capture.shadow.database_prefix' => 'a non-empty prefix for the throwaway database name, using only [a-z0-9_]',
+            'capture.shadow.database_prefix' => 'a non-empty prefix for the throwaway database name, using only [a-z0-9_] and at most '
+                .ShadowDatabaseName::MAX_PREFIX_LENGTH.' characters, so a later run\'s orphan sweep can read the names it makes',
             'capture.shadow.allowed_environments' => 'a non-empty list of environment names the shadow mode may run in',
             'capture.shadow.allowed_environments-item' => 'an environment name (a non-empty string)',
             'capture.shadow.keep_on_failure' => 'a boolean — whether to keep the throwaway database when a run fails, for debugging',
-            'capture.shadow.timeout' => 'a positive integer number of seconds the shadow provisioning and migration may take',
-            'audit' => 'an array with the keys: ignore, tenancy, uuid_generated_by, money_columns, unused_index, expect, naming, documentation',
+            'capture.shadow.timeout' => 'a positive integer number of seconds: the budget of each statement and each lock wait on the shadow database, not of the run as a whole',
+            'audit' => 'an array with the keys: ignore, tenancy, uuid_generated_by, money_columns, unused_index, key_ceiling, expect, naming, documentation',
             'audit.tenancy' => 'an array with the keys: mode, reference',
             'audit.uuid_generated_by' => 'either app or server when the project knows which side generates its UUID primary keys, or null to leave it unanswered',
-            'audit.tenancy.mode' => 'either none (one database) or explicit (tenants, and reference names the one to audit)',
+            'audit.tenancy.mode' => 'either none (nothing declared, the default) or explicit (tenants, and reference names the one to audit)',
             'audit.tenancy.reference' => 'the tenant or connection this report is about, or null when mode is none',
             'audit.ignore' => 'an array with the keys: rules, objects, pairs',
             'audit.ignore.rules' => 'a list of rule ids to silence everywhere; empty means none',
@@ -487,18 +494,22 @@ final readonly class ConfigSchema
             'audit.ignore.objects' => 'a list of dotted object paths on which every rule is silenced; empty means none',
             'audit.ignore.objects-item' => 'a dotted object path, optionally ending in * — for example "legacy.*"',
             'audit.ignore.pairs' => 'a list of {rule, objects} entries — the precise form; empty means none',
-            'audit.ignore.pairs-item' => 'an entry with a rule id and a non-empty list of object paths',
+            'audit.ignore.pairs-item' => 'an entry with exactly two keys: rule, a rule id, and objects, a non-empty list of object paths',
             'audit.money_columns' => 'an array with the keys: extra, ignore',
             'audit.unused_index' => 'an array with the key: min_observation_days',
+            'audit.key_ceiling' => 'an array with the key: min_percent_used',
             'audit.naming' => 'an array with the keys: pattern, exempt, foreign_key_suffix',
             'audit.naming.pattern' => 'a PCRE pattern an identifier must match, delimiters included — the shipped default is /^[a-z][a-z0-9_]*$/, and a pattern PCRE cannot compile is refused here rather than turning every identifier into a violation',
             'audit.naming.exempt' => 'a list of PCRE patterns naming identifiers this rule does not judge — for a schema somebody else owns, where the convention is not yours to set',
+            'audit.naming.exempt-item' => 'a PCRE pattern PHP can compile, delimiters included, such as /^legacy_/',
             'audit.naming.foreign_key_suffix' => 'a non-empty string a single-column foreign key\'s column is expected to end with — the default is _id. Empty is refused rather than honored: every name ends with the empty string, so an empty setting silences the rule completely and the project reads "no findings" as "my keys are named the way I asked"',
             'audit.documentation' => 'an array with the keys: require_table_comments, require_column_comments, exempt',
             'audit.documentation.require_table_comments' => 'a boolean — whether a table without a comment is a finding. FALSE by default: level 9 is already an opt-in, and a project that raised its level to see the pedantic band should not be told in the same breath that every table it owns is undocumented',
             'audit.documentation.require_column_comments' => 'a boolean — whether a column without a comment is a finding. Separate from the table switch because it is a different amount of work, and folding the two together would make the cheaper half unreachable',
             'audit.documentation.exempt' => 'a list of bare table names this rule does not judge, or null to use the shipped framework list. It REPLACES that list rather than adding to it, so a project naming its own set is not silently still carrying ours. Names are matched WHOLE: a project\'s own job_applications is not the framework\'s jobs',
+            'audit.documentation.exempt-item' => 'a bare table name (a non-empty string)',
             'audit.unused_index.min_observation_days' => 'a whole number of days (0 or more) the statistics must have been running before an unused index is reported',
+            'audit.key_ceiling.min_percent_used' => 'a whole number from 1 to 100: the share of its ceiling an integer primary key may have used before the level-5 near-ceiling rule reports it',
             'audit.money_columns.extra' => 'a list of column-name terms this project treats as money; empty means the shipped dictionary alone',
             'audit.money_columns.extra-item' => 'a column-name term (a non-empty string) — for example "settlement_amount"',
             'audit.money_columns.ignore' => 'a list of dictionary terms this project does not want reported; empty means none',
@@ -519,8 +530,8 @@ final readonly class ConfigSchema
             'pgsql.expected_timeouts' => 'a list of the session timeouts a strong-lock migration must set; empty means neither is required',
             'pgsql.expected_timeouts-item' => 'one of: '.implode(', ', self::PGSQL_TIMEOUT_NAMES),
             'pgsql.max_locks_per_transaction' => 'a positive integer — how many distinct existing tables one migration transaction may strong-lock before it is flagged',
-            'security' => 'an array with the keys: audit_connection, min_severity, include_vendor_migrations, advisories, runtime_connection, migration_connection, analyse, rls, privacy',
-            'security.audit_connection' => "a connection name from config/database.php for the security readers to RUN ON, or null for the run's own connection. Not to be confused with runtime_connection and migration_connection beside it, which name connections this suite ANALYZES. A name no database config defines is refused rather than fallen back from: falling back would examine a different instance and report it as clean",
+            'security' => 'an array with the keys: '.implode(', ', self::SECTION_KEYS['security']),
+            'security.audit_connection' => "a connection name from config/database.php for the security readers of sqlens:security to RUN ON, or null for the run's own connection; sqlens:audit reads its --connection or sqlens.connection instead. Not to be confused with runtime_connection and migration_connection beside it, which name connections this suite ANALYZES. A name no database config defines is refused rather than fallen back from: falling back would examine a different instance and report it as clean",
             'security.advisories' => 'an array with the keys: path, source',
             'security.advisories.source' => 'an https URL serving a document in this package\'s advisory format, or null — no default ships',
             'security.advisories.path' => 'an absolute path to an end-of-life data file, or null to use the published or bundled copy',
@@ -594,7 +605,8 @@ final readonly class ConfigSchema
             'deploy' => 'an array with the keys: drift, debt, predeploy, postdeploy',
             'deploy.postdeploy' => 'an array with the keys: budget_ms, transition_patterns',
             'deploy.postdeploy.budget_ms' => "a positive integer number of milliseconds the WHOLE post-deploy run may take before it reports DEPLOY.RUN.TIME_BUDGET_EXCEEDED — its own number rather than the pre-deploy gate's, because two commands making two promises must not move together, and milliseconds like every other budget here so nobody reads a five-second allowance as five milliseconds",
-            'deploy.postdeploy.transition_patterns' => 'a list of PCRE patterns naming objects that look like unfinished-migration leftovers, or null for the shipped list. It REPLACES the shipped one rather than adding to it. A pattern PCRE cannot compile is dropped and a list that ends up empty falls back to the shipped one, because an empty list would silence the check and let a project read "no findings" as "nothing left behind"',
+            'deploy.postdeploy.transition_patterns' => 'a list of PCRE patterns naming objects that look like unfinished-migration leftovers, or null for the shipped list. It REPLACES the shipped one rather than adding to it, and an empty list falls back to the shipped one, because an empty list would silence the check and let a project read "no findings" as "nothing left behind". A pattern PCRE cannot compile is refused here',
+            'deploy.postdeploy.transition_patterns-item' => 'a PCRE pattern PHP can compile, delimiters included, such as /_old$/',
             'deploy.predeploy' => 'an array with the keys: allow_undetermined, available_disk_bytes',
             'deploy.drift' => 'an array with the keys: mode, exclude_file',
             'deploy.drift.exclude_file' => 'a non-empty, repository-relative path — where the differences this project has accepted are recorded. Never null and never absolute: the file is a decision log, and one outside the repository is one nobody reviews. Every entry needs a reason, and an entry that matches nothing ends the run',
@@ -658,7 +670,7 @@ final readonly class ConfigSchema
         // Every entry of the tool map answers the same question — is this tool exposed — so it is
         // one branch rather than six `match` arms that would have to be edited in lockstep with
         // MCP_TOOL_NAMES. The names themselves are already closed by the section walk: reaching
-        // here means the key IS one of them.
+        // here means the key is one of them.
         if (str_starts_with($relativePath, 'agent.mcp.tools.')) {
             return is_bool($value) ? [] : [ConfigViolation::wrongType($path, $expected, $value)];
         }
@@ -673,15 +685,16 @@ final readonly class ConfigSchema
                 : [is_string($value)
                     ? ConfigViolation::outOfRange($path, $expected, $value)
                     : ConfigViolation::wrongType($path, $expected, $value)],
-            // SHAPE here, MEANING in the loader — the same split the host arm above documents, and
-            // for the same reason. Which operation names exist is a fact about the shipped
-            // threshold artifact, and `EscalationThresholds::load()` already refuses an unknown one
-            // by name. Repeating that list here would be a second authority on it, free to drift
-            // toward accepting a name the artifact dropped.
-            // An empty array is BOTH a list and the shipped default, so it has to pass; anything
+            // The shape here, and the operation names asked of the loader rather than listed: which
+            // operations exist is a fact about the shipped threshold artifact, and a list repeated
+            // here would be a second authority on it, free to drift toward accepting a name the
+            // artifact dropped. Asked here, an unknown name is refused before a command starts, with
+            // the misconfiguration exit. Left to the loader alone, it would surface while the
+            // container builds the command's collaborators, before the command can refuse anything.
+            // An empty array is both a list and the shipped default, so it has to pass; anything
             // else that is a list is a mistake — the steps go one level down, keyed by operation.
             'preflight.thresholds' => is_array($value) && ($value === [] || ! array_is_list($value))
-                ? []
+                ? $this->unknownOperations($path, $value)
                 : [ConfigViolation::wrongType($path, $expected, $value)],
             'level' => is_int($value)
                 ? ($value >= 0 && $value <= 9 ? [] : [ConfigViolation::outOfRange($path, $expected, $value)])
@@ -719,13 +732,19 @@ final readonly class ConfigSchema
             // command's own default, so shipping one made `sqlens:predeploy` run as `local` in every
             // project that never picked a profile.
             'profile' => $value === null ? [] : $this->enumLeaf($path, $expected, RunProfile::class, $value),
+            // A string or nothing, and not held to the profile names here: an unknown name is refused
+            // where the profile is chosen, by the selector, which names SQLENS_PROFILE as its source.
+            'environment_profile' => $value === null || is_string($value) ? [] : [ConfigViolation::wrongType($path, $expected, $value)],
             'strict_tools', 'strict_undetermined', 'use_statistics', 'allow_destructive' => is_bool($value)
                 ? []
                 : [ConfigViolation::wrongType($path, $expected, $value)],
+            // Read with the strict pin parser the run reads it with. The lenient banner scan accepts
+            // `18.x` or `v18.0`, which the run then refuses as an unreadable pin, leaving every
+            // version-dependent rule undetermined behind exit 0 instead of stopping here.
             'assume_server_version' => $value === null
                 ? []
                 : (is_string($value)
-                    ? ($value !== '' && ServerVersion::parse($value, 'assumed') instanceof ServerVersion
+                    ? (ServerVersion::parsePin($value, 'assumed') instanceof ServerVersion
                         ? []
                         : [ConfigViolation::outOfRange($path, $expected, $value)])
                     : [ConfigViolation::wrongType($path, $expected, $value)]),
@@ -748,10 +767,6 @@ final readonly class ConfigSchema
                 : (is_int($value)
                     ? [ConfigViolation::outOfRange($path, $expected, $value)]
                     : [ConfigViolation::wrongType($path, $expected, $value)]),
-            // Zero is ALLOWED here, unlike every budget above, and the difference is what the
-            // number means. A budget of zero would say "no bound", which is the harm those settings
-            // exist to prevent; a threshold of zero says "loud from the first day", which is a
-            // legitimate thing for a project to want and the only way to express it.
             // Null is the OFF position and a positive number is a real threshold. Zero is refused
             // rather than read as "break on everything": a project that meant that would be saying
             // every safe two-step pattern must fail its own deploy, which is not a setting anybody
@@ -761,6 +776,10 @@ final readonly class ConfigSchema
                 : (is_int($value)
                     ? [ConfigViolation::outOfRange($path, $expected, $value)]
                     : [ConfigViolation::wrongType($path, $expected, $value)]),
+            // Zero is ALLOWED here, unlike every budget above, and the difference is what the
+            // number means. A budget of zero would say "no bound", which is the harm those settings
+            // exist to prevent; a threshold of zero says "loud from the first day", which is a
+            // legitimate thing for a project to want and the only way to express it.
             'deploy.debt.thresholds.notice',
             'deploy.debt.thresholds.warning',
             'deploy.debt.thresholds.error' => is_int($value) && $value >= 0
@@ -768,12 +787,6 @@ final readonly class ConfigSchema
                 : (is_int($value)
                     ? [ConfigViolation::outOfRange($path, $expected, $value)]
                     : [ConfigViolation::wrongType($path, $expected, $value)]),
-            // The reader identifies itself in the server's activity view. An empty name
-            // is refused rather than stored: an unidentified session holding a connection
-            // on production is one somebody will eventually kill blind.
-            // A blank entry would scope the audit to a schema nobody can name, and the
-            // reader would refuse it later with a message about a schema called "". Caught
-            // here instead, under the key that produced it.
             // Both lists take the same shape, so they share one arm — and the item spec is derived
             // from the path rather than written twice, which is how the two would drift apart.
             // The two string lists of the audit ignore. `pairs` is not here because its items are
@@ -785,11 +798,11 @@ final readonly class ConfigSchema
                 static fn (string $item): bool => trim($item) !== '',
                 $relativePath.'-item',
             ),
-            // Checked as a LIST only. The shape of each entry — a rule id and a non-empty object
-            // list — is enforced where it is read, and duplicating it here would mean two places
-            // decide what a pair is. What this arm refuses is the shape that would otherwise reach
-            // the reader as something it cannot walk at all.
-            'audit.ignore.pairs' => $this->listOfArrays($path, $value, $relativePath),
+            // Each entry by index, with the definition of a pair the reader uses, so one place
+            // decides what a pair is. The reader drops an entry it cannot read, the safe direction
+            // for a run, but a dropped line is one the project believes in while nothing reads it,
+            // so it is named here before anything runs.
+            'audit.ignore.pairs' => $this->ignorePairs($path, $value, $relativePath),
             // A fixed pair rather than a free string: 'explicit' and 'none' are the whole
             // vocabulary, and a typo that fell through would leave a tenant project running
             // with the guard silently off.
@@ -824,6 +837,9 @@ final readonly class ConfigSchema
             'audit.expect.lower_case_table_names' => $value === null || (is_int($value) && in_array($value, [0, 1, 2], true))
                 ? []
                 : [ConfigViolation::wrongType($path, $expected, $value)],
+            // A blank entry would scope the audit to a schema nobody can name, and the
+            // reader would refuse it later with a message about a schema called "". Caught
+            // here instead, under the key that produced it.
             'catalog.schemas' => $this->listOfStrings(
                 $path,
                 $value,
@@ -855,6 +871,9 @@ final readonly class ConfigSchema
                 static fn (string $item): bool => trim($item) !== '',
                 'catalog.extensions.allow-item',
             ),
+            // The reader identifies itself in the server's activity view. An empty name
+            // is refused rather than stored: an unidentified session holding a connection
+            // on production is one somebody will eventually kill blind.
             'catalog.session.application_name' => is_string($value) && trim($value) !== ''
                 ? []
                 : (is_string($value)
@@ -887,7 +906,7 @@ final readonly class ConfigSchema
                     ? ConfigViolation::outOfRange($path, $expected, $value)
                     : ConfigViolation::wrongType($path, $expected, $value)],
             'capture.shadow.database_prefix' => is_string($value)
-                ? ($value !== '' && preg_match('/^[a-z0-9_]+$/', $value) === 1 ? [] : [ConfigViolation::outOfRange($path, $expected, $value)])
+                ? ($value !== '' && strlen($value) <= ShadowDatabaseName::MAX_PREFIX_LENGTH && preg_match('/^[a-z0-9_]+$/', $value) === 1 ? [] : [ConfigViolation::outOfRange($path, $expected, $value)])
                 : [ConfigViolation::wrongType($path, $expected, $value)],
             'capture.shadow.allowed_environments' => $this->listOfStrings(
                 $path,
@@ -952,11 +971,11 @@ final readonly class ConfigSchema
             ),
             // A threshold below 1 would mean "flag a transaction that locks zero tables",
             // which is never a finding — a misconfiguration, not a normalized zero.
-            // Zero IS meaningful here, unlike the lock threshold below: it means "report on
+            // Zero is meaningful here, unlike the lock threshold below: it means "report on
             // whatever window the server has", which is the honest setting for a project that
             // knows its statistics have never been reset. A negative value is not a shorter
             // window, it is a mistake.
-            // A pattern PCRE cannot compile is REFUSED, and that is the whole reason this leaf has a
+            // A pattern PCRE cannot compile is refused, and that is the whole reason this leaf has a
             // check of its own. `preg_match()` answers `false` for a broken pattern rather than `0`,
             // and `false !== 1` — so one typo in a project's pattern would turn every identifier in
             // the database into a violation, with nothing in the report pointing at the setting.
@@ -964,15 +983,21 @@ final readonly class ConfigSchema
             // canonical GOOD name in this rule's own default.
             //
             // The silence operator is the narrow kind: the only diagnostic `preg_match()` raises
-            // here is about the pattern, and it is not swallowed — its failure IS the violation.
+            // here is about the pattern, and it is not swallowed — its failure is the violation.
             'audit.naming.pattern' => is_string($value) && @preg_match($value, '') !== false
                 ? []
                 : (is_string($value)
                     ? [ConfigViolation::outOfRange($path, $expected, $value)]
                     : [ConfigViolation::wrongType($path, $expected, $value)]),
-            'audit.naming.exempt' => is_array($value) && array_all($value, static fn (mixed $entry): bool => is_string($entry) && @preg_match($entry, '') !== false)
-                ? []
-                : [ConfigViolation::wrongType($path, $expected, $value)],
+            // Each entry on its own and by index, as every other list here reports: "found an
+            // array" above a list that is a list would leave the reader to find the entry by eye.
+            'audit.naming.exempt' => $this->listOfStrings(
+                $path,
+                $value,
+                'audit.naming.exempt',
+                static fn (string $entry): bool => @preg_match($entry, '') !== false,
+                'audit.naming.exempt-item',
+            ),
             // The EMPTYING value is refused rather than normalized: every name ends with the empty
             // string, so an empty suffix silences the rule completely — and the project reads "no
             // findings" as "my keys are named the way I asked" when nothing had been asked.
@@ -984,22 +1009,41 @@ final readonly class ConfigSchema
                 : (is_int($value)
                     ? [ConfigViolation::outOfRange($path, $expected, $value)]
                     : [ConfigViolation::wrongType($path, $expected, $value)]),
+            // Zero would report every key that has handed out one value, and a share above a hundred
+            // none at all: both are refused rather than read as "report everything" or "never".
+            'audit.key_ceiling.min_percent_used' => is_int($value) && $value >= 1 && $value <= 100
+                ? []
+                : (is_int($value)
+                    ? [ConfigViolation::outOfRange($path, $expected, $value)]
+                    : [ConfigViolation::wrongType($path, $expected, $value)]),
             'audit.documentation.require_table_comments', 'audit.documentation.require_column_comments' => is_bool($value)
                 ? []
                 : [ConfigViolation::wrongType($path, $expected, $value)],
             // Null is the shipped default and means "use the framework list". A list REPLACES it.
             // Refused as anything else rather than coerced: a string here would exempt one table
             // and read as though it exempted a set.
-            'audit.documentation.exempt' => $value === null || (is_array($value) && array_all($value, static fn (mixed $entry): bool => is_string($entry) && $entry !== ''))
+            'audit.documentation.exempt' => $value === null
                 ? []
-                : [ConfigViolation::wrongType($path, $expected, $value)],
+                : $this->listOfStrings(
+                    $path,
+                    $value,
+                    'audit.documentation.exempt',
+                    static fn (string $entry): bool => $entry !== '',
+                    'audit.documentation.exempt-item',
+                ),
             // Null is the shipped default and means "use the list this package ships". A list
             // REPLACES it. Each entry must be a pattern PCRE can compile — refused here rather than
             // dropped at runtime, because a project that wrote a broken pattern deserves to be told
             // so once rather than to read a quiet "no findings" forever.
-            'deploy.postdeploy.transition_patterns' => $value === null || (is_array($value) && array_all($value, static fn (mixed $entry): bool => is_string($entry) && $entry !== '' && @preg_match($entry, '') !== false))
+            'deploy.postdeploy.transition_patterns' => $value === null
                 ? []
-                : [ConfigViolation::wrongType($path, $expected, $value)],
+                : $this->listOfStrings(
+                    $path,
+                    $value,
+                    'deploy.postdeploy.transition_patterns',
+                    static fn (string $entry): bool => $entry !== '' && @preg_match($entry, '') !== false,
+                    'deploy.postdeploy.transition_patterns-item',
+                ),
             'pgsql.max_locks_per_transaction' => is_int($value) && $value >= 1
                 ? []
                 : (is_int($value)
@@ -1009,7 +1053,7 @@ final readonly class ConfigSchema
             // as "off". A key left null reads as unset, so a project could not tell its own future
             // reader whether the gate was switched off on purpose or the line was never finished.
             // Refusing it costs one migration step and removes the ambiguity permanently.
-            // Null is legal here and MEANS something: the project runs everything on one connection.
+            // Null is legal here and means something: the project runs everything on one connection.
             // That is the state the least-privilege rule reports on, so refusing null would force a
             // project to invent an answer to a question it is entitled to leave open.
             // The preflight connection joins them, and null means the same thing in all three: a
@@ -1032,7 +1076,7 @@ final readonly class ConfigSchema
                 ? []
                 : [ConfigViolation::wrongType($path, $expected, $value)],
             // Read off the enum rather than repeated as a literal list. A second copy would go stale
-            // the day a mode is added, and it would go stale QUIETLY — the config would refuse a
+            // the day a mode is added, and it would go stale quietly — the config would refuse a
             // value the code accepts, which reads to a user as their own typo.
             'security.analyse.mode' => is_string($value) && AnalyseMode::tryFrom($value) instanceof AnalyseMode
                 ? []
@@ -1115,7 +1159,7 @@ final readonly class ConfigSchema
             ),
             // Non-empty, because an empty list finds nothing and a formatter that looked at no
             // files while reporting a clean tree is the one answer this suite must never give. And
-            // the reserved names are refused HERE, where a configuration is judged — the runtime
+            // the reserved names are refused here, where a configuration is judged — the runtime
             // drops them again, on the other path, where the cost is a destroyed migration.
             'format.extensions' => $this->listOfStrings(
                 $path,
@@ -1190,7 +1234,7 @@ final readonly class ConfigSchema
                 static fn (string $item): bool => $item !== '',
                 'guard.profiles.*.connections-item',
             ),
-            // Its own arm, and NOT folded into the boolean group below: a positive integer or null
+            // Its own arm, and not folded into the boolean group below: a positive integer or null
             // is a different shape, and a case slipped into a grouped arm changes what its
             // neighbors return. That is exactly what a first draft of this line did.
             'deploy.predeploy.available_disk_bytes' => $value === null || (is_int($value) && $value > 0)
@@ -1217,7 +1261,7 @@ final readonly class ConfigSchema
             'agent.mcp.transport' => is_string($value)
                 ? (in_array($value, self::MCP_TRANSPORTS, true) ? [] : [ConfigViolation::outOfRange($path, $expected, $value)])
                 : [ConfigViolation::wrongType($path, $expected, $value)],
-            // Bounded on BOTH sides. Zero would mean "answer with nothing", which is not a smaller
+            // Bounded on both sides. Zero would mean "answer with nothing", which is not a smaller
             // answer but a silent one; a value without a ceiling would be the same as having no
             // setting, only written down so it looks deliberate.
             // The standing consent a protocol needs, because it cannot be asked. It is the WEAKEST
@@ -1236,11 +1280,6 @@ final readonly class ConfigSchema
             'reporting.sarif.anchor_file' => is_string($value) && trim($value) !== ''
                 ? ($this->isAbsolutePath($value) ? [ConfigViolation::outOfRange($path, $expected, $value)] : [])
                 : [ConfigViolation::wrongType($path, $expected, $value)],
-            // Absolute, deliberately, and the opposite of `baseline.path` one line down. A baseline
-            // lives IN the repository and is compared across machines, so a repo-relative path is
-            // the only portable one. An advisory file is an operational artifact that a refresh may
-            // write outside the tree entirely — a cache directory, a mounted volume — and forcing it
-            // repo-relative would push a generated file into version control.
             // https only, and null by default. A refresh that would fetch over plain http could be
             // answered by anybody on the path with a file this package then trusts as its security
             // baseline — the one artifact where being lied to is worst.
@@ -1249,6 +1288,11 @@ final readonly class ConfigSchema
                 : (is_string($value)
                     ? (str_starts_with($value, 'https://') ? [] : [ConfigViolation::outOfRange($path, $expected, $value)])
                     : [ConfigViolation::wrongType($path, $expected, $value)]),
+            // Absolute, deliberately, and the opposite of `baseline.path` below. A baseline
+            // lives IN the repository and is compared across machines, so a repo-relative path is
+            // the only portable one. An advisory file is an operational artifact that a refresh may
+            // write outside the tree entirely — a cache directory, a mounted volume — and forcing it
+            // repo-relative would push a generated file into version control.
             'security.advisories.path' => $value === null
                 ? []
                 : (is_string($value)
@@ -1350,16 +1394,16 @@ final readonly class ConfigSchema
     }
 
     /**
-     * Validate a list whose items are themselves arrays — the ignore list's `pairs` form.
+     * Validate the ignore list's `pairs`: a list whose every entry is a pair the reader can read.
      *
-     * Deliberately shallow. What each entry CONTAINS is decided where it is read, and repeating
-     * that here would put the definition of a pair in two places, which is how the two come to
-     * disagree. What this refuses is the shape nothing downstream can walk at all: a scalar where
-     * a list belongs, or an entry that is not an array.
+     * The definition of a pair is {@see IgnoreList::isReadablePair()}, the one the reader drops by,
+     * so the two cannot come to disagree. An entry that is not an array is a wrong type; an array
+     * that is not a readable pair, a misspelled key or an empty object list among them, is out of
+     * range. Every bad entry is reported under its own index.
      *
      * @return list<ConfigViolation>
      */
-    private function listOfArrays(string $path, mixed $value, string $fieldSpec): array
+    private function ignorePairs(string $path, mixed $value, string $fieldSpec): array
     {
         if (! is_array($value) || ! array_is_list($value)) {
             return [ConfigViolation::wrongType($path, $this->expectation($fieldSpec), $value)];
@@ -1370,10 +1414,38 @@ final readonly class ConfigSchema
         foreach ($value as $index => $item) {
             if (! is_array($item)) {
                 $violations[] = ConfigViolation::wrongType($path.'.'.$index, $this->expectation($fieldSpec.'-item'), $item);
+            } elseif (! IgnoreList::isReadablePair($item)) {
+                $violations[] = ConfigViolation::outOfRange($path.'.'.$index, $this->expectation($fieldSpec.'-item'), $item);
             }
         }
 
         return $violations;
+    }
+
+    /**
+     * Every operation a threshold override names that the shipped artifact does not define.
+     *
+     * The known names come from {@see EscalationThresholds::operations()}, so the artifact stays the
+     * one authority on them, and each unknown one is its own violation at its own key.
+     *
+     * @param  array<array-key, mixed>  $overrides
+     * @return list<ConfigViolation>
+     */
+    private function unknownOperations(string $path, array $overrides): array
+    {
+        // The shipped default overrides nothing, and asking the artifact about it would read a file
+        // on every validation for an answer that cannot be anything but empty.
+        if ($overrides === []) {
+            return [];
+        }
+
+        $known = EscalationThresholds::load()->operations();
+        $unknown = array_diff(array_map(strval(...), array_keys($overrides)), $known);
+
+        return array_values(array_map(
+            static fn (string $operation): ConfigViolation => ConfigViolation::unknownKey($path.'.'.$operation, $known),
+            $unknown,
+        ));
     }
 
     /**

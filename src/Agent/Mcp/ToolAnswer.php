@@ -59,7 +59,7 @@ final readonly class ToolAnswer
     }
 
     /**
-     * A tool that could NOT do its job, and says why.
+     * A tool that could not do its job, and says why.
      *
      * @param  array<string, mixed>  $payload  anything the caller can still act on — a path, a name
      * @param  string  $also  a sentence the tool would have said anyway, kept beside the reason.
@@ -124,7 +124,7 @@ final readonly class ToolAnswer
     /**
      * The same answer, marked as an error result.
      *
-     * The payload is the SAME structure rather than a bare sentence. `isError` tells a client that
+     * The payload is the same structure rather than a bare sentence. `isError` tells a client that
      * the call did not produce what it asked for; the fields tell it what happened — and a refusal
      * that dropped the structure would leave an agent parsing prose for the one thing it needs,
      * which is the shape this class exists to guarantee.

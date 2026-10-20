@@ -94,7 +94,7 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
      * applies to this server's version. Returns null when the value is fine, or the sentence that
      * says what is wrong with it.
      *
-     * The subject rides along for {@see self::crossFact()} ONLY. It deliberately does not widen what
+     * The subject rides along for {@see self::crossFact()} only. It deliberately does not widen what
      * a rule may JUDGE: the session value is on that subject too, and a rule reading it would report
      * the audit's own connection as the server's configuration — the exact trap this family is built
      * to avoid. The guard for that is a test, not a promise.
@@ -105,7 +105,7 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
      * Why this value cannot cause harm here, or null when nothing excludes it.
      *
      * The rare shape a silent pass would misrepresent. Returning null is the ordinary answer and
-     * means "nothing structural excludes this" — NOT "this is fine", which is what an empty
+     * means "nothing structural excludes this" — not "this is fine", which is what an empty
      * violation says. Keeping the two apart is the whole reason this is its own hook.
      */
     protected function reasonedPass(string $serverValue, ServerSettingExpectation $expectation, SchemaObject $object): ?string
@@ -119,7 +119,7 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
      * Null is the ordinary answer and the default, so the rules that judge a value on its own merits
      * — which is most of them — never mention this hook.
      *
-     * It exists for a question that has to be answered BEFORE the value means anything, and whose
+     * It exists for a question that has to be answered before the value means anything, and whose
      * own answer may be unknown. {@see self::reasonedPass()} cannot serve that: it returns a
      * sentence, so its only possible verdict is `pass`, and a rule forced through it would have to
      * report "I could not tell" as "this is fine".
@@ -167,7 +167,7 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
     }
 
     /**
-     * A server setting is a property of THIS machine. It reads fine on a replica — that is exactly
+     * A server setting is a property of this machine. It reads fine on a replica — that is exactly
      * the trap — and the value it returns there describes a node that serves no writes. Narrowed
      * from the catalog default because the base class is right about schemas and wrong about this.
      */
@@ -266,7 +266,7 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
             //
             // The second half of the condition is not an escape hatch from that reasoning, it is the
             // reasoning applied one level down. The matrix abstains where a value cannot be judged
-            // FROM THE VALUE — `log_statement = all` is a privacy problem on a production server and
+            // from the value — `log_statement = all` is a privacy problem on a production server and
             // how people debug on a laptop, so a matrix entry claiming either would be wrong half
             // the time. A rule that supplies the missing fact is not the rule that abstention is
             // about, and it says so out loud rather than being assumed.
@@ -331,7 +331,7 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
         }
 
         // A precondition that settles the finding before the value means anything — and unlike
-        // `reasonedPass()` below, it may answer with ANY verdict, `undetermined` included.
+        // `reasonedPass()` below, it may answer with any verdict, `undetermined` included.
         //
         // That difference is the whole reason it exists. `reasonedPass()` can only say "fine", so a
         // rule whose precondition is unanswerable would have to spell "I could not tell" as "fine",
@@ -340,7 +340,7 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
         // be judged at all. A question that only matters for a wrong value belongs to
         // `findingCondition()` below instead.
         //
-        // Placed AFTER the readability rungs on purpose: answering a precondition about a value the
+        // Placed after the readability rungs on purpose: answering a precondition about a value the
         // run could not read would be a statement about a database it never examined.
         $precondition = $this->precondition($object);
 
@@ -348,7 +348,7 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
             return [$precondition];
         }
 
-        // Asked BEFORE the judgment, because a structural exclusion makes the judgment moot rather
+        // Asked before the judgment, because a structural exclusion makes the judgment moot rather
         // than wrong: a default engine of MyISAM on a server where MyISAM is disabled entirely is a
         // setting that looks bad and cannot bite. One hook rather than a nullable violation, so a
         // rule cannot accidentally express "excluded" as "fine" and lose the sentence.
@@ -431,7 +431,7 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
      * ## It is a considered `none` for every one of these, and that is not a shortcut
      *
      * No migration sets a server variable. There is no sequence to hand over, and the thing that
-     * IS worth handing over — what changing it costs and where the work is — is exactly what the
+     * is worth handing over — what changing it costs and where the work is — is exactly what the
      * `none` reason carries. A payload proposing a migration here would be the failure this base
      * class already names one method down: *advice they will follow for an afternoon before
      * discovering it cannot be done.*

@@ -20,7 +20,7 @@ final class InvalidStatisticsRequest extends InvalidArgumentException
     /**
      * The request named no objects.
      *
-     * Deliberately NOT read as "then read everything". That reading is what turns a targeted lookup
+     * Deliberately not read as "then read everything". That reading is what turns a targeted lookup
      * into a full catalog sweep, and it would arrive silently: the caller that forgot to pass its
      * object list gets a bigger answer than it asked for rather than an error, and the cost lands on
      * somebody's production instance minutes before a deploy.

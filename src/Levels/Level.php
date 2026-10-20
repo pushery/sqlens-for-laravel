@@ -9,11 +9,11 @@ namespace Pushery\SQLens\Levels;
  * includes every rule up to and including N. This is the gate the rule catalog
  * is sliced by.
  *
- * A rule's level membership is DRIVER-SPECIFIC — the same rule class can sit at
+ * A rule's level membership is driver-specific — the same rule class can sit at
  * a different level on PostgreSQL than on MySQL. The level here is the axis, not
  * the assignment; assignment lives with each rule.
  *
- * Levels model strictness appetite, NOT risk. Security and privacy rules are
+ * Levels model strictness appetite, not risk. Security and privacy rules are
  * gated by the separate severity axis and ignore the level gate entirely
  * (see Category::usesSeverityGate()).
  */

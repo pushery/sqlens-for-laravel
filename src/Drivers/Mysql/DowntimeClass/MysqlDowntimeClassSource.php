@@ -20,7 +20,7 @@ use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Rules\ServerVersion;
 
 /**
- * The ONE place a MySQL rule gets its `downtime_class`.
+ * The one place a MySQL rule gets its `downtime_class`.
  *
  * It builds no classifier of its own. Everything it needs already exists and has an owner: the
  * matrix entry comes from {@see MatrixResolver}, and the entry's axes become a class through
@@ -152,7 +152,7 @@ final readonly class MysqlDowntimeClassSource
     /**
      * The class shared by a SET of candidate operations, or a named undetermined when they differ.
      *
-     * This exists because MySQL's syntax sometimes hides WHICH operation a statement performs while
+     * This exists because MySQL's syntax sometimes hides which operation a statement performs while
      * still settling what it COSTS. `ALTER TABLE t MODIFY col BIGINT NOT NULL` could be a type
      * change, a nullability flip or a reorder — MySQL requires the whole column definition either
      * way, so the statement cannot say. But every one of those operations rebuilds the table, so

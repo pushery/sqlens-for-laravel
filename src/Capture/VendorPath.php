@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Capture;
 use Composer\Autoload\ClassLoader;
 
 /**
- * Whether a file lives inside the dependency tree — asked in ONE place, because two places would
+ * Whether a file lives inside the dependency tree — asked in one place, because two places would
  * disagree.
  *
  * Two layers need the answer and they reach it from different strings. The capture layer classifies
@@ -23,14 +23,14 @@ use Composer\Autoload\ClassLoader;
  * and the two strings then answer differently:
  *
  *     raw       …/app/vendor/pkg/migrations/0001_x.php   ->  vendor
- *     realpath  …/local/migrations/0001_x.php            ->  NOT vendor
+ *     realpath  …/local/migrations/0001_x.php            ->  not vendor
  *
  * A caller matching the raw path would drop the file from the enumeration while the capture layer,
  * matching the resolved one, would bind the same file as a migration of yours. Two opposite answers
  * out of one "shared" predicate — and a guard grepping for the string `vendor` reads both call
  * sites as consistent.
  *
- * So the resolution happens here, and the answer is about where the file REALLY is. A symlinked
+ * So the resolution happens here, and the answer is about where the file really is. A symlinked
  * package is a local checkout you are working on: code you can change, which is the whole
  * distinction the vendor switch draws.
  *
@@ -39,7 +39,7 @@ use Composer\Autoload\ClassLoader;
  * The dependency tree is where Composer installs, and Composer says where that is: every
  * autoloader it registered is keyed by its vendor directory, a `vendor-dir` the project configured
  * included. A `vendor` directory below the project root counts as well, the tree of a nested
- * Composer project. A `vendor` ABOVE the root does not. It used to, because the whole absolute
+ * Composer project. A `vendor` above the root does not. It used to, because the whole absolute
  * path was searched for the segment, and a checkout that happened to lie in `/builds/vendor/app`
  * then filed every migration of the project as a package's: the same repository gave a different
  * result in another directory, and a Critical in its own migration went silent.

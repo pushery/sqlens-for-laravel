@@ -9,7 +9,7 @@ namespace Pushery\SQLens\Deploy;
  *
  * ## Why the finding needs this at all
  *
- * A debt IS a finding already — {@see DebtNotices} builds them with the same factories every rule
+ * A debt is a finding already — {@see DebtNotices} builds them with the same factories every rule
  * uses, and they travel in the same list. What they could not do until now is say what they are in a
  * form a machine can read: the kind, the age and the state reached a consumer only as English prose
  * inside `message`, so the only way to get the age off a finding was to parse the sentence

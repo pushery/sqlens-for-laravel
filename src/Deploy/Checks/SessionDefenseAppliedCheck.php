@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Deploy\Checks;
 
 use Pushery\SQLens\Catalog\ReaderSession;
+use Pushery\SQLens\Catalog\SessionBudget;
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\PreflightCheck;
 use Pushery\SQLens\Contracts\ReadsSessionBounds;
@@ -55,7 +56,7 @@ final readonly class SessionDefenseAppliedCheck implements PreflightCheck, Reads
      * No default, and that is the point rather than an oversight.
      *
      * `[]` builds a check that answers `undetermined` for every engine — correct behavior, and
-     * indistinguishable from a wiring mistake. It WAS one: 82d95e5b moved the engine question
+     * indistinguishable from a wiring mistake. It was one: 82d95e5b moved the engine question
      * behind this parameter and updated the Unit and Feature arms, while the three sites in
      * `tests/MySql/SessionDefenseAppliedLiveTest.php` kept the argument-less spelling and went on
      * compiling. The pull-request lane does not run that suite, so the first red was the develop
@@ -73,6 +74,22 @@ final readonly class SessionDefenseAppliedCheck implements PreflightCheck, Reads
 
     public const string ID = 'DEPLOY.CONTEXT.SESSION_DEFENSE_NOT_APPLIED';
 
+    /**
+     * Which bound of the budget each reported timeout is held to, by the name the engines report.
+     *
+     * Names only, both engines' spellings side by side: the values come from the session's own
+     * budget, and a name not listed is held to "bounded" alone.
+     *
+     * @var array<string, string>
+     */
+    private const array ASKED_AS = [
+        'statement_timeout' => 'statement',
+        'max_execution_time' => 'statement',
+        'lock_timeout' => 'lock',
+        'innodb_lock_wait_timeout' => 'lock',
+        'lock_wait_timeout' => 'lock',
+    ];
+
     public function id(): string
     {
         return self::ID;
@@ -86,7 +103,7 @@ final readonly class SessionDefenseAppliedCheck implements PreflightCheck, Reads
     /**
      * The timeouts actually in force, in milliseconds — the same read this check judges on.
      *
-     * Public so the reporter header can show them, and it is the SAME call rather than a second
+     * Public so the reporter header can show them, and it is the same call rather than a second
      * one on purpose. Two reads of one fact are two chances to disagree, and the disagreement would
      * surface as a header claiming a bound beside a verdict saying there is none.
      *
@@ -127,21 +144,78 @@ final readonly class SessionDefenseAppliedCheck implements PreflightCheck, Reads
             );
         }
 
-        $missing = array_values(array_filter(
-            $applied,
-            static fn (?int $value): bool => $value === null || $value === 0,
-        ));
-
-        if ($missing === []) {
-            return CheckResult::pass(self::ID);
-        }
-
         $unbounded = array_keys(array_filter(
             $applied,
             static fn (?int $value): bool => $value === null || $value === 0,
         ));
 
-        return CheckResult::fail(self::ID, [$this->finding($context, $unbounded)]);
+        if ($unbounded !== []) {
+            return CheckResult::fail(self::ID, [$this->finding($context, $unbounded)]);
+        }
+
+        $loosened = $this->loosened($applied, $context->session->budget());
+
+        return $loosened === [] ? CheckResult::pass(self::ID) : CheckResult::fail(self::ID, [$this->loosenedFinding($context, $loosened)]);
+    }
+
+    /**
+     * The timeouts in force above the bound this run asked for, as `name => [asked, in force]`.
+     *
+     * A bound that a role, a database or a pool default replaced is still a bound, but not the
+     * run's: the report would promise a budget the session does not keep. A server may round a
+     * bound up to a whole second, as MySQL's lock wait does, so the comparison allows that and
+     * nothing more.
+     *
+     * @param  array<string, int|null>  $applied
+     * @return array<string, array{int, int}>
+     */
+    private function loosened(array $applied, SessionBudget $budget): array
+    {
+        $asked = ['statement' => $budget->statementTimeoutMs, 'lock' => $budget->lockTimeoutMs];
+        $loosened = [];
+
+        foreach ($applied as $name => $inForce) {
+            $bound = $asked[self::ASKED_AS[$name] ?? ''] ?? null;
+
+            if ($bound !== null && $inForce !== null && $inForce > max(1_000, (int) ceil($bound / 1_000) * 1_000)) {
+                $loosened[$name] = [$bound, $inForce];
+            }
+        }
+
+        return $loosened;
+    }
+
+    /** @param array<string, array{int, int}> $loosened */
+    private function loosenedFinding(PreflightContext $context, array $loosened): Finding
+    {
+        $pairs = array_map(
+            static fn (string $name, array $values): string => sprintf('%s at %d ms where this run asked for %d ms', $name, $values[1], $values[0]),
+            array_keys($loosened),
+            array_values($loosened),
+        );
+
+        return Finding::fail(
+            ruleId: self::ID,
+            messagePrefix: DeployNotice::MESSAGE_PREFIX,
+            message: sprintf(
+                'This run set its own timeouts and the session reports %s when read back. A `SET` '
+                .'that returns no error can still stop applying — under transaction pooling, session '
+                .'state does not survive the end of a transaction — and a role, database or pool '
+                .'default then bounds the run instead of its own budget. Point the preflight at a '
+                .'session-pooled connection, or at the database directly.',
+                implode(' and ', $pairs),
+            ),
+            location: Location::inCatalog($context->driver, $context->connection, 'session timeouts', SchemaObjectType::Setting),
+            category: Category::Safety,
+            level: Level::Capturable,
+            stability: StabilityTier::Stable,
+            documentationUrl: RuleDocumentationUrl::for(self::ID),
+            context: new SubjectContext(driver: $context->driver, profile: $context->profile, strictTools: false),
+            // High, the severity the catalog declares for this check: a default in place of the
+            // run's own bound can be MySQL's metadata-lock wait of a year, which bounds nothing a
+            // deploy would notice, so ranking it below the unbounded case would rank it wrongly.
+            severity: Severity::High,
+        )->withDowntimeClass(DowntimeClass::Online);
     }
 
     /** @param list<string> $unbounded */

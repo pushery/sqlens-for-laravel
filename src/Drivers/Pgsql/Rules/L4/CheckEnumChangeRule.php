@@ -21,7 +21,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
 /**
- * Laravel's `$table->enum()` does NOT create a PostgreSQL enum type — it makes a
+ * Laravel's `$table->enum()` does not create a PostgreSQL enum type — it makes a
  * `varchar` column with a `CHECK (col IN (…))` constraint. So changing the allowed
  * values is not an `ALTER TYPE` at all: it is a DROP of the old CHECK and an ADD of a
  * new one, and the ADD validates the whole table under a lock. This confusion is the

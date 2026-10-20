@@ -23,7 +23,7 @@ use Pushery\SQLens\Subjects\ParametrizationSignal;
  * ## Why identifiers need their own collector
  *
  * A value can be bound; an identifier cannot. `whereRaw('status = ?', [$status])` keeps the value
- * out of the statement, and there is no equivalent for `orderBy($column)` — the column name IS the
+ * out of the statement, and there is no equivalent for `orderBy($column)` — the column name is the
  * statement. So the two families ask different questions and the answers differ in what they can
  * recommend: the raw-SQL rules say "bind it", this one has to say "choose from a list you wrote".
  *
@@ -61,7 +61,7 @@ use Pushery\SQLens\Subjects\ParametrizationSignal;
 final readonly class DynamicIdentifierCollector implements Collector
 {
     /**
-     * Builder methods whose FIRST argument is a column name.
+     * Builder methods whose first argument is a column name.
      *
      * `latest()` and `oldest()` default to `created_at` and take a column when given one, which is
      * exactly the shape a sortable listing uses. Verified present on `Query\Builder` by

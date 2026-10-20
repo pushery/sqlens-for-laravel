@@ -18,10 +18,11 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * comparing it to another index means anything — and a redundancy heuristic that compares two
  * indexes it does not understand produces a confident, wrong answer about which one to drop.
  *
- * ## The four things that make an index incomparable in v1
+ * ## The five things that make an index incomparable in v1
  *
- * Each was measured on a real PostgreSQL 18 before it was encoded here, because three of the four
- * look identical in `information_schema` and two look identical to each other in the naive reading:
+ * The first four were measured on a real PostgreSQL 18 before they were encoded here, because three
+ * of them look identical in `information_schema` and two look identical to each other in the naive
+ * reading:
  *
  * - **A partial index** carries a predicate, and `(email) WHERE note IS NOT NULL` does not cover
  *   what `(email)` covers. v1 does not compare predicates — a deliberate limit, not a gap — so the
@@ -38,10 +39,13 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *   another index of its own kind, which is a narrower question the projection now asks separately.
  * - **A non-default operator class** changes what the index answers: `text_pattern_ops` serves
  *   `LIKE 'foo%'` and the default class does not. Two indexes on the same column with different
- *   classes are two different indexes. It is read AFTER the method, because a class only decides
+ *   classes are two different indexes. It is read after the method, because a class only decides
  *   anything inside a method that is comparable at all — see the ordering note on `of()`.
+ * - **A MySQL prefix-length key** indexes the first characters of a column rather than the column,
+ *   and `information_schema` names the same column either way. The negative corpus found it on a
+ *   real 8.4 catalog; PostgreSQL has no counterpart.
  *
- * ## What is NOT a comprehension gap, stated rather than left implied
+ * ## What is not a comprehension gap, stated rather than left implied
  *
  * An **invisible** MySQL index is understood completely — it exists, it costs writes, and the
  * optimizer ignores it. That is a fact for a rule to act on, not something the reader failed to
@@ -78,7 +82,7 @@ final readonly class IndexComprehension
     /**
      * The verdict for one index object, read from the attributes both drivers produce.
      *
-     * The order is deliberate: the FIRST reason found is the one reported, and the list runs from
+     * The order is deliberate: the first reason found is the one reported, and the list runs from
      * the most consequential to the least. An expression index that is also partial is reported as
      * partial, because the predicate is what a reader has to think about first.
      */
@@ -118,7 +122,7 @@ final readonly class IndexComprehension
 
         // The METHOD before the operator class, and the order is the finding rather than a tidy-up.
         //
-        // An operator class only decides anything INSIDE a comparable method: two b-tree indexes on
+        // An operator class only decides anything inside a comparable method: two b-tree indexes on
         // one column with different classes are two different indexes, which is why the arm below
         // exists. Once the method itself is outside the question, naming the class points a reader
         // at a fact that cannot change the answer. Measured against PostgreSQL 18's `pg_opclass`:
@@ -141,7 +145,7 @@ final readonly class IndexComprehension
             return new self(false, 'non-default operator class: '.$opclasses, SkipReason::NotComparable);
         }
 
-        // A MySQL PREFIX-LENGTH key — `KEY (email(20))` — indexes the first 20 CHARACTERS rather
+        // A MySQL prefix-length key — `KEY (email(20))` — indexes the first 20 characters rather
         // than the column (bytes, for a binary string), and `information_schema` reports the same
         // COLUMN_NAME either way. So two
         // indexes that differ entirely look identical from their column lists, and a redundancy
@@ -167,7 +171,7 @@ final readonly class IndexComprehension
      * a MySQL prefix-length key whose column list lies about what it indexes, and an index the server
      * itself marked invalid, which the planner ignores and which must never be offered as a cover.
      *
-     * Deliberately NOT `! isFullyUnderstood()` plus a reason-string comparison. Reading which arm of
+     * Deliberately not `! isFullyUnderstood()` plus a reason-string comparison. Reading which arm of
      * `of()` fired out of its sentence would make the projection depend on prose somebody will
      * reword, and the whole point of that sentence is that it can be reworded.
      */
@@ -199,7 +203,7 @@ final readonly class IndexComprehension
      *
      * The mirror of {@see self::comparableApartFromItsMethod()}, for the other attribute that can be
      * made to cancel. Two partial indexes under one condition cover the same rows, so the condition
-     * drops out of the question, and nothing else does. What survives is compared by LEFT PREFIX,
+     * drops out of the question, and nothing else does. What survives is compared by left prefix,
      * which is b-tree arithmetic over plain key positions, so every other reason an index cannot be
      * compared still has to be absent: an access method other than b-tree, a non-default operator
      * class, an expression that did not arrive, a prefix-length key, an index the server marked
@@ -207,7 +211,7 @@ final readonly class IndexComprehension
      *
      * ## The operator class is the one that bit
      *
-     * `pg_get_indexdef(oid, n, true)` prints a key position WITHOUT its operator class. Measured on
+     * `pg_get_indexdef(oid, n, true)` prints a key position without its operator class. Measured on
      * PostgreSQL 18.0: `(email text_pattern_ops) WHERE state IN ('closed', 'void')` and `(email)`
      * under the same condition both arrive as `email`, so a grouping that asked only whether the
      * condition could be read put them in one universe with identical column lists, and the rule
@@ -242,7 +246,7 @@ final readonly class IndexComprehension
     }
 
     /**
-     * Whether a redundancy question inside this access method may be answered by a LEFT PREFIX.
+     * Whether a redundancy question inside this access method may be answered by a left prefix.
      *
      * B-tree alone, and a method nobody named counts as one — an engine that does not report the
      * access method must not have every index treated as exotic by a field it never fills.
@@ -309,7 +313,7 @@ final readonly class IndexComprehension
     {
         $tokens = TopLevelList::split($index->getString('key_columns') ?? '', ',');
 
-        // ONE question, and it is put to the key list itself: is an expression visible among the
+        // One question, and it is put to the key list itself: is an expression visible among the
         // positions this index claims to have? That is fail-closed against any reading that drops
         // one, whether or not the reading admits it — which is all a flag beside it could add.
         // Measured on 18.4 over five shapes — a cast, a concatenation, a negation, a JSON arrow and
@@ -343,7 +347,7 @@ final readonly class IndexComprehension
     }
 
     /**
-     * Whether this token is a WHOLE key position rather than a piece of one.
+     * Whether this token is a whole key position rather than a piece of one.
      *
      * Balance on the parentheses and on both kinds of quote, and nothing cleverer: a complete
      * expression closes everything it opens. The list is already split only at its top level, so a
@@ -361,7 +365,7 @@ final readonly class IndexComprehension
     /**
      * Every object with its comprehension recorded, and each index a comparison MISSED named in the skips.
      *
-     * The object STAYS in the reading — it was read, and a rule that only needs to know the index
+     * The object stays in the reading — it was read, and a rule that only needs to know the index
      * exists is entitled to it.
      *
      * ## A skip says a comparison did not happen, not that the index is unusual
@@ -377,7 +381,7 @@ final readonly class IndexComprehension
      *   "not compared against b-tree indexes" names a comparison with no meaning.
      * - A partial index, read intact, is compared against every index under its own condition, and
      *   never against an unconditional one, which is a decision rather than a gap. The comparison
-     *   that genuinely does not happen is against a partial index under a DIFFERENT condition, which
+     *   that genuinely does not happen is against a partial index under a different condition, which
      *   would need an implication rule, so the skip is recorded when its table carries one, and only
      *   then.
      *
@@ -402,7 +406,7 @@ final readonly class IndexComprehension
 
             $comprehension = self::of($object);
 
-            // Recorded on EVERY index, true or false. An attribute that appears only when something
+            // Recorded on every index, true or false. An attribute that appears only when something
             // is wrong cannot be relied on to be there when it is right, and `isFullyUnderstood()`
             // would then be answering "nobody looked" with "yes".
             $attributes = ['understood' => $comprehension->fullyUnderstood];

@@ -97,11 +97,15 @@ final readonly class CaptureFindingCollector
         $subjectRules = is_array($subjectRules) ? array_values($subjectRules) : iterator_to_array($subjectRules, false);
 
         // The run's own statements, once, so every subject carries the same view of what the
-        // WHOLE run does — the material a rule needs when its question is about an absence that
+        // whole run does — the material a rule needs when its question is about an absence that
         // one migration cannot settle (see MigrationContext::$runStatements). Built here rather
         // than per result: it is a fact about the run, and computing it per migration would be
         // quadratic over exactly the runs that have most files.
         $runStatements = $run->statementDigestsBySection();
+
+        // Where the next migration of each section begins in that section's run statements, or null
+        // once the list stops saying what ran before it — see MigrationContext::$runOffset.
+        $runOffsets = [];
 
         $findings = [];
 
@@ -119,10 +123,18 @@ final readonly class CaptureFindingCollector
                 $findings[] = $this->preScanFinding($hit, $result, $context, $projectRoot);
             }
 
+            $section = $result->section->value;
+            $runOffset = array_key_exists($section, $runOffsets) ? $runOffsets[$section] : 0;
+
+            // The run carries none of a failed or undetermined result's statements, so no list after
+            // it can say what ran before.
+            $runOffsets[$section] = $result->isPass() && $runOffset !== null ? $runOffset + count($result->statementDigests()) : null;
+
             // The driver's SQL rules see only a successful capture's canonicalized
             // statements; a failed or undetermined result has no subject to hand them.
             if ($result->isPass()) {
-                foreach ($result->toSubjects($context, $runStatements[$result->section->value] ?? []) as $statement) {
+                // A roundtrip's down legs run in reverse, while the run lists them in file order.
+                foreach ($result->toSubjects($context, $runStatements[$section] ?? [], $result->section === CaptureSection::Down ? null : $runOffset) as $statement) {
                     // The statement, then each later action of an `ALTER TABLE` action list that does
                     // something else, as the statement it would be on its own. A finding the
                     // statement already produced is not reported again for one of its actions: a rule
@@ -197,7 +209,7 @@ final readonly class CaptureFindingCollector
     }
 
     /**
-     * The downtime class to stamp: the rule's constant, or the one it derives for THIS statement.
+     * The downtime class to stamp: the rule's constant, or the one it derives for this statement.
      *
      * Most rules answer with a constant and are right to — an index built without CONCURRENTLY
      * blocks, always. A rule keyed on a data table cannot: MySQL's online-DDL matrix answers per
@@ -228,7 +240,7 @@ final readonly class CaptureFindingCollector
      * ## One rule, one claim about the deploy
      *
      * A payload names a downtime class of its own, and the finding beside it carries the one
-     * stamped above. A rule that implements BOTH this and {@see DerivesDowntimeClass} therefore has
+     * stamped above. A rule that implements both this and {@see DerivesDowntimeClass} therefore has
      * two places to answer the same question, and must read its payload's class from the same
      * derivation rather than from its constant — otherwise the finding and the material attached to
      * it tell a reader two different things about the same statement. No rule does both today; the
@@ -244,7 +256,7 @@ final readonly class CaptureFindingCollector
     /**
      * The finding, carrying its material — or carrying why it does not.
      *
-     * This is the ONLY place a payload reaches a finding, which is what makes the validator
+     * This is the only place a payload reaches a finding, which is what makes the validator
      * unbypassable rather than merely available: a reporter cannot reach around it, because a
      * reporter never sees a payload that did not come through here.
      *

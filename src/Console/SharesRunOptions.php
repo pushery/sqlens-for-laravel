@@ -11,7 +11,7 @@ use Pushery\SQLens\Exceptions\UnknownCategory;
  * The options every suite command shares, resolved once so the suites cannot drift apart.
  *
  * `--level`, `--category` and `--output` mean the same thing in `sqlens:lint` and `sqlens:audit`,
- * and a user who has learned one has learned both. That is only true while there is ONE
+ * and a user who has learned one has learned both. That is only true while there is one
  * implementation: two copies of "reject a level above 9" would eventually disagree about whether 10
  * is an error or a clamp, and the disagreement would be invisible because each command's own test
  * would still pass.

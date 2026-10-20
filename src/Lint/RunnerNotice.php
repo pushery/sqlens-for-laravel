@@ -27,7 +27,7 @@ use Pushery\SQLens\Rules\Suite;
  * {@see LintRunner}, which made them invisible to anything that wants the package's full set of
  * documented findings — the registry export, and through it the "every finding has a page" check.
  * A catalog that has to be maintained by hand is a catalog that goes stale; this one cannot,
- * because the runner constructs its findings FROM it.
+ * because the runner constructs its findings from it.
  *
  * ## The skip family
  *
@@ -135,7 +135,7 @@ enum RunnerNotice: string implements RunNotice
      * An acknowledgment whose own review date has passed.
      *
      * `review_at` is the part of an acknowledgment that keeps it from becoming permanent. Somebody
-     * decided to carry a debt UNTIL a moment they named; once that moment is behind us the decision
+     * decided to carry a debt until a moment they named; once that moment is behind us the decision
      * has expired, and reporting it is what turns "we will look at this in Q4" back into something
      * anybody looks at in Q4.
      *
@@ -156,7 +156,7 @@ enum RunnerNotice: string implements RunNotice
     /**
      * An `#[SqlensIgnore]` annotation names a rule id that no rule of any driver carries.
      *
-     * A NOTICE rather than the refusal its config-file twin gets, and the difference is where the
+     * A notice rather than the refusal its config-file twin gets, and the difference is where the
      * text lives. An ignore list is edited by whoever runs the tool today; an annotation sits in a
      * migration that shipped years ago and will never be touched again. Refusing a run over a rule
      * that has since been renamed would turn every project's history into a timer — the older the

@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Capture\Rules;
 use LogicException;
 use Pushery\SQLens\Capture\CaptureResult;
 use Pushery\SQLens\Capture\CaptureRuleMetadata;
-use Pushery\SQLens\Findings\CredentialRedactor;
+use Pushery\SQLens\Findings\CompositeCredentialRedactor;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
@@ -17,7 +17,7 @@ use Pushery\SQLens\Subjects\SubjectContext;
 
 /**
  * `CAP.L0.UNDETERMINED_CAPTURE` — the capture could not conclude for a migration,
- * for a named reason that is NOT a static pre-scan flag.
+ * for a named reason that is not a static pre-scan flag.
  *
  * This is the "no silent green" backstop of the capture path. A migration whose
  * capture came back undetermined — a file the scanner could not parse, a statement
@@ -32,7 +32,7 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * undetermined, but its answer is the specific `CAP.PRESCAN.*` hits it was flagged
  * for — each individually addressable in a report and a baseline — so those are
  * reported as their own findings and this rule steps aside, or the same migration
- * would be reported twice under two different ids. This rule is the reason WITHOUT a
+ * would be reported twice under two different ids. This rule is the reason without a
  * hit: the capture layer's own undetermined outcomes, named but not located to a line.
  *
  * The specific reason is preserved on the finding's status (and so in the run's
@@ -120,6 +120,6 @@ final readonly class UndeterminedCaptureRule implements CaptureRule
      */
     private function masked(string $detail): string
     {
-        return RowValueMask::in(SecretLiteralMask::in((new CredentialRedactor)->redact($detail)));
+        return RowValueMask::in(SecretLiteralMask::in(new CompositeCredentialRedactor()->redact($detail)));
     }
 }

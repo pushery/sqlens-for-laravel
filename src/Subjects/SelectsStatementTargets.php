@@ -8,7 +8,7 @@ use Pushery\SQLens\Canonical\StatementTarget;
 use Pushery\SQLens\Canonical\TargetRole;
 
 /**
- * Selecting one target out of a statement's list — the ONE implementation both carriers share.
+ * Selecting one target out of a statement's list — the one implementation both carriers share.
  *
  * ## Why this is a trait rather than two copies
  *

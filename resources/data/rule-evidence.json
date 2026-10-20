@@ -103,7 +103,7 @@
                 "type": "doc",
                 "url": "https://dev.mysql.com/doc/refman/8.4/en/create-table-foreign-keys.html",
                 "applies_to": "MySQL 8.4",
-                "note": "MySQL requires the referenced columns of a foreign key to be covered by a unique key of the target table, and documents restrict_fk_on_non_standard_key — enabled by default in 8.4 — as the setting that enforces it. With it on, a foreign key onto a non-unique index or onto a prefix of a composite key is not accepted at all: the server answers ERROR 6125, so the migration fails rather than merely ageing badly."
+                "note": "MySQL requires the referenced columns of a foreign key to be covered by a unique key of the target table, and documents restrict_fk_on_non_standard_key — enabled by default in 8.4 — as the setting that enforces it. With it on, a foreign key onto a non-unique index or onto a prefix of a composite key is not accepted at all: the server answers ERROR 6125, so the migration fails rather than merely aging badly."
             },
             {
                 "type": "doc",
@@ -124,6 +124,20 @@
                 "url": "https://github.com/github/gh-ost/blob/master/doc/requirements-and-limitations.md",
                 "applies_to": "MySQL 8.4",
                 "note": "gh-ost states its requirement plainly: the table must have a PRIMARY KEY or another unique key it can chunk by, and it refuses to migrate one that has neither. Percona's pt-online-schema-change behaves the same way and exits with NO_PRIMARY_OR_UNIQUE_KEY. That is the operational consequence the rule reports — the table that most needs an online schema change is the one that cannot have one."
+            }
+        ],
+        "MY.L2.OPTIMIZE_TABLE": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/optimize-table.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The OPTIMIZE TABLE page: for InnoDB the statement is mapped to ALTER TABLE ... FORCE, which rebuilds the table, and it uses online DDL except for a table with a FULLTEXT index, which is rebuilt with the table-copy method. The statement is written to the binary log and replicates unless it says NO_WRITE_TO_BINLOG or its alias LOCAL."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-online-ddl-operations.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The table operations section lists optimizing a table and rebuilding it with FORCE as in-place rebuilds that permit concurrent DML, and states that in-place operation is not supported for a table with a FULLTEXT index."
             }
         ],
         "MY.L3.ALGORITHM_LOCK_UNEXPRESSIBLE": [
@@ -274,6 +288,26 @@
                 "url": "https://laravel.com/docs/13.x/migrations",
                 "applies_to": "Laravel 13 and newer, on MySQL 8.4",
                 "note": "morphs() adds both columns AND the index over them, which is why a project that uses it never sees this finding. The shapes that do are hand-written columns, and what is left behind when a later migration replaces a nullableMorphs() with its two parts."
+            }
+        ],
+        "MY.L5.PK_NEAR_CEILING": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/information-schema-optimization.html",
+                "applies_to": "MySQL 8.4",
+                "note": "INFORMATION_SCHEMA.TABLES.AUTO_INCREMENT is one of the cached statistics columns, and information_schema_stats_expiry keeps a cached value for 86400 seconds by default. A key judged from it can be judged against yesterday's table, so the reading takes the value from SHOW CREATE TABLE, which reports what the engine holds."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/example-auto-increment.html",
+                "applies_to": "MySQL 8.4",
+                "note": "When an AUTO_INCREMENT column reaches the upper limit of its data type, the next attempt to generate a sequence number fails. The limit is the column type's, signed or unsigned, which is why the ceiling is read from the catalog's UNSIGNED flag rather than assumed."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/integer-types.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The integer types table gives the ceilings a key is held against, signed and unsigned, from TINYINT's 127 and 255 to INT's 2147483647 and 4294967295."
             }
         ],
         "MY.L5.SQL_MODE_DIVISION_BY_ZERO_SILENT": [
@@ -456,6 +490,20 @@
                 "note": "Where the variable's scope is documented: Global plus Session and settable at runtime. That is why only the global value is judged — a connection can be strict while the server hands something laxer to everything else that connects."
             }
         ],
+        "MY.L6.TIMESTAMP_2038": [
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/datetime.html",
+                "applies_to": "MySQL 8.4",
+                "note": "The DATE, DATETIME and TIMESTAMP page gives the ranges: TIMESTAMP from '1970-01-01 00:00:01' UTC to '2038-01-19 03:14:07' UTC, DATETIME from '1000-01-01 00:00:00' to '9999-12-31 23:59:59'. It also says that TIMESTAMP converts a value from the session time zone to UTC for storage and back for retrieval, and that DATETIME does not."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/sql-mode.html",
+                "applies_to": "MySQL 8.4",
+                "note": "Strict SQL mode makes an invalid or out-of-range value an error rather than a warning with an adjusted value, which is how a TIMESTAMP set past 2038 is refused instead of stored as a zero date."
+            }
+        ],
         "MY.L6.TIME_ZONE_NOT_UTC": [
             {
                 "type": "doc",
@@ -529,7 +577,13 @@
                 "type": "doc",
                 "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-locking.html",
                 "applies_to": "MySQL 8.4",
-                "note": "InnoDB holds the row locks a write takes until the transaction ends, and a single unbounded UPDATE therefore holds locks on every row it matched for the whole of its runtime, while the undo log grows with it. Splitting the same work into bounded statements releases each batch's locks as it commits. The documentation describes the locking; it says nothing about how many rows any given table holds, which is exactly the part this rule declines to guess at."
+                "note": "InnoDB holds the row locks a write takes until the transaction ends, and a single unbounded UPDATE therefore holds locks on every row it read for the whole of its runtime, while the undo log grows with it. Splitting the same work into bounded statements releases each batch's locks as it commits, and how many rows one batch locks depends on the index that serves its predicate. The documentation describes the locking; it says nothing about how many rows any given table holds, which is exactly the part this rule declines to guess at."
+            },
+            {
+                "type": "doc",
+                "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-locks-set.html",
+                "applies_to": "MySQL 8.4",
+                "note": "An UPDATE or a DELETE sets record locks on every index record its scan reads, whether or not the WHERE condition excludes the row, and with no index to serve the predicate that is every row the scan passes. A LIMIT shortens the scan only by stopping at its n-th match, so on an unindexed predicate a batch still locks everything before that match. Under READ COMMITTED the locks on rows that did not match are released once the condition is evaluated. A measurement on MySQL 8.0 agrees: a row the scan passed was held under REPEATABLE READ and free under READ COMMITTED."
             }
         ],
         "MY.L8.FK_ID_SUFFIX": [
@@ -610,6 +664,20 @@
                 "note": "TRUNCATE empties a table without scanning it, and takes a lock that excludes every concurrent reader and writer for its duration. It is not a filtered delete and cannot be undone by a WHERE clause someone forgot."
             }
         ],
+        "PG.L2.CLUSTER": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-cluster.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The CLUSTER page: while a table is clustered, an ACCESS EXCLUSIVE lock is held on it, which prevents every other operation on the table, reads and writes alike, until CLUSTER is finished. Clustering is a one-time operation, so changes made to the table afterwards are not clustered, and CLUSTER without a table name cannot run inside a transaction block. Measured on PostgreSQL 18.0: CLUSTER orders USING orders_n_idx held AccessExclusiveLock on the table and on each of its indexes inside its own transaction."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/explicit-locking.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The table of lock modes names CLUSTER among the commands that take ACCESS EXCLUSIVE, which conflicts with every other mode, readers included."
+            }
+        ],
         "PG.L2.CONSTRAINT_NOT_VALIDATED": [
             {
                 "type": "doc",
@@ -621,7 +689,7 @@
                 "type": "incident",
                 "url": "https://gocardless.com/blog/zero-downtime-postgres-migrations-the-hard-parts",
                 "applies_to": "PostgreSQL 18",
-                "note": "GoCardless documented a roughly fifteen-second outage from adding a foreign key. ANCHORED HERE FOR THE MECHANISM AND THE REMEDY, NOT FOR THE LOCK LEVEL, which has changed: on the server of that time the referenced table was locked ACCESS EXCLUSIVE, which conflicts with every other lock, so a read query already running against it stalled all traffic. PostgreSQL 9.5 weakened that to SHARE ROW EXCLUSIVE on both sides, and measured on 18.0 that is what ADD FOREIGN KEY takes -- it blocks writers and lets readers through, so a maintenance window planned for a read outage is the wrong window. What still holds on 18 is why the incident happened at all: the validation runs while the lock is held, and every lock request arriving behind it waits, so writers pile up behind a slow scan. Adding the constraint NOT VALID first shrinks the window to a brief metadata lock, and a lock_timeout aborts the deploy rather than the application when the lock cannot be taken."
+                "note": "GoCardless documented a roughly fifteen-second outage from adding a foreign key. It is cited here for the mechanism and the remedy, not for the lock level, which has changed: on the server of that time the referenced table was locked ACCESS EXCLUSIVE, which conflicts with every other lock, so a read query already running against it stalled all traffic. PostgreSQL 9.5 weakened that to SHARE ROW EXCLUSIVE on both sides, and measured on 18.0 that is what ADD FOREIGN KEY takes -- it blocks writers and lets readers through, so a maintenance window planned for a read outage is the wrong window. What still holds on 18 is why the incident happened at all: the validation runs while the lock is held, and every lock request arriving behind it waits, so writers pile up behind a slow scan. Adding the constraint NOT VALID first shrinks the window to a brief metadata lock, and a lock_timeout aborts the deploy rather than the application when the lock cannot be taken."
             }
         ],
         "PG.L2.DROP_INDEX_NOT_CONCURRENT": [
@@ -640,6 +708,28 @@
                 "note": "A plain CREATE INDEX blocks writes to the table until the index is built; CONCURRENTLY builds it without that block, at the cost of running outside a transaction and of possibly leaving an invalid index behind if it is interrupted."
             }
         ],
+        "PG.L2.REFRESH_MATERIALIZED_VIEW_NOT_CONCURRENT": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-refreshmaterializedview.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The REFRESH MATERIALIZED VIEW page: without CONCURRENTLY the refresh locks out reads of the view while it runs. CONCURRENTLY lets selects run alongside it, needs at least one UNIQUE index on the view that uses only column names and includes all rows, and cannot be used on a view that is not populated. Measured on PostgreSQL 18.0: the plain refresh held AccessExclusiveLock on the view, the concurrent one ExclusiveLock, and the concurrent refresh ran inside BEGIN and ROLLBACK without an error."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/explicit-locking.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The table of lock modes names REFRESH MATERIALIZED VIEW without CONCURRENTLY among the commands that take ACCESS EXCLUSIVE, which conflicts with every other mode, readers included, and REFRESH MATERIALIZED VIEW CONCURRENTLY as the command that takes EXCLUSIVE, which lets plain reads through."
+            }
+        ],
+        "PG.L2.REINDEX_NOT_CONCURRENT": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-reindex.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The REINDEX page: REINDEX locks out writes but not reads of the index's parent table, and takes an ACCESS EXCLUSIVE lock on the index being processed, which blocks reads that try to use it. REINDEX CONCURRENTLY rebuilds without those locks and cannot run inside a transaction block. Measured on PostgreSQL 18.0: REINDEX TABLE orders held ShareLock on the table and AccessExclusiveLock on each of its indexes inside its own transaction, and BEGIN followed by REINDEX TABLE CONCURRENTLY orders was refused."
+            }
+        ],
         "PG.L2.SET_NOT_NULL_SCAN": [
             {
                 "type": "doc",
@@ -654,6 +744,20 @@
                 "url": "https://www.postgresql.org/docs/18/sql-altertable.html",
                 "applies_to": "PostgreSQL 18",
                 "note": "Changing a column's type rewrites the whole table unless the new type is binary-coercible from the old one, and a USING clause forces the rewrite unconditionally. The duration therefore grows with the row count, which is why a change that is instant in development can be an outage in production."
+            }
+        ],
+        "PG.L2.VACUUM_FULL": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-vacuum.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The VACUUM page: VACUUM FULL rewrites the entire contents of the table into a new disk file and needs an ACCESS EXCLUSIVE lock on each table while it processes it, while the plain form runs beside ordinary reads and writes. VACUUM cannot be executed inside a transaction block."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/explicit-locking.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The table of lock modes names VACUUM FULL among the commands that take ACCESS EXCLUSIVE, which conflicts with every other mode, readers included, and VACUUM without FULL among those that take SHARE UPDATE EXCLUSIVE, which conflicts with no read and no write."
             }
         ],
         "PG.L3.CONCURRENTLY_IN_TRANSACTION": [
@@ -706,6 +810,14 @@
                 "url": "https://www.postgresql.org/docs/18/explicit-locking.html",
                 "applies_to": "PostgreSQL 18",
                 "note": "A lock held by a transaction is kept until the transaction commits or rolls back. When several strong-lock operations run in one transaction — as they do when a migration alters several tables inside Laravel's default up() transaction — every lock is held for the whole transaction, so the total lock time is the sum of the operations and traffic to any locked table queues behind the slowest. Splitting the operations into separate migrations lets each take its lock, commit, and release it before the next begins."
+            }
+        ],
+        "PG.L3.VACUUM_IN_TRANSACTION": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-vacuum.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "VACUUM cannot be executed inside a transaction block, in any of its forms. Laravel wraps a migration's up() in a transaction by default, so the statement fails until the migration opts out with public $withinTransaction = false. Measured on PostgreSQL 18.0: BEGIN followed by VACUUM FULL orders failed with error 25001."
             }
         ],
         "PG.L4.CHECK_ENUM_CHANGE": [
@@ -790,6 +902,20 @@
                 "url": "https://www.postgresql.org/docs/18/sql-reindex.html",
                 "applies_to": "PostgreSQL 18",
                 "note": "The first half of the remediation, and the reason the finding names it as work rather than a setting: rebuilding an index is an operation with a cost and a lock profile, not a configuration change somebody can make between two meetings."
+            }
+        ],
+        "PG.L5.FK_NEAR_CEILING": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/view-pg-sequences.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The pg_sequences view documents last_value as null both for a sequence not read from yet and for a user without USAGE or SELECT on it. The reading asks has_sequence_privilege beside it, so a parent whose position is withheld is reported as undetermined rather than as a column with room to spare."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/datatype-numeric.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The integer types table gives the ceiling a referencing column is held against: an integer column stops at +2147483647 whatever the bigint key it points at can still hand out."
             }
         ],
         "PG.L5.FK_NO_INDEX": [
@@ -882,6 +1008,26 @@
                 "note": "Why “just use ctid” is not an answer for row-level tooling: a row's physical location is not stable — it changes on UPDATE and on VACUUM FULL — so it cannot serve as the identity an audit trail or a re-run-this-row recovery needs."
             }
         ],
+        "PG.L5.PK_NEAR_CEILING": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/view-pg-sequences.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The pg_sequences view documents last_value as the last value written to disk, which with caching can stand ahead of the last value handed out, and as null both for a sequence not read from yet and for a user without USAGE or SELECT on it. The reading therefore asks has_sequence_privilege beside it: the two nulls are the same value, and only the privilege tells an unused key from a withheld one."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-altersequence.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "ALTER SEQUENCE ... AS changes the maximum only when it was the maximum of the old type, and keeps a maximum set by hand unless the same command gives a new one. That is the cure the finding names when the sequence rather than the column is the limit: AS bigint for a default maximum, with NO MAXVALUE in the same statement for one set by hand."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/datatype-numeric.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "The integer types table gives the ceilings a key column is held against: smallint to +32767, integer to +2147483647 and bigint to +9223372036854775807."
+            }
+        ],
         "PG.L6.DEFAULT_TRANSACTION_ISOLATION_DRIFT": [
             {
                 "type": "doc",
@@ -922,6 +1068,14 @@
                 "note": "Where the variable lives and what changing it costs: a client-connection default, settable per session and per role, so the server value is what a connection gets when nothing else has spoken — and a configuration change plus a reload, not a restart."
             }
         ],
+        "PG.L6.FK_NARROWER_THAN_KEY": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/datatype-numeric.html",
+                "applies_to": "PostgreSQL 18 and newer",
+                "note": "The numeric-types table gives the ranges: `integer` is -2147483648 to +2147483647 and `bigint` is -9223372036854775808 to +9223372036854775807. That difference is the whole finding — a referencing column of the narrower type can address only a fraction of what the referenced key can hold, and nothing about the foreign key says so."
+            }
+        ],
         "PG.L6.JSON_NOT_JSONB": [
             {
                 "type": "doc",
@@ -936,6 +1090,12 @@
                 "url": "https://www.postgresql.org/docs/18/datatype-numeric.html",
                 "applies_to": "PostgreSQL 18",
                 "note": "PostgreSQL's numeric types table gives the ranges directly: smallint spans -32768 to +32767, integer -2147483648 to +2147483647, and bigint -9223372036854775808 to +9223372036854775807. The same chapter notes that the integer type is the usual choice as it offers the best balance, which is exactly why a key chosen without thought lands on it."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-altersequence.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "ALTER SEQUENCE ... AS changes the maximum only when it was the maximum of the old type, and keeps a maximum set by hand unless the same command gives a new one. It is the cure the rule names for a bigint key whose serial sequence stayed AS integer after the column was widened, and for a narrow serial key whose sequence has to widen with it."
             }
         ],
         "PG.L6.PK_UUID_V4": [
@@ -1022,6 +1182,20 @@
                 "note": "Where `autovacuum_enabled` lives — a per-table storage parameter in `pg_class.reloptions`, absent on a table that runs under the cluster's setting. The same page carries the per-table thresholds this rule deliberately does not read: a threshold set so high it never fires is the same state written more quietly, and a separate question."
             }
         ],
+        "PG.L7.AUTOVACUUM_OFF": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/runtime-config-autovacuum.html#GUC-AUTOVACUUM",
+                "applies_to": "PostgreSQL 18",
+                "note": "The setting itself, on by default, and the fact that decides this rule's second half: while it is off the server still launches autovacuum to prevent transaction ID wraparound. So switching it off does not avoid the vacuum, it defers it to a moment nobody chose."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-createtable.html#SQL-CREATETABLE-STORAGE-PARAMETERS",
+                "applies_to": "PostgreSQL 18",
+                "note": "Why a table cannot opt back in: the autovacuum daemon does not run at all while the server setting is off, apart from preventing wraparound, and the per-table autovacuum_enabled does not override that. The finding is therefore one per server, not one per table."
+            }
+        ],
         "PG.L7.DATA_CHECKSUMS_DISABLED": [
             {
                 "type": "doc",
@@ -1040,6 +1214,32 @@
                 "url": "https://www.postgresql.org/docs/18/app-initdb.html",
                 "applies_to": "PostgreSQL 18",
                 "note": "Where the default now sits: initdb enables checksums unless told not to, so on version 18 their absence is either a deliberate opt-out or, far more often, an older cluster carried forward. Knowing which of the two it is changes who needs to be in the conversation."
+            }
+        ],
+        "PG.L7.INDEX_INVALID": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-createindex.html#SQL-CREATEINDEX-CONCURRENTLY",
+                "applies_to": "PostgreSQL 18",
+                "note": "A concurrent build that fails, for example on a uniqueness violation or a deadlock, leaves an invalid index behind that queries ignore, and the recommended recovery is to drop it and try again. The page adds that such an index still consumes update overhead. Measured on PostgreSQL 18.0, that holds only once writes reached it: the remains of a unique build over duplicate values were never ready and stayed at zero bytes through 20,000 later inserts, while an invalid index that was ready grew from 456 to 896 KiB over the same inserts."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-reindex.html#SQL-REINDEX-CONCURRENTLY",
+                "applies_to": "PostgreSQL 18",
+                "note": "A REINDEX CONCURRENTLY that fails leaves an invalid index of its own behind, named with a ccnew suffix, beside the one it was replacing, and the recovery is again to drop the invalid one. So the rule reports both kinds of remains, not only those of CREATE INDEX."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/catalog-pg-index.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "What the two flags mean: indisvalid false makes the index unusable for queries, and indisready false means INSERT and UPDATE ignore it. The finding reads both, which is how it says whether the index still costs writes."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/progress-reporting.html#CREATE-INDEX-PROGRESS-REPORTING",
+                "applies_to": "PostgreSQL 18",
+                "note": "pg_stat_progress_create_index lists every running CREATE INDEX and REINDEX. Measured on PostgreSQL 18.0, two facts the rule is built on: during a REINDEX CONCURRENTLY the view names the index being replaced rather than the invalid ccnew one, so a running build is matched by its table; and a role without pg_read_all_stats sees another role's build with a NULL relid, so that state is undetermined rather than a pass."
             }
         ],
         "PG.L7.INDEX_REDUNDANT": [
@@ -1068,6 +1268,20 @@
                 "url": "https://www.postgresql.org/docs/18/monitoring-stats.html",
                 "applies_to": "PostgreSQL 18",
                 "note": "pg_stat_user_indexes.idx_scan counts index scans and pg_stat_database.stats_reset records when the counters were last reset; the documentation is explicit that the statistics are per instance and can be reset, which is what makes the window a precondition for reading the counter at all."
+            }
+        ],
+        "PG.L7.TRACK_COUNTS_OFF": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/runtime-config-statistics.html#GUC-TRACK-COUNTS",
+                "applies_to": "PostgreSQL 18",
+                "note": "The setting, on by default because the autovacuum daemon needs the counts it collects. Measured on PostgreSQL 18.0: three index scans in a session with it off left pg_stat_user_indexes.idx_scan where it was, which is why PG.L7.INDEX_UNUSED does not judge on such a server."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/runtime-config-autovacuum.html#GUC-AUTOVACUUM",
+                "applies_to": "PostgreSQL 18",
+                "note": "States that track_counts must be on for autovacuum to work, so a server with it off vacuums and analyzes no table on its own while autovacuum itself still reads on."
             }
         ],
         "PG.L7.UNBATCHED_MASS_DML": [
@@ -1115,7 +1329,13 @@
                 "type": "doc",
                 "url": "https://www.postgresql.org/docs/18/datatype-numeric.html",
                 "applies_to": "PostgreSQL 18 and newer",
-                "note": "The numeric-types table gives the ranges: `integer` is -2147483648 to +2147483647 and `bigint` is -9223372036854775808 to +9223372036854775807. That difference is the whole finding — a referencing column of the narrower type can address only a fraction of what the referenced key can hold, and nothing about the foreign key says so."
+                "note": "The integer types and their ranges, which decide which rule a mismatched pair belongs to: a referencing column narrower than its key is PG.L6.FK_NARROWER_THAN_KEY's, because it runs out on a date; a wider one stays here, as a conversion the schema did not ask for."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/typeconv-oper.html",
+                "applies_to": "PostgreSQL 18 and newer",
+                "note": "How PostgreSQL resolves an operator over two different types: it looks for an operator that takes both, or converts one side. A foreign key between two types leans on that resolution for every lookup it makes, while nothing in the schema records it."
             }
         ],
         "PG.L9.VIEW_SELECT_STAR": [
@@ -1371,7 +1591,7 @@
                 "type": "doc",
                 "url": "https://dev.mysql.com/doc/refman/8.4/en/load-data-local-security.html",
                 "applies_to": "MySQL 8.4",
-                "note": "Documents that LOAD DATA LOCAL has the SERVER name the path and the CLIENT read and upload it, so a hostile or hijacked server can ask an application for a file it never meant to send. Cited for the half of this finding that is about the capability rather than about the account."
+                "note": "Documents that LOAD DATA LOCAL has the SERVER name the path and the CLIENT read and upload it, so a statement injected into an application's connection can load a file from the application host. Cited for the half of this finding that is about the capability rather than about the account."
             },
             {
                 "type": "doc",

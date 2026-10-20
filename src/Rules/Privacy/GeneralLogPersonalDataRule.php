@@ -13,7 +13,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
 /**
  * MySQL's general query log is on, and every row value in every statement is now in a file.
  *
- * ## Why this exists beside {@see GeneralLogRule}, which reads the SAME variable
+ * ## Why this exists beside {@see GeneralLogRule}, which reads the same variable
  *
  * They ask different questions about one setting, and a project usually cares about exactly one of
  * them. The hardening view is about SECRETS — `CREATE USER … IDENTIFIED BY` writes the password into

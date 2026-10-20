@@ -15,12 +15,12 @@ use Pushery\SQLens\Subjects\MigrationSql;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
 /**
- * Turns a rule's verdict about ONE migration statement into a finding — once, for every base that
+ * Turns a rule's verdict about one migration statement into a finding — once, for every base that
  * has migration subjects.
  *
  * The exact counterpart of {@see CatalogVerdicts}, and it exists for the same reason. Two bases
  * reach a migration statement now: {@see AbstractSafetyRule}, whose whole family judges them, and
- * {@see AbstractCatalogRule}, for a catalog rule that ALSO has something to say about one
+ * {@see AbstractCatalogRule}, for a catalog rule that also has something to say about one
  * ({@see JudgesMigrationStatements}). Letting each build its own finding would be the second code
  * path this package keeps refusing: the two would drift on the location shape, on whether the
  * engine note is applied, or on how an undetermined verdict is carried — and the drift would be
@@ -29,7 +29,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * It takes the whole {@see Rule} rather than a dozen arguments, so a metadata field added to that
  * contract later cannot be forgotten here.
  *
- * What it deliberately does NOT do is stamp the confidence or the downtime class. Those come from
+ * What it deliberately does not do is stamp the confidence or the downtime class. Those come from
  * the collector, which is where a rule that DERIVES its class per statement is asked — putting a
  * second stamping here would give one finding two answers.
  */

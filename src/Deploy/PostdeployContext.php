@@ -12,7 +12,7 @@ use Pushery\SQLens\Rules\ServerVersion;
 /**
  * What a post-deploy check is allowed to look at, and how long it has.
  *
- * ## Why this is NOT {@see PreflightContext} with a flag
+ * ## Why this is not {@see PreflightContext} with a flag
  *
  * The two moments ask about different worlds, and the difference is exactly one field: preflight
  * carries {@see PendingWork} — the statements that are ABOUT to run. After `migrate --force` there
@@ -41,7 +41,7 @@ final readonly class PostdeployContext
         /**
          * When this run must be finished, as an `hrtime(true)` reading.
          *
-         * Postdeploy is not monitoring: it runs ONCE and ends. The budget is what makes that
+         * Postdeploy is not monitoring: it runs once and ends. The budget is what makes that
          * structural rather than a promise — a verifier that could take arbitrarily long is a
          * daemon nobody meant to write.
          */

@@ -48,7 +48,7 @@ final readonly class PgsqlWriteAcceptance implements ReadsWriteAcceptance
             throw new PreflightStateUnreadable('the instance answered nothing about its write state');
         }
 
-        // Recovery FIRST, and the order is the message rather than an optimization. A standby is a
+        // Recovery first, and the order is the message rather than an optimization. A standby is a
         // connection pointed at the wrong host; a read-only primary is a setting somebody chose.
         // Reported the other way round, a reader goes looking for a config flag on a machine that is
         // not the one they should be talking to at all.

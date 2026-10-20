@@ -22,17 +22,18 @@ use Pushery\SQLens\Capture\SessionGuard;
  * at a shared instance needs to know which:
  *
  *   - the **maintenance link**, deliberately — a `CREATE DATABASE … TEMPLATE` of a real schema can take
- *     longer than the tight per-statement capture budget, and the whole provisioning is bounded by
- *     `capture.shadow.timeout` instead. {@see ConnectionMaintenanceGateway} states this at its own head.
+ *     longer than the tight per-statement capture budget, so it runs on the server's defaults.
+ *     {@see ConnectionMaintenanceGateway} states this at its own head.
  *   - the **template connection**, which replays a whole schema dump through `getPdo()->exec()`.
  *   - the **MySQL replay**, likewise a whole dump.
  *
  * The last two are a real gap rather than a decision. Binding them is a behavior change on the
  * provisioning path — a per-statement budget over a schema dump aborts a legitimately long replay —
- * and the harm the gap carries is bounded by the guards around shadow mode: throwaway databases, a
- * refusal to run against a production target, and the overall `capture.shadow.timeout`.
+ * and the harm the gap carries is limited by the guards around shadow mode: throwaway databases and
+ * a refusal to run against a production target. Nothing bounds the provisioning as a whole:
+ * `capture.shadow.timeout` is a budget per statement and per lock wait on the connection below.
  *
- * It reuses the ONE per-driver set-path, `SessionGuard::statementsFor()`, for the
+ * It reuses the one per-driver set-path, `SessionGuard::statementsFor()`, for the
  * statement and lock budgets rather than growing a second one, and adds only what
  * the shadow path needs on top:
  *
@@ -57,7 +58,7 @@ final readonly class ShadowSessionDefense
     {
         $milliseconds = $this->timeoutSeconds * 1000;
 
-        // The statement and lock budgets are the SAME two axes the capture session
+        // The statement and lock budgets are the same two axes the capture session
         // guard sets — reused, not re-implemented — both bounded by the shadow
         // timeout.
         $this->sessionGuard = new SessionGuard([

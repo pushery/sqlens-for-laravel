@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Corpus;
 
 /**
- * A digest of WHICH rules a build ships — the thing a false-positive rate is a statement about.
+ * A digest of which rules a build ships — the thing a false-positive rate is a statement about.
  *
  * ## Why a rate needs one
  *

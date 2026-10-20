@@ -44,10 +44,10 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * A version comparison has three genuinely different "cannot answer" cases, and collapsing any of
  * them into a pass is a silent green:
  *
- * 1. NEITHER side reports a version. This provider does not report one on this platform — measured
+ * 1. Neither side reports a version. This provider does not report one on this platform — measured
  *    on PostgreSQL 18 on macOS, the `libc` provider reports none at all. Drift is undetectable here
  *    in principle, which is not the same as absent.
- * 2. ONE side reports and the other does not. A recorded version with no current one means the
+ * 2. One side reports and the other does not. A recorded version with no current one means the
  *    provider stopped reporting — an OS change already happened and the evidence is gone. The
  *    reverse means the object predates version tracking.
  * 3. Both present and different — the finding.

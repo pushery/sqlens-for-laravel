@@ -46,7 +46,7 @@ use Throwable;
  * "Can this DDL run right now" is the question the preflight exists to answer, and the freeze
  * horizon is one of the few answers to it that the instance can give in advance.
  *
- * ## TWO clocks, and the second one is the one nobody watches
+ * ## two clocks, and the second one is the one nobody watches
  *
  * PostgreSQL counts two horizons, and either one stops the cluster when it runs out:
  *
@@ -93,7 +93,8 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
      * against a held SHARE UPDATE EXCLUSIVE, `CREATE INDEX`, `CREATE INDEX CONCURRENTLY`, `DROP INDEX`
      * and `DROP INDEX CONCURRENTLY` each waited, while an `INSERT` and a `SELECT` ran. `VALIDATE
      * CONSTRAINT`, a SHARE UPDATE EXCLUSIVE `ALTER TABLE`, waits behind the worker as well. A `DROP
-     * INDEX` names only its index, so its table is asked of the catalog ({@see IndexTables}).
+     * INDEX` and a `REINDEX INDEX` name only their index, so its table is asked of the catalog
+     * ({@see IndexTables}).
      *
      * @var list<StatementKind>
      */
@@ -110,6 +111,15 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
         StatementKind::DropConstraint,
         StatementKind::Rename,
         StatementKind::CreateIndex,
+        // `VACUUM FULL` and `CLUSTER`, whose ACCESS EXCLUSIVE conflicts with every other lock, the
+        // worker's included.
+        StatementKind::RebuildTable,
+        // A `REINDEX` takes SHARE on its table and a concurrent one SHARE UPDATE EXCLUSIVE, and a
+        // refresh ACCESS EXCLUSIVE on its view and a concurrent one EXCLUSIVE: all four conflict
+        // with the worker's lock. A `REINDEX INDEX` names only its index, whose table the catalog
+        // answers, and a refresh names the view, which keeps freeze clocks of its own.
+        StatementKind::Reindex,
+        StatementKind::RefreshMaterializedView,
     ];
 
     /** Report from here: at the threshold the launcher starts an anti-wraparound worker. */
@@ -141,17 +151,18 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
         }
 
         $targets = $this->lockedTables($context);
-        $droppedIndexes = $this->droppedIndexes($context);
+        $indexesNamedAlone = $this->indexesNamedAlone($context);
 
-        if ($targets === [] && $droppedIndexes === []) {
+        if ($targets === [] && $indexesNamedAlone === []) {
             return CheckResult::pass(self::ID);
         }
 
         try {
-            $targets = array_values(array_unique([...$targets, ...IndexTables::of($context->session, $droppedIndexes)]));
+            $targets = array_values(array_unique([...$targets, ...IndexTables::of($context->session, $indexesNamedAlone)]));
 
             if ($targets === []) {
-                // Only indexes the catalog does not know yet: nothing this run drops exists to be vacuumed.
+                // Only indexes the catalog does not know yet: nothing this run drops or rebuilds exists
+                // to be vacuumed.
                 return CheckResult::pass(self::ID);
             }
 
@@ -186,7 +197,7 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
             return CheckResult::fail(self::ID, $findings);
         }
 
-        // Asked only HERE, and only now: the answer can change nothing while there are findings, and
+        // Asked only here, and only now: the answer can change nothing while there are findings, and
         // a query bought for an answer nobody reads is a query on somebody's production instance at
         // the moment before a deploy.
         try {
@@ -263,7 +274,7 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
     }
 
     /**
-     * Whether this role sees OTHER sessions in `pg_stat_activity` — the question an empty reading
+     * Whether this role sees other sessions in `pg_stat_activity` — the question an empty reading
      * from {@see self::runningAntiWraparound()} cannot answer for itself.
      *
      * `pg_has_role` on `pg_read_all_stats`, deliberately not `has_table_privilege` on the view.
@@ -489,7 +500,9 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
             }
 
             foreach ($statement->targets ?? [] as $target) {
-                if ($target->type !== SchemaObjectType::Table || ! $target->isSubject()) {
+                // A materialized view is examined like a table: it is vacuumed, and the age query
+                // reads its freeze clocks.
+                if (! in_array($target->type, [SchemaObjectType::Table, SchemaObjectType::MaterializedView], true) || ! $target->isSubject()) {
                     continue;
                 }
 
@@ -505,17 +518,18 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
     }
 
     /**
-     * The indexes this run drops, concurrently or not: both forms lock the index's table in a mode
-     * a vacuum's SHARE UPDATE EXCLUSIVE conflicts with.
+     * The indexes this run drops or rebuilds by name, concurrently or not: a `DROP INDEX` and a
+     * `REINDEX INDEX` name only the index, and both forms of each lock the index's table in a mode a
+     * vacuum's SHARE UPDATE EXCLUSIVE conflicts with.
      *
      * @return list<string>
      */
-    private function droppedIndexes(PreflightContext $context): array
+    private function indexesNamedAlone(PreflightContext $context): array
     {
         $indexes = [];
 
         foreach ($context->pending->statements as $statement) {
-            if ($statement->statementKind !== StatementKind::DropIndex) {
+            if (! in_array($statement->statementKind, [StatementKind::DropIndex, StatementKind::Reindex], true)) {
                 continue;
             }
 
@@ -536,7 +550,8 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
      * clause rewrites, and so does a target the type matrix calls a rewrite, unless the statement
      * restates the column's type the way Laravel's `->change()` does, where the current type decides.
      * The statement's kind cannot answer it: PostgreSQL classifies every `ALTER COLUMN` as a plain
-     * `alter_table`, and a retyping behind another action carries that action's kind.
+     * `alter_table`, and a retyping behind another action carries that action's kind. The kind does
+     * answer it for a `VACUUM FULL` or a `CLUSTER`, which rewrite the whole table by definition.
      */
     private function rewritesAnything(PreflightContext $context): bool
     {
@@ -545,6 +560,10 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
         return array_any(
             $context->pending->statements,
             static function (CapturedStatement $statement) use ($matrix): bool {
+                if ($statement->statementKind === StatementKind::RebuildTable) {
+                    return true;
+                }
+
                 $change = ColumnTypeChange::inCanonical($statement->canonicalSql ?? '');
 
                 return $change instanceof ColumnTypeChange && ($change->hasUsingClause()

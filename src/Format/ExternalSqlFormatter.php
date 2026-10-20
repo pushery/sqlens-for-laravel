@@ -16,10 +16,11 @@ use Pushery\SQLens\Tools\ToolRunResult;
  * ## Why one base rather than two adapters
  *
  * pgFormatter and SQLFluff differ in their command line, their dialect coverage and the style
- * options they can express. They do NOT differ in any of the things that are hard: bounding the
- * process, treating a missing binary as a named reason rather than an exception, refusing a version
- * outside the measured window, and passing the tool's own words through instead of interpreting
- * them. Two copies of that would be two chances to get the hard part wrong, and the second copy is
+ * options they can express. They do not differ in any of the things that are hard: bounding the
+ * process, treating a missing binary as a named reason rather than an exception, refusing output
+ * that no longer reads as the statement it was given, and passing the tool's own words through
+ * instead of interpreting them. No version is refused: the backends have no version concept, and
+ * the version read from the binary only labels the result. Two copies of that would be two chances to get the hard part wrong, and the second copy is
  * always the one that forgets the timeout.
  *
  * ## Every failure is a REASON, never a throw
@@ -90,7 +91,7 @@ abstract readonly class ExternalSqlFormatter implements SqlFormatter
             );
         }
 
-        // Located BEFORE it is run, so "not installed" is a different answer from "ran and failed".
+        // Located before it is run, so "not installed" is a different answer from "ran and failed".
         // A caller told the second when the first is true goes looking for a bug in their SQL.
         $path = $this->processes->locate($this->binary);
 
@@ -140,7 +141,7 @@ abstract readonly class ExternalSqlFormatter implements SqlFormatter
                 $this->name(),
                 $dialect,
                 $style,
-                // The tool's OWN words. A paraphrase is a second opinion about a message its authors
+                // The tool's own words. A paraphrase is a second opinion about a message its authors
                 // wrote deliberately, and it is the paraphrase that goes stale when they improve it.
                 trim($run->stderrExcerpt) !== '' ? trim($run->stderrExcerpt) : 'exit code '.$run->exitCode,
             );
@@ -215,7 +216,7 @@ abstract readonly class ExternalSqlFormatter implements SqlFormatter
     /**
      * Style options this backend cannot express, by name.
      *
-     * Answered UP FRONT rather than discovered from the output, because the alternative is comparing
+     * Answered up front rather than discovered from the output, because the alternative is comparing
      * what came back against what was asked for — which is guessing, and guesses about formatting
      * are how a `--check` run reports a clean file as dirty.
      *

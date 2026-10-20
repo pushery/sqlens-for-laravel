@@ -45,7 +45,7 @@ use Pushery\SQLens\Agent\Remediation\RemediationValidator;
  * ## The discriminator alone is not enough, and that is the other half
  *
  * A field that is merely *meaningless* for half the ground set is still a field somebody reads. So
- * {@see RemediationValidator} REFUSES a payload that sets one
+ * {@see RemediationValidator} refuses a payload that sets one
  * where it does not apply, rather than rendering it and hoping. Absent is a fact; present and
  * ignored is a lie a reader cannot see.
  */

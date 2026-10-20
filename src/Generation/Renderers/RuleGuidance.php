@@ -12,7 +12,7 @@ use Pushery\SQLens\Generation\RuleCatalogSnapshot;
  * ## Why one body and three wrappers
  *
  * The three target formats differ in where the file goes, what frontmatter it carries and whether
- * it owns its file. They do NOT differ in what a project's rules are. Writing the body three times
+ * it owns its file. They do not differ in what a project's rules are. Writing the body three times
  * would mean three descriptions of one rule set, and the day one of them gained a sentence the
  * other two would be quietly wrong — which is the same drift the whole export chain exists to
  * prevent, reproduced one layer down.
@@ -55,7 +55,7 @@ final readonly class RuleGuidance
     }
 
     /**
-     * The run's own parameters, so a reader can tell WHICH configuration this describes.
+     * The run's own parameters, so a reader can tell which configuration this describes.
      *
      * The version note is included when there is one. A catalog produced without a pin lists rules
      * it could not place, and a reader who does not know that will treat every line as certain.
@@ -218,7 +218,7 @@ final readonly class RuleGuidance
     }
 
     /**
-     * The stability tier, said only when it is NOT `stable`.
+     * The stability tier, said only when it is not `stable`.
      *
      * A rule this export carries is one the project's config selected, and a preview or experimental
      * rule only gets in when somebody opted into that tier. So the agent reading this needs the tier
@@ -258,7 +258,7 @@ final readonly class RuleGuidance
      * not sum to the total — a reader who added them up and got more than the total would
      * reasonably conclude the numbers were wrong.
      *
-     * Suite NAMES, not command names. Most map to a `sqlens:<name>` command and one does not:
+     * Suite names, not command names. Most map to a `sqlens:<name>` command and one does not:
      * `deploy` is reached through `sqlens:predeploy` and `sqlens:postdeploy`, so rendering a
      * command here would invent `sqlens:deploy` for every project that has a deploy rule.
      */

@@ -20,7 +20,7 @@ namespace Pushery\SQLens\Reporting;
  * completeness test while telling nobody anything.
  *
  * The skips are already findings in the result — each one is reported as an `undetermined` with
- * its named reason. They appear in the header TOO because the header is what gets read first, and
+ * its named reason. They appear in the header too because the header is what gets read first, and
  * a run that skipped half the catalog must not look complete at a glance.
  */
 final readonly class ReportedSkip

@@ -62,7 +62,7 @@ final readonly class PrivilegeRequirement
     /** The stable sort key — same capture, same order, byte-identical reports. */
     public function sortKey(): string
     {
-        // The underivable marker sorts LAST by design (`~` is above every letter in ASCII), so a
+        // The underivable marker sorts last by design (`~` is above every letter in ASCII), so a
         // report's unanswered questions collect at the end rather than hiding between two answers.
         return $this->object.'|'.$this->objectType->value.'|'.($this->class instanceof PrivilegeClass ? $this->class->value : '~underivable');
     }

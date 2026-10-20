@@ -9,14 +9,15 @@ namespace Pushery\SQLens\Contracts;
  * database-creating mode makes before it touches the instance.
  *
  * The question is engine-specific (PostgreSQL asks `pg_is_in_recovery()`, MySQL
- * reads `@@read_only` / `@@innodb_read_only`), so it lives behind this seam and
- * the concrete probes hold the query. The shadow captor asks only "is this a
- * replica?" and turns a yes into a named undetermined, never a run — a replica
- * has a different state than its primary, and provisioning against it would
- * describe the wrong database.
+ * reads `@@read_only`, `@@innodb_read_only` and its replication channel), so it
+ * lives behind this seam and the concrete probes hold the query. The shadow captor
+ * asks only "is this a replica?" and turns a yes into a named undetermined, never a
+ * run — a replica has a different state than its primary, and provisioning against
+ * it would describe the wrong database.
  *
- * A probe is a read: it selects a status flag and nothing more. It writes
- * nothing and takes no lock, like every other connection SQLens opens.
+ * A probe is a read: it selects status flags, and on MySQL one catalog table, and
+ * nothing more. It writes nothing and takes no lock, like every other connection
+ * SQLens opens.
  */
 interface ReplicaProbe
 {

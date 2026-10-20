@@ -33,7 +33,7 @@ use Pushery\SQLens\Config\RuleIdValidator;
  *   system variable: what the engine does regardless of who is connected.
  * - `SEC.AUTH.<NAME>` — how does somebody get IN? Credentials, password hashes,
  *   host matching, anonymous access, `pg_hba.conf` lines.
- * - `SEC.PRIV.<NAME>` — what may they do ONCE in? Grants, role attributes,
+ * - `SEC.PRIV.<NAME>` — what may they do once in? Grants, role attributes,
  *   ownership, the separation of runtime and migration connections.
  * - `SEC.RLS.<NAME>`  — does row-level security actually bite? Enablement,
  *   forcing, policies, and policies that are true for everyone.
@@ -64,7 +64,7 @@ use Pushery\SQLens\Config\RuleIdValidator;
  * a strictness appetite nor asks one of those questions:
  *
  * - `SEC.SKIPPED.<NAME>` — the security suite's degradation findings.
- * - `CAP.PRESCAN.<NAME>` — what the static pre-scan found in a migration BEFORE
+ * - `CAP.PRESCAN.<NAME>` — what the static pre-scan found in a migration before
  *   anything ran. A pre-scan hit is not a statement about SQL; it is the reason a
  *   migration is not captured at all, so it has no level to sit at.
  */
@@ -78,7 +78,7 @@ final class RuleIdFormat
     /**
      * The questions a security rule can ask, one area each. Held here rather than in the
      * pattern alone so the guard over the registry and the documentation-url
-     * derivation read the SAME list — two copies would drift, and the drift
+     * derivation read the same list — two copies would drift, and the drift
      * would be invisible because both would stay green.
      *
      * `INJ` arrived late and for a measured reason. The scheme was fixed with
@@ -88,9 +88,9 @@ final class RuleIdFormat
      * no registry, and the property test only ever sees ids the registry carries.
      * Two gaps, one silence: an id nobody validated because a rule nobody listed.
      *
-     * `PII` arrived the same way and deliberately NOT the same way: the privacy
+     * `PII` arrived the same way and deliberately not the same way: the privacy
      * pack's column rule needed a sixth area because its subject
-     * is a schema object, and it was added HERE first — so the id was valid the
+     * is a schema object, and it was added here first — so the id was valid the
      * moment the rule existed rather than after somebody noticed.
      *
      * @var list<string>
@@ -117,15 +117,15 @@ final class RuleIdFormat
      *
      * ## Two questions that were answered by one predicate, and it cost the wrong one
      *
-     * `matches()` says how a rule of THIS package may be called. It is the catalog's guard, it is
+     * `matches()` says how a rule of this package may be called. It is the catalog's guard, it is
      * public API from 1.0, and it must stay exactly as strict as it is.
      *
-     * A suppression names something else entirely: it may name a rule an EXTERNAL TOOL emits, and
+     * A suppression names something else entirely: it may name a rule an external tool emits, and
      * those ids follow the tool's scheme, not ours. Squawk prints `prefer-timestamp-tz` — lowercase,
      * hyphenated — and the Postgres Language Server prints its own shapes. Judging those against our
      * scheme refuses them all.
      *
-     * Measured before this existed: `SQUAWK.ban-drop-table`, a rule the SHIPPED MAP describes, was
+     * Measured before this existed: `SQUAWK.ban-drop-table`, a rule the shipped map describes, was
      * refused by the configuration schema before any run started — while `PG.L1.NO_RULE_ANSWERS_TO_THIS`,
      * a pure typo in our own scheme, was admitted. The two answers were exactly the wrong way round.
      *

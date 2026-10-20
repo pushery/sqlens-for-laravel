@@ -191,7 +191,7 @@ final readonly class SquawkParityRenderer
         ];
 
         // Iterated over the mappings themselves rather than over rules() + for(). The two are the
-        // same data — rules() IS array_keys(mappings) — so a null check on the lookup guarded a
+        // same data — rules() is array_keys(mappings) — so a null check on the lookup guarded a
         // state that cannot occur, and an unreachable branch is not a safety net: it is a line no
         // test can ever cover and every reader has to reason about.
         foreach ($this->map->mappings as $rule => $mapping) {

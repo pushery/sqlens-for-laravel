@@ -17,10 +17,7 @@ namespace Pushery\SQLens\Catalog\Objects;
  */
 enum RoleAttribute: string
 {
-    /**
-     * Total authority over the instance — PG `rolsuper`, MySQL `Super_priv` together with the
-     * grant-everything shape of a root account.
-     */
+    /** Total authority over the instance — PG `rolsuper`, MySQL `Super_priv`. */
     case Superuser = 'superuser';
 
     /** May create and alter other roles — PG `rolcreaterole`, MySQL `Create_user_priv`. */
@@ -51,10 +48,13 @@ enum RoleAttribute: string
      *
      * It is in the shared vocabulary because it changes what a membership MEANS: a non-inheriting
      * member of a powerful role holds that power only after asking for it, which is a materially
-     * different exposure from holding it always. MySQL roles have an equivalent through
-     * `activate_all_roles_on_login`, which is a server setting rather than an account attribute —
-     * so on MySQL this attribute is read from that setting, and a reading that could not see the
-     * setting says so rather than assuming.
+     * different exposure from holding it always.
+     *
+     * On MySQL it is not read, and a role there never carries it. The engine has an equivalent,
+     * `activate_all_roles_on_login`, but that is a server setting rather than an account attribute,
+     * and the reader does not ask for it. Unlike `BypassRls`, the absence on MySQL is a gap in the
+     * reading rather than in the engine, so a rule that judges this attribute there has to read the
+     * setting first, and say so where it could not, before its verdict means anything.
      */
     case Inherit = 'inherit';
 }

@@ -11,7 +11,7 @@ use Pushery\SQLens\Canonical\TransactionMarkers;
  * The per-driver canonicalization contract — where a driver contributes its own
  * quirks (quoting, case folding, literal and comment syntaxes, keywords, DDL
  * transaction behavior, driver-specific stages) so the core never has to know
- * them. This is the ONLY place PostgreSQL-vs-MySQL syntax knowledge lives; the
+ * them. This is the only place PostgreSQL-vs-MySQL syntax knowledge lives; the
  * normalization stages read it instead of hard-coding a driver.
  *
  * A driver that leaves a required capability empty (no quoting character, no
@@ -124,7 +124,7 @@ interface DriverCanonicalization
 
     /**
      * The statement-recognition data the classifier applies — the shapes that map a
-     * canonical statement to its kind and targets. This is the ONE place the engine
+     * canonical statement to its kind and targets. This is the one place the engine
      * knows what `CREATE INDEX` or `ALTER TABLE … DROP COLUMN` looks like; the
      * classifier stays a generic matcher. An empty profile is a named undetermined,
      * not a silent "everything unknown".

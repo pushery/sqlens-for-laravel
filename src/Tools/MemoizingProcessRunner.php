@@ -13,7 +13,7 @@ namespace Pushery\SQLens\Tools;
  * `locate()` and `version()` answer questions about the MACHINE: where a binary lives, and which
  * build it is. Neither depends on the input, so both give the same answer for the first file and
  * the two-hundredth. `run()` is the work itself and is never cached — an answer that depended on
- * the SQL and came back from a cache would be catastrophic in a suite that WRITES FILES.
+ * the SQL and came back from a cache would be catastrophic in a suite that writes files.
  *
  * ## The measurement that made this exist
  *
@@ -27,7 +27,7 @@ namespace Pushery\SQLens\Tools;
  *
  * ## It also makes a promise the reporter already relies on
  *
- * `sqlens:format` prints ONE backend version for the whole run and takes it from a result rather
+ * `sqlens:format` prints one backend version for the whole run and takes it from a result rather
  * than probing separately, precisely so it cannot name a binary other than the one that did the
  * work. Re-resolving per file leaves a window where file 40 is formatted by something file 39 was
  * not, and nothing in the report would say so. Remembering the first answer closes it.

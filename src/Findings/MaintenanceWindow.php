@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Findings;
 /**
  * The maintenance-window advice a finding carries, derived from its downtime class alone.
  *
- * ## What it deliberately does NOT say
+ * ## What it deliberately does not say
  *
  * No duration. Not in seconds, not as a range, not as "roughly". A number here would look like
  * knowledge and be a guess: how long a rewrite takes depends on the row count, the hardware and

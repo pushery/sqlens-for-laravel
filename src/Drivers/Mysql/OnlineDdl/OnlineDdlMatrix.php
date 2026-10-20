@@ -44,7 +44,7 @@ final readonly class OnlineDdlMatrix
      * JSON parse inside the loop, growing with the matrix. The facts are immutable and the shipped
      * file does not change while a process runs, so one parse is the whole truth.
      *
-     * Only THIS accessor memoizes. {@see self::fromFile()} always reads, which is what the author
+     * Only this accessor memoizes. {@see self::fromFile()} always reads, which is what the author
      * path (`composer matrix:normalize`) and every test loading a different file rely on — so the
      * cache can never hand back a stale copy of a file something just rewrote.
      *

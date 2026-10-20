@@ -8,7 +8,7 @@ namespace Pushery\SQLens\Capture\PreScan;
  * What a call in a migration actually points at, once imports and aliases are
  * resolved — or an explicit statement that it could not be resolved.
  *
- * The unresolvable case is a FIRST-CLASS value, not a null. A dynamic class name,
+ * The unresolvable case is a first-class value, not a null. A dynamic class name,
  * `call_user_func`, or a variable method name means the scanner genuinely does
  * not know what runs; returning null would let every caller quietly treat "I
  * could not tell" as "nothing dangerous here". The pre-scan is deliberately
@@ -85,7 +85,7 @@ final readonly class CallTarget
 
     /**
      * The scanner could not determine what this call runs. The description says
-     * WHAT was unresolvable, so the resulting finding can name it instead of
+     * what was unresolvable, so the resulting finding can name it instead of
      * reporting a bare "something dynamic".
      */
     public static function dynamic(string $description): self

@@ -15,7 +15,7 @@ use Pushery\SQLens\Security\OriginBinding;
 /**
  * Everything a lint rule is allowed to reason about, and nothing more.
  *
- * A rule receives THIS, never the migration subject and never the raw grammar
+ * A rule receives this, never the migration subject and never the raw grammar
  * output. That boundary is the defense against grammar drift restated at the point
  * it matters: the fields here are the CANONICAL facts — the normalized statement
  * string, what the statement does ({@see StatementKind}), what it acts on
@@ -44,7 +44,7 @@ final readonly class MigrationStatementView
          * This statement's own position in the migration — its capture sequence, the
          * same index the entries of {@see MigrationContext::$statements} carry. A rule
          * that walks the ordered stream to find, say, the first strong-lock statement
-         * uses this to tell whether IT is that statement and so should carry the once-
+         * uses this to tell whether it is that statement and so should carry the once-
          * per-migration finding. It is a canonical fact about the statement (where it
          * sits), never raw grammar or provenance.
          */
@@ -86,23 +86,23 @@ final readonly class MigrationStatementView
          */
         public ?ResolvedServerVersion $serverVersion = null,
         /**
-         * The ordered column list THIS statement names — an index's key columns, a foreign
+         * The ordered column list this statement names — an index's key columns, a foreign
          * key's referencing columns — or an empty list when it names none.
          *
-         * The same fact {@see MigrationStatementDigest::$keyColumns} carries for ANOTHER statement,
+         * The same fact {@see MigrationStatementDigest::$keyColumns} carries for another statement,
          * carried here for the statement being judged. It had to travel both ways: a rule that
          * compares its own key against the migration's indexes needs one of each, and reading
          * its own out of the canonical string — the only alternative before this field existed —
          * would put grammar back into a rule, which is what this whole projection prevents.
          *
          * ORDER is load-bearing, which is why it is a list and not a set: index coverage is a
-         * LEFT PREFIX, so `(a, b)` answers a lookup on `(a)` and answers nothing for `(b)`.
+         * left prefix, so `(a, b)` answers a lookup on `(a)` and answers nothing for `(b)`.
          *
          * @var list<string>
          */
         public array $keyColumns = [],
         /**
-         * The columns THIS statement defines, with their canonical types — or null.
+         * The columns this statement defines, with their canonical types — or null.
          *
          * The same fact {@see MigrationStatementDigest::$columnDefinitions} carries for another
          * statement, carried here for the one being judged, and for the same reason `keyColumns`
@@ -120,7 +120,7 @@ final readonly class MigrationStatementView
         /**
          * Where this statement came from — migration, not a migration, or unknown.
          *
-         * Already DECIDED by the time a rule sees it: the run resolved the registered migration
+         * Already decided by the time a rule sees it: the run resolved the registered migration
          * paths once and the subject applied them, so a rule reads an answer instead of computing
          * one. That matters beyond tidiness — a rule computing it would need the paths, would take
          * a shortcut to `database/migrations`, and would then miss a package path, a tenant

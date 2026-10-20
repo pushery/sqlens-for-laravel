@@ -12,7 +12,7 @@ use Pushery\SQLens\Contracts\DriverCanonicalization;
  *
  * One answer for every stage that walks a statement, because the stages that each carried their own
  * scanner knew only the doubled delimiter. MySQL also escapes a delimiter with a backslash, and
- * Laravel writes a column comment through `addslashes()`, so `comment 'the setting\'s key'` is ONE
+ * Laravel writes a column comment through `addslashes()`, so `comment 'the setting\'s key'` is one
  * literal. A scanner that ended it at `\'` read the rest of the statement as a literal that never
  * closes: the keywords after it stayed lower case, a `PRIMARY KEY` went unseen, and the text inside
  * the literal was rewritten.

@@ -19,6 +19,7 @@ use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Nop;
 use PhpParser\NodeFinder;
+use Pushery\SQLens\Attributes\AttributeReason;
 use Pushery\SQLens\Attributes\NoSqlOnDriver;
 use Pushery\SQLens\Subjects\DownMethodState;
 
@@ -60,7 +61,7 @@ final readonly class ScannedMigration
      * cost model of the pre-scan rests on parsing each file exactly once, and the fast path's
      * sub-second promise rests on that.
      *
-     * A file holding several classes is judged by the FIRST one that declares either migration
+     * A file holding several classes is judged by the first one that declares either migration
      * method: a Laravel migration file returns one anonymous class, and a helper class beside
      * it (or a trait) must not be mistaken for the migration itself. A file with no such class
      * reports {@see DownMethodState::Missing} — nothing there can be rolled back either.
@@ -146,13 +147,14 @@ final readonly class ScannedMigration
     /**
      * The `#[NoSqlOnDriver]` annotations in these groups, as driver => reason.
      *
-     * Matched on the LAST segment of the attribute name, so it works whether the file imported the
+     * Matched on the last segment of the attribute name, so it works whether the file imported the
      * class or wrote it fully qualified — the pre-scan resolves names, but a migration is an
      * ordinary file and both spellings are ordinary things to write.
      *
      * Only literal strings are read. A constant or a variable in either argument means evaluating
      * project code to learn what a migration promises, and that is a thing this package does not do
-     * — the same decision `#[RawSql]` makes about its own reason.
+     * — the same decision `#[RawSql]` makes about its own reason. A reason that is empty or only
+     * whitespace excuses nothing either, by the rule every attribute shares.
      *
      * @param  array<AttributeGroup>  $groups
      * @return array<string, string>
@@ -170,7 +172,7 @@ final readonly class ScannedMigration
                 $driver = $this->literalArgument($attribute, 0, 'driver');
                 $reason = $this->literalArgument($attribute, 1, 'reason');
 
-                if ($driver === null || $driver === '' || $reason === null || $reason === '') {
+                if ($driver === null || $driver === '' || $reason === null || ! AttributeReason::states($reason)) {
                     continue;
                 }
 
@@ -182,7 +184,7 @@ final readonly class ScannedMigration
     }
 
     /**
-     * The short name of {@see NoSqlOnDriver}, lowercased — read OFF THE CLASS, never typed.
+     * The short name of {@see NoSqlOnDriver}, lowercased — read off the class, never typed.
      *
      * A literal here would leave the attribute class with no reference anywhere in `src/`, which is
      * what the unwired-mechanism guard reports and is right to: a class nothing names is a class a
@@ -374,7 +376,7 @@ final readonly class ScannedMigration
     /**
      * The calls whose target the scanner could not resolve. A detector that
      * cares about a specific surface still has to account for these — an
-     * unresolved call may BE that surface, reached dynamically.
+     * unresolved call may be that surface, reached dynamically.
      *
      * @return list<array{node: Node, target: CallTarget, line: int, scope: string|null, context: CallContext}>
      */

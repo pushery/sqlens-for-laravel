@@ -32,7 +32,7 @@ use Pushery\SQLens\Catalog\CatalogSkip;
 final readonly class HbaReading
 {
     /**
-     * @param  list<HbaRule>  $rules  in file order — which IS their evaluation order
+     * @param  list<HbaRule>  $rules  in file order — which is their evaluation order
      * @param  list<CatalogSkip>  $skips
      */
     private function __construct(
@@ -62,7 +62,7 @@ final readonly class HbaReading
     /**
      * The view refused, so nothing is claimed about how this server authenticates.
      *
-     * Partial with no rules rather than complete with none: something WAS withheld, and a reader who
+     * Partial with no rules rather than complete with none: something was withheld, and a reader who
      * cannot tell those apart would take silence for a clean bill of health — which is the one
      * reading this package must never produce.
      *

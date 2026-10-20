@@ -9,7 +9,7 @@ use Pushery\SQLens\Exceptions\ShadowDatabaseKept;
 use Pushery\SQLens\Findings\UndeterminedReason;
 
 /**
- * What building the expectation side produced: a catalog, or a NAMED reason there is none.
+ * What building the expectation side produced: a catalog, or a named reason there is none.
  *
  * Three-valued by construction rather than by convention. A builder that returned
  * `?CatalogSnapshot` would hand the caller a null it has to interpret, and every caller would
@@ -25,12 +25,19 @@ final readonly class ShadowReferenceOutcome
 {
     /**
      * @param  list<string>  $keptDatabases  what `capture.shadow.keep_on_failure` left on the server
+     * @param  string|null  $refusal  what a refused provisioning said beyond its reason, for a person:
+     *                                it can differ from run to run, so no report carries it, and the
+     *                                commands write it on STDERR
+     * @param  list<string>  $notes  what setting up the throwaway database left out that a person
+     *                               should know, written on STDERR for the same reason
      */
     private function __construct(
         public ?CatalogSnapshot $snapshot,
         public ?UndeterminedReason $reason,
         public ?string $shadowDatabase,
         public array $keptDatabases = [],
+        public ?string $refusal = null,
+        public array $notes = [],
     ) {}
 
     /**
@@ -39,10 +46,12 @@ final readonly class ShadowReferenceOutcome
      * The database name rides along because a report has to be able to say where the expectation
      * came from. It is already dropped by the time this object exists — naming it is provenance,
      * not an invitation to connect to it again.
+     *
+     * @param  list<string>  $notes  what setting up the throwaway database left out that a person should know
      */
-    public static function of(CatalogSnapshot $snapshot, string $shadowDatabase): self
+    public static function of(CatalogSnapshot $snapshot, string $shadowDatabase, array $notes = []): self
     {
-        return new self($snapshot, null, $shadowDatabase);
+        return new self($snapshot, null, $shadowDatabase, notes: $notes);
     }
 
     /**
@@ -50,9 +59,9 @@ final readonly class ShadowReferenceOutcome
      *
      * @param  list<string>  $keptDatabases  the databases a failed replay left standing for inspection
      */
-    public static function undetermined(UndeterminedReason $reason, array $keptDatabases = []): self
+    public static function undetermined(UndeterminedReason $reason, array $keptDatabases = [], ?string $refusal = null): self
     {
-        return new self(null, $reason, null, $keptDatabases);
+        return new self(null, $reason, null, $keptDatabases, $refusal);
     }
 
     /**

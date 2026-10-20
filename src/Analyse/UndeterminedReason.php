@@ -12,7 +12,7 @@ namespace Pushery\SQLens\Analyse;
  * the classifier looked and failed, or never looked at all. So the reason is part of the verdict's
  * type rather than an optional note somebody may or may not have attached.
  *
- * ## Two reasons, and the two that are deliberately NOT here
+ * ## Two reasons, and the two that are deliberately not here
  *
  * Four names suggest themselves. Two of them describe things this component cannot or should not
  * say, and a case for them would be vocabulary that never fires — the shape this package treats as
@@ -23,8 +23,8 @@ namespace Pushery\SQLens\Analyse;
  *   the array holds can change the statement's shape, so `whereRaw('id = ?', $ids)` is parameterized
  *   however `$ids` was assembled. Degrading it would fire on the single most ordinary safe shape in
  *   any Laravel codebase, which is precisely the noise this classifier exists to prevent.
- * `receiver-type-unknown` was in that list too, and it has since arrived — but it is produced ONE
- * LAYER UP, by the collector that recognizes a call site, not by the classifier. The classifier is
+ * `receiver-type-unknown` was in that list too, and it has since arrived — but it is produced one
+ * layer up, by the collector that recognizes a call site, not by the classifier. The classifier is
  * handed an argument and a scope and never learns who the receiver was. Both live in this enum
  * because a consumer reads one set of reasons; only the producers differ.
  */
@@ -34,7 +34,7 @@ enum UndeterminedReason: string
      * The SQL argument's type did not narrow to constant text.
      *
      * A variable, a property, a method call — anything whose value arrives at runtime from outside
-     * this call site. The classifier sees ONE call site by design (no data flow across function
+     * this call site. The classifier sees one call site by design (no data flow across function
      * boundaries), so this is the honest answer for everything it cannot follow, including the case
      * where the value was assembled unsafely one method away.
      */
@@ -43,7 +43,7 @@ enum UndeterminedReason: string
     /**
      * The constant SQL's placeholders and the constant bindings array disagree on how many there are.
      *
-     * Deliberately NOT a security finding: the text is constant, so nothing can be injected. It is a
+     * Deliberately not a security finding: the text is constant, so nothing can be injected. It is a
      * bug that will surface at runtime, and the classifier refuses to call the call site
      * parameterized while its own two halves contradict each other.
      */
@@ -52,11 +52,11 @@ enum UndeterminedReason: string
     /**
      * The object a fragment method was called on did not resolve to a type.
      *
-     * Produced by the fragment collector rather than by the classifier, and it is deliberately NOT
+     * Produced by the fragment collector rather than by the classifier, and it is deliberately not
      * the same answer as "the receiver is somebody else's class". A `whereRaw()` on a resolved,
      * foreign type is not a call site at all — that is the false-positive fence, and without it
      * every repository and collection in a codebase would be collected. A receiver that resolved to
-     * NOTHING is a different statement: this may well be a query builder, and the honest answer is
+     * nothing is a different statement: this may well be a query builder, and the honest answer is
      * that nobody can tell.
      *
      * Discarding it silently would be the cheaper choice and the wrong one: it is exactly the case
@@ -67,7 +67,7 @@ enum UndeterminedReason: string
     /**
      * A column or direction is not known at analysis time, and the request is not visible in it.
      *
-     * The identifier rule needs BOTH halves before it reports, because "not known" is the normal
+     * The identifier rule needs both halves before it reports, because "not known" is the normal
      * state of every sortable listing ever written. When only the first half holds, the allowlist
      * may be one method away — this analysis sees one expression in one scope — so the answer is a
      * named "I cannot tell" rather than a pass.

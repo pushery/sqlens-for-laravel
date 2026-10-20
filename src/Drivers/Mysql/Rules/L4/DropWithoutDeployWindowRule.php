@@ -43,7 +43,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * `ENUM_ADD_VALUE` and `CONSTRAINT_VALIDATION_PENDING` really are PostgreSQL mechanics, and this
  * rule is not. The scope moves with this change.
  *
- * ## What it does NOT re-decide
+ * ## What it does not re-decide
  *
  * The same-migration exemption, the heuristic stance, and the interaction with the destructive
  * opt-in all follow the PostgreSQL rule exactly, because all three are engine-neutral too. It

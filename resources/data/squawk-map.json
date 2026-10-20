@@ -291,15 +291,15 @@
         },
         {
             "rule": "prefer-repack",
-            "sqlens_rule": null,
-            "category": "performance",
-            "level": 7,
+            "sqlens_rule": "PG.L2.VACUUM_FULL",
+            "category": "safety",
+            "level": 2,
             "severity": null,
-            "downtime_class": null,
-            "dedupe_group": null,
-            "parity_status": "mapped_only",
+            "downtime_class": "rewrite",
+            "dedupe_group": "vacuum-full",
+            "parity_status": "covered",
             "excludable": true,
-            "rationale": "A suggestion to use pg_repack instead of VACUUM FULL, which locks the table exclusively. SQLens has no maintenance-command rules; the tool's advice stands on its own.",
+            "rationale": "The same verdict on the same statement: VACUUM FULL rewrites the table under an ACCESS EXCLUSIVE lock that blocks every read and write until it is done. SQLens names pg_repack and pg_squeeze, which rewrite the table online, and the plain VACUUM, which reclaims space for reuse without that lock.",
             "source_url": "https://squawkhq.com/docs/prefer-repack"
         },
         {
@@ -408,15 +408,15 @@
         },
         {
             "rule": "require-concurrent-reindex",
-            "sqlens_rule": null,
+            "sqlens_rule": "PG.L2.REINDEX_NOT_CONCURRENT",
             "category": "safety",
             "level": 2,
             "severity": null,
             "downtime_class": "blocking",
-            "dedupe_group": null,
-            "parity_status": "mapped_only",
+            "dedupe_group": "reindex-not-concurrent",
+            "parity_status": "covered",
             "excludable": true,
-            "rationale": "REINDEX without CONCURRENTLY blocks writes for the duration. Same gap, same treatment.",
+            "rationale": "The same verdict on the same statement: REINDEX without CONCURRENTLY blocks writes to the table, and reads that would use the index, until the rebuild is done. SQLens hands over the concurrent rebuild in a migration whose transaction is switched off.",
             "source_url": "https://squawkhq.com/docs/require-concurrent-reindex"
         },
         {

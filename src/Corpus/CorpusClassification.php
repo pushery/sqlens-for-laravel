@@ -13,7 +13,7 @@ namespace Pushery\SQLens\Corpus;
  * to right-and-wrong, three quite different things collapse into one:
  *
  * - A rule that fired where the corpus said it should is a **true positive** — the control that
- *   keeps the whole measurement honest, because a rule set that reported NOTHING would otherwise
+ *   keeps the whole measurement honest, because a rule set that reported nothing would otherwise
  *   score a perfect false-positive rate.
  * - A rule that stayed quiet where the corpus expected a finding is a **false negative**. It is not
  *   a false positive and must not improve the number; it is the opposite failure and its own count.

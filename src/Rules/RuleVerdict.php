@@ -12,8 +12,8 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
 /**
  * What a rule concluded about one statement: a FLAG (the statement is unsafe, with a
  * message), an UNDETERMINED (the rule could not decide, with a named reason and a
- * message), a NOT-APPLICABLE (there was nothing here to decide about, with its own
- * reason), or — expressed as a null verdict at the call site — NOTHING to say.
+ * message), a not-applicable (there was nothing here to decide about, with its own
+ * reason), or — expressed as a null verdict at the call site — nothing to say.
  *
  * Most rules only ever flag or stay silent, and return a plain message string for that.
  * This value object exists for the rules that have a real third answer: a type-change
@@ -61,7 +61,7 @@ final readonly class RuleVerdict
         public ?string $objectName = null,
         public ?SchemaObjectType $objectType = null,
         /**
-         * The severity THIS verdict carries, when it differs from the rule's own.
+         * The severity this verdict carries, when it differs from the rule's own.
          *
          * Null for almost every rule, and null means "use the rule's". A rule's severity is a
          * property of the rule, and that is right for the rules whose every finding says the same

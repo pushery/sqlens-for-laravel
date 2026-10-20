@@ -36,7 +36,7 @@ use Throwable;
  *      or the run is undetermined before anything is created. The name is generated
  *      first for that reason: MySQL grants both per database, so the question only
  *      has an answer about a name.
- *   3. The dump is read BEFORE any database is created, so a missing or unparseable
+ *   3. The dump is read before any database is created, so a missing or unparseable
  *      dump fails with nothing to clean up.
  *   4. The generated name must be free — a collision never touches a database the
  *      mode did not create.
@@ -44,8 +44,9 @@ use Throwable;
  * Only then is the database created and the dump replayed statement by statement.
  * A server that refuses the `CREATE DATABASE` all the same makes the run the named
  * undetermined of step 2, since nothing was created. If any statement of the replay
- * fails, the half-built database is dropped and the run is undetermined — a
- * partially rebuilt schema is green with nothing behind it.
+ * fails, or the first connection to the new database does, that database is dropped
+ * and the run is undetermined — a partially rebuilt schema is green with nothing
+ * behind it.
  */
 final readonly class MysqlShadowProvisioner implements ShadowProvisioner
 {
@@ -101,7 +102,7 @@ final readonly class MysqlShadowProvisioner implements ShadowProvisioner
             throw new ShadowProvisioningUndetermined(UndeterminedReason::ShadowInsufficientPrivileges);
         }
 
-        // Read the dump BEFORE creating anything: a missing or unparseable dump then
+        // Read the dump before creating anything: a missing or unparseable dump then
         // fails with no database to clean up.
         $plan = $this->dumpReader->read($this->schemaDumpPath);
 
@@ -130,7 +131,20 @@ final readonly class MysqlShadowProvisioner implements ShadowProvisioner
             $name,
             $this->sourceConnection,
             new DateTimeImmutable('now', new DateTimeZone('UTC')),
+            notes: $this->notes($plan),
         );
+    }
+
+    /**
+     * The directives the replay left out whose omission a person should know about, each once.
+     *
+     * @return list<string>
+     */
+    private function notes(SchemaDumpPlan $plan): array
+    {
+        $notes = array_map(static fn (SkippedDumpDirective $directive): ?string => $directive->note(), $plan->skipped);
+
+        return array_values(array_unique(array_filter($notes, static fn (?string $note): bool => $note !== null)));
     }
 
     public function destroy(ShadowSession $session): void
@@ -168,17 +182,20 @@ final readonly class MysqlShadowProvisioner implements ShadowProvisioner
      * Replay the dump's executable statements into the freshly created database. A
      * statement that fails drops the half-built database and makes the run
      * undetermined — never a lint against a schema that only partially rebuilt.
+     * So does a first connection to it that fails: the database exists from the
+     * moment it was created, and only this method's cleanup drops it.
      */
     #[RawSql(reason: 'replays the project\'s own `schema:dump` output, which is a file of DDL statements and not something any builder has a verb for; it runs on the PDO handle so no mysql client binary is needed, and PDO\'s exception error mode turns a bad statement into the throwable this method catches')]
     private function replay(string $name, SchemaDumpPlan $plan): void
     {
-        // Replay the dump's statements directly on the PDO handle: they are trusted
-        // schema:dump SQL, not literal strings, and PDO's exception error mode turns
-        // a bad statement into a throwable this method catches. No mysql client binary
-        // is required.
-        $pdo = $this->db->connection($name)->getPdo();
-
         try {
+            // Replay the dump's statements directly on the PDO handle: they are trusted
+            // schema:dump SQL, not literal strings, and PDO's exception error mode turns
+            // a bad statement into a throwable this method catches. No mysql client binary
+            // is required. Opening the handle is the first connection to the new database,
+            // and it can fail like any other: too many connections, the network, TLS.
+            $pdo = $this->db->connection($name)->getPdo();
+
             // The dump drops and recreates every table it names, so it runs nowhere but the database
             // just created for it.
             ShadowConnectionLatch::assertReaches($this->db->connection($name), $name);

@@ -13,25 +13,27 @@ namespace Pushery\SQLens\Tools\Squawk;
  * Several reasons and not one, because each is a different thing to go and do. The broader
  * rule-id namespace these sit in is settled separately; these follow its shape.
  *
- * Two of them are decided BEFORE the tool runs: an assumption SQLens cannot establish must not
- * be replaced by the tool's own default, because the tool's default is a different question than
- * the one the core rules answered.
+ * Three of them are decided before the tool runs. Two because an assumption SQLens cannot
+ * establish must not be replaced by the tool's own default: the tool's default is a different
+ * question than the one the core rules answered. The third because the project kept the tool out
+ * of the fast path.
  */
 enum SquawkFailureReason: string
 {
     /**
      * The tool did not run to a report: it timed out, could not start, exited with a code its
-     * contract does not use, or wrote something that is not its JSON report at all.
+     * contract does not use, or wrote something that is not its JSON report at all. Or it was not
+     * asked: once it timed out on one migration, the rest of the run's migrations are not sent.
      *
-     * All four are "no measurement was taken", which is the distinction that matters against a
-     * run that DID measure and found nothing. The specific cause travels in the detail.
+     * All five are "no measurement was taken", which is the distinction that matters against a
+     * run that did measure and found nothing. The specific cause travels in the detail.
      */
     case RunFailed = 'TOOL.SQUAWK.RUN_FAILED';
 
     /**
      * The tool ran, and said it could not parse the SQL it was given.
      *
-     * Its own reason because it is a fact about OUR input, not about the tool: the capture form
+     * Its own reason because it is a fact about our input, not about the tool: the capture form
      * and the tool's grammar disagreed. That is a bug report waiting to happen on this side, and
      * filing it under "the tool failed" would send it to the wrong place.
      */
@@ -75,7 +77,7 @@ enum SquawkFailureReason: string
      *
      * Reported rather than passed over, and the distinction from a disabled tool is the reason:
      * `enabled = false` says "never use this", which is a decision that needs no reminder.
-     * `fast_path = false` says "use it, but not here" — the project DOES want these checks, so a
+     * `fast_path = false` says "use it, but not here" — the project does want these checks, so a
      * run that quietly left them out would be a smaller check wearing the same face as a full one.
      *
      * It exists because the fast path promises sub-second turnaround so a pre-commit hook stays

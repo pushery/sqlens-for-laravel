@@ -83,7 +83,7 @@ final class UnbatchedMassDmlRule extends AbstractPgsqlSafetyRule implements Decl
      * The batching recipe, with the one fact this statement carries filled in.
      *
      * The table is fillable when the statement names exactly one; the batch size and the pause are
-     * NOT, and never will be. They decide whether the backfill is invisible or is itself the
+     * not, and never will be. They decide whether the backfill is invisible or is itself the
      * incident, and the values depend on row width, replica lag budget and traffic — none of which
      * is in the statement. This rule is a heuristic about SIZE precisely because size is what it
      * cannot see, so a payload that filled in a batch size would contradict the finding beside it.
@@ -170,7 +170,7 @@ final class UnbatchedMassDmlRule extends AbstractPgsqlSafetyRule implements Decl
     /**
      * The bulk write this statement is, or null when it is not one — one reading, shared.
      *
-     * The kind check lives HERE rather than being repeated by each caller: `BulkWrite::parse()`
+     * The kind check lives here rather than being repeated by each caller: `BulkWrite::parse()`
      * reads a canonical string and would happily be handed a DDL statement, so the two questions
      * belong together or they drift apart.
      */

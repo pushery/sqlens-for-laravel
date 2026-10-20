@@ -79,7 +79,7 @@ final readonly class DriftExcludes
     }
 
     /**
-     * The reason `--update-excludes` writes, and the next read REFUSES it.
+     * The reason `--update-excludes` writes, and the next read refuses it.
      *
      * Three candidates, and only this one is honest. An empty string would be refused too, but a
      * generated file full of empty fields reads like a bug rather than an obligation. An invented,
@@ -96,7 +96,7 @@ final readonly class DriftExcludes
     /**
      * An entry per difference in a report, with the placeholder reason `--update-excludes` writes.
      *
-     * A divergence is written WITHOUT an attribute — the object whole. Narrowing it to one attribute
+     * A divergence is written without an attribute — the object whole. Narrowing it to one attribute
      * is a judgment about which part is deliberate, and a generator has no basis for that.
      *
      * @return list<DriftExcludeEntry>

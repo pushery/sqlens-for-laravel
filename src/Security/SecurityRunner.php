@@ -10,7 +10,6 @@ use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Console\ExitCode;
 use Pushery\SQLens\Drivers\DriverResolutionFailure;
 use Pushery\SQLens\Drivers\DriverResolutionReason;
-use Pushery\SQLens\Exceptions\UnreadableBaseline;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Result;
 use Pushery\SQLens\Findings\UndeterminedReason;
@@ -46,7 +45,7 @@ use Throwable;
  * database. So a sub-run that cannot happen contributes a named `undetermined` finding, and the
  * aggregate says which half is missing.
  *
- * ## What it does NOT do
+ * ## What it does not do
  *
  * **Deduplicate.** Two suites can legitimately report the same rule about one object, and deciding
  * which survives is its own change with its own arguments. Concatenating is the honest interim: a
@@ -89,13 +88,13 @@ final readonly class SecurityRunner
      * Run both halves and return what they found, with the failure of either named.
      *
      * @param  list<string>|null  $migrationPaths  where to look for migrations; null means the configured paths
-     * @param  string|null  $host  the ONE read host to address when the connection configures a choice.
+     * @param  string|null  $host  the one read host to address when the connection configures a choice.
      *                             Only the audit half reads an instance; the lint half never does. Without
      *                             it a split connection refuses with CAP.L0.INSTANCE_AMBIGUOUS -- correctly,
      *                             because choosing a host for somebody is exactly what this package must not
      *                             do -- and until this parameter existed there was no way to answer it,
      *                             which made the suite unusable on the split topologies it is for.
-     * @param  bool|null  $strictTools  override the configured strict_tools, or null to keep it. Reaches BOTH
+     * @param  bool|null  $strictTools  override the configured strict_tools, or null to keep it. Reaches both
      *                                  halves: a flag that made one of them strict and left the other on the
      *                                  configured value would produce a run nobody asked for and no header names.
      */
@@ -103,10 +102,12 @@ final readonly class SecurityRunner
     {
         $audit = $this->audit($connection, $strictUndetermined, $strictTools, $host);
 
-        // The audit half runs FIRST and its VISIBLE findings ride into the lint half, which is what
-        // finally lets the cross-source dedupe fire: the layer hides a migration finding about a
-        // `GRANT … TO PUBLIC` when the catalog half reported the same grant, and until now no pass
-        // ever held both sides at once.
+        // The audit half runs first and its visible findings ride into the lint half, so one pass holds
+        // both sides and the cross-source dedupe can hide a migration finding that names the same rule
+        // and the same object as a catalog finding. No rule in the security category reports from both
+        // halves under one id today, and a pending `GRANT … TO PUBLIC` is deliberately not paired with
+        // the live grant (CrossSourceDedupeSuppressionSource says why), so in this suite the layer
+        // stands ready rather than hiding anything.
         //
         // Visible, not every audit finding, and that choice is the whole safety of this layer.
         // Feeding the hidden ones too would mean a baseline entry on the catalog side silently takes
@@ -151,12 +152,12 @@ final readonly class SecurityRunner
      * `SEC.SKIPPED.NOTHING_CHECKED` finding, under a header that said `driver=pgsql` and
      * `strict-tools=on`. Two of those three are the defect, and the third is not.
      *
-     * The notices are built INSIDE `audit()` and `lint()`, at the moment that half failed — the
+     * The notices are built inside `audit()` and `lint()`, at the moment that half failed — the
      * other half has not run yet, so no profile is established and the values were literals. Here
      * is the first point where an answer exists: one half may have reached a context even when the
      * other did not, which is the same borrow `analyse()` above already makes.
      *
-     * ## What does NOT travel, and why the driver is the third value
+     * ## What does not travel, and why the driver is the third value
      *
      * `driver` stays as the notice set it. A finding saying "this half examined nothing" names no
      * engine, and taking `pgsql` from the half that did run would attach it to a sentence that
@@ -208,10 +209,6 @@ final readonly class SecurityRunner
             );
 
             return $this->fromAudit($outcome, $connection);
-        } catch (UnreadableBaseline $exception) {
-            // Before the general catch, because it is not a crash: the baseline is configuration,
-            // and `sqlens:audit` ends on a misconfiguration when it cannot read it.
-            return SecuritySubRun::misconfigured(SecurityRunNotices::subRunCrashed('audit', $exception->getMessage()));
         } catch (Throwable $exception) {
             return SecuritySubRun::failed(SecurityRunNotices::subRunCrashed('audit', $exception->getMessage()));
         }
@@ -236,6 +233,12 @@ final readonly class SecurityRunner
             return $this->unsupported('audit', $outcome->unsupported, $this->named($requested, $outcome->connectionName));
         }
 
+        // Not a crash and not a shorter report: the baseline is configuration, and `sqlens:audit`
+        // ends on a misconfiguration when it cannot read it, with the reason.
+        if ($outcome->unreadableBaseline !== null) {
+            return SecuritySubRun::misconfigured(SecurityRunNotices::subRunCrashed('audit', $outcome->unreadableBaseline));
+        }
+
         if ($outcome->exitCode === ExitCode::Misconfiguration && ! $outcome->examined) {
             return SecuritySubRun::misconfigured(SecurityRunNotices::subRunRefused('audit', $outcome->result->findings));
         }
@@ -256,7 +259,7 @@ final readonly class SecurityRunner
     }
 
     /**
-     * A half whose connection could not be resolved to a driver, split by WHY.
+     * A half whose connection could not be resolved to a driver, split by why.
      *
      * A connection that exists and uses a driver this package does not support examined nothing,
      * and that is all it is: the ordinary state of a SQLite test database, reported and left to the
@@ -276,6 +279,11 @@ final readonly class SecurityRunner
     {
         if ($outcome->unsupported instanceof DriverResolutionFailure) {
             return $this->unsupported('lint', $outcome->unsupported, $this->named($requested, $outcome->connectionName));
+        }
+
+        // The same baseline as the audit half, and the same answer `sqlens:lint` gives.
+        if ($outcome->unreadableBaseline !== null) {
+            return SecuritySubRun::misconfigured(SecurityRunNotices::subRunCrashed('lint', $outcome->unreadableBaseline));
         }
 
         if ($outcome->exitCode === ExitCode::Misconfiguration && ! $outcome->examined) {
@@ -378,9 +386,6 @@ final readonly class SecurityRunner
             );
 
             return $this->fromLint($outcome, $connection);
-        } catch (UnreadableBaseline $exception) {
-            // The same baseline as the audit half, and the same answer `sqlens:lint` gives.
-            return SecuritySubRun::misconfigured(SecurityRunNotices::subRunCrashed('lint', $exception->getMessage()));
         } catch (Throwable $exception) {
             return SecuritySubRun::failed(SecurityRunNotices::subRunCrashed('lint', $exception->getMessage()));
         }

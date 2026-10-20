@@ -34,7 +34,7 @@ final readonly class ToolReport
                 'resolution' => $diagnostic->resolution->value,
                 'available' => $diagnostic->isAvailable(),
                 'version' => $diagnostic->version,
-                // The path only when something WAS found. Printing a configured path that resolved
+                // The path only when something was found. Printing a configured path that resolved
                 // to nothing would read as "it is here", which is the opposite of the finding.
                 'path' => $diagnostic->isAvailable() ? $diagnostic->path : null,
                 'adds' => $diagnostic->tool->whatItEnables(),

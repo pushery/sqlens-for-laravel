@@ -12,7 +12,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
 
 /**
  * One reading of the server's statistics: how big the objects in scope are, how much room their
- * storage has, what could NOT be read, and whether that is the whole picture.
+ * storage has, what could not be read, and whether that is the whole picture.
  *
  * The sibling of {@see CatalogSnapshot}, built the same way for the same
  * reasons. The parts are inseparable: numbers alone cannot be judged (about which objects? asked
@@ -32,7 +32,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ## Determinism is a property of the type, not of the reader
  *
- * Tables, their indexes and the skips are sorted HERE, on construction, rather than left to
+ * Tables, their indexes and the skips are sorted here, on construction, rather than left to
  * whichever order the query returned. Two readings of an unchanged database must serialize
  * byte-identically, or a comparison reports the ordering of a query plan as a change. Sorting in
  * one place means no reader can forget and no reader can sort differently.
@@ -80,7 +80,7 @@ final readonly class StatisticsSnapshot
             }
         }
 
-        // An object somebody asked about that came back with nothing gets a NAMED skip, derived
+        // An object somebody asked about that came back with nothing gets a named skip, derived
         // here rather than left to each driver to remember.
         //
         // The list alone was not enough, and the case that showed it is MySQL's: `information_schema`
@@ -90,14 +90,14 @@ final readonly class StatisticsSnapshot
         // nothing about the table that vanished.
         //
         // `not_readable` rather than `insufficient_privilege`, and the imprecision is the honest
-        // part: a catalog that returns no row cannot say WHICH of the two happened, and that reason
+        // part: a catalog that returns no row cannot say which of the two happened, and that reason
         // is the one whose definition already covers both — "it does not exist on this server, or
         // the connection lost access to it". Claiming a privilege problem would be inventing a
         // diagnosis; claiming a dropped table would be worse.
         $alreadyNamed = array_map(static fn (CatalogSkip $skip): string => $skip->reference, $skips);
 
         foreach ($this->objectsWithoutRows($request, $tables) as $object) {
-            // An object the reader ALREADY said something about keeps that answer. Deriving a
+            // An object the reader already said something about keeps that answer. Deriving a
             // second skip here would not merely duplicate: for an object excluded by configuration
             // it would turn a DECISION into a gap, so every deliberate exclusion would read as a
             // failure and `gaps()` would stop meaning what it says.
@@ -231,7 +231,7 @@ final readonly class StatisticsSnapshot
      * without anything about the schema changing, and including them makes the digest report a
      * difference on every reading while saying nothing about what it describes:
      *
-     * - **`headroom`** is `pg_database_size` and free space. It moves whenever ANYTHING writes to
+     * - **`headroom`** is `pg_database_size` and free space. It moves whenever anything writes to
      *   the instance — another connection, autovacuum, a temporary table in a neighboring test.
      * - **`measured_at`** is when the server last ran ANALYZE. It moves when autoanalyze does.
      *

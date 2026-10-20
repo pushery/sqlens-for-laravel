@@ -16,7 +16,7 @@ use Pushery\SQLens\Exceptions\NamingPatternGaveUp;
  * eventually disagree about what a malformed value means. There are two naming rules, one per
  * engine, sharing one judgment — so there is exactly one place this may be built.
  *
- * ## The pattern is validated BEFORE this exists
+ * ## The pattern is validated before this exists
  *
  * `ConfigSchema` refuses a pattern PCRE cannot compile, and that refusal is load-bearing rather
  * than tidy. `preg_match()` answers `false` for a broken pattern, not `0`, and `false !== 1` — so a
@@ -26,7 +26,7 @@ use Pushery\SQLens\Exceptions\NamingPatternGaveUp;
  * This class is the second line for the same reason every other value object here has one: a
  * registry built directly in a test, or by a consuming application, never passed through the
  * validator. An unusable pattern falls back to the shipped default rather than to "everything
- * fails" — the failure direction that reports LESS is the safe one for a convention rule, because
+ * fails" — the failure direction that reports less is the safe one for a convention rule, because
  * the alternative floods a report and gets the rule switched off.
  */
 final readonly class NamingConvention
@@ -66,10 +66,11 @@ final readonly class NamingConvention
         return new self(
             is_string($pattern) && @preg_match($pattern, '') !== false ? $pattern : SnakeCaseIdentifiers::DEFAULT_PATTERN,
             self::usablePatterns($naming['exempt'] ?? null),
-            // An EMPTY suffix is refused rather than honored, and the direction matters: every
-            // name ends with the empty string, so an empty setting would silence the rule
-            // completely — a project would read "no findings" and believe its keys are named the
-            // way it asked, when in fact it asked for nothing and got nothing checked.
+            // An EMPTY suffix is never honored, and the direction matters: every name ends with
+            // the empty string, so an empty setting would silence the rule completely — a project
+            // would read "no findings" and believe its keys are named the way it asked, when in
+            // fact it asked for nothing and got nothing checked. The configuration check refuses
+            // it before a run; a caller that skipped the check gets the default.
             is_string($suffix) && $suffix !== '' ? $suffix : ForeignKeyIdSuffix::DEFAULT_SUFFIX,
         );
     }

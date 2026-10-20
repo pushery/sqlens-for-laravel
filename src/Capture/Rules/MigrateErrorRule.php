@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Capture\Rules;
 use Pushery\SQLens\Capture\CaptureResult;
 use Pushery\SQLens\Capture\CaptureRuleMetadata;
 use Pushery\SQLens\Capture\CaptureSection;
-use Pushery\SQLens\Findings\CredentialRedactor;
+use Pushery\SQLens\Findings\CompositeCredentialRedactor;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
@@ -70,7 +70,7 @@ final readonly class MigrateErrorRule implements CaptureRule
 
     public function appliesTo(CaptureResult $result, SubjectContext $context): bool
     {
-        // The FIRST `up` only. A roundtrip's later legs have their own findings —
+        // The first `up` only. A roundtrip's later legs have their own findings —
         // `CAP.L0.DOWN_FAILED` and `CAP.L0.DOWN_NOT_INVERTIBLE` — and the sections are
         // what keep the three apart. Without this scope a failing second `up` would be
         // reported as a broken migration when it is a broken ROLLBACK, which sends the
@@ -107,22 +107,29 @@ final readonly class MigrateErrorRule implements CaptureRule
     }
 
     /**
-     * The driver message the runner recorded, made safe to show: credentials
-     * redacted first (a connection-level failure can carry them), then the project
-     * root relativized out so the same error reads identically on every machine —
-     * the determinism the whole report depends on. The fallback keeps the message
+     * The driver message the runner recorded, made safe to show: the project root
+     * relativized out so the same error reads identically on every machine — the
+     * determinism the whole report depends on — then credentials redacted (a
+     * connection-level failure can carry them). The fallback keeps the message
      * honest on the rare failure recorded without a detail.
      */
     private function detail(CaptureResult $result, string $projectRoot): string
     {
         $detail = $result->failureDetail ?? 'the capture recorded no further detail';
 
-        $detail = (new CredentialRedactor)->redact($detail);
+        // The project root comes out first. The configured values are taken out wherever a host, a
+        // user or a database name stands as a word of its own, and a project often lives in a
+        // directory named like its database: redacted first, that name would cut the root apart and
+        // leave the rest of the absolute path in the message.
+        $detail = str_replace(rtrim($projectRoot, '/').'/', '', $detail);
 
-        // Two passes, and they catch different things. `CredentialRedactor` knows the values
-        // this application configured — it takes the connection's own host, user and password out
-        // of the text. It cannot know a password somebody typed straight into a migration, because
-        // that value appears in no configuration.
+        $detail = new CompositeCredentialRedactor()->redact($detail);
+
+        // Two passes, and they catch different things. `CompositeCredentialRedactor` takes out the
+        // values this application's connections are configured with, and then the coordinates a
+        // driver prints by their form: the host, user and database of the connection block Laravel
+        // appends to an error. Neither half could know a password somebody typed straight into a
+        // migration, because that value appears in no configuration and in no shape a driver prints.
         //
         // `SecretLiteralMask` is the other half: it finds a secret by the shape of the statement
         // (`PASSWORD '…'`, `IDENTIFIED BY '…'`) rather than by knowing its value. A database error
@@ -139,9 +146,7 @@ final readonly class MigrateErrorRule implements CaptureRule
         // and does not belong in a finding. Masked by the shape of the message, like the secret.
         $detail = RowValueMask::in($detail);
 
-        $root = rtrim($projectRoot, '/').'/';
-
         // The sentence around the detail ends it with a period of its own.
-        return rtrim(str_replace($root, '', $detail), '.');
+        return rtrim($detail, '.');
     }
 }

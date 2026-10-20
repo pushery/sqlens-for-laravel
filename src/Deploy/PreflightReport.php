@@ -75,7 +75,7 @@ final readonly class PreflightReport
     /**
      * Whether a fail-closed gate should stop the deploy.
      *
-     * `undetermined` counts, and that IS the fail-closed contract: a gate that could not look has
+     * `undetermined` counts, and that is the fail-closed contract: a gate that could not look has
      * not established that the deploy is safe, and treating "I do not know" as "go ahead" is the
      * assumption this package exists to refuse. `--allow-undetermined` is the deliberate way out,
      * and it lives on the command rather than here — the report states what it found, the caller

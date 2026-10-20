@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Agent\Mcp;
 
+use Illuminate\Contracts\Container\Container;
 use Pushery\SQLens\Agent\Mcp\Tools\ExplainRuleTool;
 use Pushery\SQLens\Agent\Mcp\Tools\GetDebtLedgerTool;
 use Pushery\SQLens\Agent\Mcp\Tools\GetFindingsTool;
@@ -95,6 +96,19 @@ final readonly class ToolRegistry
     public static function of(array $tools): self
     {
         return new self($tools);
+    }
+
+    /**
+     * The registry the container holds, or the declared one where nothing is bound.
+     *
+     * The provider binds the declared registry so a test can create the window in which the build
+     * and the configuration differ. The tool list and the banner read it from here, and the
+     * `tools/call` handler receives the same binding as a dependency, so all three answer from one
+     * registry. A host that serves without the provider gets the declared one.
+     */
+    public static function bound(Container $container): self
+    {
+        return $container->bound(self::class) ? $container->make(self::class) : self::declared();
     }
 
     /**

@@ -9,7 +9,7 @@ namespace Pushery\SQLens\Config;
  *
  * ## What Laravel's own two helpers do, and why neither is right here
  *
- * `mergeConfigFrom()` is a flat `array_merge`: it asks ONE question per top-level key. A project
+ * `mergeConfigFrom()` is a flat `array_merge`: it asks one question per top-level key. A project
  * that sets a nested value has to hand over the whole block it lives in — and that block then never
  * receives a newly shipped key again. With a 99 KB reference configuration that is not a corner:
  * answering `security.rls.mode` means either publishing all 99 KB or freezing the entire `security`

@@ -66,7 +66,7 @@ final readonly class RlsReading
          * How separation is enforced, when the project answered that the database does not do it.
          *
          * The fourth state, and the one `declined` could not carry: `mode => off` says this database
-         * separates NOTHING, and `mode => application` says it separates in the application — two
+         * separates nothing, and `mode => application` says it separates in the application — two
          * different statements, and only one of them is true of a project whose every row belongs to
          * a user. Told to choose between them, a consumer picked the finding's own suggestion and
          * configured something false about its database.
@@ -76,6 +76,15 @@ final readonly class RlsReading
          * validator refuses `application` without one, so an empty answer cannot reach here.
          */
         public ?string $applicationSeparation = null,
+        /**
+         * The tenant column of a heuristic that matched no table.
+         *
+         * Nothing was read, as for a project that set nothing, and the cause differs: the project
+         * answered, and its answer found no table. Without the column the two read the same, and
+         * the advice for the first — set the mode to heuristic and name the column — is what the
+         * second already did.
+         */
+        public ?string $unmatchedTenantColumn = null,
     ) {}
 
     /**
@@ -143,6 +152,18 @@ final readonly class RlsReading
     public static function separatedInApplication(string $reason): self
     {
         return new self([], CatalogCompleteness::Complete, [], false, true, true, $reason);
+    }
+
+    /**
+     * The project set `security.rls.mode` to `heuristic`, and no table carries its tenant column.
+     *
+     * Read nothing, like {@see self::unconfigured()}, and says why: a typo or another spelling of the
+     * column reads exactly like a project that set nothing, and a report that asked for the setting
+     * would send the reader to do what they did.
+     */
+    public static function tenantColumnMatchesNothing(string $column): self
+    {
+        return new self([], CatalogCompleteness::Complete, [], false, true, false, null, $column);
     }
 
     public function isComplete(): bool

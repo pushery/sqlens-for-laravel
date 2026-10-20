@@ -8,7 +8,7 @@ use RuntimeException;
 use Throwable;
 
 /**
- * A shadow teardown finished with databases still on the server, and it names WHICH.
+ * A shadow teardown finished with databases still on the server, and it names which.
  *
  * A PostgreSQL shadow run creates two databases — a template carrying the project's whole schema,
  * and a clone made from it — so "the teardown failed" is not one fact. It used to be reported as

@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Capture\PreScan;
 /**
  * One thing the static pre-scan found in a migration.
  *
- * A hit always carries where it is and WHY it matters. The reason is written for
+ * A hit always carries where it is and why it matters. The reason is written for
  * the person reading the report, not for the detector that produced it: a user
  * who sees "this migration is undetermined" must be able to tell, from the hit
  * alone, what in their file caused it and what to do about it.

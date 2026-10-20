@@ -42,7 +42,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * A template that stopped after step one would therefore not be a shorter fix; it would be a way of
  * turning a visible problem into an invisible permanent one. So the second migration is a step, and
- * the payload NAMES the debt the gap between them opens — in the ledger's own word, read from
+ * the payload names the debt the gap between them opens — in the ledger's own word, read from
  * {@see ConstraintValidationPendingRule::DEBT_KIND} rather than spelled a second time here.
  *
  * ## What it can fill, and what it deliberately leaves standing
@@ -80,7 +80,7 @@ final readonly class NotValidThenValidateTemplate
     }
 
     /**
-     * The sequence for THIS statement, chosen by the shape of the constraint it adds.
+     * The sequence for this statement, chosen by the shape of the constraint it adds.
      *
      * One entry point rather than two public methods, because the choice is not the caller's to
      * make: a rule that picked the sequence itself would be the second reading this class exists to
@@ -194,16 +194,18 @@ final readonly class NotValidThenValidateTemplate
                     laravelSnippet: 'public $withinTransaction = false;',
                     withinTransaction: false,
                 ),
+                // The check before the step it guards: an interrupted concurrent build leaves an
+                // INVALID index, and the promotion is the step that must not meet one.
                 new RemediationStep(
                     order: 2,
-                    kind: RemediationStepKind::MigrationStatement,
-                    noteKey: self::LANG.'promote_index',
-                    sqlTemplate: 'ALTER TABLE {{table}} ADD CONSTRAINT {{constraint}} '.$shape->promotionKeyword().' USING INDEX {{index}}',
+                    kind: RemediationStepKind::ManualGate,
+                    noteKey: self::LANG.'index_must_be_valid',
                 ),
                 new RemediationStep(
                     order: 3,
-                    kind: RemediationStepKind::ManualGate,
-                    noteKey: self::LANG.'index_must_be_valid',
+                    kind: RemediationStepKind::MigrationStatement,
+                    noteKey: self::LANG.'promote_index',
+                    sqlTemplate: 'ALTER TABLE {{table}} ADD CONSTRAINT {{constraint}} '.$shape->promotionKeyword().' USING INDEX {{index}}',
                 ),
             ], $statement),
             strategy: RemediationStrategy::Concurrently,
@@ -341,7 +343,7 @@ final readonly class NotValidThenValidateTemplate
     }
 
     /**
-     * The placeholder values THIS statement carries — and only the ones it carries.
+     * The placeholder values this statement carries — and only the ones it carries.
      *
      * `{{table}}` is the table the statement alters. A foreign key names two, and the classification
      * keeps the altered one as the subject and the one after `REFERENCES` as referenced, so the

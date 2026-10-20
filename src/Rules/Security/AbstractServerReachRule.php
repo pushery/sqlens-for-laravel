@@ -31,7 +31,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * A grant the ENGINE ships is never judged: MySQL's `mysql.session` holds server privileges out of
  * the box, and a rule reporting it would open on a fresh install with a finding nobody caused.
  *
- * The privilege is looked for among the ENGINE-NAMED ones. `FILE` and `PROCESS` have no PostgreSQL
+ * The privilege is looked for among the engine-named ones. `FILE` and `PROCESS` have no PostgreSQL
  * equivalent, so canonicalization maps both to the unmapped case — asking the canonical list would
  * ask a question the mapping has already erased. This is also what makes the pair silent on
  * PostgreSQL without a driver check: that engine simply never produces these names.

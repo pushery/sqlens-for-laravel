@@ -40,7 +40,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * documentation URL, so a split would make every project suppress the same thing twice. The verdict
  * carries the severity instead.
  *
- * Both values sit BELOW the security gate's `high` default. That is the guardrail this rule ships
+ * Both values sit below the security gate's `high` default. That is the guardrail this rule ships
  * with: a name heuristic that broke somebody's pipeline would be switched off within a week, and it
  * would take its true positives with it.
  *
@@ -62,7 +62,7 @@ final class UnencryptedColumnRule extends AbstractCatalogRule implements Declare
     /**
      * Whether the missing-wiring answer has already been given in this run.
      *
-     * ONE finding, not one per column. A reading of a modest schema carries thousands of columns, and
+     * One finding, not one per column. A reading of a modest schema carries thousands of columns, and
      * a rule that answered `undetermined` for every one of them would bury every other finding in the
      * report under a single fact repeated — which is the same failure as silence, only louder.
      *
@@ -171,7 +171,7 @@ final class UnencryptedColumnRule extends AbstractCatalogRule implements Declare
         // {@see AbstractPrivacySettingRule} uses for a missing environment, and for the same
         // reason. Silence here would be indistinguishable from an application that encrypts
         // everything, which is the one reading that must never be reachable by accident.
-        // BEFORE the wiring check, and the order is load-bearing. A rule that answered about a
+        // Before the wiring check, and the order is load-bearing. A rule that answered about a
         // table or an index while declaring only columns would be reported as never evaluated on a
         // reading that handed it exactly its subject — the architecture arm that measures
         // declaration against BEHAVIOR catches precisely this, and caught it here.

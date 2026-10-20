@@ -33,7 +33,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  */
 trait OffersAConsideredNone
 {
-    /** The reason key naming WHY there is no standard sequence for this rule's finding. */
+    /** The reason key naming why there is no standard sequence for this rule's finding. */
     abstract protected function noSequenceReasonKey(): string;
 
     /** How a reader confirms whatever they decide — the same answer for every state finding. */

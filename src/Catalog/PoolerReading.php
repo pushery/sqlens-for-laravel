@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Catalog;
 
-use Pushery\SQLens\Findings\CredentialRedactor;
+use Pushery\SQLens\Findings\CompositeCredentialRedactor;
 
 /**
  * A pooler verdict together with the signals that produced it.
@@ -25,10 +25,21 @@ final readonly class PoolerReading
         return new self(PoolerVerdict::Transaction, $signals);
     }
 
-    /** @param  list<string>  $signals */
+    /**
+     * A measured direct connection, with any pooler convention its configuration shows.
+     *
+     * Beside a convention the reading also says what the measurement cannot rule out, so that
+     * `none (the port 6432 is a pooler convention)` is not read as a check that proved there is no
+     * transaction pool.
+     *
+     * @param  list<string>  $signals  the pooler conventions the configuration shows
+     */
     public static function direct(array $signals = []): self
     {
-        return new self(PoolerVerdict::None, $signals);
+        return new self(
+            PoolerVerdict::None,
+            $signals === [] ? [] : [...$signals, 'measured direct, which a transaction pool under no load can also produce'],
+        );
     }
 
     /**
@@ -50,7 +61,7 @@ final readonly class PoolerReading
      */
     public static function undetermined(array $signals): self
     {
-        $redactor = new CredentialRedactor;
+        $redactor = new CompositeCredentialRedactor;
 
         return new self(
             PoolerVerdict::Undetermined,

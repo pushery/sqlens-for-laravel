@@ -30,7 +30,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * "Which tables hold tenant data" is a question only the project can answer, and answering it by
  * heuristic produces a finding for every reference table, job queue and migration ledger in the
  * schema — a report nobody finishes, from a tool that has learned nothing about the application. So
- * the scope comes from `sqlens.security.rls`, and a project that has not set it gets ONE
+ * the scope comes from `sqlens.security.rls`, and a project that has not set it gets one
  * `undetermined` naming the key rather than a silent pass or a page of guesses.
  *
  * That `undetermined` is the point rather than a formality. A security suite that says nothing about
@@ -220,6 +220,23 @@ final class RlsDisabledRule extends AbstractSchemaObjectSecurityRule implements 
 
         if ($object->getBool('rls_configured') !== false) {
             return [];
+        }
+
+        // The project answered with a tenant column, and no table carries it. The reading is as empty
+        // as a project's that set nothing, and the advice below for that case, set the mode to
+        // heuristic and name the column, is what this one did. The reason stays not_configured:
+        // which tables hold tenant data is still a question nothing answers, and a waiver written
+        // for it keeps meaning the same.
+        $unmatched = $object->getString('rls_unmatched_tenant_column');
+
+        if ($unmatched !== null && $unmatched !== '') {
+            return [RuleVerdict::undetermined(
+                'sqlens.security.rls.mode is heuristic and sqlens.security.rls.tenant_column is "'.$unmatched
+                .'", but no table in this database has a column of that name, so SQLens cannot tell which '
+                .'tables hold tenant data and checks none of them. Compare the spelling with the column the '
+                .'tenant tables carry, or name them in sqlens.security.rls.tables.',
+                UndeterminedReason::NotConfigured,
+            )];
         }
 
         return [RuleVerdict::undetermined(

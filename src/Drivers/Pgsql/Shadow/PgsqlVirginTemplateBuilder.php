@@ -50,7 +50,7 @@ final readonly class PgsqlVirginTemplateBuilder
      * How many emptiness probes travel in one statement.
      *
      * A compromise with one bad end on each side: one statement for every table is a
-     * round trip per table, and one statement for ALL of them grows without bound
+     * round trip per table, and one statement for all of them grows without bound
      * with the schema. Sixty-four keeps the statement small enough to be ordinary
      * and turns the common few-hundred-table project into a handful of round trips.
      */

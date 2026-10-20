@@ -33,7 +33,7 @@ use Throwable;
  *     PDO explicitly, so "pending" reflects the instance deployments target.
  *
  * And the dangerous shape is refused: an unreachable connection, a missing
- * migration table, or an empty migration path is a NAMED skip, never an empty list
+ * migration table, or an empty migration path is a named skip, never an empty list
  * read as "nothing pending, all clean".
  *
  * `Migrator::withoutMigrations()` (a harness feature that excludes specific
@@ -190,7 +190,7 @@ final readonly class PendingMigrationResolver implements PendingResolver
      * The capture layer has always known a `vendor/` migration from one of yours — that is what
      * {@see PathBinding} decides, and what
      * `security.include_vendor_migrations` switches. But it decides it about a statement that has
-     * ALREADY been captured, so a package's migration was still loaded, still pretend-executed, and
+     * already been captured, so a package's migration was still loaded, still pretend-executed, and
      * still able to produce a capture-layer finding of its own. A first run after `composer require`
      * therefore failed on three findings inside another package, none of which the project could
      * fix, every one of them repeating on every run.
@@ -200,9 +200,9 @@ final readonly class PendingMigrationResolver implements PendingResolver
      * findings they COULD have acted on with it. It weighs more for `lint`, the suite that hangs in
      * CI, where the gate would be red on day one over another package's migrations.
      *
-     * ## What is deliberately NOT filtered
+     * ## What is deliberately not filtered
      *
-     * A path somebody NAMED. `--path`, `sqlens.migration_paths` and `--file` are a person saying
+     * A path somebody named. `--path`, `sqlens.migration_paths` and `--file` are a person saying
      * "these", and quietly dropping part of what they named would make the argument advisory. The
      * caller decides that and it arrives here as `$includeVendorMigrations`.
      *

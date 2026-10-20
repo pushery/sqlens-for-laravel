@@ -33,10 +33,11 @@ use Pushery\SQLens\Rules\Suite;
 /**
  * Everything this package can report, as one deterministically sorted machine-readable artifact.
  *
- * Three families produce findings, and until now nothing could see all three at once: the engine
+ * Several families produce findings, and until now nothing could see them all at once: the engine
  * rule sets reachable through the drivers, the capture layer's level-0 rules and pre-scan
- * detectors, and the runner's own notices. Each carries an id, a documentation URL and the
- * metadata a report shows — but they carry it through three different shapes, so "does every
+ * detectors, the runner's own notices, the analyse suite's PHPStan rules and the deploy gate's
+ * checks. Each carries an id, a documentation URL and the metadata a report shows — but each
+ * through a shape of its own, so "does every
  * finding this package can emit have a documentation page?" was a question nobody could ask
  * mechanically. This is the answer surface: one row per documented id, one fixed key order, one
  * sort.
@@ -46,7 +47,7 @@ use Pushery\SQLens\Rules\Suite;
  * - The documentation generator reads it instead of discovering rules on its own, so it fills
  *   pages rather than inventing addresses.
  * - The completeness check counts {@see RuleDocumentationState::Pending} rows. A page that has
- *   not been written is a NAMED state here, never an absence — the same reason a finding that
+ *   not been written is a named state here, never an absence — the same reason a finding that
  *   could not be determined says so instead of passing.
  * - It ships, so a consuming application (or an agent working inside one) can read the rule
  *   catalog out of `vendor/` without booting a driver, a connection or a config.
@@ -72,7 +73,7 @@ final readonly class RuleRegistryExport
     /** Where the generated artifact lives, relative to the package root. */
     public const string BUNDLED_FILE = 'resources/data/rule-registry.json';
 
-    /** The three families a row can come from — stated per row, so a reader can filter. */
+    /** The families a row can come from — stated per row, so a reader can filter. */
     public const string SOURCE_RULE = 'rule';
 
     public const string SOURCE_CAPTURE = 'capture';
@@ -118,7 +119,7 @@ final readonly class RuleRegistryExport
             }
         }
 
-        // ALL FOUR notice families, never a subset: a family the export cannot see is a family of
+        // Every notice family, never a subset: a family the export cannot see is a family of
         // ids with no documentation page and nothing to notice the gap. The audit's own eighteen
         // were exactly that — written as literals, in no registry, each shipping a dead link.
         return self::build(
@@ -204,7 +205,7 @@ final readonly class RuleRegistryExport
     }
 
     /**
-     * Add a row, refusing a second row for an id that already has one UNLESS the two agree.
+     * Add a row, refusing a second row for an id that already has one unless the two agree.
      *
      * Two drivers legitimately register the same driver-neutral lifecycle rule, so a duplicate id
      * is normal and first-wins is correct — as long as the rows are identical. If they are not,
@@ -286,7 +287,7 @@ final readonly class RuleRegistryExport
             // reports as `pending` on the same row. Nothing is invented to fill the gap — a
             // catalog that made up a title would look complete and say the wrong thing.
             //
-            // `rationale` is deliberately NOT here. The page BODY is the rationale; it is long, it
+            // `rationale` is deliberately not here. The page body is the rationale; it is long, it
             // has no second source to derive from, and every row already carries the stable
             // `documentation_url` that reaches it.
             'title' => $pages->titleFor($id),
@@ -407,7 +408,7 @@ final readonly class RuleRegistryExport
             severity: $metadata->severity?->value,
             stability: $metadata->stability->value,
             // The capture producers declare no confidence: their verdicts are statements about
-            // what the capture DID, not judgments that could be more or less certain.
+            // what the capture did, not judgments that could be more or less certain.
             confidence: null,
             deprecatedSince: $metadata->deprecation?->since,
             replacedBy: $metadata->deprecation?->replacedBy,
@@ -436,7 +437,7 @@ final readonly class RuleRegistryExport
             severity: $metadata->severity?->value,
             stability: $metadata->stability->value,
             // No confidence here even though some checks carry one per finding: a heuristic estimate
-            // and a catalog fact can come from the SAME check depending on what it could read, so a
+            // and a catalog fact can come from the same check depending on what it could read, so a
             // single value would be wrong for half the findings it describes.
             confidence: null,
             deprecatedSince: null,
@@ -445,7 +446,7 @@ final readonly class RuleRegistryExport
             // decides whether it applies to that engine.
             minVersion: null,
             maxVersion: null,
-            // Eight of the twelve DO classify one, and the first version of this method wrote null
+            // Most of them do classify one, and the first version of this method wrote null
             // for all of them — which the row states as "classifies no downtime whatsoever" while
             // the finding beside it said `blocking`. The class is declared with the check now.
             downtimeClass: $metadata->downtimeClass?->value,
@@ -506,7 +507,7 @@ final readonly class RuleRegistryExport
             level: $notice->level()->value,
             // Asked, not stamped `null`: a runner notice can carry a severity. `DEBT.UNRECORDED`
             // ships with `Severity::Info`, and the severity is where `DebtThresholds::escalate()`
-            // starts ageing a debt toward `high`, so an artifact saying "no severity" would
+            // starts aging a debt toward `high`, so an artifact saying "no severity" would
             // contradict the finding a consumer receives.
             //
             // A run notice carries no version window, is never deprecated and classifies no

@@ -19,7 +19,7 @@ namespace Pushery\SQLens\Drivers\Pgsql\Catalog;
  * extension does". That is a fact about the database rather than a guess about a name, and it
  * covers the extension nobody on this project has heard of.
  *
- * ## Excluded means NAMED as excluded
+ * ## Excluded means named as excluded
  *
  * Every object left out becomes a skip carrying the extension that owns it. A count of what was
  * excluded and why is the difference between a scope decision and a silent absence — and it is what
@@ -31,7 +31,7 @@ final readonly class ExtensionOwnershipFilter
      * @param  bool  $includeAll  the escape hatch for a project that genuinely audits its
      *                            extensions — off by default, because for almost everyone those
      *                            objects are somebody else's code
-     * @param  list<string>  $allowed  extensions whose objects ARE the user's business, named one by
+     * @param  list<string>  $allowed  extensions whose objects are the user's business, named one by
      *                                 one. The per-extension form matters: a project that manages
      *                                 its own `citext` domains should not have to take PostGIS's
      *                                 hundred tables with it.
@@ -44,7 +44,7 @@ final readonly class ExtensionOwnershipFilter
     /**
      * Whether an object owned by the named extension belongs in the reading.
      *
-     * An object owned by NOTHING (an empty name) is the user's own and always included — the filter
+     * An object owned by nothing (an empty name) is the user's own and always included — the filter
      * only ever decides about objects the catalog says belong to an extension.
      */
     public function includes(string $owningExtension): bool

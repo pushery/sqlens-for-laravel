@@ -6,7 +6,7 @@
             "mysql": "On MySQL the damage is not even transactional: every DDL statement causes an implicit commit, so a rollback that fails halfway through leaves what it already destroyed destroyed, and nothing undoes it."
         },
         "GEN.L4.DOWN_MISSING": {
-            "mysql": "On MySQL this weighs more, not less: every DDL statement causes an implicit commit, so a failed up() leaves a partially applied schema behind and no transaction rolls it back. down() is not a safety net here — it is the only teardown there is, and it has to be written by hand."
+            "mysql": "On MySQL this weighs more, not less: every DDL statement causes an implicit commit, so no transaction takes a migration back, and down() is the only way to undo one that ran. It does not clean up a failed up(), though: Laravel records a migration only after its up() completes, so a rollback never calls the down() of one that failed, and the partially applied schema it left has to be cleaned up by hand."
         }
     }
 }

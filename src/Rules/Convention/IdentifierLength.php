@@ -27,11 +27,11 @@ namespace Pushery\SQLens\Rules\Convention;
  * ## Why PostgreSQL's case is the worse one
  *
  * MySQL refuses the statement: the deploy stops, at the moment somebody is watching, with the
- * offending name in the message. PostgreSQL creates the object under a DIFFERENT NAME and says so in
+ * offending name in the message. PostgreSQL creates the object under a different name and says so in
  * a `NOTICE` — which no migration runner surfaces. Every later reference by the name that was
  * written then fails, long after the deploy that caused it.
  *
- * ## Both drivers report it at the SAME level, and that is a decision
+ * ## Both drivers report it at the same level, and that is a decision
  *
  * The first plan put PostgreSQL at level 4 and MySQL at level 8, reading the loud refusal as the
  * milder problem. That was wrong twice over. A statement the server refuses is not a matter of

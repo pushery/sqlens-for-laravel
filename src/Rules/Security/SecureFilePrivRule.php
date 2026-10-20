@@ -97,7 +97,7 @@ final class SecureFilePrivRule extends AbstractSettingSecurityRule
     public function limitations(): array
     {
         return [
-            'reads the RUNNING value, not the file: a setting changed on disk and not yet reloaded is invisible here, and one changed only for this session would be read as the server\'s',
+            'reads the GLOBAL value, not the file: a setting changed on disk and not yet reloaded is invisible here, and a value set for one session is never read',
             'reads the directory the setting names, never its contents or its permissions. A restricted path that anyone can write to is as reachable as an unrestricted one, and that is a filesystem fact outside this run',
         ];
     }

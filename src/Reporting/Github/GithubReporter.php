@@ -42,7 +42,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  * decides how loudly a diff says it, and it never drops the finding or its reason.
  *
  * Each line carries the finding's repo-relative file and, when it has one, its
- * line, so GitHub anchors the annotation to the exact spot. A finding WITHOUT a
+ * line, so GitHub anchors the annotation to the exact spot. A finding without a
  * source line does not silently fall to line 1: the message names why it has none
  * (a file-level migration finding, a live-schema object, a callsite without a
  * line), so the reader is never misled into looking at line 1. The message is the
@@ -53,7 +53,9 @@ use Symfony\Component\Console\Output\OutputInterface;
  * findings past that cap vanish, the reporter emits nine of an overflowing level
  * and then a single collector line — itself within the ten displayed — that names
  * how many were omitted and which rules, so the overflow is visible, never
- * swallowed. The full set always remains in the JSON report.
+ * swallowed. The preamble below is a notice too and takes one of the ten notice
+ * slots, so an overflowing notice level emits eight. The full set always remains
+ * in the JSON report.
  *
  * An annotated run opens with a single `::notice::` preamble naming the run
  * parameters — mode, profile, the two gate thresholds, the server and tool versions
@@ -104,7 +106,7 @@ final class GithubReporter implements Reporter
 
         foreach ($result->findings as $finding) {
             $command = $this->command($finding);
-            $budget = $this->emitBudget($counts[$command] ?? 0);
+            $budget = $this->emitBudget($command, $counts[$command] ?? 0);
 
             if (($emitted[$command] ?? 0) < $budget) {
                 ReportText::line($out, $this->annotation($command, $finding));
@@ -123,12 +125,17 @@ final class GithubReporter implements Reporter
 
     /**
      * The annotations to emit for a level that has `$count` findings: all of them
-     * when they fit, otherwise one fewer than the display limit so the collector
+     * when they fit, otherwise one fewer than the level's slots so the collector
      * line has a displayed slot of its own.
+     *
+     * The preamble is a `::notice` that precedes every annotated run, so the notice
+     * level has one slot fewer than the others.
      */
-    private function emitBudget(int $count): int
+    private function emitBudget(string $command, int $count): int
     {
-        return $count > self::DISPLAY_LIMIT ? self::DISPLAY_LIMIT - 1 : $count;
+        $slots = $command === 'notice' ? self::DISPLAY_LIMIT - 1 : self::DISPLAY_LIMIT;
+
+        return $count > $slots ? $slots - 1 : $count;
     }
 
     /**
@@ -159,7 +166,7 @@ final class GithubReporter implements Reporter
             Outcome::Pass => 'notice',
             // No severity escalation here, and its absence is the point.
             //
-            // A finding reaches this branch when its category is NOT security or privacy. No RULE
+            // A finding reaches this branch when its category is not security or privacy. No rule
             // outside those two carries a severity at all — pinned in GithubReporterTest, against
             // the shipped registry — so for rules an escalation would be unreachable code stating
             // the opposite of what this file decided twenty lines above.
@@ -171,7 +178,7 @@ final class GithubReporter implements Reporter
             // `info` finding that FAILED look weaker than one that passed.
             Outcome::Undetermined => 'warning',
             // A check that had nothing to run against asks nobody to do anything, so it carries the
-            // same weight as a pass — the weakest annotation there is. It is deliberately NOT
+            // same weight as a pass — the weakest annotation there is. It is deliberately not
             // treated as an undetermined: an undetermined is a question left open, and escalating
             // "there was no question" to a warning would put a line in a reviewer's diff that no
             // change of theirs can ever remove.
@@ -228,7 +235,35 @@ final class GithubReporter implements Reporter
         $properties = $this->properties($finding);
         $prefix = $properties === '' ? '::'.$command.'::' : '::'.$command.' '.$properties.'::';
 
-        return $prefix.$this->escapeData($finding->ruleId.': '.$finding->message.$this->confirmation($finding).$this->noLineNote($finding));
+        return $prefix.$this->escapeData($finding->ruleId.': '.$this->message($finding).$this->confirmation($finding).$this->noLineNote($finding));
+    }
+
+    /**
+     * The message, and for a finding about the live database the object it is about.
+     *
+     * Anchored to a migration, the annotation lands on that migration's line in a pull request, and
+     * a reader takes it for a finding about the file. It is about the object as the database holds
+     * it now, and the migration is only where the object came from: one that was correct on the day
+     * it ran is the ordinary case. So the annotation says so, as the SARIF message does.
+     */
+    private function message(Finding $finding): string
+    {
+        $location = $finding->location;
+
+        if ($location->kind !== LocationKind::Catalog || $location->objectName === null) {
+            return $finding->message;
+        }
+
+        if ($location->file === null) {
+            return $location->objectName.': '.$finding->message;
+        }
+
+        return sprintf(
+            '%s: %s (a live-database finding — this annotation sits on the migration that introduced %s, which is where it came from rather than what is being reported)',
+            $location->objectName,
+            $finding->message,
+            $location->objectName,
+        );
     }
 
     /**

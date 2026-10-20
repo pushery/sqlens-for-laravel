@@ -41,7 +41,7 @@ final class CredentialRedactor
 
         // scheme://user:pass@host — credentials embedded in a connection URL.
         //
-        // The user information runs to the LAST `@` before the host, the way PHP's parse_url() and Laravel's
+        // The user information runs to the last `@` before the host, the way PHP's parse_url() and Laravel's
         // URL parser read it: a password with an unencoded `@` is common, and a host never holds one. Cut at
         // the first `@`, the rest of such a password stayed in the text while the `:` that SecretLiteralMask
         // anchors on went, so on the capture path neither pass took it. A pair with an empty
@@ -55,7 +55,7 @@ final class CredentialRedactor
         ) ?? $text;
 
         // `connection to server at "10.0.0.4", port 5432 failed` — the standard libpq preamble on
-        // EVERY PostgreSQL connection error since 12, and the reason this class was a no-op there:
+        // every PostgreSQL connection error since 12, and the reason this class was a no-op there:
         // it carries the host and port as PROSE, not as `host=`/`port=`, so every key/value pattern
         // above walks straight past them. Measured against a real server, not reconstructed.
         $text = preg_replace(
@@ -152,11 +152,11 @@ final class CredentialRedactor
             $text,
         ) ?? $text;
 
-        // LARAVEL'S OWN SUFFIX, and the most reliable leak of the lot.
+        // Laravel's own suffix, and the most reliable leak of the lot.
         //
         // `QueryException::formatMessage()` appends
         // ` (Connection: pgsql, Host: 10.0.0.4, Port: 5432, Database: app, SQL: select 1)`
-        // to EVERY query exception, on both engines, whatever the driver said. So even a message
+        // to every query exception, on both engines, whatever the driver said. So even a message
         // that carried nothing sensitive of its own arrives wearing the connection's coordinates —
         // and when the connection configures a read-replica LIST, `Host:` is every one of them,
         // joined with commas (framework source, `formatConnectionDetails()`).

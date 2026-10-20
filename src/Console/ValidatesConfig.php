@@ -8,6 +8,9 @@ use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Translation\Translator;
 use Pushery\SQLens\Config\ConfigInspection;
 use Pushery\SQLens\Config\ConfigValidator;
+use Pushery\SQLens\Config\ConfigViolation;
+use Pushery\SQLens\Security\Privacy\PrivacyPack;
+use Pushery\SQLens\Security\Privacy\UnreadablePrivacyDictionary;
 use Pushery\SQLens\ShippedLocale;
 use Symfony\Component\Console\Output\OutputInterface;
 
@@ -30,7 +33,8 @@ use Symfony\Component\Console\Output\OutputInterface;
  * deploy window; `baseline`, `drift` and `format` write files into the repository; the MCP server
  * binds tools to whatever the configuration says. Two of them rely on the validator having already
  * refused the shape they are about to read — `PreflightService` falls back on an unusable
- * threshold on that basis, and `McpCommand` treats reaching a branch as proof it was bypassed.
+ * threshold on that basis, and `McpCommand` checks no transport of its own, because the validator
+ * refuses every other value.
  *
  * ## Self-sufficient on purpose
  *
@@ -49,11 +53,11 @@ trait ValidatesConfig
      * The call every command makes first: refuse the run when `config('sqlens')` is not a shape
      * this package understands.
      *
-     * Called FIRST — before the reporter, before the profile, before anything opens a connection. A
+     * Called first — before the reporter, before the profile, before anything opens a connection. A
      * misconfiguration that surfaces after twenty seconds of catalog reading is one people check
      * for less often.
      *
-     * Reads the configuration itself rather than taking it as an argument, so the commands make ONE
+     * Reads the configuration itself rather than taking it as an argument, so the commands make one
      * call that cannot differ — some of them have a `Repository` in `handle()` and some do not, and
      * an argument would have meant a slightly different line in each.
      *
@@ -80,12 +84,59 @@ trait ValidatesConfig
      */
     private function configInspection(): ConfigInspection
     {
-        return new ConfigValidator()->inspect($this->laravel->make(Repository::class)->get('sqlens'));
+        return $this->inspected($this->laravel->make(Repository::class)->get('sqlens'));
     }
 
-    private function configIsValid(mixed $config): bool
+    /**
+     * The validator's walk, and the one question it cannot answer: whether the privacy dictionary
+     * the configuration names can be read.
+     *
+     * The validator reads values and never the disk, so a well-formed path to a file nobody can
+     * parse passes it, and the container reads that file only when the privacy rule first needs it.
+     * Asked here, a broken file is one more violation: every command refuses it with the
+     * misconfiguration exit, and doctor reports it beside the rest.
+     */
+    private function inspected(mixed $config): ConfigInspection
     {
         $inspection = new ConfigValidator()->inspect($config);
+        $dictionary = $this->unreadablePrivacyDictionary();
+
+        if (! $dictionary instanceof ConfigViolation) {
+            return $inspection;
+        }
+
+        return new ConfigInspection([...$inspection->violations, $dictionary], $inspection->notices, $inspection->retired);
+    }
+
+    /** The privacy dictionary the configuration names, as a violation when this application cannot read it. */
+    private function unreadablePrivacyDictionary(): ?ConfigViolation
+    {
+        $pack = new PrivacyPack($this->laravel->make(Repository::class));
+        $path = $pack->dictionaryPath();
+
+        if (! $pack->isEnabled() || $path === null) {
+            return null;
+        }
+
+        try {
+            $pack->dictionary($this->laravel->basePath());
+        } catch (UnreadablePrivacyDictionary $failure) {
+            return ConfigViolation::outOfRange(
+                'sqlens.security.privacy.dictionary',
+                'a privacy dictionary this application can read, or null for the bundled one (this file: '.$failure->why.')',
+                $path,
+            );
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  mixed  $config  the `sqlens` configuration as the repository holds it, before it is known to be an array
+     */
+    private function configIsValid(mixed $config): bool
+    {
+        $inspection = $this->inspected($config);
 
         // The notices first, and they are printed whether or not the run goes on. A key that is
         // absent takes the shipped default — harmless for an upgrade, and exactly the state a
@@ -102,7 +153,7 @@ trait ValidatesConfig
         }
 
         // A retired key is the opposite case to a defaulted one and gets its own header for it: the
-        // key IS set, and the advice is to delete it. Under the defaulted header it would be told to
+        // key is set, and the advice is to delete it. Under the defaulted header it would be told to
         // re-add the one line it should remove.
         if ($inspection->retired !== []) {
             $this->configStream()->writeln($this->configMessage('sqlens::messages.commands.retired_config', [

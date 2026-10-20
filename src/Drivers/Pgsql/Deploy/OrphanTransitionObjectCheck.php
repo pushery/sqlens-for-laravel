@@ -27,7 +27,7 @@ use Pushery\SQLens\Subjects\SubjectContext;
 use Throwable;
 
 /**
- * Objects whose NAMES say they were meant to be temporary, read once after the deploy.
+ * Objects whose names say they were meant to be temporary, read once after the deploy.
  *
  * An expand/contract migration that stopped halfway leaves `users_old`. A backfill helper leaves
  * `tmp_backfill_state`. A snapshot taken "just in case" leaves `orders_20260721`. Each of them
@@ -35,7 +35,7 @@ use Throwable;
  * is the first thing somebody restores by mistake, because it looks like the real table with a
  * suffix.
  *
- * ## It NEVER fails, and that is the design rather than timidity
+ * ## It never fails, and that is the design rather than timidity
  *
  * A name is not evidence. `orders_old` is exactly what an abandoned rename leaves behind and exactly
  * what a team calls the archive it queries every quarter, and the catalog holds nothing that

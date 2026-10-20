@@ -19,14 +19,14 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  * usually surprised by:
  *
  *  - The new value cannot be USED in the same transaction it is added in. This is the
- *    PostgreSQL 18 reality, and it is stated as exactly that — NOT as the obsolete
+ *    PostgreSQL 18 reality, and it is stated as exactly that — not as the obsolete
  *    blanket "ADD VALUE cannot run in a transaction", which stopped being true in
  *    PostgreSQL 12. Repeating that old rule on this baseline would be a version trap,
  *    and a wrong old rule is worse than a missing one.
  *  - The step is irreversible: a `down()` cannot remove an enum value, so a migration
  *    that adds one cannot be cleanly rolled back.
  *
- * The exception: adding a value to an enum type this SAME migration creates is fine —
+ * The exception: adding a value to an enum type this same migration creates is fine —
  * the `down()` drops the whole type, so there is nothing to roll back and no live
  * consumers of the value. That is read from the migration context, not the SQL around
  * the statement.
@@ -53,7 +53,7 @@ final class EnumAddValueRule extends AbstractPgsqlSafetyRule implements Provides
     /**
      * The append sequence — the only enum change PostgreSQL performs cheaply.
      *
-     * Type and value come from the SAME reading {@see judge()} uses, so the material can never name
+     * Type and value come from the same reading {@see judge()} uses, so the material can never name
      * a different value than the finding does.
      */
     public function remediationFor(MigrationStatementView $statement): ?RemediationPayload

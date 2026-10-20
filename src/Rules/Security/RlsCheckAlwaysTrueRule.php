@@ -30,7 +30,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * ## Why an omitted `WITH CHECK` is not a finding
  *
  * PostgreSQL applies the `USING` expression to the check when no `WITH CHECK` is given. A policy with
- * a real tenant filter and no explicit check is therefore guarded on BOTH paths — and that is how
+ * a real tenant filter and no explicit check is therefore guarded on both paths — and that is how
  * almost everyone writes policies, so reporting it would make this rule noise on the ordinary case.
  * Only an explicit always-true check is a hole, because somebody had to type it.
  */

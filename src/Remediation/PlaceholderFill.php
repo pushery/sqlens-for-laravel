@@ -18,6 +18,10 @@ namespace Pushery\SQLens\Remediation;
  * string gets the escapes that string needs. Everywhere else a value goes in as it is, which is what
  * the templates put there: identifiers `Identifier::canonical()` has already quoted, SQL fragments and
  * numbers.
+ *
+ * An empty value fills nothing: its placeholder stands, as it does for a name the context lacks.
+ * `ALTER TABLE  ADD CONSTRAINT  CHECK` reads like a statement and is not one, while a standing
+ * `{{table}}` is a hole the reader can see and fill.
  */
 final class PlaceholderFill
 {
@@ -48,7 +52,7 @@ final class PlaceholderFill
             $value = str_starts_with($piece, '{{') ? ($context[substr($piece, 2, -2)] ?? null) : null;
 
             $filled .= match (true) {
-                $value === null, $inLiteral && str_contains($value, '\\') => $piece,
+                $value === null, $value === '', $inLiteral && str_contains($value, '\\') => $piece,
                 $inLiteral => str_replace("'", "''", $value),
                 default => $value,
             };
@@ -74,7 +78,7 @@ final class PlaceholderFill
         $marked = preg_replace_callback(self::PLACEHOLDER, static function (array $match) use ($context, &$values): string {
             $name = substr($match[0], 2, -2);
 
-            if (! array_key_exists($name, $context)) {
+            if (! array_key_exists($name, $context) || $context[$name] === '') {
                 return $match[0];
             }
 

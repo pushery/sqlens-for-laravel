@@ -63,7 +63,7 @@ enum NotApplicableReason: string
     /**
      * Nothing is pending, so there is no change for this check to judge the state against.
      *
-     * The deploy-context checks are the case: `lock_timeout = 0` matters BECAUSE a migration is
+     * The deploy-context checks are the case: `lock_timeout = 0` matters because a migration is
      * about to run behind whatever is holding a lock, and with nothing pending that sentence is
      * false. A consumer ran the gate after a deploy and read three findings arguing from a
      * migration in the same report whose first line said none had been read — a gate that refutes
@@ -118,7 +118,7 @@ enum NotApplicableReason: string
      * documented default, the objects an extension installs, which nobody in the project wrote.
      *
      * Not {@see UndeterminedReason::StructurallyNotApplicable}, where these notices used to land, and
-     * not {@see self::NotComparable}, which says the object WAS read. This one was not, and that was
+     * not {@see self::NotComparable}, which says the object was read. This one was not, and that was
      * the decision: nothing about it is owed, so `--strict` has nothing to escalate. Escalated, it
      * ended the audit of every application with `citext` or `pg_trgm` in its schema with exit 3.
      */
