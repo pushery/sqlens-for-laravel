@@ -22,7 +22,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * PostgreSQL only marks the column dropped rather than rewriting the table. Level 1
  * catches that data loss.
  *
- * This rule speaks ONLY to the loss. The separate concern — that dropping a column
+ * This rule speaks only to the loss. The separate concern — that dropping a column
  * still read by a running old app version needs a deploy window, "ship the code that
  * stops using it first" — belongs to `PG.L4.DROP_WITHOUT_DEPLOY_WINDOW`, and this
  * finding deliberately does not repeat that advice, so the two rules do not say the
@@ -36,7 +36,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * Detection is on the canonical form and the classified target, never Laravel's raw
  * grammar.
  *
- * A column ADDED and then dropped within one migration on a PRE-EXISTING table is not
+ * A column added and then dropped within one migration on a pre-existing table is not
  * caught by the table-level exception — the classifier does not model per-column
  * additions — but that shape is rare and the loss is genuinely nil, so it is a known,
  * documented limit rather than a false positive worth column-level bookkeeping.

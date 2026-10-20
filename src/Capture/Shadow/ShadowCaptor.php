@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Capture\Shadow;
 
-use DateTimeImmutable;
-use DateTimeZone;
 use Illuminate\Database\QueryException;
 use PDOException;
 use Pushery\SQLens\Capture\CaptureResult;
@@ -75,6 +73,7 @@ final readonly class ShadowCaptor implements Captor
         private bool $roundtrip = false,
         private ?ShadowOrphanSweeper $sweeper = null,
         private ?ShadowSweepRecorder $sweepRecorder = null,
+        private ?ShadowNoteRecorder $noteRecorder = null,
     ) {}
 
     public function capture(iterable $migrations, CaptureSection $section): CaptureRun
@@ -111,7 +110,7 @@ final readonly class ShadowCaptor implements Captor
             return $this->allUndetermined($pending, $section, UndeterminedReason::ShadowConnectionCollides);
         }
 
-        // A direct connection pointed at ANOTHER server is refused before either probe is
+        // A direct connection pointed at another server is refused before either probe is
         // asked, because it is the more dangerous of the two: a pooled source costs a failed
         // run, while provisioning on an instance nobody named creates and drops databases
         // somewhere the operator is not looking. Decided from configuration alone — no
@@ -124,7 +123,7 @@ final readonly class ShadowCaptor implements Captor
         }
 
         // A read replica has a different state than its primary and forbids the
-        // writes provisioning needs. Detected BEFORE any database is created, so a
+        // writes provisioning needs. Detected before any database is created, so a
         // replica target is a named undetermined, never a run against the wrong
         // instance. The probe asks the connection provisioning runs on, and is a read;
         // when none is wired, there is nothing to detect and the flow proceeds.
@@ -135,7 +134,7 @@ final readonly class ShadowCaptor implements Captor
         // A transaction pooler (PgBouncer) breaks the template operations
         // provisioning needs. When a direct connection is configured it is used and
         // no probe is needed; otherwise the connection provisioning runs on is checked,
-        // and a pooled one stops the run BEFORE any DDL — with an actionable reason,
+        // and a pooled one stops the run before any DDL — with an actionable reason,
         // never a failed CREATE DATABASE. The check is heuristic and named one in the reason.
         if (! $this->hasDirectConnection
             && $this->poolerProbe instanceof PoolerProbe
@@ -145,9 +144,9 @@ final readonly class ShadowCaptor implements Captor
 
         // The net for the one teardown path a `try/finally` cannot cover — the two comments further
         // down in this file name it twice. A process killed mid-run never reaches its own cleanup,
-        // so what it leaked is removed by a LATER run, and this is that run.
+        // so what it leaked is removed by a later run, and this is that run.
         //
-        // AFTER the guard and BEFORE provisioning, and both halves are load-bearing. After the
+        // After the guard and before provisioning, and both halves are load-bearing. After the
         // guard, because dropping a database is a database-mutating action and a blocked run may
         // take none. Before provisioning, because this run's own throwaway database is younger than
         // any threshold and must never become a candidate for its own sweep.
@@ -162,7 +161,7 @@ final readonly class ShadowCaptor implements Captor
         // not look. It used to be discarded here, so a lint run dropped databases and said nothing.
         if ($this->sweeper instanceof ShadowOrphanSweeper) {
             try {
-                $report = $this->sweeper->sweep($this->decision, new DateTimeImmutable('now', new DateTimeZone('UTC')));
+                $report = $this->sweeper->sweep($this->decision);
             } catch (Throwable) {
                 // Deliberate, and bounded to the sentence above: this run's verdict is about its own
                 // migrations. An orphan nobody could list is still an orphan, the report says that
@@ -198,9 +197,18 @@ final readonly class ShadowCaptor implements Captor
         try {
             $session = $this->provisioner->provision();
         } catch (ShadowProvisioningUndetermined $undetermined) {
+            // The results carry the reason; what the provisioner said beyond it goes to a person.
+            $this->noteRecorder?->refused($undetermined);
+
             return $this->allUndetermined($pending, $section, $undetermined->reason);
         } catch (QueryException|PDOException $refused) {
             return $this->allUndetermined($pending, $section, UndeterminedReason::ShadowProvisioningFailed, DriverMessage::of($refused));
+        }
+
+        // What the setup left out that a person should know, such as a dump directive the replay did
+        // not run. The results never carry it.
+        foreach ($session->notes as $note) {
+            $this->noteRecorder?->noted($note);
         }
 
         try {
@@ -236,7 +244,7 @@ final readonly class ShadowCaptor implements Captor
             return CaptureRun::of([...$run->results, ...$this->kept($session, $section)], $this->mode());
         }
 
-        // A successful run: drop the throwaway database. A drop that FAILS is never
+        // A successful run: drop the throwaway database. A drop that fails is never
         // swallowed — a database nobody removes is a leak — so it is surfaced as an
         // extra undetermined result naming the leaked database.
         try {
@@ -252,7 +260,7 @@ final readonly class ShadowCaptor implements Captor
     }
 
     /**
-     * The roundtrip: `up`, then `down`, then `up` again — all against the SAME
+     * The roundtrip: `up`, then `down`, then `up` again — all against the same
      * throwaway database, which is the only way the question makes sense. Running
      * each leg against its own clone would prove nothing about reversibility; the
      * point is whether the second `up` still works on the state `down` left behind.

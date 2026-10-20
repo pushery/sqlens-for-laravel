@@ -13,7 +13,7 @@ use Pushery\SQLens\Contracts\Rule;
  *
  * ## Off by default, and off is a decision
  *
- * These rules read column NAMES and guess what lives in them. That is a useful guess and an
+ * These rules read column names and guess what lives in them. That is a useful guess and an
  * unreliable one: a column called `iban` usually holds an IBAN and sometimes holds a label. A pack
  * that guessed wrong by default would teach a team to ignore the category it guessed in, and a
  * category people ignore is worse than one that never ran — it is a category that will still be
@@ -82,6 +82,27 @@ final readonly class PrivacyPack
     public function ignoredColumns(): array
     {
         return $this->stringList('sqlens.security.privacy.ignore_columns');
+    }
+
+    /**
+     * The dictionary in force: the project's own file when one is configured, the bundled one
+     * otherwise, with the extra terms merged into either.
+     *
+     * One place resolves the path, because two callers read the file, the container and the
+     * configuration check every command runs first, and two resolutions could disagree about which
+     * file that is.
+     *
+     * @throws UnreadablePrivacyDictionary
+     */
+    public function dictionary(string $basePath): PrivacyDictionary
+    {
+        $path = $this->dictionaryPath();
+
+        if ($path === null) {
+            return PrivacyDictionary::bundled($this->extraTerms());
+        }
+
+        return PrivacyDictionary::fromFile($basePath.DIRECTORY_SEPARATOR.ltrim($path, DIRECTORY_SEPARATOR), $this->extraTerms());
     }
 
     /** A repository-relative dictionary path, or null for the bundled one. */

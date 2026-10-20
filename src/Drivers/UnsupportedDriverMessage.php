@@ -13,7 +13,7 @@ use Pushery\SQLens\ShippedLocale;
  * It names the driver and why it is out of scope, and it never quotes the DSN — the
  * sentence has to be safe to paste into an issue.
  *
- * ## What it does NOT do any more, and why the wording matters
+ * ## What it does not do any more, and why the wording matters
  *
  * This block used to say the message "invites a contribution: unsupported here is a
  * statement about what has been built so far, not a refusal." For a RESERVED driver
@@ -43,7 +43,7 @@ final readonly class UnsupportedDriverMessage
 
     public function for(DriverResolutionFailure $failure, string $connection, string $driver): string
     {
-        // The failure supplies its OWN placeholder values, because only the factory
+        // The failure supplies its own placeholder values, because only the factory
         // that built it knows what they mean. Filling them here from a single
         // `detail` string produced sentences like "reports version <the whole
         // sentence>, below the <the whole sentence> SQLens supports".

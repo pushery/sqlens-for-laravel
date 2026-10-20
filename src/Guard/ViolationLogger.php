@@ -25,7 +25,7 @@ use Throwable;
  *
  * ## Redaction is not optional, even when bindings are asked for
  *
- * `include_bindings = true` does NOT mean "log the values". It means "log their shape" — type and
+ * `include_bindings = true` does not mean "log the values". It means "log their shape" — type and
  * length, never content. A binding can be a password, a token or somebody's address, and the
  * question a developer actually has ("did it bind a string or an integer, and was it empty?") is
  * answered completely by the shape.
@@ -65,7 +65,7 @@ final readonly class ViolationLogger
         'error' => 4, 'critical' => 5, 'alert' => 6, 'emergency' => 7,
     ];
 
-    /** What a security severity demands AT LEAST. Below these, the profile's own level stands. */
+    /** What a security severity demands at least. Below these, the profile's own level stands. */
     private const array SEVERITY_FLOOR = [
         'info' => 'info',
         'low' => 'notice',
@@ -75,7 +75,7 @@ final readonly class ViolationLogger
     ];
 
     /**
-     * @param  LoggerInterface  $log  ALREADY pointed at the profile's channel.
+     * @param  LoggerInterface  $log  already pointed at the profile's channel.
      *
      * PSR-3 and not Laravel's log manager, deliberately. This class needs to write a line at a
      * level with a context array, and that is the whole of PSR-3 — depending on the manager would

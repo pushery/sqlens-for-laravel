@@ -55,7 +55,7 @@ final class AdminPrivilegeGrantRule extends AbstractSchemaObjectSecurityRule imp
      * gives: a tool that reports the privileges its own documentation asks you to grant is a tool
      * nobody trusts twice. Measured before this list existed: the recommended audit account got a
      * `high` finding for `PROCESS, SHOW_ROUTINE`, which `security.min_severity = high` turns into a
-     * red build. Any OTHER administrative privilege on that account is still reported.
+     * red build. Any other administrative privilege on that account is still reported.
      *
      * @var list<string>
      */

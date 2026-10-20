@@ -39,19 +39,19 @@ return [
     |--------------------------------------------------------------------------
     |
     | The database connection SQLens resolves, canonicalizes, and audits against.
-    | Set it to a named connection to target a specific one — deliberately NOT a
+    | Set it to a named connection to target a specific one — deliberately not a
     | hard-coded 'pgsql', because guessing a connection is exactly the resolution
     | heuristic this package refuses.
     |
-    | `null` does NOT mean the same thing in every suite, and the difference is
+    | `null` does not mean the same thing in every suite, and the difference is
     | worth reading once:
     |
     |   capture, lint   the host application's default connection,
     |                   config('database.default').
     |
-    |   sqlens:audit    that default is NOT consulted. With exactly one supported
+    |   sqlens:audit    that default is not consulted. With exactly one supported
     |                   connection the audit takes it and names it in the report.
-    |                   With more than one it REFUSES and lists the candidates,
+    |                   With more than one it refuses and lists the candidates,
     |                   exiting 2. Pass --connection for a one-off, or name one
     |                   here for good.
     |
@@ -69,7 +69,7 @@ return [
     | Host
     |--------------------------------------------------------------------------
     |
-    | The ONE host to address when the connection configures a read/write split.
+    | The one host to address when the connection configures a read/write split.
     | Laravel picks a read host at RANDOM from `read.host`, so on a split
     | connection two runs against the same cluster can read two different servers
     | — and a report that does not know which server it read is not a report.
@@ -143,7 +143,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Which maturity tiers a run admits, beyond the stable ones that always run.
-    | Empty means STABLE ONLY — and that default is the whole versioning promise:
+    | Empty means stable only — and that default is the whole versioning promise:
     | a new rule lands as `preview` and runs only on request, so a minor release
     | cannot start failing a pipeline over code nobody touched.
     |
@@ -198,6 +198,22 @@ return [
     */
 
     'profile' => null,
+
+    /*
+    |--------------------------------------------------------------------------
+    | SQLENS_PROFILE, as the configuration loaded it
+    |--------------------------------------------------------------------------
+    |
+    | environment_profile carries SQLENS_PROFILE into the configuration, so a
+    | value in `.env` still selects the profile after `php artisan
+    | config:cache`, which stops Laravel from reading `.env` at all. A value
+    | exported in the process outranks it, so a host with a cached
+    | configuration can still be switched for one run. Leave the line as it is:
+    | the variable is the setting, and this key only carries it.
+    |
+    */
+
+    'environment_profile' => env('SQLENS_PROFILE'),
 
     /*
     |--------------------------------------------------------------------------
@@ -277,7 +293,9 @@ return [
     | would otherwise be read as exactly 18.0, quietly narrower than the "any 18"
     | it means, and a rule written for 18.2 would then stop firing with no message
     | at all. A server BANNER is still parsed leniently, because the server writes
-    | that one and we only get to cope with it; this you typed on purpose.
+    | that one and we only get to cope with it; this you typed on purpose. The
+    | configuration check refuses a pin in any other format before the run starts,
+    | and `sqlens:lint` refuses `--assume-server-version` the same way.
     |
     */
 
@@ -288,7 +306,7 @@ return [
     | Capture session guard
     |--------------------------------------------------------------------------
     |
-    | Whenever the capture path opens a connection, it bounds its OWN session
+    | Whenever the capture path opens a connection, it bounds its own session
     | before the first query: statement_timeout and lock_timeout on PostgreSQL,
     | max_execution_time, innodb_lock_wait_timeout and lock_wait_timeout on
     | MySQL, the last one for the metadata lock a schema change queues behind.
@@ -309,40 +327,13 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Catalog reader session
-    |--------------------------------------------------------------------------
-    |
-    | The audit suite reads a LIVE catalog, which on a busy production database
-    | is the moment a tool most needs to be harmless. So the reader opens its OWN
-    | named connection — the application's is never reconfigured — bounds it
-    | before the first query, and makes it read-only.
-    |
-    | Read-only is VERIFIED, not assumed: the session attempts one write and
-    | requires the refusal. A promise about the tool's own behavior that rests on
-    | an unverified SET is exactly the silent green this package refuses
-    | everywhere else. Measured while building it: the two engines do not enforce
-    | read-only the same way, so each driver states its own form.
-    |
-    | The timeouts are milliseconds and must be positive — zero means "wait
-    | forever", which is the harm the setting exists to prevent. idle_in_
-    | transaction bounds a read transaction that stalls, which is the shape that
-    | holds a snapshot open and blocks VACUUM on PostgreSQL.
-    |
-    | application_name puts the reader in pg_stat_activity under a name a DBA can
-    | recognize at 3am. That is not cosmetic: an unidentified session holding a
-    | connection on production is a session someone will kill blind.
-    |
-    */
-
-    /*
-    |--------------------------------------------------------------------------
     | Pre-scan
     |--------------------------------------------------------------------------
     |
     | Before a migration is captured, SQLens reads it as text and parses it —
     | it never loads it, because loading a file to inspect it would already run
     | its top-level code. If the pre-scan finds a reason the capture cannot be
-    | trusted, the migration is reported as undetermined and is NOT executed.
+    | trusted, the migration is reported as undetermined and is not executed.
     |
     | Which reasons it looks for follows `stability` like every other check. Two
     | of them are `preview` and do not run by default: a call into your own code
@@ -368,7 +359,7 @@ return [
 
     'capture' => [
         // A ceiling here is read from the environment as well, so a host can tighten it per
-        // environment without publishing this file: publishing freezes every OTHER default in it,
+        // environment without publishing this file: publishing freezes every other default in it,
         // a security default a later release corrects included. Read typed and held to a floor
         // of 1: `(int) 'abc'` is 0, and for a ceiling 0 means none, so a typo in a `.env` would
         // remove the limit. A value that is no positive integer lands on the number shipped here.
@@ -420,7 +411,7 @@ return [
             // null uses the run's resolved connection.
             //
             // A connection that resolves to the same place as the one being examined
-            // is REFUSED, not warned about: building the reference there would create
+            // is refused, not warned about: building the reference there would create
             // and then drop a database on the instance under comparison. The run comes
             // back `undetermined` with that named reason, before anything is opened.
             //
@@ -445,22 +436,26 @@ return [
              *
              * The sweep exists for the one cleanup path a try/finally cannot cover: a process
              * killed mid-run — OOM, a pipeline timeout, Ctrl-C — never reaches its own teardown,
-             * so what it left behind is dropped by a LATER run instead. On PostgreSQL the more
+             * so what it left behind is dropped by a later run instead. On PostgreSQL the more
              * expensive leftover is the TEMPLATE, which carries the whole project schema.
              *
              * The age is what makes that safe when several runs share a server: a worker must
-             * never drop the throwaway database another worker is migrating into right now. An
-             * hour is far beyond any real run — the shadow timeout below is measured in seconds —
-             * and still clears yesterday's leak on the first run of the day.
+             * never drop the throwaway database another worker is migrating into right now. It is
+             * read on the database server's clock, both when a run names its database and when a
+             * later run sweeps, so machines whose own clocks disagree still agree on it. It assumes
+             * no run takes longer than this; the shadow timeout below bounds one statement, not a
+             * run. An hour still clears yesterday's leak on the first run of the day.
              *
-             * A value BELOW an hour is raised to an hour rather than honored. Lowering it trades a
+             * A value below an hour is raised to an hour rather than honored. Lowering it trades a
              * disk-space annoyance for the one mistake this path must never make.
              *
              * SQLENS_SHADOW_ORPHAN_AFTER_SECONDS sets it from the environment, like the other bounds.
              */
             'orphan_after_seconds' => EnvironmentInteger::atLeastOne(env('SQLENS_SHADOW_ORPHAN_AFTER_SECONDS'), 3600),
 
-            // The prefix of the throwaway database name. Only [a-z0-9_].
+            // The prefix of the throwaway database name. Only [a-z0-9_], and at most
+            // 35 characters, so the whole name fits the identifier limit and a later
+            // run's orphan sweep can still read it.
             'database_prefix' => 'sqlens_shadow_',
 
             // The environments the shadow mode may run in. It refuses to run
@@ -469,44 +464,45 @@ return [
 
             // Whether to keep the throwaway database when a run fails or cannot
             // judge a migration, for debugging. Every kept database is named in
-            // the run's output. Off by default — a database nobody drops is a leak.
+            // the run's output, and a later run's orphan sweep removes it once it
+            // is older than orphan_after_seconds. Off by default — a database
+            // nobody drops is a leak.
             'keep_on_failure' => false,
 
-            // How many seconds the whole shadow provisioning and migration may take.
-            // Positive; zero would mean "wait forever", the harm this prevents.
-            // SQLENS_SHADOW_TIMEOUT sets it per environment, held to a floor of 1.
+            // How many seconds one statement on the shadow database may run, and how
+            // long it may wait for a lock. It is not a bound on the run as a whole:
+            // provisioning, which copies the template or replays a dump, has none of
+            // its own. Positive; zero would mean "wait forever", the harm this
+            // prevents. SQLENS_SHADOW_TIMEOUT sets it per environment, held to a floor
+            // of 1.
             'timeout' => EnvironmentInteger::atLeastOne(env('SQLENS_SHADOW_TIMEOUT'), 120),
         ],
     ],
 
     /*
     |--------------------------------------------------------------------------
-    | PostgreSQL
+    | Catalog reader session
     |--------------------------------------------------------------------------
     |
-    | PostgreSQL-specific lint settings — the per-engine section, mirrored by a
-    | `mysql` section when that driver lands.
+    | The audit suite reads a LIVE catalog, which on a busy production database
+    | is the moment a tool most needs to be harmless. So the reader opens its own
+    | named connection — the application's is never reconfigured — bounds it
+    | before the first query, and makes it read-only.
     |
-    | expected_timeouts: which session timeouts a migration that takes a strong
-    | lock is expected to set before it does. PostgreSQL bounds a migration's
-    | blast radius with two client settings — 'lock_timeout' caps how long a
-    | statement waits in the lock queue (so a blocked DDL cannot pile every later
-    | query up behind it) and 'statement_timeout' caps how long it runs. Both are
-    | required by default, the strict and safe position; drop one to opt out of
-    | that rule. Only these two names are legal — a typo like 'lock_timout' is a
-    | misconfiguration error naming the key, never a rule that silently stops
-    | firing. It mirrors what SQLens already does to its OWN session
-    | (capture.session above): the tool never asks of a migration what it does
-    | not do itself.
+    | Read-only is VERIFIED, not assumed: the session attempts one write and
+    | requires the refusal. A promise about the tool's own behavior that rests on
+    | an unverified SET is exactly the silent green this package refuses
+    | everywhere else. Measured while building it: the two engines do not enforce
+    | read-only the same way, so each driver states its own form.
     |
-    | max_locks_per_transaction: how many DISTINCT existing tables a single
-    | migration transaction may take a strong lock on before PG.L3.RISKY_OPS_SINGLE_TX
-    | flags it. Locks taken in one transaction are all held until it commits, so
-    | bundling operations on several tables lengthens the total lock time and grows
-    | the queue behind them. The default of 1 flags a transaction that locks more
-    | than one table; raise it to allow more, or the rule is dropped by narrowing it.
-    | A positive integer — several ALTER clauses in ONE statement are one lock on one
-    | table and never count.
+    | The timeouts are milliseconds and must be positive — zero means "wait
+    | forever", which is the harm the setting exists to prevent. idle_in_
+    | transaction bounds a read transaction that stalls, which is the shape that
+    | holds a snapshot open and blocks VACUUM on PostgreSQL.
+    |
+    | application_name puts the reader in pg_stat_activity under a name a DBA can
+    | recognize at 3am. That is not cosmetic: an unidentified session holding a
+    | connection on production is a session someone will kill blind.
     |
     */
 
@@ -528,10 +524,10 @@ return [
         // them: a hundred fast queries can be inside every per-statement bound and
         // still hold a production connection for half a minute.
         //
-        // Exceeding it is a NAMED undetermined, never an abort — the objects already
+        // Exceeding it is a named undetermined, never an abort — the objects already
         // read are worth having, and killing the run would throw them away to report a
         // problem the run itself caused. Five seconds is deliberately generous: this is
-        // the coarse upper bound, while the real regression brake is the QUERY COUNT,
+        // the coarse upper bound, while the real regression brake is the query count,
         // which is a property of the code rather than of the machine. A wall-clock
         // number tight enough to catch a regression would go red on a loaded laptop and
         // be switched off within a week.
@@ -580,7 +576,7 @@ return [
 
         // Whether each partition is reported as its own object.
         //
-        // Off by default: a partitioned table is ONE object to a rule, and reporting it
+        // Off by default: a partitioned table is one object to a rule, and reporting it
         // as n multiplies every finding by the partition count — which makes the first
         // audit of a real database unreadable, and the second one unrun. The partitions
         // are not lost, they become a property of the parent, and a partition that
@@ -601,7 +597,7 @@ return [
         'include_extension_objects' => false,
 
         'extensions' => [
-            // Extensions whose objects ARE this project's business, named one by
+            // Extensions whose objects are this project's business, named one by
             // one. Per-extension rather than one switch, because the two cases are
             // not the same size: a project that manages its own `citext` domains
             // should not have to take PostGIS's tables with it to say so.
@@ -628,7 +624,7 @@ return [
     |     'extra' => ['erloes', 'settlement_amount'],
     |     'ignore' => ['rate'],
     |
-    | expect states what THIS project wants its servers to be, for the settings where
+    | expect states what this project wants its servers to be, for the settings where
     | SQLens deliberately has no opinion of its own. lower_case_table_names is the one
     | such setting today: 0 is right on Linux, 2 is what a macOS install gives you, and
     | which of them a project wants depends on where it deploys — so the package ships
@@ -658,7 +654,7 @@ return [
         |   'rules'   silences a rule everywhere. Blunt, and honest about it.
         |   'objects' silences every rule on a path. For a legacy schema nobody
         |             is going to fix.
-        |   'pairs'   silences ONE rule on named paths. Reach for this one: the
+        |   'pairs'   silences one rule on named paths. Reach for this one: the
         |             other two grow by themselves. A rule ignored project-wide
         |             keeps ignoring itself on tables added next year, and a
         |             schema ignored wholesale hides rules that did not exist
@@ -666,9 +662,9 @@ return [
         |
         | A path is dot-separated and increasingly specific -- schema,
         | schema.table, schema.table.column -- and a segment may end in '*' to
-        | match a prefix within THAT segment. The glob never crosses a dot, so a
+        | match a prefix within that segment. The glob never crosses a dot, so a
         | pattern's reach is readable: 'public.orders' cannot touch
-        | 'public.orders_archive'. A pattern covers what is INSIDE what it names
+        | 'public.orders_archive'. A pattern covers what is inside what it names
         | (a table's columns) but never what CONTAINS it (its schema).
         |
         | If the application has a table prefix, write the name either way --
@@ -688,7 +684,7 @@ return [
         |
         | "Audit the database" stops being one statement the moment there is
         | more than one tenant database. A report produced from whichever
-        | connection happened to be default describes ONE tenant, and it looks
+        | connection happened to be default describes one tenant, and it looks
         | exactly like a report about the application -- same header, same
         | findings, same exit code. The reader then draws a conclusion about
         | their system from a statement about one of their customers.
@@ -697,9 +693,13 @@ return [
         | setup it asks you to say which tenant the report is about, and prints
         | that in the header.
         |
-        |   'none'      this project has one database. The default.
+        |   'none'      nothing declared. The default, and enough for a project
+        |               with one database: the audit goes ahead unless it sees
+        |               signs of tenants, and then it asks.
         |   'explicit'  it has tenants; 'reference' names the one to audit, and
         |               the report says the finding applies to that tenant only.
+        |               A project with one database that the signs misread
+        |               answers the same way, naming the connection it audits.
         |
         | There is deliberately no fan-out: no --all-tenants, no loop over
         | tenant connections, no merged report. An aggregate over tenants is a
@@ -749,6 +749,26 @@ return [
             'min_observation_days' => 30,
         ],
 
+        /*
+        |----------------------------------------------------------------------
+        | key_ceiling
+        |----------------------------------------------------------------------
+        |
+        | How much of its ceiling an integer primary key may have used before
+        | the level-5 near-ceiling rule reports it. The position is read from
+        | the key's sequence on PostgreSQL and from AUTO_INCREMENT on MySQL;
+        | the level-6 type rule reports every narrow key whatever its fill, so
+        | this decides only when a type choice turns into a deadline.
+        |
+        | Fifty percent by default: the point at which the key has handed out
+        | as many values as it has left, so at the rate that brought it there
+        | the remaining room lasts as long as the table has existed so far.
+        |
+        */
+        'key_ceiling' => [
+            'min_percent_used' => 50,
+        ],
+
         'expect' => [
             'lower_case_table_names' => null,
         ],
@@ -760,7 +780,7 @@ return [
         |
         | The shape an identifier must have for the level-8 naming rule. The
         | default is snake_case with no leading digit -- not a house style, but
-        | the shape that means the SAME THING on both engines unquoted: PostgreSQL
+        | the shape that means the same thing on both engines unquoted: PostgreSQL
         | folds an unquoted identifier to lower case, MySQL does not, and
         | `2fa_secret` is a syntax error unquoted on PostgreSQL.
         |
@@ -779,9 +799,9 @@ return [
             'pattern' => '/^[a-z][a-z0-9_]*$/',
             'exempt' => [],
             // What a single-column foreign key's column is expected to end with. An EMPTY value is
-            // refused and the default used instead: every name ends with the empty string, so an
-            // empty setting would silence the rule completely -- and "no findings" would read as
-            // "my keys are named the way I asked" when nothing had been asked.
+            // refused by the configuration check before any command runs: every name ends with the
+            // empty string, so an empty setting would silence the rule completely -- and "no
+            // findings" would read as "my keys are named the way I asked" when nothing had been asked.
             'foreign_key_suffix' => '_id',
         ],
 
@@ -801,7 +821,7 @@ return [
          * `exempt` REPLACES the shipped framework list rather than adding to it, so a project that
          * names its own set is not silently still carrying ours. The shipped default is
          * MissingComment::FRAMEWORK_TABLES -- `migrations`, `jobs`, `cache`, `sessions` and the
-         * rest, matched as WHOLE names: a project's own `job_applications` is not the framework's
+         * rest, matched as whole names: a project's own `job_applications` is not the framework's
          * `jobs`, and a prefix match would exempt it.
          */
         'documentation' => [
@@ -810,6 +830,37 @@ return [
             'exempt' => null,
         ],
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | PostgreSQL
+    |--------------------------------------------------------------------------
+    |
+    | PostgreSQL-specific lint settings. The MySQL driver has no settings of
+    | this kind, so there is no `mysql` section beside this one.
+    |
+    | expected_timeouts: which session timeouts a migration that takes a strong
+    | lock is expected to set before it does. PostgreSQL bounds a migration's
+    | blast radius with two client settings — 'lock_timeout' caps how long a
+    | statement waits in the lock queue (so a blocked DDL cannot pile every later
+    | query up behind it) and 'statement_timeout' caps how long it runs. Both are
+    | required by default, the strict and safe position; drop one to opt out of
+    | that rule. Only these two names are legal — a typo like 'lock_timout' is a
+    | misconfiguration error naming the key, never a rule that silently stops
+    | firing. It mirrors what SQLens already does to its own session
+    | (capture.session above): the tool never asks of a migration what it does
+    | not do itself.
+    |
+    | max_locks_per_transaction: how many DISTINCT existing tables a single
+    | migration transaction may take a strong lock on before PG.L3.RISKY_OPS_SINGLE_TX
+    | flags it. Locks taken in one transaction are all held until it commits, so
+    | bundling operations on several tables lengthens the total lock time and grows
+    | the queue behind them. The default of 1 flags a transaction that locks more
+    | than one table; raise it to allow more, or the rule is dropped by narrowing it.
+    | A positive integer — several ALTER clauses in ONE statement are one lock on one
+    | table and never count.
+    |
+    */
 
     'pgsql' => [
         'expected_timeouts' => ['lock_timeout', 'statement_timeout'],
@@ -835,7 +886,7 @@ return [
     | shipped default is 'high', so a high or critical security finding blocks out
     | of the box and an info/low/medium one is reported without blocking.
     |
-    | 'none' means REPORT, NEVER BLOCK. It is spelled as a word rather than left
+    | 'none' means report, never block. It is spelled as a word rather than left
     | as null on purpose: null reads as "unset", and "did you decide this or forget
     | it?" is the ambiguity this key exists to remove. So null is refused with a
     | message naming 'none' — say what you mean, and the report says it back.
@@ -855,9 +906,14 @@ return [
          * those rights to the role that serves requests.
          *
          * `--connection` on the command line wins over this, because a run somebody typed is a
-         * decision about THAT run. Whichever wins, the report names it: on a read/write split a
+         * decision about that run. Whichever wins, the report names it: on a read/write split a
          * replica answers with different variables, so which instance was examined is a statement
          * rather than a detail.
+         *
+         * Read by `sqlens:security` alone. `sqlens:audit` runs the server rules it shares with that
+         * suite over the connection it audits, `--connection` or `sqlens.connection`, because its
+         * catalog rules read that connection's schema. Passing this name to `sqlens:audit
+         * --connection` makes both commands answer those rules from the same role.
          *
          * A name no `config/database.php` defines is a MISCONFIGURATION, not a fall back to the
          * default. Falling back would examine the wrong instance and report it as clean.
@@ -918,7 +974,7 @@ return [
         'min_severity' => 'high',
 
         /*
-         * Whether a migration that ships INSIDE a package counts as one of yours.
+         * Whether a migration that ships inside a package counts as one of yours.
          *
          * Laravel runs package migrations — a package registers them with `loadMigrationsFrom()`
          * and they execute against your database like any other. So they are migrations, and this
@@ -953,7 +1009,7 @@ return [
          *
          * ## Two runs are deliberately not filtered
          *
-         * A run whose paths were NAMED — `--path`, `sqlens.migration_paths`, or `--file` — sees
+         * A run whose paths were named — `--path`, `sqlens.migration_paths`, or `--file` — sees
          * everything under them. Naming a path is a person saying "these", and quietly dropping
          * part of what they named would make the argument advisory.
          *
@@ -990,7 +1046,7 @@ return [
              * somebody else's terms of use -- their license, their rate limit, their attribution --
              * on behalf of every consumer, and none of those are ours to agree to for you.
              *
-             * The URL must serve a document in this package's OWN advisory format. That is what
+             * The URL must serve a document in this package's own advisory format. That is what
              * keeps the package from ever parsing a third party's shape, so it never inherits a
              * change to that shape; generate the file from whatever source your own terms allow.
              *
@@ -1013,7 +1069,7 @@ return [
          * runs on one connection from one that never answered the question — and guessing which of
          * your connections was meant to be the safe one is exactly what this package will not do.
          *
-         * So SAY IT, even when the answer is "one connection": set both keys to the same name. That
+         * So say it, even when the answer is "one connection": set both keys to the same name. That
          * turns a shrug into a statement, the check judges it, and the finding tells you what it
          * means — which is what the finding's own remediation asks for.
          *
@@ -1064,7 +1120,7 @@ return [
          *   heuristic  every table carrying `tenant_column`
          *   off        no RLS checks at all
          *
-         * With `listed` and an empty list, SQLens reports ONE undetermined naming this key — not a
+         * With `listed` and an empty list, SQLens reports one undetermined naming this key — not a
          * silent pass, and not a hundred findings. `off` is an ANSWER to that: the run then reports
          * that this database separates nothing, which is a different line from never having been
          * asked.
@@ -1102,14 +1158,14 @@ return [
         | The privacy pack — OFF, and off is the decision rather than the default nobody
         | got round to changing.
         |
-        | These rules read column NAMES and guess what lives in them. That is a useful guess
+        | These rules read column names and guess what lives in them. That is a useful guess
         | and an unreliable one: a column called `iban` usually holds an IBAN, and sometimes
         | holds a label. A pack that guessed wrong by default would teach a team to ignore
         | the category it guessed in, which costs more than the findings are worth.
         |
         | Switched off, the rules are not registered at all. They cost no query, no scan and
         | no time — the run does not carry them and quietly skip them, it does not have them.
-        | What it DOES carry is the fact that the category is inactive, in the reproducibility
+        | What it does carry is the fact that the category is inactive, in the reproducibility
         | header: a suite that checked less has to say so.
         */
         'privacy' => [
@@ -1117,9 +1173,9 @@ return [
 
             /*
              * A dictionary of your own, replacing the bundled one. Repository-relative, like
-             * every other path this package accepts: an absolute path pins a configuration to
-             * one machine, and a config file that only works where it was written is a config
-             * file somebody will edit on the next machine.
+             * the other files a project keeps in its repository: an absolute path pins a
+             * configuration to one machine, and a config file that only works where it was
+             * written is a config file somebody will edit on the next machine.
              *
              * Every term has to name a group the file declares with the signal `strong` or
              * `weak`. A file with a term that does not is refused, naming the term, rather
@@ -1171,7 +1227,7 @@ return [
     */
 
     /*
-    | budget_ms bounds the WHOLE `sqlens:predeploy` run, not one reading. When it
+    | budget_ms bounds the whole `sqlens:predeploy` run, not one reading. When it
     | runs out, the checks that were not reached are reported `undetermined` with
     | the budget named — never dropped, because a gate that quietly ran four of
     | its nine checks and reported clean is trusted like a complete one and is
@@ -1225,9 +1281,9 @@ return [
          * How large an object has to be before a deploy finding about it is rated higher.
          *
          * Empty by default, which means the shipped table in `resources/data/escalation-thresholds.json`
-         * decides. Set an operation here to replace ITS steps entirely — `rewrite`, `index_build`,
+         * decides. Set an operation here to replace its steps entirely — `rewrite`, `index_build`,
          * `constraint_validation` and `backfill` are the four the artifact defines, and naming one it
-         * does not know is REFUSED rather than ignored, because a typo would otherwise mean the
+         * does not know is refused rather than ignored, because a typo would otherwise mean the
          * escalation somebody configured silently never happens.
          *
          * A step is `['min_rows' => 1000000, 'raise_to' => 'high']` (or `min_bytes` for `rewrite`,
@@ -1280,9 +1336,9 @@ return [
              * are intentional, and only then `gate`. Raising it is a deliberate project decision,
              * and it can also be made per run with --fail-on-drift.
              *
-             * Anything that is not literally `gate` is report, including a typo: erring toward
-             * blocking on a value nobody can read would put a project into a mode it never asked
-             * for.
+             * Any other value is refused by the configuration check, before the command reads
+             * anything, with the misconfiguration exit code: a misspelled mode is a decision the
+             * project has not made yet, and neither of the two modes may be guessed for it.
              */
             'mode' => 'report',
 
@@ -1295,7 +1351,7 @@ return [
              * Without this step the way from reporting to blocking is not walkable, because the first
              * gate run on a grown database is red for reasons nobody caused today.
              *
-             * A REPOSITORY file, never a database table. A decision about a schema belongs where
+             * A repository file, never a database table. A decision about a schema belongs where
              * decisions are reviewed: in a pull request, with an author and a date, and with its
              * removal as visible as its addition. SQLens writes to no database at all.
              *
@@ -1311,7 +1367,7 @@ return [
              * reason the next run refuses, so the obligation cannot be committed and forgotten. A missing file simply means nothing is accepted yet —
              * which is every project's first run, and not an error.
              *
-             * REPOSITORY-RELATIVE, like the debt account's path and for the same reason: an absolute
+             * Repository-relative, like the debt account's path and for the same reason: an absolute
              * path would let the decision log live outside the repository, where its changes are
              * reviewed by nobody. `--exclude-file=` overrides it for one run and is taken as given.
              */
@@ -1332,7 +1388,7 @@ return [
              *
              * Turn it on, then `sqlens:lint --debt=record` once, and the account exists.
              *
-             * It is NOT a way to silence a debt somebody would rather not see. That is what the
+             * It is not a way to silence a debt somebody would rather not see. That is what the
              * acknowledged state with a written reason is for, and the difference is that one of
              * them is visible in the file.
              */
@@ -1346,10 +1402,12 @@ return [
              * A band only ever RAISES a finding's severity — it never creates one, never removes
              * one, and never changes a rule id. The debt reported on day 1 and the debt reported on
              * day 400 are the same finding about the same object; the older one is simply harder to
-             * keep ignoring. Whether an age BREAKS the run is a separate setting, because "tell me
+             * keep ignoring. Whether an age breaks the run is a separate setting, because "tell me
              * loudly but do not stop the deploy at 3am" is what most projects actually want.
              *
-             * Overriding one band leaves the other two on the shipped numbers.
+             * Overriding one band leaves the other two on the shipped numbers. The three keep the order of
+             * their names: a band that starts before the quieter one beside it is refused, because a debt is
+             * placed in the loudest band it has reached and the quieter band would never be shown.
              */
             'thresholds' => [
                 'notice' => 30,
@@ -1358,7 +1416,7 @@ return [
             ],
 
             /*
-             * The age at which an outstanding debt BREAKS a deploy, in UTC calendar days.
+             * The age at which an outstanding debt breaks a deploy, in UTC calendar days.
              *
              * Null — the default — means never. Debts are a reported state, not a gate: the safe
              * two-step patterns leave them on purpose, and a deploy command that refused to finish
@@ -1372,6 +1430,10 @@ return [
              * An ACKNOWLEDGED debt never breaks a run, whatever its age. The decision to carry it
              * has already been made and written down; overriding that from a config value would
              * make the acknowledgment worthless.
+             *
+             * With a number set, an account that does not parse or is not on the deploy machine is
+             * a question the run could not answer: `sqlens:postdeploy` exits 3 unless it runs with
+             * `--allow-undetermined`.
              */
             'fail_at' => null,
         ],
@@ -1394,7 +1456,7 @@ return [
          *
          * It also takes a LIST, and that is the form worth reaching for. `true` waives whatever
          * could not answer; a list waives only the reasons named on it, and the gate proceeds only
-         * when EVERY answer it could not get is one of them:
+         * when every answer it could not get is one of them:
          *
          *     'allow_undetermined' => ['missing_external_tool'],
          *
@@ -1444,7 +1506,7 @@ return [
              * away in the first sprint, and a gate nobody runs has helped nobody -- so this number
              * is held by a timing test in the package's own suite rather than by an intention.
              *
-             * That suite is NOT in your vendor tree -- the package's test directory never ships --
+             * That suite is not in your vendor tree -- the package's test directory never ships --
              * which is why no file is named here. A path you cannot open reads as a promise you
              * could check, and this one you cannot.
              *
@@ -1473,9 +1535,10 @@ return [
              * replaces it wholly — a project with its own convention should say what that is
              * rather than inherit ours alongside it.
              *
-             * A pattern PCRE cannot compile is dropped rather than allowed to throw, and a list
-             * that ends up empty falls back to the shipped one: an empty list would silence the
-             * check completely, and "no findings" would read as "nothing left behind".
+             * A pattern PCRE cannot compile is refused by the configuration check, which names
+             * its position in the list. An empty list falls back to the shipped one: an empty list
+             * would silence the check completely, and "no findings" would read as "nothing left
+             * behind".
              *
              * A match here is never a failure. A name is not evidence -- `orders_old` is what
              * an abandoned rename leaves behind and what a team calls the archive it queries
@@ -1496,7 +1559,7 @@ return [
     | do instead of guessing. The server is a thin shell over the same commands:
     | it adds no logic and takes no rights of its own.
     |
-    | The surface is an ATTACK SURFACE, so the shipped state is the safe one.
+    | The surface is an attack surface, so the shipped state is the safe one.
     | Every read-only tool is on, every mutating tool is off, and turning one on
     | is a separate, visible decision per tool — there is no master switch. There
     | is no free-text SQL tool and there never will be.
@@ -1535,7 +1598,7 @@ return [
             /*
              * Where `get_findings` reads the last report from — repository-relative.
              *
-             * It READS an artifact a previous run wrote; it never runs the checks again. An agent
+             * It reads an artifact a previous run wrote; it never runs the checks again. An agent
              * asking "what did the last run find" must not be able to start a database run by
              * asking, and a second run would answer about a different moment anyway.
              *
@@ -1558,18 +1621,6 @@ return [
             'max_findings' => EnvironmentInteger::atLeastOne(env('SQLENS_MCP_MAX_FINDINGS'), 200),
 
             /*
-             * Which tools the server exposes. A name that is not listed here is not a tool.
-             *
-             * The four read-only tools are on: they read, they never write, and they are the
-             * point of the server. The mutating ones are off, and each is enabled on its own —
-             * `lint_shadow` creates and drops a database, `predeploy` gates a deploy. A project
-             * that wants one of those says so about THAT one.
-             *
-             * A tool this build does not know is a configuration error naming the ones it does,
-             * never a silent no-op: a typo that quietly enables nothing looks exactly like a
-             * setting that worked.
-             */
-            /*
              * The standing "yes, I mean it" for a shadow run started over the protocol.
              *
              * A shadow run creates and drops a throwaway database, and the CLI asks before it does
@@ -1587,6 +1638,18 @@ return [
              */
             'shadow_consent' => false,
 
+            /*
+             * Which tools the server exposes. A name that is not listed here is not a tool.
+             *
+             * The four read-only tools are on: they read, they never write, and they are the
+             * point of the server. The mutating ones are off, and each is enabled on its own —
+             * `lint_shadow` creates and drops a database, `predeploy` gates a deploy. A project
+             * that wants one of those says so about that one.
+             *
+             * A tool this build does not know is a configuration error naming the ones it does,
+             * never a silent no-op: a typo that quietly enables nothing looks exactly like a
+             * setting that worked.
+             */
             'tools' => [
                 'lint_pending' => true,
                 'explain_rule' => true,
@@ -1603,9 +1666,10 @@ return [
     | Reporting
     |--------------------------------------------------------------------------
     |
-    | default_format names the reporter used when no --format is given:
-    | 'console' or 'json'. An unknown format — here or on the command line — is
-    | a hard error naming every available format, never a fallback.
+    | default_format names the reporter used when no --format is given: one of
+    | console, json, github, sarif and agent. An unknown format — here or on the
+    | command line — is a hard error naming every available format, never a
+    | fallback.
     |
     */
 
@@ -1664,7 +1728,7 @@ return [
     |
     | stale: what an entry that matched nothing in a run costs. A baseline nobody
     | prunes grows shut — entries pile up for findings fixed months ago and the
-    | file stops describing what the project accepts — so a stale entry is ALWAYS
+    | file stops describing what the project accepts — so a stale entry is always
     | named. 'report' leaves the run's verdict alone (the default, because a fresh
     | baseline on a moving codebase would otherwise fail constantly); 'error'
     | treats the baseline as misconfigured.
@@ -1745,14 +1809,14 @@ return [
 
     'profiles' => [
 
-        // A developer's machine: report, do not block. It overrides NOTHING — it is
+        // A developer's machine: report, do not block. It overrides nothing — it is
         // the base config above, under an explicit name. That is deliberate: the
         // shipped base is already lenient (level 0, nothing strict), and an empty
         // `local` means "my normal settings", so a project that raises its base level
         // still gets that level here rather than being forced back down. Naming a
         // value here would make the base config key for it dead whenever `local` is
         // active — which is by default — so the lenient profile stays empty.
-        // …with ONE exception, and it is an exception because the premise above stops
+        // …with one exception, and it is an exception because the premise above stops
         // holding for this key. `security.min_severity` ships at 'high', which is not
         // the lenient end of its scale — unlike `level`, whose base 0 already is. So
         // "empty means my normal settings" would hand a developer the pipeline's floor
@@ -1765,7 +1829,7 @@ return [
 
         // A pipeline: strict. A missing tool and a check that could not run both
         // fail the build, because a green that skipped half its checks is worse
-        // than a red — it is a red nobody sees. It names ONLY what it tightens over
+        // than a red — it is a red nobody sees. It names only what it tightens over
         // the base; anything it omits keeps the base value.
         'ci' => [
             'level' => 4,
@@ -1779,10 +1843,10 @@ return [
         ],
 
         // The pre-deploy gate carries the MECHANICS here and little more: what it
-        // actually enforces belongs to the deploy suite, and presetting that now would
-        // be inventing a gate the package cannot yet honor. The severity floor is the
-        // exception, for the reason `ci` names it: the strictest moment in a project's
-        // day must not inherit a floor somebody lowered for local work.
+        // enforces is configured under `deploy.predeploy`, next to the checks that read
+        // it. The severity floor is the exception, for the reason `ci` names it: the
+        // strictest moment in a project's day must not inherit a floor somebody lowered
+        // for local work.
         'predeploy' => [
             'security' => ['min_severity' => 'high'],
         ],
@@ -1811,7 +1875,9 @@ return [
     | enabled    Whether this tool may contribute findings at all.
     | timeout    Seconds one invocation may take before it is reported as timed
     |            out. Zero would mean "wait forever", which is the harm a bound
-    |            exists to prevent.
+    |            exists to prevent. After a timeout the run sends the tool no
+    |            further migration, so the wait is one bound, not one per
+    |            pending migration.
     | fast_path  Whether the tool may also run behind `sqlens:lint --file=…`.
     |            Off by default: the fast path promises sub-second turnaround so
     |            a pre-commit hook or an editor save stays usable, and a shell-out
@@ -1908,7 +1974,7 @@ return [
          * literal sense: they are meant to be read, adjusted and renamed, not
          * adopted unseen.
          *
-         * The names are yours. Everything INSIDE a profile is validated, so a
+         * The names are yours. Everything inside a profile is validated, so a
          * misspelled key is refused rather than quietly ignored — that is the
          * whole reason the guard suite is configuration and not code.
          *
@@ -2057,7 +2123,7 @@ return [
          * that keeps its SQL somewhere else — `database/sql/`, `db/`, a legacy
          * dump directory. Name those roots here rather than on every invocation.
          *
-         * Repo-relative. `format` is the only suite that WRITES, so this list is
+         * Repo-relative. `format` is the only suite that writes, so this list is
          * the blast radius rather than a convenience.
          */
         'paths' => [],
@@ -2070,7 +2136,7 @@ return [
          * the database in whatever shape the dumper produces, so reformatting it
          * makes the next dump a large diff against a file nobody edits — visible
          * on every deploy. A project that hand-maintains its schema file can take
-         * the entry out; the run then NAMES the dump files it touched, so the
+         * the entry out; the run then names the dump files it touched, so the
          * decision shows up in the output and not only here.
          *
          * `vendor/`, `node_modules/` and `storage/` are never walked into and are
@@ -2126,7 +2192,7 @@ return [
          * A path that is set and wrong is an error with a name, never a silent
          * fallback to another backend.
          *
-         * The difference between the first and the last is what a run REPORTS.
+         * The difference between the first and the last is what a run reports.
          * A backend that is merely missing is a loss: the machine that has it
          * formats differently, the output is committed, and the next run there
          * rewrites every file -- so it is named, and `--strict-tools` refuses.
@@ -2153,7 +2219,7 @@ return [
          * formatter's value comes from ending that argument rather than
          * parameterizing it.
          *
-         * A backend that cannot express one of these REPORTS that rather than
+         * A backend that cannot express one of these reports that rather than
          * ignoring it — otherwise you would get output you did not ask for and
          * no signal that it had happened.
          */

@@ -9,7 +9,7 @@ namespace Pushery\SQLens\Deploy;
  *
  * ## Why the identity is derived and not supplied
  *
- * `id` is a hash of what the debt IS — its kind and the object it is about — so the same debt
+ * `id` is a hash of what the debt is — its kind and the object it is about — so the same debt
  * discovered by two runs, on two machines, months apart, carries the same id. A supplied id would
  * let two runs record the same outstanding debt twice, and a ledger that double-counts is worse
  * than none: the number it reports is the one thing anybody looks at.
@@ -20,7 +20,7 @@ namespace Pushery\SQLens\Deploy;
  * run learned about it from the migration that added it or from the catalog it now sits in — and
  * with the migration folded into the hash, those two ways of learning produced two entries for one
  * constraint. Not a theoretical split: the catalog side has no migration by construction (that is
- * what a legacy constraint IS), so the two ids could never agree, the reported age was wrong for
+ * what a legacy constraint is), so the two ids could never agree, the reported age was wrong for
  * both halves, and reconciliation could not converge because each side wanted to remove the other's
  * entry.
  *
@@ -28,7 +28,7 @@ namespace Pushery\SQLens\Deploy;
  * spellings of an object are not two debts — and it has the same answer: identity is what the debt
  * is, and everything about how we came to know it is a field.
  *
- * It deliberately does NOT include `first_seen`, `state` or `reason`. Those describe what has
+ * It deliberately does not include `first_seen`, `state` or `reason`. Those describe what has
  * happened to the debt since; folding them into the identity would make acknowledging a debt look
  * like paying one and taking on a new one.
  *
@@ -86,7 +86,7 @@ final readonly class DebtEntry
             migration: $migration,
             // Inferred from the migration reference when the caller does not say, because that
             // inference is exactly right and always has been: an empty reference has meant "found
-            // in the catalog rather than in a file" since the field existed. A caller that KNOWS —
+            // in the catalog rather than in a file" since the field existed. A caller that knows —
             // a catalog check that also happens to name a migration — passes it explicitly.
             origin: $origin ?? DebtOrigin::impliedBy($migration),
             firstSeen: $firstSeen,
@@ -108,7 +108,7 @@ final readonly class DebtEntry
     }
 
     /**
-     * The entry as the ledger writes it, in the ONE documented key order.
+     * The entry as the ledger writes it, in the one documented key order.
      *
      * `review_at` is present even when null rather than omitted: a reader diffing two ledgers should
      * see a value change, not a key appear, and an absent key and a null one are the same statement

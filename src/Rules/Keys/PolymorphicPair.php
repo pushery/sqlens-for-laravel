@@ -13,7 +13,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * ## What a polymorphic relation actually asks the database
  *
- * A polymorphic relation resolves by BOTH columns at once. The id is unique only within one type —
+ * A polymorphic relation resolves by both columns at once. The id is unique only within one type —
  * `commentable_id = 7` names a post and an invoice and a user — so no relation can be resolved from
  * it alone, and every access adds the type. Without an index over the pair each of those reads the
  * whole table, and the cost grows with the table rather than with the number of relations.
@@ -31,7 +31,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * The distinction matters to the reader more than to the planner, which is why the rules report it
  * as its own sentence: "there is no index here" sends somebody to write one, and "your index is the
  * wrong way round" sends them to replace one. Told the first when the second is true, they add a
- * second index over the same columns and `L7`'s redundancy rule then reports THAT.
+ * second index over the same columns and `L7`'s redundancy rule then reports that.
  *
  * ## What identifies a pair, and the limit of it
  *
@@ -203,7 +203,7 @@ final readonly class PolymorphicPair
     }
 
     /**
-     * ONE sentence for the table, naming every pair and the edit each one needs.
+     * One sentence for the table, naming every pair and the edit each one needs.
      *
      * One verdict rather than one per pair, for the reason the foreign-key sister learned the hard
      * way: results are deduplicated by rule id and LOCATION, a catalog finding is located at the
@@ -226,10 +226,12 @@ final readonly class PolymorphicPair
 
         foreach ($assessment['reversed'] as $pair) {
             $parts[] = sprintf(
-                '`%s` and `%s` are a polymorphic pair whose index leads with the id, which answers a lookup '
-                .'nothing performs: the id is unique only within one type. REPLACE that index with one on '
-                .'(`%s`, `%s`) rather than adding a second over the same two columns.',
-                $pair->typeColumn, $pair->idColumn, $pair->typeColumn, $pair->idColumn,
+                '`%s` and `%s` are a polymorphic pair whose index leads with the id. It serves the paired '
+                .'lookup a relation makes, but not a lookup by `%s` alone, which an index on (`%s`, `%s`) '
+                .'answers as well. REPLACE that index with one on (`%s`, `%s`), creating the new index before '
+                .'dropping the old one, rather than adding a second over the same two columns.',
+                $pair->typeColumn, $pair->idColumn, $pair->typeColumn, $pair->typeColumn, $pair->idColumn,
+                $pair->typeColumn, $pair->idColumn,
             );
         }
 

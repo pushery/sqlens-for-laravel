@@ -51,7 +51,7 @@ final readonly class DynamicCallDetector implements PreScanDetector
             versionWindow: VersionWindow::unbounded(),
             downtimeClass: null,
             downtimeClassRationale: 'A pre-scan hit describes no DDL — it is the reason a migration was not captured at all — so it has no downtime behavior to classify.',
-            messagePrefix: 'Unresolvable call from migration',
+            messagePrefix: 'sqlens.lint',
             documentationUrl: RuleDocumentationUrl::for(self::RULE_ID),
             suites: PreScanMetadataAudit::defaultSuites(),
             badExample: <<<'PHP'

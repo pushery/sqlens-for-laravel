@@ -12,7 +12,7 @@ use Throwable;
  *
  * ## Why this is an interface and not just a method on the check
  *
- * The run header shows these numbers, and it takes them from the SAME call the check judges on —
+ * The run header shows these numbers, and it takes them from the same call the check judges on —
  * two reads of one fact are two chances to disagree, and the disagreement would surface as a header
  * claiming a bound beside a verdict saying there is none.
  *

@@ -79,6 +79,10 @@ final class RuleMetadataAudit
 
         if ($messagePrefix === '') {
             $violations[] = sprintf('%s "%s" has an empty message prefix', $kind, $id);
+        } elseif (preg_match('/^sqlens\.[a-z]+$/', $messagePrefix) !== 1) {
+            // The prefix is public API a consumer filters on, and it is `sqlens.<suite>` everywhere. A title in
+            // this field reads well in a console and drops the finding out of every filter written for its suite.
+            $violations[] = sprintf('%s "%s" has the message prefix "%s", which is not of the form sqlens.<suite>', $kind, $id, $messagePrefix);
         }
 
         if ($documentationUrl === '') {

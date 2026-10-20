@@ -114,7 +114,7 @@ final class SnakeCaseIdentifiersRule extends AbstractCatalogRule implements Decl
     {
         // One verdict per statement, not one per name: the contract says a second verdict for the
         // same statement is deduplicated away by rule id and location, so a statement that creates
-        // three badly-named columns would report one of them and drop two WITHOUT SAYING SO. The
+        // three badly-named columns would report one of them and drop two without saying so. The
         // names are gathered and reported together instead.
         try {
             $offending = $this->offendingTargets($statement);

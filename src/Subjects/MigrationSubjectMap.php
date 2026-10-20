@@ -26,6 +26,10 @@ use Pushery\SQLens\Capture\PreScan\SchemaSubjectCollector;
  * That asymmetry is deliberate: a missing anchor costs a reader one search, and a wrong one sends
  * them to edit a file that had nothing to do with the finding.
  *
+ * A drop in `up()` forgets what it names. A table dropped and created again anchors to the migration
+ * that created the table that exists, and one dropped for good anchors nowhere: the first create
+ * describes columns the database no longer has.
+ *
  * ## The schema qualifier is stripped, in one place
  *
  * A catalog subject is `public.orders`; a migration says `orders`. The map strips the leading
@@ -108,8 +112,16 @@ final class MigrationSubjectMap
             $traverser->addVisitor($collector);
             $traverser->traverse($scanned->ast);
 
-            foreach ($collector->subjects() as $subject => $where) {
-                $anchors[$subject] ??= MigrationAnchor::at($where['file'], $where['line']);
+            // In source order, file after file: a drop forgets what came before it, so a table
+            // dropped and created again anchors to the migration that created the one that exists.
+            foreach ($collector->events() as $event) {
+                if (isset($event['dropped'])) {
+                    $anchors = $this->forget($anchors, $event['dropped'], $event['table']);
+
+                    continue;
+                }
+
+                $anchors[$event['subject']] ??= MigrationAnchor::at($event['file'], $event['line']);
             }
         }
 
@@ -134,6 +146,23 @@ final class MigrationSubjectMap
         sort($files, SORT_STRING);
 
         return $files;
+    }
+
+    /**
+     * The anchors without a dropped subject, and for a dropped table without its columns too.
+     *
+     * @param  array<string, MigrationAnchor>  $anchors
+     * @return array<string, MigrationAnchor>
+     */
+    private function forget(array $anchors, string $subject, bool $table): array
+    {
+        unset($anchors[$subject]);
+
+        if (! $table) {
+            return $anchors;
+        }
+
+        return array_filter($anchors, static fn (string $name): bool => ! str_starts_with($name, $subject.'.'), ARRAY_FILTER_USE_KEY);
     }
 
     /** `public.orders` becomes `orders`; a name with no qualifier becomes null rather than itself. */

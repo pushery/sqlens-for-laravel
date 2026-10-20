@@ -35,7 +35,7 @@ enum Privilege: string
     case Connect = 'connect';
     case Temporary = 'temporary';
 
-    /** PostgreSQL 16+: run maintenance commands (`VACUUM`, `ANALYZE`, `REINDEX`) without ownership. */
+    /** PostgreSQL 17+: run maintenance commands (`VACUUM`, `ANALYZE`, `REINDEX`) without ownership. */
     case Maintain = 'maintain';
 
     /** PostgreSQL 15+: set a server parameter — `SET` on a `pg_parameter_acl` entry. */

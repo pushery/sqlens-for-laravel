@@ -12,7 +12,7 @@ use Pushery\SQLens\Audit\InstanceRole;
  * ## The question this answers
  *
  * An audit run addresses one instance, and an instance is not the same kind of thing as a cluster
- * or a database. A rule that reports `max_connections` is describing THAT machine; a rule that
+ * or a database. A rule that reports `max_connections` is describing that machine; a rule that
  * reports a foreign key without an index is describing a schema, which every node of the cluster
  * carries identically. Read on a replica, the first verdict is about a machine that serves no
  * writes — and the second is exactly as true as it would have been on the primary.

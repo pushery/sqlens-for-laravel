@@ -11,13 +11,13 @@ use Pushery\SQLens\Subjects\MigrationStatementDigest;
 /**
  * Everything one capture run produced, in a fixed order.
  *
- * The order is established HERE and never inherited from whatever order the
+ * The order is established here and never inherited from whatever order the
  * captor happened to emit results in — a filesystem listing, a glob, or a
  * generator's timing would all make the same repository produce different output
  * on two machines, which is precisely the determinism break the third principle
  * forbids.
  *
- * Aggregating these results into one three-valued verdict is deliberately NOT
+ * Aggregating these results into one three-valued verdict is deliberately not
  * this class's job; it holds and orders, it does not judge.
  */
 final readonly class CaptureRun

@@ -79,7 +79,7 @@ final class TimestampWithoutTimeZoneRule extends AbstractCatalogRule implements 
      * Idiom, not safety, and the boundary is worth stating.
      *
      * The consequence can be a genuine data error, which argues for safety. But the column is not
-     * WRONG — it is under-specified, and whether that matters depends on what the application puts
+     * wrong — it is under-specified, and whether that matters depends on what the application puts
      * in it, which this rule cannot see. Filed under safety it would gate deploys on a judgment
      * about somebody else's domain.
      */
@@ -111,7 +111,7 @@ final class TimestampWithoutTimeZoneRule extends AbstractCatalogRule implements 
             }
         }
 
-        // ONE verdict naming every offending column, not one verdict per column.
+        // One verdict naming every offending column, not one verdict per column.
         //
         // A catalog finding is located at the OBJECT, and results are deduplicated by rule id and
         // location — so a rule emitting one verdict per column would have all but the first

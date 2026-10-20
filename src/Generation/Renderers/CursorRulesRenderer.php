@@ -27,7 +27,7 @@ final readonly class CursorRulesRenderer implements MetadataRenderer
 {
     public function __construct(
         private string $generatorVersion,
-        private string $migrationGlob = 'database/migrations/**/*.php',
+        private string $migrationGlob = AgentContextFormat::MIGRATION_GLOB,
     ) {}
 
     public function family(): string

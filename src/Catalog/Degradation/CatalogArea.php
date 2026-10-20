@@ -16,7 +16,7 @@ final readonly class CatalogArea
 {
     /**
      * @param  string  $name  what a reader loses when this area is unreadable, in their words
-     * @param  string  $sql  a query returning ONE row with ONE truthy-or-falsy column. It must be
+     * @param  string  $sql  a query returning one row with one truthy-or-falsy column. It must be
      *                       read-only and lock-free — the probe runs on a production database whose
      *                       owner has not agreed to anything beyond being looked at.
      * @param  string  $consequence  the sentence that says what the audit cannot conclude without it

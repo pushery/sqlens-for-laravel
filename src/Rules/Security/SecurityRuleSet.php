@@ -76,7 +76,7 @@ final readonly class SecurityRuleSet
         $today ??= gmdate('Y-m-d');
 
         return new self([
-            // The privacy rules take the environment and NOTHING is defaulted in for it. Unlike the
+            // The privacy rules take the environment and nothing is defaulted in for it. Unlike the
             // advisory repository, whose bundled copy is what an unconfigured project genuinely
             // reads, there is no honest fallback for "which environment is this": a default would
             // have to pick production or not, and both answers are a guess about somebody's server.
@@ -87,7 +87,7 @@ final readonly class SecurityRuleSet
             new BroadGrantScopeRule($projectRoot),
             new AdminPrivilegeInMigrationRule($projectRoot),
             // The other shape an account acquires server power in: not a privilege in a list,
-            // but permission to BE another account. `PROXY` reads as administrative and cannot
+            // but permission to be another account. `PROXY` reads as administrative and cannot
             // live in that list -- its object is an account, never `*.*`.
             new ProxyToAdminAccountInMigrationRule($projectRoot),
             new WildcardHostGranteeRule($projectRoot),
@@ -132,7 +132,7 @@ final readonly class SecurityRuleSet
             // locked/usable split for the same reason — severity is metadata on the rule.
             new NoPasswordRule($projectRoot),
             new NoPasswordLockedRule($projectRoot),
-            // Where an account may arrive FROM, split on what it can do once it has. The host half of
+            // Where an account may arrive from, split on what it can do once it has. The host half of
             // a MySQL account name is an access control, and both rules are silent on PostgreSQL by
             // construction rather than by a check: a PostgreSQL role carries no host at all.
             new WildcardHostRule($projectRoot),
@@ -158,7 +158,7 @@ final readonly class SecurityRuleSet
             // canonicalize.
             new FileGrantRule($projectRoot),
             new ProcessGrantRule($projectRoot),
-            // The breadth of a grant rather than what it lets somebody hand on. Deliberately ONE
+            // The breadth of a grant rather than what it lets somebody hand on. Deliberately one
             // rule for both scopes: severity is metadata on the rule, so a global/database split
             // would be a second id for one fact — the difference goes in the message instead.
             new AllPrivilegesGrantRule($projectRoot),
@@ -167,7 +167,7 @@ final readonly class SecurityRuleSet
             // setting by whoever manages the server, and either alone is worth acting on.
             new SecureFilePrivRule($projectRoot),
             // The other half of the file story, and it points the other way: secure_file_priv bounds
-            // what the server may read on ITS disk, local_infile decides whether the server may ask
+            // what the server may read on its disk, local_infile decides whether the server may ask
             // the CLIENT for a file. Neither implies the other.
             new LocalInfileRule($projectRoot),
             // Its escalation, and a second id rather than a second severity: severity is metadata on

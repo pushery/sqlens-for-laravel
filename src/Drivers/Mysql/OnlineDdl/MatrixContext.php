@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Drivers\Mysql\OnlineDdl;
 /**
  * What a capture knows about the table and session a DDL operation runs against — the facts
  * that decide a matrix entry's edge predicates. It is deliberately three-valued per predicate:
- * a predicate is decided true, decided false, or NOT KNOWN.
+ * a predicate is decided true, decided false, or not known.
  *
  * The single-file fast path knows nothing about a live table, so its context is {@see blind()}
  * — every predicate undecided, which is exactly why a plain ADD COLUMN resolves to undetermined

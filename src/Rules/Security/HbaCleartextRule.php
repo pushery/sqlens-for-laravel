@@ -34,7 +34,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * The obvious next rule — a `SEC.L0.HBA_CLEARTEXT_UNENCRYPTED` that fires when a `host` line uses
  * `password` on a server whose `ssl` is off — was specified and then dropped. It would fire on
- * exactly the runs where this finding and {@see TlsDisabledRule} are BOTH already in the report, so
+ * exactly the runs where this finding and {@see TlsDisabledRule} are both already in the report, so
  * its whole content is their conjunction. A reader who sees both lines has the exposed case in front
  * of them; a third id adds a severity to restate it, and a catalog that does that once starts
  * answering every pair of findings with a third.

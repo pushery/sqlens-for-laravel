@@ -19,12 +19,12 @@ use Pushery\SQLens\Security\SecretLiteralMask;
  *
  * They are not the same problem and neither one covers the other:
  *
- * - **The active connection's values** — host, user, password, database, DSN. These are KNOWN
+ * - **The active connection's values** — host, user, password, database, DSN. These are known
  *   strings, so they are masked by matching them, and {@see CredentialRedaction} already owns that
  *   comparison. It is used rather than reimplemented: a second masker would agree for a long time
  *   and then disagree once, quietly, in whichever direction nobody looks.
  * - **A password literal inside SQL a migration wrote** — `CREATE USER … PASSWORD '…'` and its
- *   relatives. This value is NOT known in advance; it is somebody's typo committed six months ago.
+ *   relatives. This value is not known in advance; it is somebody's typo committed six months ago.
  *   So it is found by the SHAPE of the statement, never by a list of example passwords, which would
  *   only ever catch the passwords somebody already thought of.
  *
@@ -49,7 +49,7 @@ final readonly class Redactor
     /**
      * The text with every credential value replaced, and everything else untouched.
      *
-     * The connection pass runs FIRST. Its values are known exactly, so masking them first means a
+     * The connection pass runs first. Its values are known exactly, so masking them first means a
      * password that appears both in the configuration and in a statement is gone before the shape
      * pass looks — and the shape pass then finds only the ones nobody configured, which is the set
      * it exists for.

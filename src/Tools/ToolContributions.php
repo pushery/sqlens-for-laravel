@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Tools;
 /**
  * The contributions a run may ask for, keyed by the tool they belong to.
  *
- * Deliberately separate from {@see KnownTools}: a tool can be KNOWN — worth reporting as missing,
+ * Deliberately separate from {@see KnownTools}: a tool can be known — worth reporting as missing,
  * worth counting in `sqlens:doctor` — long before anything can act on its output. The Squawk
  * adapter landed in exactly that order, and so did this one. Merging the two lists would force the
  * two decisions to be made together, which is how a run comes to report a loss it could not

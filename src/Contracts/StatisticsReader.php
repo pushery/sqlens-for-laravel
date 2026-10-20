@@ -17,7 +17,7 @@ use Pushery\SQLens\Catalog\Statistics\StatisticsSnapshot;
  * put a moving value inside the structure the drift comparison relies on being still. The same
  * reasoning already gave `CatalogReader::indexUsage()` its own accessor.
  *
- * The contract exists BEFORE either implementation, and deliberately so. Two readers written
+ * The contract exists before either implementation, and deliberately so. Two readers written
  * against no shared shape produce two statistics views that disagree about scope, about what a
  * skip means, and about whether a missing number is a zero — and the severity escalation that
  * consumes them would have to know which engine it was talking to in order to read its own input.

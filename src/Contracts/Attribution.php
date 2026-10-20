@@ -17,17 +17,17 @@ namespace Pushery\SQLens\Contracts;
  * ## Why it is a field and not a rule of thumb about `source`
  *
  * `source` almost decides it and not quite: the `deploy` family splits down the middle. Two of its
- * entries name a state a migration LEFT — a constraint added `NOT VALID` and never validated, a
+ * entries name a state a migration left — a constraint added `NOT VALID` and never validated, a
  * MySQL check written `NOT ENFORCED` — and both have a clean pair. The other twenty-two name what
  * the run found in the world: a lock another session holds, a replica behind, an index whose build
  * died. Measured before this enum existed: no shipped field separated the two. `severity` is null
  * for `PREFLIGHT.STATISTICS_UNREAD` and for `PREFLIGHT.LOCK_BLOCKER` alike, and `confidence`,
  * `downtime_class` and `documentation_state` do not divide them either.
  *
- * So the answer had to be declared. It is declared HERE rather than in a list inside a test, because
+ * So the answer had to be declared. It is declared here rather than in a list inside a test, because
  * a list in a test certifies itself: the next id is classified by whoever remembers to add a line.
  *
- * ## It is a claim in BOTH directions
+ * ## It is a claim in both directions
  *
  * `Authored` says an example pair is owed. `Observed` says one would be wrong, and a guard refuses
  * it — otherwise the classification is decoration. That second half is what makes the first mean

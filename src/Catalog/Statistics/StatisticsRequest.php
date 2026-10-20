@@ -15,7 +15,7 @@ use Pushery\SQLens\Exceptions\InvalidStatisticsRequest;
  * some finding already references. Everything else is load on a production database at the one
  * moment — immediately before a deploy — when nobody wants any.
  *
- * That is why an empty object list is REFUSED instead of meaning "everything". The full-sweep
+ * That is why an empty object list is refused instead of meaning "everything". The full-sweep
  * reading is the one somebody gets by forgetting to pass their list, and it arrives silently: a
  * bigger answer than was asked for, with the cost landing somewhere nobody is watching. A caller
  * with nothing to look up builds no request.

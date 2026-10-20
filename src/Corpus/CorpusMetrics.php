@@ -116,7 +116,7 @@ final readonly class CorpusMetrics
     }
 
     /**
-     * How many cases could NOT be measured.
+     * How many cases could not be measured.
      *
      * Reported beside the rate, never folded into it. Every failure mode of a corpus run lands here,
      * and every one of them would otherwise IMPROVE the rate by shrinking its denominator.

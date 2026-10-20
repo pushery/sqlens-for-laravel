@@ -11,7 +11,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 /**
  * The contract every reporter writes against: console, JSON, GitHub annotations,
  * SARIF and the agent format. A reporter RENDERS a result; it
- * does NOT decide the exit code. That separation is deliberate: presentation and
+ * does not decide the exit code. That separation is deliberate: presentation and
  * the gate contract are different concerns, so the exit-code derivation is its own
  * contract and never leaks into how a result is displayed.
  *

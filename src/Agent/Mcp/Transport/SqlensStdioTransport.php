@@ -15,8 +15,8 @@ use Pushery\SQLens\Exceptions\McpFrameNotDelivered;
  *
  * ## Why not simply the SDK's transport
  *
- * The SDK ships one, and its read loop is exactly right; the loop below is the same pattern
- * deliberately, not a better idea. Two things it cannot give us:
+ * The SDK ships one, and its read loop has the right shape for the hangup described below; the loop
+ * here keeps that shape. Three things it cannot give us:
  *
  * 1. **Its streams are the `STDIN`/`STDOUT` constants.** Nothing can be substituted, so the two
  *    behaviors this class exists to guarantee — that a read timeout is not mistaken for a hangup,
@@ -26,6 +26,10 @@ use Pushery\SQLens\Exceptions\McpFrameNotDelivered;
  *    a socket is not an error; it is a normal outcome that returns the number of bytes taken. The
  *    remainder is then simply lost, and what the client receives is a frame that ends mid-token —
  *    which desynchronizes its parser on a message that never finishes.
+ * 3. **It hands on whatever one read returned.** A non-blocking `fgets()` returns what has arrived,
+ *    so a frame written in two pieces comes back as two reads, the first without its newline. Both
+ *    reach the handler, both fail to parse, and the request itself is never answered: the client
+ *    waits for its own timeout with nothing said. The loop below keeps a read until its newline.
  *
  * ## The read loop, and the failure it exists to prevent
  *
@@ -91,7 +95,7 @@ final class SqlensStdioTransport implements Transport
      * file description there. Zero means "not yet", as a blocking write would have waited.
      *
      * A stream that fails outright, or takes no byte for {@see self::WRITE_STALL_MICROSECONDS}, is a
-     * NAMED failure rather than a silent truncation. The part already written stays on the wire, and
+     * named failure rather than a silent truncation. The part already written stays on the wire, and
      * the exception says how much of the frame that was.
      *
      * @throws McpFrameNotDelivered
@@ -129,7 +133,7 @@ final class SqlensStdioTransport implements Transport
     /**
      * Read frames until the client really goes away.
      *
-     * Non-blocking, and `feof()` is the ONLY thing that ends it — see the class docblock for the
+     * Non-blocking, and `feof()` is the only thing that ends it — see the class docblock for the
      * minute-long silence this shape exists to survive.
      */
     public function run(): void
@@ -139,15 +143,19 @@ final class SqlensStdioTransport implements Transport
         // what keeps a long frame whole there.
         stream_set_blocking($this->input, false);
 
-        // The shutdown flag is read HERE, between frames, and nowhere else. A signal can arrive at
+        // The shutdown flag is read here, between frames, and nowhere else. A signal can arrive at
         // any instruction — including halfway through a write — so a handler that exited would
         // leave a message that stops mid-token on the wire. Noticing between frames is what makes
         // "no half frames" a property of the shape rather than a hope.
-        while (! feof($this->input) && ! ($this->shutdown?->isRequested() ?? false)) {
-            $line = fgets($this->input);
+        // The part of a frame that has arrived without its newline yet. A line is no larger here than
+        // it was when `fgets()` read it whole, so this keeps no more than a frame in memory.
+        $pending = '';
 
-            if ($line === false) {
-                // Nothing to read YET. On a socket this is also what a read timeout looks like,
+        while (! feof($this->input) && ! ($this->shutdown?->isRequested() ?? false)) {
+            $read = fgets($this->input);
+
+            if ($read === false) {
+                // Nothing to read yet. On a socket this is also what a read timeout looks like,
                 // and treating it as a hangup is the whole defect: the server would exit silently
                 // while the client was still there.
                 Sleep::usleep(self::IDLE_SLEEP_MICROSECONDS);
@@ -155,13 +163,28 @@ final class SqlensStdioTransport implements Transport
                 continue;
             }
 
-            if (trim($line) === '') {
+            $pending .= $read;
+
+            if (! str_ends_with($pending, "\n")) {
                 continue;
             }
 
-            if ($this->handler instanceof Closure) {
-                ($this->handler)($line);
-            }
+            $this->deliver($pending);
+            $pending = '';
+        }
+
+        // A client may close the stream right after a last frame it sent without a newline, and that
+        // frame is whole. A stop on request is different: what arrived of a frame then is not one.
+        if (! ($this->shutdown?->isRequested() ?? false)) {
+            $this->deliver($pending);
+        }
+    }
+
+    /** One frame to the handler, unless it is blank: a blank line is not a frame. */
+    private function deliver(string $frame): void
+    {
+        if (trim($frame) !== '' && $this->handler instanceof Closure) {
+            ($this->handler)($frame);
         }
     }
 

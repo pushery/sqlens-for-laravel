@@ -8,7 +8,7 @@ namespace Pushery\SQLens\Findings;
  * The result, with "no silent green" cast into the type: neither an undetermined
  * nor a not-applicable result is constructible without a named reason.
  *
- * There is no `skipped` and no `error`. A skip IS an undetermined, and it carries
+ * There is no `skipped` and no `error`. A skip is an undetermined, and it carries
  * its reason — that has not changed, and it is worth restating, because the fourth
  * value below is easy to mistake for one.
  *

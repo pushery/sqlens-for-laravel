@@ -4,16 +4,17 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Rules\Lifecycle;
 
+use Pushery\SQLens\Contracts\DriverCanonicalization;
 use Pushery\SQLens\Contracts\Rule;
 
 /**
  * The driver-neutral migration-lifecycle rules, in one deterministic order.
  *
- * These rules are the same on every engine — they judge what a migration DOES, not what
+ * These rules are the same on every engine — they judge what a migration does, not what
  * a server makes of a statement — so they live in Core and are the SINGLE source of the
  * lifecycle rules: each driver appends this set to its own engine-specific pack, and the
  * fixture suite judges against the same appended set, so what a user runs and what the
- * tests prove are the very same objects. A lifecycle rule is added HERE, once.
+ * tests prove are the very same objects. A lifecycle rule is added here, once.
  *
  * Sorted by rule id rather than declaration order, for the same reason the engine packs
  * are: a report's finding order must not depend on which line a rule was added on.
@@ -32,13 +33,15 @@ final readonly class LifecycleRuleSet
     }
 
     /**
-     * The shipped lifecycle rule set, built for one project root — the one construction
-     * dependency a rule has, so a finding's location is repo-relative.
+     * The shipped lifecycle rule set, built for one project root, so a finding's location is
+     * repo-relative, and for the grammar of the engine whose statements it judges. Each driver
+     * passes its own: a rule that searches a statement for a clause needs it to tell the keyword
+     * from the same word inside a string literal.
      */
-    public static function forProjectRoot(string $projectRoot): self
+    public static function forProjectRoot(string $projectRoot, ?DriverCanonicalization $syntax = null): self
     {
         return new self([
-            new DmlWithoutWhereRule($projectRoot),
+            new DmlWithoutWhereRule($projectRoot, syntax: $syntax),
             new DmlOnSchemaChangedTableRule($projectRoot),
             new DownMissingRule($projectRoot),
             new DownMoreDestructiveRule($projectRoot),

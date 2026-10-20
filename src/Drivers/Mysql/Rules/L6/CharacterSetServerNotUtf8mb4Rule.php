@@ -40,12 +40,13 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * A second rule would therefore report the same misconfiguration twice under two ids — and an
  * ignore-list entry for one would leave the other one shouting, which is the worst of both.
  *
- * ## What is deliberately NOT judged
+ * ## What is deliberately not judged
  *
- * Which utf8mb4 collation the server carries. `utf8mb4_0900_ai_ci` and `utf8mb4_unicode_ci` are both
- * legitimate: the second pins an older Unicode version, which is a real reason on a database that
- * has to keep sort order stable across a MySQL upgrade. Flagging that would be the dogmatism this
- * package avoids — the charset is a correctness question, the collation within it is a decision.
+ * Which utf8mb4 collation the server carries. The charset is a correctness question and this rule's;
+ * the collation within it is a decision, and weighing it belongs to {@see LegacyCollationRule}, which
+ * reports a pre-8.0 collation on the database default and on each table — Laravel's default
+ * `utf8mb4_unicode_ci` among them — and says when pinning one is the right call. Judging it here too
+ * would report one decision under two ids.
  */
 final class CharacterSetServerNotUtf8mb4Rule extends AbstractServerSettingRule
 {

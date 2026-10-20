@@ -15,7 +15,7 @@ use Pushery\SQLens\Contracts\Driver;
  * is confident, specific, and wrong. The configured driver name is a claim, not a
  * verification.
  *
- * The banner is the only evidence, and it comes from the ONE acquisition unit. It
+ * The banner is the only evidence, and it comes from the one acquisition unit. It
  * has to be the handshake value: only that carries MariaDB's `5.5.5-`
  * compatibility prefix, and a `select version()` would both miss it and be an
  * intervention this package does not make.

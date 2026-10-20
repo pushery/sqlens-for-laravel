@@ -46,7 +46,7 @@ final class ReaderSession
     ) {}
 
     /**
-     * A session on the SAME connection, bounded more tightly.
+     * A session on the same connection, bounded more tightly.
      *
      * The one way a caller changes what this session costs, and it exists so the deploy readers can
      * run under their own budget without a second session factory beside the one that already knows
@@ -125,7 +125,7 @@ final class ReaderSession
      * @param  callable(Connection): T  $read
      * @return T
      *
-     * @throws UnsealedReaderSession when the write probe was NOT refused
+     * @throws UnsealedReaderSession when the write probe was not refused
      */
     #[RawSql(reason: 'transaction control -- BEGIN and SET TRANSACTION READ ONLY. The builder has no verb for either, and this is the seal every reader in the package stands on')]
     public function read(callable $read): mixed
@@ -156,8 +156,9 @@ final class ReaderSession
         // The statement that would be retried is the seal's own write probe below. The package
         // would write into the database it promises never to write to — and only then report that
         // the session is not sealed. Measured against a real server in
-        // tests/Postgres/ReaderSessionEffectiveTest.php, which also measures that MySQL does NOT
-        // retry, because the detector's needle is PostgreSQL's wording rather than the SQLSTATE.
+        // tests/Postgres/ReaderSessionEffectiveTest.php; tests/MySql/ReaderSessionEffectiveTest.php
+        // measures that MySQL would not retry, because the detector's needle is PostgreSQL's wording
+        // rather than the SQLSTATE.
         $this->connection->beginTransaction();
 
         try {
@@ -214,7 +215,7 @@ final class ReaderSession
     /**
      * Whether a throwable is this session's own budget firing rather than a fault in the catalog.
      *
-     * The distinction decides what a reader reports: a timeout is a NAMED undetermined — the read
+     * The distinction decides what a reader reports: a timeout is a named undetermined — the read
      * was bounded and the bound was reached — while anything else is an unexpected error that has
      * to carry its code. Collapsing the two would file the tool's own self-restraint as a database
      * fault.

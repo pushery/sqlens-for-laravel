@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Corpus;
 use JsonException;
 
 /**
- * Reads corpus collections, and REFUSES an incomplete one.
+ * Reads corpus collections, and refuses an incomplete one.
  *
  * ## The whole design is one decision, made six times
  *
@@ -155,7 +155,7 @@ final readonly class CorpusLoader
      * branch that could never be taken. A loop over `CorpusFormat::CLASSES` needs an answer for the
      * case where none matches — and `collections()` only ever walks those two directories, so that
      * answer was unreachable code carrying a comment explaining why it was unreachable. The segment
-     * after the root IS the class, so there is nothing to decide.
+     * after the root is the class, so there is nothing to decide.
      */
     private static function provenanceOf(string $corpusRoot, string $relative): string
     {

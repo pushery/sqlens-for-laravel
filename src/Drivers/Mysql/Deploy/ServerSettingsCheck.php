@@ -53,21 +53,21 @@ use Pushery\SQLens\Subjects\SubjectContext;
  *   project with `strict => true` runs strict on a server that is not, and one with
  *   `strict => false` does not on a server that is.
  * - `lock_wait_timeout` is not set by Laravel, so a migration's session starts with the server's
- *   value, and SQLens bounds its OWN session, so the session value here is SQLens's and says nothing
+ *   value, and SQLens bounds its own session, so the session value here is SQLens's and says nothing
  *   about the migration. This one reads {@see Setting::serverValue()}, and then the pending
  *   statements: a migration that sets its own bound before its first metadata lock, as
  *   `MY.L3.MISSING_LOCK_WAIT_TIMEOUT` asks, does not wait under the server's value.
  * - `foreign_key_checks` and `innodb_online_alter_log_max_size` read the server's value. Nothing
  *   sets the first per connection, and the second is global only.
  *
- * ## Why `performance_schema` being off is NOT undetermined here
+ * ## Why `performance_schema` being off is not undetermined here
  *
  * The reader falls back to `SHOW GLOBAL VARIABLES`, which answers on every server — so the VALUES
  * survive and only their PROVENANCE is lost. Reporting undetermined for the values would be a
  * different claim from the true one, and a louder one: it would say the timeouts are unknown when
  * they were read perfectly well.
  *
- * What IS reported is the loss of provenance, as its own finding. "Set in a config file" and "still
+ * What is reported is the loss of provenance, as its own finding. "Set in a config file" and "still
  * the compiled-in default" call for different actions, and a reading that cannot tell them apart has
  * to say so rather than let a missing source read as "nobody configured this".
  *
@@ -149,7 +149,7 @@ final readonly class ServerSettingsCheck implements PreflightCheck
         $findings = [];
         $unreadable = [];
 
-        // Whether anything is actually about to run, read ONCE, as the PostgreSQL sibling does: the
+        // Whether anything is actually about to run, read once, as the PostgreSQL sibling does: the
         // judgments argue from the same fact, and two readings of one fact is two chances for a report
         // to contradict itself.
         $pending = ! $context->pending->isEmpty();
@@ -227,7 +227,7 @@ final readonly class ServerSettingsCheck implements PreflightCheck
      * The variables this check judges, and what each verdict is.
      *
      * Each message comes in two halves, for the reason the PostgreSQL sibling gives: the first says
-     * what the variable IS, the second what that means for the change about to run — and only the
+     * what the variable is, the second what that means for the change about to run — and only the
      * second is true when a change is actually pending. A report that argues from "a migration is
      * about to run" beneath a header saying none was read teaches a reader to take the next real red
      * for noise.

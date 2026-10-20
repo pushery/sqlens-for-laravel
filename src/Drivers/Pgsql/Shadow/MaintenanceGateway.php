@@ -31,7 +31,7 @@ interface MaintenanceGateway
     public function canCreateDatabase(): bool;
 
     /**
-     * The number of active connections to $database OTHER than this maintenance
+     * The number of active connections to $database other than this maintenance
      * connection. A non-zero count means PostgreSQL will refuse the database as a
      * `CREATE DATABASE … TEMPLATE` source, so it is read before the clone rather
      * than discovered by a failed template operation.
@@ -39,14 +39,14 @@ interface MaintenanceGateway
     public function activeConnectionCount(string $database): int;
 
     /**
-     * WHO those connections are, for the refusal message — never for a decision.
+     * Who those connections are, for the refusal message — never for a decision.
      *
      * The count above answers "may this be cloned"; this answers the question a reader asks
-     * next and nothing else could: WHICH session is in the way. A refusal that says only "the
+     * next and nothing else could: which session is in the way. A refusal that says only "the
      * template has other active connections" is a named reason with nowhere to go, and this
      * package's own rule is that a reason you cannot look up is half a reason.
      *
-     * ## The one field this deliberately does NOT read
+     * ## The one field this deliberately does not read
      *
      * `pg_stat_activity.query` is the obvious thing to include and is excluded on purpose. A
      * running statement can carry a credential — the very thing `SEC.AUTH.PASSWORD_LITERAL_*`

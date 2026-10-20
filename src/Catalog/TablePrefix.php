@@ -78,7 +78,7 @@ final readonly class TablePrefix
      * a name the developer wrote by hand, so a column that happens to be called `acme_id` keeps its
      * name. Stripping there would rename a column nobody prefixed.
      *
-     * An object that does not carry the prefix is returned untouched — its real name IS the name the
+     * An object that does not carry the prefix is returned untouched — its real name is the name the
      * project knows it by, and inventing a difference would be worse than saying nothing.
      */
     public function logicalName(string $qualifiedName, SchemaObjectType $type = SchemaObjectType::Table): string

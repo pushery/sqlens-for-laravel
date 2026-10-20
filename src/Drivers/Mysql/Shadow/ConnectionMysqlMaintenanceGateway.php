@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Drivers\Mysql\Shadow;
 
+use DateTimeImmutable;
 use Illuminate\Database\ConnectionInterface;
 use Pushery\SQLens\Attributes\RawSql;
+use Pushery\SQLens\Capture\Shadow\ShadowDatabaseName;
 use Pushery\SQLens\Contracts\ShadowDatabaseCatalog;
 use Pushery\SQLens\Drivers\Mysql\Catalog\MysqlDatabasePattern;
 
@@ -56,6 +58,15 @@ final readonly class ConnectionMysqlMaintenanceGateway implements MysqlMaintenan
         return $names;
     }
 
+    #[RawSql(reason: 'reads the server clock, which a shadow database is named by and the orphan sweep ages it by')]
+    public function serverTime(): DateTimeImmutable
+    {
+        // UTC_TIMESTAMP(), not NOW(): NOW() is in the session time zone, and the stamp is UTC.
+        $row = $this->maintenance->selectOne("select date_format(utc_timestamp(), '%Y%m%d%H%i%s') as stamp");
+
+        return ShadowDatabaseName::serverTimeFrom(is_object($row) ? $row->stamp ?? null : null);
+    }
+
     #[RawSql(reason: 'asks the server which product it is, because MariaDB shares this driver key and answers differently to nearly everything after this point')]
     public function isMariaDb(): bool
     {
@@ -68,7 +79,7 @@ final readonly class ConnectionMysqlMaintenanceGateway implements MysqlMaintenan
     #[RawSql(reason: 'asks whether this account may create and drop the shadow database before the harness tries, so a refusal is reported rather than discovered as a crash')]
     public function canCreateAndDropDatabase(string $name): bool
     {
-        // SHOW GRANTS returns one column per row whose NAME is "Grants for user@host",
+        // SHOW GRANTS returns one column per row whose name is "Grants for user@host",
         // so each value is read positionally rather than by a fixed key. For the current
         // user it also lists what the active roles confer.
         $grants = [];

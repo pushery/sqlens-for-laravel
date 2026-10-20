@@ -15,7 +15,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  * {@see Rule::downtimeClass()} is one value for the whole rule, and for most rules that is exactly
  * right: `PG.L2.INDEX_NOT_CONCURRENT` blocks, always, whatever it is looking at. But a rule keyed
  * on a data table — MySQL's online-DDL matrix is the case this exists for — cannot answer that way.
- * The matrix answers per OPERATION and per SERVER VERSION, so two statements a single rule flags
+ * The matrix answers per operation and per server version, so two statements a single rule flags
  * can legitimately carry different classes, and one constant would have to be wrong about one of
  * them.
  *
@@ -25,7 +25,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  *
  * ## Three answers, and none of them a default
  *
- * A class is the class. A {@see DowntimeUndetermined} says the class of THIS statement could not
+ * A class is the class. A {@see DowntimeUndetermined} says the class of this statement could not
  * be determined, and why: the collector stamps it on the finding, and the report counts it. Null
  * says the rule makes no claim about this statement, and the finding carries neither.
  *
@@ -40,7 +40,7 @@ interface DerivesDowntimeClass
      * The downtime class for this specific statement, the undetermined when it cannot be named, or
      * null when the rule makes no claim about this statement.
      *
-     * Called by the collector INSTEAD of {@see Rule::downtimeClass()} for a rule that implements
+     * Called by the collector instead of {@see Rule::downtimeClass()} for a rule that implements
      * this — never in addition, so there is exactly one answer per finding and no question of
      * which of two wins.
      */

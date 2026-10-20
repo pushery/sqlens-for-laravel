@@ -61,7 +61,7 @@ final class MysqlCanonicalization implements DeclaresReservedWords, DriverCanoni
      * `CHARACTER VARYING`, so a shared list would truncate one engine's types or swallow the
      * other's modifiers. That pair is the reason this list belongs to the driver.
      *
-     * `UNSIGNED` and `ZEROFILL` stay OUT on purpose: they are part of what the type IS, and the
+     * `UNSIGNED` and `ZEROFILL` stay out on purpose: they are part of what the type is, and the
      * shared normalizer reads `unsigned` off the raw text to set its own flag. Terminating there
      * would drop the distinction the flag exists for.
      *
@@ -177,7 +177,7 @@ final class MysqlCanonicalization implements DeclaresReservedWords, DriverCanoni
             // migration. The list is measured from what Laravel's MySQL grammar actually emits —
             // captured and pinned by a characterization test — rather than recalled from memory.
             //
-            // Safe by construction: this stage runs AFTER identifier normalization, so a column
+            // Safe by construction: this stage runs after identifier normalization, so a column
             // named `varchar` is already quoted and a BARE word is unambiguously the keyword.
             'BIGINT', 'BINARY', 'BLOB', 'CHAR', 'DATE', 'DATETIME', 'DECIMAL', 'DOUBLE', 'ENUM',
             'FLOAT', 'GEOMETRY', 'INT', 'JSON', 'LONGTEXT', 'MEDIUMINT', 'MEDIUMTEXT', 'SET',
@@ -218,6 +218,10 @@ final class MysqlCanonicalization implements DeclaresReservedWords, DriverCanoni
             // classifier refuses a statement whose lead is not a keyword. MySQL reserves the word,
             // so a name spelled with it was quoted already and keeps its quotes.
             'ANALYZE',
+
+            // `OPTIMIZE` leads `OPTIMIZE TABLE`, which the signatures read as a rebuild. MySQL
+            // reserves it as well, so no name changes its quoting.
+            'OPTIMIZE',
         ];
     }
 
@@ -241,7 +245,9 @@ final class MysqlCanonicalization implements DeclaresReservedWords, DriverCanoni
      * what this package reads.
      *
      * The identifier quote is the backtick ({@see self::quotingCharacter()}), so nothing here is
-     * ambiguous: a `"` opens data and a backtick opens a name.
+     * ambiguous: a `"` opens data and a backtick opens a name. A connection whose `modes` set
+     * `ANSI_QUOTES` or `NO_BACKSLASH_ESCAPES` reads text differently, and its captured statements
+     * reach this canonicalization already translated into this reading ({@see MysqlSqlMode}).
      *
      * @return list<string>
      */
@@ -373,7 +379,7 @@ final class MysqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                 // name. Within that constraint the shapes are grouped ADD-then-DROP, except that
                 // MODIFY/CHANGE and ADD COLUMN sit among the DROP block for historical reasons —
                 // harmless, since they share no keyword with anything around them. Moving any of
-                // them is safe ONLY while the two bare forms stay last; measure, do not assume.
+                // them is safe only while the two bare forms stay last; measure, do not assume.
                 //
                 // A second ordering holds inside the groups: a spelling that is the longer form of
                 // another comes BEFORE it — `ADD UNIQUE KEY` before `ADD UNIQUE`, `MODIFY COLUMN`
@@ -451,7 +457,7 @@ final class MysqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                 // nothing: the grammar emits `add spatial index `name`(…)` but `add fulltext
                 // `name`(…)`. An unmatched signature is not a quiet miss — the statement becomes
                 // uncanonicalizable and the whole migration reports CAP.L0.UNDETERMINED_CAPTURE, so
-                // the run checks NOTHING for it.
+                // the run checks nothing for it.
                 new StatementSignature(StatementKind::CreateSpatialIndex, [
                     SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
                     SignatureElement::optionalModifiers(), SignatureElement::target($table),
@@ -541,7 +547,7 @@ final class MysqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                 // — the same with the symbol written, read for what the server keeps of it. A primary
                 // key is `PRIMARY` whatever its symbol. A `UNIQUE` that names its index is that index,
                 // and the symbol is dropped; one that names none takes the symbol as the index's name,
-                // so there the symbol IS the index target. Without these shapes they fell to the
+                // so there the symbol is the index target. Without these shapes they fell to the
                 // generic `ADD CONSTRAINT <k>` below, and no rule about a key or an index saw them.
                 new StatementSignature(StatementKind::AddPrimaryKey, [
                     SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
@@ -601,7 +607,7 @@ final class MysqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                 ]),
                 // ALTER TABLE <t> ADD CONSTRAINT <k> FOREIGN KEY (<c>, …) REFERENCES <t2>
                 //
-                // The columns travel, and they have to be read BEFORE the shape below, which is the
+                // The columns travel, and they have to be read before the shape below, which is the
                 // same statement without them. PostgreSQL's signature list has carried the pair this
                 // way since the coverage rule needed it; MySQL's carried only the second, so a rule
                 // asking a MySQL foreign-key statement for its columns got an empty list and said
@@ -810,7 +816,7 @@ final class MysqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                 //
                 // BEFORE the plain `UPDATE <t>` below, because signatures are tried in order and the
                 // plain one matches everything this does. It captures the columns a back-fill
-                // WRITES, which is what the expand/contract debt rule needs; the columns it reads
+                // writes, which is what the expand/contract debt rule needs; the columns it reads
                 // sit inside expressions and stay there.
                 //
                 // Only assignments whose value mentions a column are captured: `SET status = 'new'`
@@ -832,6 +838,22 @@ final class MysqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                 new StatementSignature(StatementKind::Dml, [
                     SignatureElement::keyword('DELETE'), SignatureElement::keyword('FROM'),
                     SignatureElement::target($table),
+                ]),
+                // OPTIMIZE [NO_WRITE_TO_BINLOG | LOCAL] TABLE <t> [, <t>] …
+                //
+                // A rebuild of every table it names, which the online DDL matrix answers as
+                // `optimize_table`. The second shape reads past the word that keeps the statement off
+                // the binary log, `NO_WRITE_TO_BINLOG` or `LOCAL`: neither is a keyword here, so either
+                // arrives as a name. Both end at the end of the statement, and `OPTIMIZE TABLES`, which
+                // the server also accepts, stays undetermined rather than read as something else.
+                new StatementSignature(StatementKind::RebuildTable, [
+                    SignatureElement::keyword('OPTIMIZE'), SignatureElement::keyword('TABLE'),
+                    SignatureElement::targetList($table), SignatureElement::endOfStatement(),
+                ]),
+                new StatementSignature(StatementKind::RebuildTable, [
+                    SignatureElement::keyword('OPTIMIZE'), SignatureElement::skippedName(),
+                    SignatureElement::keyword('TABLE'), SignatureElement::targetList($table),
+                    SignatureElement::endOfStatement(),
                 ]),
             ],
             modifiers: ['UNIQUE', 'IF', 'NOT', 'EXISTS'],
@@ -882,10 +904,10 @@ final class MysqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                 // `ANALYZE TABLE` refreshes the index statistics and changes no schema and no row. It
                 // is `Unknown`, as a `SELECT` is. Refused, it made the whole migration undetermined.
                 //
-                // `OPTIMIZE TABLE` is deliberately absent. The online DDL matrix records it as a
-                // rebuild that runs in place only on a table without a FULLTEXT index and copies one
-                // that has it, and `Unknown` would pass the copy without a word. It stays undetermined
-                // until it carries a kind the matrix entry can answer for.
+                // `OPTIMIZE` is deliberately absent. The online DDL matrix records `OPTIMIZE TABLE` as
+                // a rebuild that runs in place only on a table without a FULLTEXT index and copies one
+                // that has it, and `Unknown` would pass the copy without a word. The signatures give it
+                // the kind the matrix entry answers for, and a form they cannot read stays undetermined.
                 'ANALYZE' => StatementKind::Unknown,
             ],
             // `ALTER TABLE t ADD INDEX i (a), ALGORITHM=INPLACE, LOCK=NONE`: the last two qualify how

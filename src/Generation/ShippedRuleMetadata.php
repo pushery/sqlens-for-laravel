@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Generation;
 use JsonException;
 
 /**
- * The shipped rule metadata, keyed by id — the one description of what a rule IS.
+ * The shipped rule metadata, keyed by id — the one description of what a rule is.
  *
  * Read from `resources/data/rule-registry.json` rather than composed from the rule objects a
  * second time. A rule's category, level, severity, downtime class and documentation address

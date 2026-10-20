@@ -40,7 +40,7 @@ final readonly class PgsqlDebtStandingResolver implements ResolvesDebtStanding
 {
     /**
      * @param  list<string>  $stillOwed  the canonical object names this run's checks reported as
-     *                                   still carrying their debt — the ONE reading of those
+     *                                   still carrying their debt — the one reading of those
      *                                   catalog columns, taken by the classes that own them
      */
     public function __construct(
@@ -146,7 +146,9 @@ final readonly class PgsqlDebtStandingResolver implements ResolvesDebtStanding
                 .' where c.conname = ?'.$scope.' limit 1',
             'invalid_index' => 'select 1 from pg_class c'
                 .' join pg_namespace n on n.oid = c.relnamespace'
-                .' where c.relname = ? and c.relkind = \'i\''.$scope.' limit 1',
+                // `I` is a partitioned index, the one an `ON ONLY` build leaves invalid until its
+                // partitions are attached; once valid it is resolved, not missing.
+                .' where c.relname = ? and c.relkind in (\'i\', \'I\')'.$scope.' limit 1',
             default => null,
         };
 
@@ -162,7 +164,7 @@ final readonly class PgsqlDebtStandingResolver implements ResolvesDebtStanding
                 static fn (Connection $db): array => $db->select($sql, $bindings),
             );
         } catch (Throwable) {
-            // NOT resolved, and not an absence either: a privilege the role lacks and a debt
+            // Not resolved, and not an absence either: a privilege the role lacks and a debt
             // somebody paid look identical from here.
             return DebtStanding::Unreadable;
         }

@@ -77,7 +77,7 @@ final class DebtNotices
     /**
      * A recorded debt the catalog shows as settled.
      *
-     * A PASS rather than a silence, and this is the shape that reservation exists for: the thing
+     * A pass rather than a silence, and this is the shape that reservation exists for: the thing
      * that would normally be wrong is present in the file and cannot bite, and a reader deserves to
      * be told so rather than left to notice an absence. It is also what tells somebody the ledger
      * is behind — an account that quietly kept settled debts would overstate what a project owes.
@@ -179,7 +179,7 @@ final class DebtNotices
     /**
      * A debt the catalog shows and the account has never heard of.
      *
-     * A FAIL rather than an undetermined: nothing here is unknown. The catalog was read, the debt is
+     * A fail rather than an undetermined: nothing here is unknown. The catalog was read, the debt is
      * there, and the account does not mention it — which is a definite statement about the file
      * rather than a gap in the reading.
      *
@@ -277,7 +277,7 @@ final class DebtNotices
             $context,
         );
 
-        // Only the notices that describe ONE recorded debt carry the account's view of it. The two
+        // Only the notices that describe one recorded debt carry the account's view of it. The two
         // that do not — a missing file, an unreadable one — are statements about the ACCOUNT, and
         // giving them a `debt_kind` would invent a debt out of the fact that none could be read.
         return $debt instanceof DebtContext ? $finding->withDebt($debt) : $finding;

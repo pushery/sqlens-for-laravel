@@ -26,6 +26,22 @@ final readonly class ProjectPath
         return rtrim($projectRoot, '/\\').DIRECTORY_SEPARATOR.ltrim($path, '/\\');
     }
 
+    /**
+     * The repo-relative form of a path: what a finding shows, and the reason two machines agree.
+     *
+     * A path outside the project root stays as it is. Cut to look relative, it still carried the
+     * machine's directory layout and read like a path in the repository, so a SARIF consumer
+     * resolved it against the repository and pointed at a file that is not there. A package linked
+     * through a Composer `path` repository is the ordinary way to get one: PHP reports its
+     * migrations under the directory the link resolves to.
+     */
+    public static function relative(string $path, string $projectRoot): string
+    {
+        $root = rtrim($projectRoot, '/\\').'/';
+
+        return str_starts_with($path, $root) ? substr($path, strlen($root)) : $path;
+    }
+
     /** Unix, Windows drive, or UNC absolute. */
     public static function isAbsolute(string $path): bool
     {

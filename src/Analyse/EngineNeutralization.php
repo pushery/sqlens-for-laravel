@@ -17,7 +17,7 @@ use PHPStan\Type\ObjectType;
 
 /**
  * What the engine's own escaping did to a value on its way into statement text — and, just as
- * important, what it did NOT do.
+ * important, what it did not do.
  *
  * ## Why this exists
  *
@@ -40,11 +40,11 @@ use PHPStan\Type\ObjectType;
  * select a different object — which is exactly what a binding guarantees, at a position that accepts
  * no binding. So a value that went through it is no longer raw, and the finding goes.
  *
- * **`Grammar::wrap()` does NOT.** It prevents the breakout and nothing more. Measured against both
+ * **`Grammar::wrap()` does not.** It prevents the breakout and nothing more. Measured against both
  * shipped grammars with real objects:
  *
  *     wrap('x"; DROP TABLE users; --')  ->  "x""; DROP TABLE users; --"     quoted, doubled
- *     wrap('other_schema.secrets')      ->  "other_schema"."secrets"         a DIFFERENT OBJECT
+ *     wrap('other_schema.secrets')      ->  "other_schema"."secrets"         a different object
  *     wrap('orders as o')               ->  "orders" as "o"                  an alias appears
  *     wrap(DB::raw($evil))              ->  evil"; DROP TABLE users; --      VERBATIM
  *
@@ -215,7 +215,7 @@ final readonly class EngineNeutralization
     /**
      * Is the first argument one of the scalars `escape()` declares it takes?
      *
-     * Its signature is `string|float|int|bool|null`, and it THROWS on an array. So an argument the
+     * Its signature is `string|float|int|bool|null`, and it throws on an array. So an argument the
      * analyzer cannot pin to a scalar is refused here rather than assumed — the refusal costs a
      * finding somebody can exempt, and the assumption would cost the claim this class makes.
      */

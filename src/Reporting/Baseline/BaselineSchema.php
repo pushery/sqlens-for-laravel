@@ -43,7 +43,7 @@ final readonly class BaselineSchema
 
     /**
      * Check a decoded baseline root and hand back its entries, or fail by name.
-     * `$path` only ever appears in messages, so a user knows WHICH file to fix.
+     * `$path` only ever appears in messages, so a user knows which file to fix.
      *
      * @return list<mixed> the raw entries, whose shape the serializer validates
      *

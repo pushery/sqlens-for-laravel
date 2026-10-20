@@ -105,7 +105,7 @@ final readonly class RuleCatalogSnapshot
     /**
      * The whole document, hash last.
      *
-     * Last because the hash is OVER the rest: it is computed from this same array with the key
+     * Last because the hash is over the rest: it is computed from this same array with the key
      * absent, so a reader can recompute it without knowing an exclusion rule, and a renderer's
      * `--check` compares one string instead of two documents.
      *
@@ -155,7 +155,7 @@ final readonly class RuleCatalogSnapshot
     /**
      * One row: the shipped metadata, plus the two facts only this layer knows.
      *
-     * `blocking` is here because it is the field that changes what somebody DOES. A security rule
+     * `blocking` is here because it is the field that changes what somebody does. A security rule
      * below the project's floor still reports and still appears — it just does not stop a deploy,
      * and an agent told only that the rule exists cannot tell the two apart. The comparison is
      * asked of {@see Severity::isAtLeast()} rather than re-ranked here; there is one ordering of
@@ -178,7 +178,7 @@ final readonly class RuleCatalogSnapshot
         $severity = is_string($row['severity'] ?? null) ? Severity::tryFrom($row['severity']) : null;
 
         // Assigned rather than spread. A spread renumbers integer keys, and — worse — a spread
-        // that put the artifact's row LAST would let a future `blocking` column in the registry
+        // that put the artifact's row last would let a future `blocking` column in the registry
         // silently overwrite the one computed here. Assignment always wins, which is the only
         // correct direction: these two fields are this layer's answer, not the artifact's.
         $row['version_dependent'] = $versionDependent;

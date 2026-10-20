@@ -348,7 +348,7 @@
             "level": 0,
             "severity": null,
             "stability": "stable",
-            "message_prefix": "Unresolvable call from migration",
+            "message_prefix": "sqlens.lint",
             "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/cap-prescan-dynamic-call/",
             "deprecated_since": null,
             "replaced_by": null
@@ -359,7 +359,7 @@
             "level": 0,
             "severity": null,
             "stability": "preview",
-            "message_prefix": "Indirect call from migration",
+            "message_prefix": "sqlens.lint",
             "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/cap-prescan-indirect-call/",
             "deprecated_since": null,
             "replaced_by": null
@@ -370,7 +370,7 @@
             "level": 0,
             "severity": null,
             "stability": "stable",
-            "message_prefix": "Schema introspection guard",
+            "message_prefix": "sqlens.lint",
             "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/cap-prescan-introspection-guard/",
             "deprecated_since": null,
             "replaced_by": null
@@ -381,7 +381,7 @@
             "level": 0,
             "severity": null,
             "stability": "preview",
-            "message_prefix": "Result-dependent migration",
+            "message_prefix": "sqlens.lint",
             "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/cap-prescan-result-dependent/",
             "deprecated_since": null,
             "replaced_by": null
@@ -392,7 +392,7 @@
             "level": 0,
             "severity": null,
             "stability": "stable",
-            "message_prefix": "Side effect in migration",
+            "message_prefix": "sqlens.lint",
             "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/cap-prescan-side-effect/",
             "deprecated_since": null,
             "replaced_by": null
@@ -1091,6 +1091,17 @@
             "replaced_by": null
         },
         {
+            "id": "MY.L2.OPTIMIZE_TABLE",
+            "category": "safety",
+            "level": 2,
+            "severity": null,
+            "stability": "stable",
+            "message_prefix": "sqlens.lint",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/my-l2-optimize-table/",
+            "deprecated_since": null,
+            "replaced_by": null
+        },
+        {
             "id": "MY.L3.ALGORITHM_LOCK_UNEXPRESSIBLE",
             "category": "safety",
             "level": 3,
@@ -1223,6 +1234,17 @@
             "replaced_by": null
         },
         {
+            "id": "MY.L5.PK_NEAR_CEILING",
+            "category": "safety",
+            "level": 5,
+            "severity": null,
+            "stability": "stable",
+            "message_prefix": "sqlens.lint",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/my-l5-pk-near-ceiling/",
+            "deprecated_since": null,
+            "replaced_by": null
+        },
+        {
             "id": "MY.L5.SQL_MODE_DIVISION_BY_ZERO_SILENT",
             "category": "safety",
             "level": 5,
@@ -1351,6 +1373,17 @@
             "stability": "stable",
             "message_prefix": "sqlens.lint",
             "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/my-l6-sql-mode-loose-group-by/",
+            "deprecated_since": null,
+            "replaced_by": null
+        },
+        {
+            "id": "MY.L6.TIMESTAMP_2038",
+            "category": "idiom",
+            "level": 6,
+            "severity": null,
+            "stability": "stable",
+            "message_prefix": "sqlens.lint",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/my-l6-timestamp-2038/",
             "deprecated_since": null,
             "replaced_by": null
         },
@@ -1509,6 +1542,17 @@
             "replaced_by": null
         },
         {
+            "id": "PG.L2.CLUSTER",
+            "category": "safety",
+            "level": 2,
+            "severity": null,
+            "stability": "stable",
+            "message_prefix": "sqlens.lint",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l2-cluster/",
+            "deprecated_since": null,
+            "replaced_by": null
+        },
+        {
             "id": "PG.L2.CONSTRAINT_NOT_VALIDATED",
             "category": "safety",
             "level": 2,
@@ -1542,6 +1586,28 @@
             "replaced_by": null
         },
         {
+            "id": "PG.L2.REFRESH_MATERIALIZED_VIEW_NOT_CONCURRENT",
+            "category": "safety",
+            "level": 2,
+            "severity": null,
+            "stability": "stable",
+            "message_prefix": "sqlens.lint",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l2-refresh-materialized-view-not-concurrent/",
+            "deprecated_since": null,
+            "replaced_by": null
+        },
+        {
+            "id": "PG.L2.REINDEX_NOT_CONCURRENT",
+            "category": "safety",
+            "level": 2,
+            "severity": null,
+            "stability": "stable",
+            "message_prefix": "sqlens.lint",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l2-reindex-not-concurrent/",
+            "deprecated_since": null,
+            "replaced_by": null
+        },
+        {
             "id": "PG.L2.SET_NOT_NULL_SCAN",
             "category": "safety",
             "level": 2,
@@ -1560,6 +1626,17 @@
             "stability": "stable",
             "message_prefix": "sqlens.lint",
             "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l2-type-change-rewrite/",
+            "deprecated_since": null,
+            "replaced_by": null
+        },
+        {
+            "id": "PG.L2.VACUUM_FULL",
+            "category": "safety",
+            "level": 2,
+            "severity": null,
+            "stability": "stable",
+            "message_prefix": "sqlens.lint",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l2-vacuum-full/",
             "deprecated_since": null,
             "replaced_by": null
         },
@@ -1615,6 +1692,17 @@
             "stability": "stable",
             "message_prefix": "sqlens.lint",
             "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l3-risky-ops-single-tx/",
+            "deprecated_since": null,
+            "replaced_by": null
+        },
+        {
+            "id": "PG.L3.VACUUM_IN_TRANSACTION",
+            "category": "safety",
+            "level": 3,
+            "severity": null,
+            "stability": "stable",
+            "message_prefix": "sqlens.lint",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l3-vacuum-in-transaction/",
             "deprecated_since": null,
             "replaced_by": null
         },
@@ -1718,6 +1806,17 @@
             "replaced_by": null
         },
         {
+            "id": "PG.L5.FK_NEAR_CEILING",
+            "category": "safety",
+            "level": 5,
+            "severity": null,
+            "stability": "stable",
+            "message_prefix": "sqlens.lint",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l5-fk-near-ceiling/",
+            "deprecated_since": null,
+            "replaced_by": null
+        },
+        {
             "id": "PG.L5.FK_NO_INDEX",
             "category": "performance",
             "level": 5,
@@ -1784,6 +1883,17 @@
             "replaced_by": null
         },
         {
+            "id": "PG.L5.PK_NEAR_CEILING",
+            "category": "safety",
+            "level": 5,
+            "severity": null,
+            "stability": "stable",
+            "message_prefix": "sqlens.lint",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l5-pk-near-ceiling/",
+            "deprecated_since": null,
+            "replaced_by": null
+        },
+        {
             "id": "PG.L6.DEFAULT_TRANSACTION_ISOLATION_DRIFT",
             "category": "safety",
             "level": 6,
@@ -1802,6 +1912,17 @@
             "stability": "stable",
             "message_prefix": "sqlens.lint",
             "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l6-default-transaction-read-only/",
+            "deprecated_since": null,
+            "replaced_by": null
+        },
+        {
+            "id": "PG.L6.FK_NARROWER_THAN_KEY",
+            "category": "idiom",
+            "level": 6,
+            "severity": null,
+            "stability": "stable",
+            "message_prefix": "sqlens.lint",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l6-fk-narrower-than-key/",
             "deprecated_since": null,
             "replaced_by": null
         },
@@ -1894,6 +2015,17 @@
             "replaced_by": null
         },
         {
+            "id": "PG.L7.AUTOVACUUM_OFF",
+            "category": "performance",
+            "level": 7,
+            "severity": null,
+            "stability": "stable",
+            "message_prefix": "sqlens.lint",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l7-autovacuum-off/",
+            "deprecated_since": null,
+            "replaced_by": null
+        },
+        {
             "id": "PG.L7.DATA_CHECKSUMS_DISABLED",
             "category": "safety",
             "level": 7,
@@ -1901,6 +2033,17 @@
             "stability": "stable",
             "message_prefix": "sqlens.lint",
             "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l7-data-checksums-disabled/",
+            "deprecated_since": null,
+            "replaced_by": null
+        },
+        {
+            "id": "PG.L7.INDEX_INVALID",
+            "category": "performance",
+            "level": 7,
+            "severity": null,
+            "stability": "stable",
+            "message_prefix": "sqlens.lint",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l7-index-invalid/",
             "deprecated_since": null,
             "replaced_by": null
         },
@@ -1923,6 +2066,17 @@
             "stability": "experimental",
             "message_prefix": "sqlens.lint",
             "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l7-index-unused/",
+            "deprecated_since": null,
+            "replaced_by": null
+        },
+        {
+            "id": "PG.L7.TRACK_COUNTS_OFF",
+            "category": "performance",
+            "level": 7,
+            "severity": null,
+            "stability": "stable",
+            "message_prefix": "sqlens.lint",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l7-track-counts-off/",
             "deprecated_since": null,
             "replaced_by": null
         },

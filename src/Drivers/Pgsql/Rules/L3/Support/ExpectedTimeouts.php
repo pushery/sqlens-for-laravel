@@ -18,7 +18,7 @@ namespace Pushery\SQLens\Drivers\Pgsql\Rules\L3\Support;
  * that genuinely wants only one narrows the set, and a typo in it is a loud
  * misconfiguration (validated by the config schema), never a silent drop.
  *
- * The allowed names live HERE, at the driver, because they are PostgreSQL GUC names —
+ * The allowed names live here, at the driver, because they are PostgreSQL GUC names —
  * MySQL's timeout vocabulary is different and lives with the MySQL driver.
  * The neutral config schema validates a value of this key against {@see KNOWN} through
  * a test that pins the two lists together, so core never has to name an engine setting.

@@ -85,21 +85,40 @@ final readonly class ServerSettingMatrix
      * Null is not "no expectation" — that is what an entry with a null `expectation` says. This is
      * "the matrix does not cover this", and a rule reaching it should report that it could not
      * check rather than assume the value is fine.
+     *
+     * Without a server version there is no window to check, so there is no answer either: the
+     * first row of the variable would be an expectation picked for a server nobody established.
+     * The version is a required argument for that reason, null included, and {@see self::entry()}
+     * answers the question that needs no server.
      */
-    public function for(string $driver, string $variable, ?string $serverVersion = null): ?ServerSettingExpectation
+    public function for(string $driver, string $variable, ?string $serverVersion): ?ServerSettingExpectation
+    {
+        if ($serverVersion === null) {
+            return null;
+        }
+
+        foreach ($this->entries as $entry) {
+            if ($entry->driver === $driver && $entry->variable === $variable && $this->covers($entry, $serverVersion)) {
+                return $entry;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The first row the matrix holds for a variable, whatever server it applies to, or null when
+     * the variable is not in the matrix at all.
+     *
+     * For questions about the file rather than about a server: whether a rule's variable is covered
+     * anywhere, and what a change to it costs. A verdict about a server asks {@see self::for()}.
+     */
+    public function entry(string $driver, string $variable): ?ServerSettingExpectation
     {
         foreach ($this->entries as $entry) {
-            if ($entry->driver !== $driver) {
-                continue;
+            if ($entry->driver === $driver && $entry->variable === $variable) {
+                return $entry;
             }
-            if ($entry->variable !== $variable) {
-                continue;
-            }
-            if ($serverVersion !== null && ! $this->covers($entry, $serverVersion)) {
-                continue;
-            }
-
-            return $entry;
         }
 
         return null;

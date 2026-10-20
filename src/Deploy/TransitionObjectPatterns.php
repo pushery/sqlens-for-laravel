@@ -25,7 +25,7 @@ namespace Pushery\SQLens\Deploy;
  * and each is anchored at the END of the bare name. `_old` matches `users_old` and not
  * `threshold_settings`; `tmp_` is anchored at the start for the same reason.
  *
- * What is deliberately NOT here: `_v2`, `_copy_of`, `_a`/`_b`, and anything shorter than three
+ * What is deliberately not here: `_v2`, `_copy_of`, `_a`/`_b`, and anything shorter than three
  * characters. Each of those appears in real, permanent schemas often enough that including it would
  * spend the check's credibility to catch a case the dated suffix already covers.
  */

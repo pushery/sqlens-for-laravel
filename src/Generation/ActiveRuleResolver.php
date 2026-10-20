@@ -29,7 +29,7 @@ use Pushery\SQLens\Security\Privacy\PrivacyPack;
 use Pushery\SQLens\Severity\Severity;
 
 /**
- * Which rules apply to THIS project, right now — the one place that answers it.
+ * Which rules apply to this project, right now — the one place that answers it.
  *
  * ## Why this exists beside the rule registry
  *
@@ -268,7 +268,7 @@ final readonly class ActiveRuleResolver
      * list, and refusing the other engine's id would turn a correct configuration into an error
      * that depends on which catalog somebody happened to ask for.
      *
-     * Keyed by id, because a driver-neutral rule is registered by EVERY driver and the registry
+     * Keyed by id, because a driver-neutral rule is registered by every driver and the registry
      * refuses a duplicate id outright — correctly, since ids are public API and "last wins" would
      * make which rule answers depend on registration order. Here the duplicate is expected rather
      * than suspicious: it is one rule reachable through two doors, and the ignore list only needs

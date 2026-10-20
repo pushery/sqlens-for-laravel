@@ -10,14 +10,14 @@ use Pushery\SQLens\Findings\Outcome;
 use Pushery\SQLens\Findings\UndeterminedReason;
 
 /**
- * What the run could NOT answer — the section this whole format exists to make unmissable.
+ * What the run could not answer — the section this whole format exists to make unmissable.
  *
  * An agent reading a report with no failure list concludes the run was clean and says so. That is
  * the single most expensive mistake available here, and the agent loop is where it costs most:
  * nobody looks again afterwards. A skip that is merely omitted is indistinguishable, from inside
  * the document, from a check that ran and passed.
  *
- * So the section is ALWAYS present, says "0" out loud when it is empty, and gives every entry a
+ * So the section is always present, says "0" out loud when it is empty, and gives every entry a
  * named reason plus the next thing to do about it.
  *
  * ## The action is per FAMILY, not per reason
@@ -28,8 +28,8 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  *
  * What a description cannot say is the thing that is true of a whole CLASS of skip: that a check
  * defeated by static reading needs the shadow mode, that a missing tool is an install or a
- * deliberate opt-out, that a missing privilege is a grant somebody has to decide on. Those four
- * sentences are added here, beside the reason rather than instead of it.
+ * deliberate opt-out, that a missing privilege is a grant somebody has to decide on. Those sentences
+ * are added here, one per family in ACTIONS, beside the reason rather than instead of it.
  */
 final readonly class UndeterminedSection
 {
@@ -91,7 +91,9 @@ final readonly class UndeterminedSection
         $lines[] = '';
 
         foreach ($unresolved as $finding) {
-            $lines = [...$lines, ...$this->entry($finding)];
+            foreach ($this->entry($finding) as $line) {
+                $lines[] = $line;
+            }
         }
 
         return $lines;

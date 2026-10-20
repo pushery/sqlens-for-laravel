@@ -112,9 +112,13 @@ final class ExplicitDefaultsForTimestampOffRule extends AbstractServerSettingRul
     }
 
     /**
-     * The concrete half: which columns already carry the implicit `ON UPDATE CURRENT_TIMESTAMP`.
+     * The concrete half: which TIMESTAMP columns carry `ON UPDATE CURRENT_TIMESTAMP`.
      *
-     * An empty list is stated OUT LOUD rather than left as silence. "No column is affected yet" is a
+     * The catalog shows the clause, not who wrote it: one the server added under the legacy behavior
+     * and one a migration declared read alike. So the list names the columns to look at and says
+     * that, rather than calling each of them affected.
+     *
+     * An empty list is stated out loud rather than left as silence. "No column is affected yet" is a
      * genuinely different situation from a table full of them — it means the setting is a hazard for
      * the next migration rather than a bug in today's data — and a finding that simply omitted the
      * sentence would leave a reader unable to tell which of the two they are in.
@@ -124,9 +128,11 @@ final class ExplicitDefaultsForTimestampOffRule extends AbstractServerSettingRul
         $columns = $this->crossFact($object, MysqlSettingCrossFactCollector::TIMESTAMP_AUTO_UPDATE_COLUMNS);
 
         return match ($columns === null || $columns === '') {
-            true => ' No column in this schema carries the implicit ON UPDATE CURRENT_TIMESTAMP yet, so this '
+            true => ' No TIMESTAMP column in this schema carries ON UPDATE CURRENT_TIMESTAMP yet, so this '
                 .'is a hazard for the next migration rather than a defect in existing data.',
-            false => ' Already affected in this schema: '.$columns.'.',
+            false => ' TIMESTAMP columns in this schema with ON UPDATE CURRENT_TIMESTAMP: '.$columns.'. The '
+                .'catalog does not say whether the server added the clause or a migration declared it, so '
+                .'each is one to look at rather than one already known to be affected.',
         };
     }
 

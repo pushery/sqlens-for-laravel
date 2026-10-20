@@ -73,7 +73,7 @@ final readonly class SchemaObject implements Subject
      * Every attribute this object carries, in a stable order.
      *
      * A bulk accessor beside the three typed ones, and it exists for exactly one caller: a drift
-     * comparison has to serialize what an object IS, and asking key by key would mean the
+     * comparison has to serialize what an object is, and asking key by key would mean the
      * serializer carrying a list of key names — a second place that has to learn about every new
      * attribute a reader starts attaching.
      *
@@ -97,7 +97,7 @@ final readonly class SchemaObject implements Subject
      * The same object with more attributes merged over its own.
      *
      * The attribute bag stays private — a caller that could reach in would be a second place that
-     * decides what an object's facts are. This is the one way to add to them, and it produces a NEW
+     * decides what an object's facts are. This is the one way to add to them, and it produces a new
      * object rather than mutating one, so a snapshot that has been handed out cannot change under
      * whoever is holding it.
      *

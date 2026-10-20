@@ -19,7 +19,7 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  *
  * ## Why there are two codes and not one, and not four
  *
- * The reason a caller reports is the one that tells somebody what to DO, and there are exactly two
+ * The reason a caller reports is the one that tells somebody what to do, and there are exactly two
  * things to do. A version this build cannot act on is fixed by moving a version — upgrade the tool,
  * or migrate the file. A file that is not a ledger at all is fixed by repairing or deleting it.
  * Splitting further (missing field vs. non-integer field) would give two codes to one action; a

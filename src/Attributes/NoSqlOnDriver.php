@@ -31,7 +31,7 @@ use Attribute;
  *   and looks new;
  * - it lives somewhere else than the decision, so a reader of the migration cannot see that the
  *   emptiness is intended, and a reader of the baseline cannot see why;
- * - it keeps suppressing after the migration becomes empty BY ACCIDENT.
+ * - it keeps suppressing after the migration becomes empty by accident.
  *
  * The attribute has none of those properties: it sits on the decision, moves with the file, and
  * stops applying the moment its condition stops holding.
@@ -47,13 +47,15 @@ use Attribute;
  * | `sqlite` | `pgsql`  | **finding**, exactly as before |
  * | `sqlyte` (a typo) | anything | **finding on every driver**, so the typo surfaces |
  *
- * A wrong driver name excuses NOTHING, which is what makes it visible rather than dangerous.
+ * A wrong driver name excuses nothing, which is what makes it visible rather than dangerous.
  *
  * ## Repeatable, because one migration can be empty on more than one driver
  *
- * And the reason is a required constructor argument, for the same reason {@see RawSql} makes it one:
- * an annotation without a reason is a PHP error before any analysis runs, which is the only
- * enforcement nobody can forget.
+ * And the reason is a required constructor argument, for the same reason {@see RawSql} makes it one.
+ * The pre-scan reads the attribute from the source and never instantiates it, so PHP never sees a
+ * missing reason; the pre-scan does, and an annotation whose reason is missing, empty or only
+ * whitespace excuses nothing — the finding stands, by the rule {@see AttributeReason} holds for
+ * every attribute.
  *
  * ```php
  * #[NoSqlOnDriver('sqlite', reason: 'partial indexes are a PostgreSQL feature; SQLite gets the full index')]
@@ -72,8 +74,8 @@ final readonly class NoSqlOnDriver
     /**
      * @param  string  $driver  the connection driver name this migration deliberately emits nothing
      *                          on — the same spelling Laravel reports, e.g. `sqlite`, `mysql`, `pgsql`
-     * @param  string  $reason  why. An empty string is not one, and is treated as though the
-     *                          attribute were absent — the finding stands.
+     * @param  string  $reason  why. One that is empty or only whitespace is not one, and is treated
+     *                          as though the attribute were absent — the finding stands.
      */
     public function __construct(
         public string $driver,

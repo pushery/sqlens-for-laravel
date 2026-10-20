@@ -10,7 +10,7 @@ use Pushery\SQLens\Findings\LocationKind;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
 /**
- * Where a finding IS, in the two answers SARIF has for it — and why most of this package's findings
+ * Where a finding is, in the two answers SARIF has for it — and why most of this package's findings
  * need the second one.
  *
  * A migration or callsite finding has a file and a line, and that is the easy half. Everything the
@@ -41,11 +41,11 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *   response, and it carries no `region`, because a line number there would be the invention above.
  *
  * Both are anchors and both say so. `sqlens-anchored` stays true either way — a migration is where
- * an object CAME FROM, never what the finding is about — and `sqlens-anchor-kind` says which of the
+ * an object came from, never what the finding is about — and `sqlens-anchor-kind` says which of the
  * two a consumer is looking at.
  *
  * The anchor is honest only because the message says so. A catalog finding's SARIF text names its
- * object FIRST and states that the file is a stand-in, so nobody reads the alert as a finding about
+ * object first and states that the file is a stand-in, so nobody reads the alert as a finding about
  * `config/sqlens.php`. Without that sentence this class would be the second mistake wearing the
  * costume of the fix.
  */
@@ -123,10 +123,10 @@ final readonly class LocationResolver
             'properties' => [
                 // The anchor, named as an anchor. A consumer reading the physical location alone
                 // would otherwise have no way to know it is a stand-in rather than the subject.
-                // TRUE in both cases: a migration is where the object CAME FROM, never what the
+                // TRUE in both cases: a migration is where the object came from, never what the
                 // finding is about — the finding is about the object as the database holds it now.
                 'sqlens-anchored' => true,
-                // …and WHICH kind of anchor, because the two are worth different amounts to a
+                // …and which kind of anchor, because the two are worth different amounts to a
                 // reader. `migration` is the file that introduced the subject, so the alert lands
                 // on a line somebody is reading anyway; `configured` is a stand-in for an object
                 // with no file at all. Additive, so a consumer that only knows the flag above is

@@ -85,7 +85,7 @@ final class ConcurrentlyInTransactionRule extends AbstractPgsqlSafetyRule implem
      */
     public function remediationFor(MigrationStatementView $statement): ?RemediationPayload
     {
-        // TWO readings, because this rule's shape needs both — and the seam is the only caller that
+        // Two readings, because this rule's shape needs both — and the seam is the only caller that
         // has to make them itself. `verdict()` establishes the CONCURRENTLY half before `judge()`
         // ever runs, which is why the judgment can read the flag alone; a caller that comes in at
         // `remediationFor()` skips that gate entirely.
@@ -116,11 +116,13 @@ final class ConcurrentlyInTransactionRule extends AbstractPgsqlSafetyRule implem
      * Whether this statement builds concurrently at all — the gate `verdict()` opens with.
      *
      * On the canonical string, where the keyword is normalized to one casing, never on the
-     * grammar's output.
+     * grammar's output. A `REFRESH MATERIALIZED VIEW CONCURRENTLY` carries the word and is not one
+     * of these: PostgreSQL runs it inside a transaction block.
      */
     private function buildsConcurrently(MigrationStatementView $statement): bool
     {
-        return preg_match('/\bCONCURRENTLY\b/', $statement->canonical) === 1;
+        return preg_match('/\bCONCURRENTLY\b/', $statement->canonical) === 1
+            && ! $statement->is(StatementKind::RefreshMaterializedView);
     }
 
     public function level(): Level

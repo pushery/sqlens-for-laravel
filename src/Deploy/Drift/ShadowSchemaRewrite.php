@@ -12,7 +12,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * ## Why this exists, and it is not a nicety
  *
- * On MySQL the schema IS the database, so every qualified name carries it:
+ * On MySQL the schema is the database, so every qualified name carries it:
  * `sqlens_test.orders.id` live, `sqlens_shadow_20260819_ab12cd.orders.id` in the replay. The
  * comparator keys objects on `type + qualifiedName`, so the two sides can never meet — every object
  * is reported MISSING and UNEXPECTED at once.
@@ -24,7 +24,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * PostgreSQL never showed it. There the schema is `public` on both sides, so the names happen to
  * agree — which is exactly why a proof on one engine is not a proof on the other.
  *
- * ## The rewrite belongs HERE, not in the comparator
+ * ## The rewrite belongs here, not in the comparator
  *
  * {@see DriftComparator} takes two readings and knows no engine, no connection and no database. That
  * is what keeps it honest. The reference builder is the one place holding both names at once — the

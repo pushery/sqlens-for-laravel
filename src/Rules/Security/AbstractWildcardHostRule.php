@@ -15,14 +15,14 @@ use Pushery\SQLens\Subjects\SchemaObject;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
 /**
- * An account that may connect from ANY host.
+ * An account that may connect from any host.
  *
  * A MySQL account is a name AND a host pattern, and the host half is a real access control: `%`
  * matches every address there is. On its own that is a `medium` finding rather than an alarm —
  * plenty of deployments have a legitimate reason for it, and a rule that shouted would be switched
  * off by exactly the people who have the most accounts.
  *
- * What sharpens it is what the account can DO once it arrives, which is why this is a pair.
+ * What sharpens it is what the account can do once it arrives, which is why this is a pair.
  *
  * ## Which patterns are an open host, and which are the narrowing
  *
@@ -31,7 +31,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * - `%` alone, or a pattern of nothing but wildcards and dots such as `%.%.%.%`, admits every
  *   address. This is what the pair judges, split on the account's privileges.
- * - A pattern over host NAMES, such as `%.example.com`, admits every host whose name fits. That is
+ * - A pattern over host names, such as `%.example.com`, admits every host whose name fits. That is
  *   narrower than every address whatever the account holds, so it is the `medium` rule's alone,
  *   with its own sentence.
  * - An address pattern, such as `10.0.0.%`, and a `_` without a `%` are not reported. MySQL matches
@@ -59,11 +59,11 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * grants, and that is worth stating because it looks like a shortcut and is not. Measured on a real
  * MySQL 8.4: an account holding nothing but `GRANT ALL PRIVILEGES ON *.*` is read back carrying
  * `superuser`, `create_role`, `create_database` and `replication` — the reader turns MySQL's
- * far-reaching grants into role attributes, from the SAME `mysql.user` reading the account itself
+ * far-reaching grants into role attributes, from the same `mysql.user` reading the account itself
  * comes from. So the escalation and the account are one reading, and one readability question,
  * rather than two that could disagree.
  *
- * That is also why an unreadable record is `undetermined` for BOTH rules rather than quietly
+ * That is also why an unreadable record is `undetermined` for both rules rather than quietly
  * landing on the milder one. Choosing `medium` because the privilege half could not be read would
  * be a downgrade nobody asked for and nobody could see.
  */

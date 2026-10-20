@@ -23,7 +23,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * Turns a catalog rule's verdicts into findings — once, for every base that has catalog subjects.
  *
  * Two bases reach a schema object now: {@see AbstractCatalogRule}, for a rule that only ever
- * answers from a catalog, and {@see AbstractSafetyRule}, for a lint rule that ALSO answers from one
+ * answers from a catalog, and {@see AbstractSafetyRule}, for a lint rule that also answers from one
  * ({@see JudgesSchemaObjects}). Letting each build its own finding would
  * be the second code path this package keeps refusing: the two would drift on the location shape,
  * on which metadata is stamped, or on how an undetermined verdict is carried — and the drift would
@@ -48,12 +48,17 @@ final readonly class CatalogVerdicts
     ): array {
         $verdicts = self::withoutTheFixturesVerdict($verdicts, $rule, $object);
 
-        // Asked ONCE per object rather than once per verdict: the material is about the object, and
+        // Asked once per object rather than once per verdict: the material is about the object, and
         // a rule that flags twice attaches the same template twice rather than building it twice.
         $payload = self::remediationFor($rule, $object);
 
+        // Material only beside a flag. An undetermined verdict is a rule declining to answer and a pass is
+        // nothing to fix, and material beside either would overtake the verdict: the rule
+        // OffersAConsideredNone states, held here for every catalog rule rather than in each of them.
         return array_map(
-            static fn (RuleVerdict $verdict): Finding => self::withMaterial(self::finding($verdict, $rule, $object, $map, $projectRoot), $payload),
+            static fn (RuleVerdict $verdict): Finding => self::isFlag($verdict)
+                ? self::withMaterial(self::finding($verdict, $rule, $object, $map, $projectRoot), $payload)
+                : self::finding($verdict, $rule, $object, $map, $projectRoot),
             $verdicts,
         );
     }
@@ -79,7 +84,7 @@ final readonly class CatalogVerdicts
      *
      * That last one is a real trade and not a free one, so it is written down rather than left to be
      * rediscovered: on a disposable server a reader cannot tell a check that passed from one that
-     * did not apply, UNLESS it would have flagged. Where it would have, the finding says so in full.
+     * did not apply, unless it would have flagged. Where it would have, the finding says so in full.
      * Where it would not, nothing is withheld from the reader that the check itself established.
      *
      * @param  list<RuleVerdict>  $verdicts
@@ -95,7 +100,7 @@ final readonly class CatalogVerdicts
             return $verdicts;
         }
 
-        // The command the sentence sends a reader to has to be one that RUNS these rules. It named
+        // The command the sentence sends a reader to has to be one that runs these rules. It named
         // `sqlens:predeploy` until a consumer followed it into a deploy script: that command evaluates
         // no `SEC.*` rule at all, so the server was checked nowhere while the report said where. Every
         // server-bound rule sits in the audit suite, which `sqlens:security` and `sqlens:audit` both
@@ -247,7 +252,7 @@ final readonly class CatalogVerdicts
         }
 
         if ($verdict->notApplicableReason instanceof NotApplicableReason) {
-            // The one route from a catalog rule to a NOT-APPLICABLE finding. It exists for the same
+            // The one route from a catalog rule to a not-applicable finding. It exists for the same
             // reason the pass route above does, one step further out: staying silent is
             // indistinguishable from a rule that never ran — and here the rule genuinely did not,
             // because there was nothing on this engine for it to look at.

@@ -11,7 +11,7 @@ use Pushery\SQLens\Capture\PendingResolution;
  * input to every lint run.
  *
  * It is a seam so the resolution can be tested with a fake against no database, and
- * so the one rule about it is enforceable in one place: it READS only. It never
+ * so the one rule about it is enforceable in one place: it reads only. It never
  * writes to the migration repository and never takes a lock; a connection it cannot
  * reach is a named skip, never an empty list. The concrete resolver composes the
  * answer from the Laravel migrator's repository, addressing the write side of a

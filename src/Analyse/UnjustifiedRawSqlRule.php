@@ -25,7 +25,7 @@ use Pushery\SQLens\Rules\RuleDocumentationUrl;
  * be making a promise its author knows it cannot keep.
  *
  * The bet behind a justification requirement is different and much smaller: raw SQL is sometimes
- * genuinely the right tool, and a project that has to say WHY out loud writes less of it by
+ * genuinely the right tool, and a project that has to say why out loud writes less of it by
  * accident. The reason is for the next reader, not for this rule — nothing here parses it.
  *
  * ## Honest limits, stated where a reader will meet them
@@ -62,7 +62,7 @@ final readonly class UnjustifiedRawSqlRule implements Rule
      * user reads in a report has to be the id they can act on — two vocabularies for one rule is how
      * a suppression comes to be written for something that does not exist.
      *
-     * Note that a project does NOT write this id to accept a call site. Acceptance is
+     * Note that a project does not write this id to accept a call site. Acceptance is
      * `#[RawSql(reason: '…')]`, which names no rule at all: it answers this rule's question rather
      * than silencing it. Naming the id is what {@see SqlensIgnore} is for, and that is a different
      * statement — the finding is produced and recorded as suppressed.
@@ -81,7 +81,7 @@ final readonly class UnjustifiedRawSqlRule implements Rule
     public const string IDENTIFIER = 'sqlens.rawSql.unjustified';
 
     /**
-     * The run's policy — the ONLY rule in this suite that reads it.
+     * The run's policy — the only rule in this suite that reads it.
      *
      * Deliberately not shared with the injection rules. This one reports a missing sentence; those
      * report that a runtime value reached the statement text, and severity is not level-gated in
@@ -106,7 +106,7 @@ final readonly class UnjustifiedRawSqlRule implements Rule
         }
 
         // Both joins — by name and by position — in one unit, shared with the interpolation rule
-        // that asks the same question of the OTHER channel. Two copies of this join is the failure
+        // that asks the same question of the other channel. Two copies of this join is the failure
         // this package has paid for elsewhere: two readings agreeing today, disagreeing the first
         // time either is touched, and each rule's tests green about its own half.
         $justified = JustificationCoverage::rawSql($node);

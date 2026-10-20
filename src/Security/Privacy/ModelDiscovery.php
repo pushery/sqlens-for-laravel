@@ -42,7 +42,7 @@ use Throwable;
  *
  * A class name is derived from the path — the application namespace plus the directories below the
  * scanned root — and then verified by reflection: the class must exist, be a concrete `Model`, and
- * be DECLARED IN THE FILE the name came from. The same discipline {@see MigrationLoader}
+ * be declared in the file the name came from. The same discipline {@see MigrationLoader}
  * applies, and for the same reason: a project whose autoloader maps a different file to that name
  * would otherwise have an unrelated class constructed as one of its models.
  *
@@ -108,7 +108,7 @@ final readonly class ModelDiscovery
      * `app/Models` when it exists, otherwise `app` — Laravel's own order, and it matters.
      *
      * An application predating the `Models` directory keeps them directly under `app`, and one that
-     * has the directory keeps nothing else in it. Scanning the fallback FIRST would walk an entire
+     * has the directory keeps nothing else in it. Scanning the fallback first would walk an entire
      * application's classes to find models that are all in one place.
      */
     private function scannedDirectory(): ?string

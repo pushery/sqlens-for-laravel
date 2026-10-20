@@ -29,7 +29,7 @@ use Throwable;
  *
  * ## Why this is not a louder version of the timeout findings
  *
- * Every other context check says a migration MIGHT go badly. This one says the next command will
+ * Every other context check says a migration might go badly. This one says the next command will
  * fail — `migrate --force` against a standby or a read-only instance is refused outright. The gate
  * ran, said nothing, and the deploy broke two lines later on something the gate could see.
  *
@@ -48,7 +48,7 @@ use Throwable;
  *
  * It used to be here, behind `$context->driver === 'mysql' ? … : …` with a private method on each
  * side. That is a driver decision taken in the core, and it was carried in the core-purity register
- * as a NAMED cost rather than excused — the register said in so many words that the honest remedy
+ * as a named cost rather than excused — the register said in so many words that the honest remedy
  * was a driver capability. This is that capability: {@see ReadsWriteAcceptance}, one implementation
  * per engine, and nothing here that knows either engine's name.
  *

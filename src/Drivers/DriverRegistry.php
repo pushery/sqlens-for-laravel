@@ -35,10 +35,10 @@ use Pushery\SQLens\Today;
  * back only the Driver contract, never a concrete class, so driver isolation never
  * holds "only almost".
  *
- * The extension point takes NEW drivers; it never overwrites a core decision. A
+ * The extension point takes new drivers; it never overwrites a core decision. A
  * duplicate key throws rather than silently overwriting. The reserved keys
  * (`mariadb`, `sqlite`, `sqlsrv`) are non-goals: extending them throws, so
- * the unsupported path can never be quietly bypassed — this is the ONE place the
+ * the unsupported path can never be quietly bypassed — this is the one place the
  * blocklist lives. Resolution is lazy and deterministic (no class scans, no
  * autoload-order dependence).
  */
@@ -47,7 +47,7 @@ final class DriverRegistry implements DebtStandingResolvers, SessionDefenses
     /**
      * The seal a connection of this driver gets.
      *
-     * It lives HERE rather than in a class of its own, and that is the whole point: exactly three
+     * It lives here rather than in a class of its own, and that is the whole point: exactly three
      * files in this package may know both engines, and the purity census pins them so a fourth
      * cannot slip in quietly. This registry is already one of the three — the mapping belongs beside
      * the other driver mappings rather than growing the set of files that carry engine knowledge.
@@ -106,8 +106,8 @@ final class DriverRegistry implements DebtStandingResolvers, SessionDefenses
     private array $resolved = [];
 
     /**
-     * ONE docblock, in constructor-parameter order. It used to be two stacked ones, and PHP attaches
-     * only the LAST — so the three `@param` lines that stood above the second block documented
+     * One docblock, in constructor-parameter order. It used to be two stacked ones, and PHP attaches
+     * only the last — so the three `@param` lines that stood above the second block documented
      * nothing any tool could read, and a static analyzer saw those parameters as undescribed.
      *
      * @param  string  $projectRoot  the application base path, threaded to the drivers so
@@ -130,10 +130,13 @@ final class DriverRegistry implements DebtStandingResolvers, SessionDefenses
      *                              shipped default and silences only the expectation-based trigger.
      * @param  mixed  $uuidGeneratedBy  the raw `sqlens.audit.uuid_generated_by` value — `app`,
      *                                  `server`, or anything else, which reads as "not said".
+     * @param  mixed  $keyCeiling  the raw `sqlens.audit.key_ceiling` array. A share outside 1 to 100,
+     *                             or anything that is not a whole number, reads as "not said", and
+     *                             the near-ceiling rules then use the shipped default.
      */
-    public function __construct(private readonly string $projectRoot = '', mixed $pgsqlExpectedTimeouts = null, mixed $pgsqlMaxLocksPerTransaction = null, mixed $auditExpect = null, mixed $uuidGeneratedBy = null, mixed $moneyColumns = null, mixed $unusedIndex = null, mixed $naming = null, mixed $documentationConfig = null, private readonly ?EolRepository $advisories = null, private readonly ?Today $today = null, private readonly ?UnencryptedColumnEvaluator $privacyColumns = null, private readonly ?RunEnvironment $environment = null, mixed $migrationsTable = null)
+    public function __construct(private readonly string $projectRoot = '', mixed $pgsqlExpectedTimeouts = null, mixed $pgsqlMaxLocksPerTransaction = null, mixed $auditExpect = null, mixed $uuidGeneratedBy = null, mixed $moneyColumns = null, mixed $unusedIndex = null, mixed $naming = null, mixed $documentationConfig = null, private readonly ?EolRepository $advisories = null, private readonly ?Today $today = null, private readonly ?UnencryptedColumnEvaluator $privacyColumns = null, private readonly ?RunEnvironment $environment = null, mixed $migrationsTable = null, mixed $keyCeiling = null)
     {
-        // Built ONCE here and handed to both drivers, rather than each rule reading the config for
+        // Built once here and handed to both drivers, rather than each rule reading the config for
         // itself. A rule that read configuration would be a rule whose verdict depends on something
         // its own tests cannot see, and two rules reading the same key would eventually disagree
         // about what a malformed value means.
@@ -142,12 +145,12 @@ final class DriverRegistry implements DebtStandingResolvers, SessionDefenses
             $this->stringList(is_array($moneyColumns) ? ($moneyColumns['ignore'] ?? null) : null),
         );
 
-        // Built ONCE here for the same reason the dictionary above is: there are TWO naming rules,
+        // Built once here for the same reason the dictionary above is: there are two naming rules,
         // one per engine, sharing one judgment — so there is exactly one place this may be built,
         // and neither rule reads configuration it could then disagree about.
         $convention = NamingConvention::fromConfig($naming);
 
-        // Built ONCE here for the same reason, and with one more of its own: reading it inside a
+        // Built once here for the same reason, and with one more of its own: reading it inside a
         // rule would put `config()` into shipped code, which this package does not declare a
         // dependency for — a guard reads the source for exactly that helper.
         $documentation = DocumentationPolicy::fromConfig($documentationConfig);
@@ -193,7 +196,16 @@ final class DriverRegistry implements DebtStandingResolvers, SessionDefenses
         $ledger = MigrationsTable::from($migrationsTable);
         $ledger = $ledger === MigrationsTable::DEFAULT && ! $this->namesDefaultLedger($migrationsTable) ? null : $ledger;
 
-        $this->register('pgsql', fn (): Driver => new PgsqlDriver($this->projectRoot, $expectedTimeouts, $maxLocks, $uuid, $dictionary, $days, $this->advisories, $this->today, $this->environment, $this->privacyColumns, $convention, $documentation, $ledger));
+        // Narrowed like the observation window above, and for the same reason: the value reaches a
+        // rule that changes its verdict on it. Zero would report every key that has handed out a
+        // single value, and a share above a hundred would report none, so both read as "not said".
+        $keyCeilingPercent = is_int($share = (is_array($keyCeiling) ? ($keyCeiling['min_percent_used'] ?? null) : null))
+            && $share >= 1
+            && $share <= 100
+                ? $share
+                : null;
+
+        $this->register('pgsql', fn (): Driver => new PgsqlDriver($this->projectRoot, $expectedTimeouts, $maxLocks, $uuid, $dictionary, $days, $this->advisories, $this->today, $this->environment, $this->privacyColumns, $convention, $documentation, $ledger, $keyCeilingPercent));
         // Narrowed to string keys rather than asserted: `is_array()` admits a LIST, and the
         // driver's contract is a keyed map. A numerically-keyed entry under `audit.expect` names no
         // setting and cannot mean anything, so dropping it is the honest reading — and the config
@@ -206,7 +218,7 @@ final class DriverRegistry implements DebtStandingResolvers, SessionDefenses
             }
         }
 
-        $this->register('mysql', fn (): Driver => new MysqlDriver($this->projectRoot, $expect, $dictionary, $days, $this->advisories, $this->today, $this->environment, $this->privacyColumns, $convention, $documentation, $ledger));
+        $this->register('mysql', fn (): Driver => new MysqlDriver($this->projectRoot, $expect, $dictionary, $days, $this->advisories, $this->today, $this->environment, $this->privacyColumns, $convention, $documentation, $ledger, $keyCeilingPercent));
     }
 
     /**
@@ -263,7 +275,7 @@ final class DriverRegistry implements DebtStandingResolvers, SessionDefenses
     }
 
     /**
-     * Register a NEW third-party driver. Throws for a reserved key or a key that
+     * Register a new third-party driver. Throws for a reserved key or a key that
      * is already taken — never a silent overwrite.
      *
      * @param  Closure(): Driver  $creator
@@ -279,7 +291,7 @@ final class DriverRegistry implements DebtStandingResolvers, SessionDefenses
 
     /**
      * Whether a key is a reserved non-goal engine (`mariadb`/`sqlite`/`sqlsrv`).
-     * This is the ONE source of the blocklist: the manager asks here to tell a
+     * This is the one source of the blocklist: the manager asks here to tell a
      * reserved driver apart from a genuinely unknown one, rather than keeping its
      * own copy.
      */
@@ -301,7 +313,7 @@ final class DriverRegistry implements DebtStandingResolvers, SessionDefenses
     /**
      * Every registered driver, in the same deterministic order {@see self::keys()} defines.
      *
-     * Exists so a caller that wants them ALL — the rule-registry export is the first — does not
+     * Exists so a caller that wants them all — the rule-registry export is the first — does not
      * have to walk the keys and re-check a null that cannot happen: a key from `keys()` always
      * resolves, and a null branch nothing can reach is a branch nothing can test.
      *
@@ -345,7 +357,7 @@ final class DriverRegistry implements DebtStandingResolvers, SessionDefenses
     }
 
     /**
-     * Whether the configuration REALLY says `migrations`, as opposed to saying nothing.
+     * Whether the configuration really says `migrations`, as opposed to saying nothing.
      *
      * The two are the same name and not the same statement. A rule that exempts the framework's
      * ledger must not exempt a table the application never named — and a configuration that is

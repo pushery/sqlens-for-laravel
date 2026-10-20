@@ -27,7 +27,7 @@ final readonly class SquawkRunner
     /**
      * A config file the tool reads is a config file that changes the answer.
      *
-     * A `.squawk.toml` in the working directory IS read and DOES change results — measured: one
+     * A `.squawk.toml` in the working directory is read and does change results — measured: one
      * excluded rule, one finding fewer, nothing anywhere saying so. Since SQLens maps this tool's
      * rules onto its own ids, levels and downtime classes, such a file would silence a SQLENS
      * rule without ever passing through the baseline or the ignore list, which are the two places
@@ -57,6 +57,10 @@ final readonly class SquawkRunner
             $invocation->timeoutSeconds,
             $payload->sql,
         );
+
+        if ($result->outcome === ToolRunOutcome::TimedOut) {
+            return SquawkRunResult::timedOut($this->outcomeDetail($result));
+        }
 
         if ($result->outcome !== ToolRunOutcome::Completed) {
             return SquawkRunResult::failed(

@@ -10,7 +10,7 @@ use Pushery\SQLens\Exceptions\UnsupportedCatalogDriver;
 use Pushery\SQLens\Subjects\SubjectContext;
 
 /**
- * Builds the catalog readers for a connection — the ONE place that knows which engine gets which.
+ * Builds the catalog readers for a connection — the one place that knows which engine gets which.
  *
  * Everything downstream of it is driver-neutral by construction: the audit runner asks for readers
  * by connection name and never learns what answered. Without this the branch would appear in the

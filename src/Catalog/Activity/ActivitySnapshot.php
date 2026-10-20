@@ -31,7 +31,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * The natural place to lose it is the mapping — a `match` with no arm, a filter that keeps what it
  * understood — and losing it deletes a blocking lock from the picture.
  *
- * So the row arrives carrying the server's own spelling, and THIS constructor adds the
+ * So the row arrives carrying the server's own spelling, and this constructor adds the
  * `unmapped_lock_mode` skip itself. A reader cannot forget to, and a reader cannot decline to: the
  * normative rule is enforced by the type rather than stated in a docblock somebody has to read.
  *
@@ -124,7 +124,7 @@ final readonly class ActivitySnapshot
      * The lock waits whose mode this build could not name.
      *
      * Kept reachable rather than only counted, because the raw modes are what a later mapping is
-     * written from — and because a reader of a partial preflight deserves to see WHICH lock could
+     * written from — and because a reader of a partial preflight deserves to see which lock could
      * not be classified rather than only that one could not.
      *
      * @return list<LockWait>

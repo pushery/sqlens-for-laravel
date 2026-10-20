@@ -25,7 +25,7 @@ use Throwable;
 /**
  * What this MySQL server will say about how big things are.
  *
- * The sibling of the PostgreSQL reader, and deliberately NOT a translation of it: the two engines
+ * The sibling of the PostgreSQL reader, and deliberately not a translation of it: the two engines
  * answer differently enough that copying the shape would have produced wrong numbers dressed in the
  * right types.
  *
@@ -50,7 +50,7 @@ use Throwable;
  *
  * ## `DATA_FREE` is not free space, and using it as such would be the worst kind of wrong
  *
- * It is reclaimable room INSIDE a tablespace file — fragmentation, not capacity. A headroom reading
+ * It is reclaimable room inside a tablespace file — fragmentation, not capacity. A headroom reading
  * built on it would tell a deploy gate "there is room for the rewrite" on the strength of gaps in a
  * file that cannot hold a second copy of the table. MySQL has no more SQL for the volume's free
  * space than PostgreSQL does, so the same named skip is reported, for the same reason.
@@ -70,7 +70,7 @@ final readonly class MysqlStatisticsReader implements StatisticsReader
         // and a number arriving with a request must not be able to widen it.
         $session = $this->session->withBudget($this->session->budget()->narrowedTo($request->budgetMilliseconds));
 
-        // Resolved ONCE, and only when the request did not state it. MySQL's "schema" is a database,
+        // Resolved once, and only when the request did not state it. MySQL's "schema" is a database,
         // so a bare `orders` means the table in the database this connection is pointed at — and
         // asking the server per object would be one round trip per table to answer one question.
         $defaultSchema = $request->schemas[0] ?? $this->currentDatabase($session, $skips);
@@ -86,7 +86,7 @@ final readonly class MysqlStatisticsReader implements StatisticsReader
             $skips,
         );
 
-        // A SEPARATE read, and a separately skippable one. The freshness and the per-index sizes
+        // A separate read, and a separately skippable one. The freshness and the per-index sizes
         // live in the `mysql` schema, which an ordinary application role commonly may not read —
         // and losing the row counts because the timestamp beside them was withheld would discard
         // the useful half to record that the other half was unavailable.

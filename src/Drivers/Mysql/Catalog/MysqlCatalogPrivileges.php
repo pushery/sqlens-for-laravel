@@ -27,9 +27,31 @@ use Pushery\SQLens\Contracts\CatalogPrivileges;
  * its tables: a schema the account cannot see is absent from `information_schema.SCHEMATA` entirely,
  * while an empty-but-visible schema is present. That distinguishes "you may not look" from "there is
  * nothing to see", which is the distinction the whole three-valued model rests on.
+ *
+ * ## Why a visible database is not yet a visible reading
+ *
+ * A database is in `SCHEMATA` as soon as the account holds any right in it, a right on one table
+ * included, and `TABLES` then lists that table and no other. Measured on MySQL 8.0.36: an account
+ * with `SELECT` on one of two tables saw the database, and one table. So the account's own grants
+ * are asked as well. A table- or column-level grant in an audited database, with no grant on the
+ * whole database and no global grant that reaches tables, is a reading of single tables, and it is
+ * named rather than taken for the database.
+ *
+ * The privilege views list what was granted to the account itself, not what reaches it through a
+ * role, so an account whose table-level rights come through a role is not recognized here.
  */
 final readonly class MysqlCatalogPrivileges implements CatalogPrivileges
 {
+    /**
+     * The connecting account in the spelling of the privilege views' `GRANTEE`, `'user'@'host'`.
+     *
+     * The host is everything after the last `@`, because a host cannot hold one and a user name can.
+     */
+    private const string GRANTEE = "CONCAT('''', LEFT(CURRENT_USER(), CHAR_LENGTH(CURRENT_USER()) - CHAR_LENGTH(SUBSTRING_INDEX(CURRENT_USER(), '@', -1)) - 1), '''@''', SUBSTRING_INDEX(CURRENT_USER(), '@', -1), '''')";
+
+    /** The privileges that make a table visible when they are held on its database or globally. */
+    private const string TABLE_PRIVILEGES = "'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'REFERENCES', 'INDEX', 'ALTER', 'CREATE VIEW', 'SHOW VIEW', 'TRIGGER'";
+
     public function areas(array $schemas): array
     {
         if ($schemas === []) {
@@ -48,6 +70,17 @@ final readonly class MysqlCatalogPrivileges implements CatalogPrivileges
                 ),
                 'at least one audited database is invisible to this account — information_schema is filtered by privilege, so the reading would come back EMPTY and look like a clean audit rather than an impossible one',
                 $schemas,
+            ),
+            new CatalogArea(
+                'every table of the audited databases',
+                'SELECT COUNT(*) = 0 AS ok FROM ('
+                .'SELECT TABLE_SCHEMA AS s FROM information_schema.TABLE_PRIVILEGES WHERE GRANTEE = '.self::GRANTEE.' AND TABLE_SCHEMA IN ('.$placeholders.')'
+                .' UNION SELECT TABLE_SCHEMA FROM information_schema.COLUMN_PRIVILEGES WHERE GRANTEE = '.self::GRANTEE.' AND TABLE_SCHEMA IN ('.$placeholders.')'
+                .') AS single_tables'
+                .' WHERE NOT EXISTS (SELECT 1 FROM information_schema.USER_PRIVILEGES u WHERE u.GRANTEE = '.self::GRANTEE.' AND u.PRIVILEGE_TYPE IN ('.self::TABLE_PRIVILEGES.'))'
+                .' AND NOT EXISTS (SELECT 1 FROM information_schema.SCHEMA_PRIVILEGES d WHERE d.GRANTEE = '.self::GRANTEE.' AND single_tables.s LIKE d.TABLE_SCHEMA AND d.PRIVILEGE_TYPE IN ('.self::TABLE_PRIVILEGES.'))',
+                'this account holds rights on single tables of an audited database and on nothing wider, so information_schema lists only those tables — a table the reading does not list is not audited, and the reading would look complete',
+                [...$schemas, ...$schemas],
             ),
             // performance_schema is off on some managed instances and denied on others; both end an
             // audit's ability to say anything about live statement behavior, and both are ordinary

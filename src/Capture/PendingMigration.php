@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Capture;
 
 /**
- * One pending migration handed TO a captor — file plus class, nothing more.
+ * One pending migration handed to a captor — file plus class, nothing more.
  *
  * This exists to make the captor's input contract explicit: a captor is given an
  * already-resolved, already-sorted list and resolves nothing itself. Passing a
@@ -32,7 +32,7 @@ final readonly class PendingMigration
     /**
      * The same migration, at a different position in the run.
      *
-     * The single-file resolver answers about ONE file and has no list to number against, so it
+     * The single-file resolver answers about one file and has no list to number against, so it
      * hands back index 0 every time. That was invisible while `--file` took one file and became a
      * defect the moment it took several: four subjects all claiming position 0 is not an order.
      *

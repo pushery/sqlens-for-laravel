@@ -10,7 +10,7 @@ namespace Pushery\SQLens\Security\Advisory;
  * Three files can answer the same question, and they are searched in a fixed order: a path the
  * project configured, the copy an application published into its own `resources/`, and the copy
  * bundled with the package. That order is the whole point of the type — an operator who refreshed
- * the data and still sees the old verdict needs to know WHICH file was read, and "somewhere" is not
+ * the data and still sees the old verdict needs to know which file was read, and "somewhere" is not
  * an answer they can act on.
  *
  * It travels into the reproducibility header for the same reason a server version does: two runs

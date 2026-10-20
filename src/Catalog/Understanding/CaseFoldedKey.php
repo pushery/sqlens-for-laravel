@@ -11,7 +11,7 @@ namespace Pushery\SQLens\Catalog\Understanding;
  *
  * `lower(email)` and `email` are different keys, and {@see IndexComprehension} already compares them
  * as the different things they are — an expression index carried intact needs nothing from this
- * class to be comparable. What no reader could say before is what such a key MEANS when the index is
+ * class to be comparable. What no reader could say before is what such a key means when the index is
  * unique: the table guarantees that no two rows share a value once case is folded away, which is a
  * promise the application has to make the same way or it asks a question the index does not answer.
  *

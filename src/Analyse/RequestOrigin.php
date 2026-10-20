@@ -83,7 +83,7 @@ final readonly class RequestOrigin
     /**
      * Does the request appear anywhere inside this expression?
      *
-     * Recursive on purpose, because the value almost never IS the call: `(string) $request->input()`,
+     * Recursive on purpose, because the value almost never is the call: `(string) $request->input()`,
      * `$request->input('sort') ?? 'id'`, `trim($request->query('sort'))` are the ordinary shapes, and
      * a check that only matched the bare call would be silent on all of them.
      */

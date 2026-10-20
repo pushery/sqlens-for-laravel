@@ -29,11 +29,11 @@ use Pushery\SQLens\Severity\SeverityGate;
  * fingerprint, so a document that is *correct* but not *stable* opens a fresh alert for the same
  * problem every night and teaches everybody to ignore the tab.
  *
- * ## What is deliberately NOT in here
+ * ## What is deliberately not in here
  *
  * **No timestamp.** `invocation` may carry `startTimeUtc` and `endTimeUtc`, and both are omitted:
  * this package's determinism claim is that the same state serializes byte-identically, and a clock
- * reading breaks that for every consumer that diffs two reports. The run parameters that DO vary
+ * reading breaks that for every consumer that diffs two reports. The run parameters that do vary
  * meaningfully — versions, mode, profile, the gate thresholds — are all in `invocation.properties`,
  * from the same {@see RunContext} the console header prints. One value type, two serializations.
  *
@@ -169,15 +169,30 @@ final readonly class SarifDocument
      * ships: what the rule checks, and in the help what it does not check and where its page is. A rule the catalog
      * does not name on its own, a member of a family, falls back to its id, as the short description does.
      *
+     * A descriptor is built from the LOUDEST finding of its rule. One rule can honestly report two loudnesses, a
+     * privacy rule a strong signal as low and a weak one as info, and a descriptor taken from whichever finding sorted
+     * last would let the names of two objects decide what the rule weighs. Among findings of equal weight the last
+     * in sort order serves. Each result keeps its own severity.
+     *
      * @param  list<Finding>  $findings
      * @param  array<string, array<array-key, mixed>>  $catalog
      * @return list<array<string, mixed>>
      */
     private function rules(array $findings, array $catalog, RuleLimitations $limitations): array
     {
-        $rules = [];
+        $loudest = [];
 
         foreach ($findings as $finding) {
+            $kept = $loudest[$finding->ruleId] ?? null;
+
+            if (! $kept instanceof Finding || ($finding->severity?->rank() ?? -1) >= ($kept->severity?->rank() ?? -1)) {
+                $loudest[$finding->ruleId] = $finding;
+            }
+        }
+
+        $rules = [];
+
+        foreach ($loudest as $finding) {
             $rules[$finding->ruleId] = [
                 'id' => $finding->ruleId,
                 // The id doubles as the name. SARIF wants a human-readable one, and inventing a
@@ -203,10 +218,10 @@ final readonly class SarifDocument
                     // omitted: a consumer reading the key learns this rule is not weighed on the
                     // risk axis, where a missing key would only say the producer is older.
                     'severity' => $finding->severity?->value,
-                    // …and the weight GitHub actually sorts by, on the RULE rather than only on the
-                    // result. That is where its code-scanning ingestion reads it from, and a
-                    // document that put it only on the result would arrive with every alert
-                    // unweighted while looking complete to a validator.
+                    // …and the weight GitHub actually sorts by, on the RULE and not on the result.
+                    // That is where its code-scanning ingestion reads it from, and a document that
+                    // put it on the result instead would arrive with every alert unweighted while
+                    // looking complete to a validator.
                     ...$this->securitySeverity($finding),
                 ],
             ];
@@ -281,6 +296,10 @@ final readonly class SarifDocument
      * what makes it impossible, rather than a test that compares two independent constructions and
      * passes until somebody edits one of them.
      *
+     * The properties are the whole run header, `instance` included: the host, port and database of
+     * the audited server travel with the log wherever it is uploaded, as they do in the JSON report.
+     * {@see RunContext} names the fields that vary between two runs.
+     *
      * @return array<string, mixed>
      */
     private function invocation(): array
@@ -336,7 +355,7 @@ final readonly class SarifDocument
             // SarifLocationTest holds findings-in against results-out for exactly that.
             'locations' => $this->locations->locations($finding),
             // What lets GitHub recognize one problem across runs instead of opening a new alert
-            // every night. The SAME fingerprint the baseline matches on, deliberately: a project
+            // every night. The same fingerprint the baseline matches on, deliberately: a project
             // that has accepted a finding in its baseline and a security tab that keeps reopening it
             // would be two answers to one question.
             'partialFingerprints' => [
@@ -357,7 +376,7 @@ final readonly class SarifDocument
                     ? [SeverityMapper::STATE => Outcome::Undetermined->value]
                     : []),
                 // The named reason an undetermined carries, or null. This is the field that keeps a
-                // check which COULD NOT RUN from reading like one that ran and found nothing.
+                // check which could not run from reading like one that ran and found nothing.
                 'undeterminedReason' => $finding->status->reason?->value,
                 'notApplicableReason' => $finding->status->notApplicableReason?->value,
                 'category' => $finding->category->value,
@@ -402,11 +421,11 @@ final readonly class SarifDocument
         // Offering an unproven schema as a one-click edit to a production migration is the wrong
         // order: the format has to earn trust before it earns a button.
         //
-        // Where the material DOES go: the JSON envelope and `--format=agent` carry the payload in
+        // Where the material does go: the JSON envelope and `--format=agent` carry the payload in
         // full, for a reader who then decides. The refusal is about the applicable-change surface,
         // not about withholding the advice.
         //
-        // Revisited when the schema is promoted `preview` → stable, and NOT before. That is the
+        // Revisited when the schema is promoted `preview` → stable, and not before. That is the
         // trigger, not a date and not somebody's judgment that it looks ready.
         // `tests/Feature/Reporting/SarifCarriesNoFixesTest.php` holds this to it.
 
@@ -435,7 +454,7 @@ final readonly class SarifDocument
      * Spread into the bag rather than set to null: SARIF's `properties` has no schema, so an
      * explicit null is a property whose value is null — and GitHub reads that as a weight it cannot
      * parse rather than as an absence. This is the one place in the package where absent and null
-     * are NOT interchangeable, which is why it is its own method with this sentence on it.
+     * are not interchangeable, which is why it is its own method with this sentence on it.
      *
      * @return array<string, string>
      */

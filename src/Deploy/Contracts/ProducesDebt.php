@@ -19,7 +19,7 @@ use Pushery\SQLens\Findings\Finding;
  *
  * Nothing in the two methods below was ever about being a rule. What the registrar needs is a thing
  * that names itself, names a kind, and can point at the object one of its findings leaves behind —
- * which is why `id()` is declared HERE rather than assumed from `Rule`. A check already had it; now
+ * which is why `id()` is declared here rather than assumed from `Rule`. A check already had it; now
  * the registrar can ask for it without knowing which of the two it is holding.
  *
  * ## Why it is an opt-in interface rather than a metadata flag on every rule
@@ -35,7 +35,7 @@ use Pushery\SQLens\Findings\Finding;
  *
  * ## Why the rule names a reference and not a subject
  *
- * The rule says WHICH object; the registrar canonicalizes it. Quoting and casing folding are engine
+ * The rule says which object; the registrar canonicalizes it. Quoting and casing folding are engine
  * rules, and a rule that canonicalized its own reference would be one more place that has to
  * remember to — and the day one of them forgot, the ledger would grow a duplicate that looks like a
  * second debt. One implementation, one identity, the same rule this package applies to its checks.

@@ -14,7 +14,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
 /**
  * A `SECURITY DEFINER` routine created without pinning its `search_path`.
  *
- * The routine runs with the privileges of whoever OWNS it rather than whoever calls it — usually the
+ * The routine runs with the privileges of whoever owns it rather than whoever calls it — usually the
  * migration role, which usually holds a great deal. That is the whole point of `SECURITY DEFINER`
  * and it is fine. What is not fine is leaving the name resolution to the caller: `search_path` is a
  * session setting, so an unqualified `orders` inside the body means whatever the CALLER's path says
@@ -86,7 +86,7 @@ final class DefinerWithoutSearchPathRule extends AbstractMigrationSecurityRule
      * A pinned path, in either spelling PostgreSQL accepts.
      *
      * `SET search_path = …` and `SET search_path TO …` are the same clause. Whether the value is a
-     * SAFE path is a different question, and it belongs to the catalog siblings — a rule that
+     * safe path is a different question, and it belongs to the catalog siblings — a rule that
      * answered both would have no separate id to silence.
      */
     private const string PINS_SEARCH_PATH = '/\bSET\s+search_path\s*(?:=|\bTO\b)/i';

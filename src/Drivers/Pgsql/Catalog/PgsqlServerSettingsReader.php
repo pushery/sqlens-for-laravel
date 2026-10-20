@@ -17,7 +17,8 @@ use Throwable;
 /**
  * What this PostgreSQL server is configured to do, read from `pg_settings`.
  *
- * One statement over a view, no lock, inside the session the catalog reader already sealed.
+ * Two statements per reading, no lock, inside the session the catalog reader already sealed: one asks
+ * whether the role may read every setting, the other reads the `pg_settings` view.
  *
  * ## The row that is not there
  *
@@ -33,7 +34,7 @@ use Throwable;
  *
  * ## Why every row is global scope
  *
- * `pg_settings.setting` is the value in effect for THIS session, which for an untouched session is
+ * `pg_settings.setting` is the value in effect for this session, which for an untouched session is
  * the server's. The reader session does set a few of its own bounds — `statement_timeout`,
  * `lock_timeout`, the read-only seal — so those specific names describe the audit rather than the
  * server, and a rule about them must consult `boot_val`/`reset_val` instead. Every other name is
@@ -93,7 +94,7 @@ final readonly class PgsqlServerSettingsReader implements ServerSettingsReader
                 // managed database it is simply not available.
                 $this->nullableText($row, 'sourcefile'),
                 $this->nullableText($row, 'context'),
-                // The server's own value, named as such. `setting` above is what THIS session is
+                // The server's own value, named as such. `setting` above is what this session is
                 // running with; `reset_val` is what a fresh session would get, which is the server's
                 // configuration for this role and database. A server-baseline rule reads only this.
                 $this->nullableText($row, 'reset_val'),

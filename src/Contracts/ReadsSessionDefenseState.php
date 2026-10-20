@@ -21,13 +21,15 @@ use Throwable;
  *
  * ## The shape of the answer
  *
- * A map of SETTING NAME to milliseconds, or null where the server did not answer with a timeout at
+ * A map of setting name to milliseconds, or null where the server did not answer with a timeout at
  * all. The names are the ones the engine itself uses, because they are shown to an operator in the
  * run header and a name they cannot look up is worse than none: PostgreSQL answers
- * `statement_timeout` and `lock_timeout`, MySQL `max_execution_time` and `lock_wait_timeout`.
+ * `statement_timeout` and `lock_timeout`, MySQL `max_execution_time`, `innodb_lock_wait_timeout`
+ * and `lock_wait_timeout`, one for each bound its session defense sets.
  *
- * The caller therefore does not index this map by name — it judges every value and reports the keys
- * whose bound is missing, which works whatever an engine calls its settings.
+ * The caller judges every value and reports the keys whose bound is missing or looser than the run
+ * asked. It looks a name up only to learn which of the run's bounds holds it, and a name it does not
+ * know is held to being bounded at all, which works whatever an engine calls its settings.
  *
  * **Zero is a value, not an absence.** Zero means NO TIMEOUT on both engines — exactly the state
  * the check exists to catch — so an implementation reports it as `0` and never folds it into null.
@@ -35,7 +37,7 @@ use Throwable;
 interface ReadsSessionDefenseState
 {
     /**
-     * The timeouts in force on this session, in milliseconds, keyed by cross-engine name.
+     * The timeouts in force on this session, in milliseconds, keyed by the name the engine uses.
      *
      * @return array<string, int|null>
      *

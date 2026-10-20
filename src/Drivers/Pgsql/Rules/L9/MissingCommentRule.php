@@ -67,7 +67,7 @@ final class MissingCommentRule extends AbstractCatalogRule implements DeclaresCo
     /**
      * Off unless the project turned one of the two switches on — the state this rule ships in.
      *
-     * EITHER switch is enough to make it reachable, because the two are independent halves: a
+     * Either switch is enough to make it reachable, because the two are independent halves: a
      * project that requires table comments and not column ones still gets findings, and reporting
      * that rule as silenced would be wrong in the direction that matters least visibly.
      *
@@ -130,12 +130,9 @@ final class MissingCommentRule extends AbstractCatalogRule implements DeclaresCo
 
         // A column is judged by the exemption of the TABLE that owns it, not by its own name.
         // Exempting `migrations` has to exempt `migrations.batch` too, or the table switch would be
-        // honored and the column switch would report the framework anyway.
-        $owner = $object->type === SchemaObjectType::Column
-            ? $object->parent ?? $object->qualifiedName
-            : $object->qualifiedName;
-
-        if (in_array(MissingComment::bareName($owner), $this->policy->exempt, true)) {
+        // honored and the column switch would report the framework anyway. The table is named as the
+        // project knows it, without a connection's table prefix.
+        if (in_array(MissingComment::ownerName($object), $this->policy->exempt, true)) {
             return [];
         }
 

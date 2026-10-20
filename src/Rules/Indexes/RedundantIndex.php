@@ -39,9 +39,9 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * - **The cover is INVISIBLE.** MySQL maintains an `INVISIBLE` index on every write and its
  *   optimizer ignores it, so it serves no lookup, and reporting a visible index as covered by one
  *   would advise dropping the index the queries use. An invisible index may still be the one that
- *   IS covered: it costs the writes and serves nothing, and a visible index does its work.
+ *   is covered: it costs the writes and serves nothing, and a visible index does its work.
  * - **The candidate is UNIQUE or the primary key.** Dropping it would change what the schema
- *   ALLOWS, not just what it costs, and that is a different conversation from a performance
+ *   allows, not just what it costs, and that is a different conversation from a performance
  *   finding. A unique index may still be the one that COVERS another — a unique key on `(a, b)`
  *   serves lookups on `(a)` — so it is excluded as a victim and kept as a candidate cover.
  * - **The candidate carries an INCLUDE payload.** Measured: `(a) INCLUDE (b)` and `(a)` report the
@@ -50,7 +50,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * - **It is not a strict left prefix.** A B-tree on `(a, b)` serves `(a)`, and does not serve `(b)`.
  *   Order is the fact, not a detail.
  *
- * ## The one thing a partial index DOES conclude, and the three it does not
+ * ## The one thing a partial index does conclude, and the three it does not
  *
  * Two partial indexes whose normalized predicates are identical cover exactly the same rows, so the
  * predicate cancels and the columns decide. That is arithmetic — same condition, same row set — and
@@ -58,7 +58,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * Everything else about them stays excluded, and each exclusion is a decision rather than a gap:
  *
- * - **Two DIFFERENT predicates** is an implication question, and implication is not built. The pair
+ * - **Two different predicates** is an implication question, and implication is not built. The pair
  *   is never formed.
  * - **A partial index against an UNCONDITIONAL one** is the tempting case. As a statement about rows
  *   it is true that the full index covers the partial one; as ADVICE it is not, because the partial
@@ -119,7 +119,7 @@ final readonly class RedundantIndex
     }
 
     /**
-     * The redundant indexes inside one comparison universe, judged by LEFT PREFIX.
+     * The redundant indexes inside one comparison universe, judged by left prefix.
      *
      * A universe is a set of indexes that cover the same rows as each other — every unconditional
      * comparable index, or one group of partial indexes carrying the same condition. Whether the
@@ -144,7 +144,7 @@ final readonly class RedundantIndex
      * The redundant indexes inside a universe where only IDENTITY concludes anything.
      *
      * The members share an access method and an operator class and nothing else is known about how
-     * that method searches — so the pair that may be reported is the pair with the SAME column list,
+     * that method searches — so the pair that may be reported is the pair with the same column list,
      * which is the same index written twice. A prefix here would be a claim about a structure this
      * package has not measured, made in the direction that tells somebody to drop an index.
      *
@@ -206,7 +206,7 @@ final readonly class RedundantIndex
      *
      * Two partial indexes whose normalized predicates are identical cover exactly the same rows, so
      * the predicate cancels and the columns decide. That is arithmetic, not a heuristic — and it is
-     * the ONLY thing about a partial index this rule concludes. The grouping itself is done by
+     * the only thing about a partial index this rule concludes. The grouping itself is done by
      * {@see TableMembers}, whose projection also decides what never enters
      * a group: an unconditional index, a predicate shape the reading refuses, and an index alone
      * under its condition.
@@ -222,7 +222,7 @@ final readonly class RedundantIndex
     }
 
     /**
-     * The indexes of this table that share an ACCESS METHOD and operator class, one set per pair.
+     * The indexes of this table that share an access method and operator class, one set per pair.
      *
      * ## What the group buys, and the line it does not cross
      *
@@ -316,7 +316,7 @@ final readonly class RedundantIndex
     }
 
     /**
-     * Whether these two are the SAME index written twice — the only claim a shared method supports.
+     * Whether these two are the same index written twice — the only claim a shared method supports.
      *
      * Equal lists, in order, and the tie broken by name exactly as above so one finding comes out of
      * a pair instead of two. Order is required rather than ignored: this cannot know whether the
@@ -339,7 +339,7 @@ final readonly class RedundantIndex
     private static function protectedNames(SchemaObject $table): array
     {
         $names = [
-            // Dropping either changes what the schema ALLOWS rather than what it costs.
+            // Dropping either changes what the schema allows rather than what it costs.
             ...array_keys(ForeignKeyIndexCoverage::parse($table->getString('primary_key') ?? '')),
             ...array_keys(ForeignKeyIndexCoverage::parse($table->getString('unique_indexes') ?? '')),
             // The payload is invisible in a column list, so an index carrying one is never the

@@ -16,13 +16,13 @@ enum SqlTokenKind
     /** A bare word: keyword, identifier or number. The only kind a formatter may re-case. */
     case Word;
 
-    /** A string literal, delimiters included. NEVER touched — its contents are data. */
+    /** A string literal, delimiters included. Never touched — its contents are data. */
     case String;
 
-    /** An identifier in quotes or backticks. NEVER touched — the quoting is what makes it exact. */
+    /** An identifier in quotes or backticks. Never touched — the quoting is what makes it exact. */
     case QuotedIdentifier;
 
-    /** A comment. NEVER touched: it can contain anything, including SQL that is not SQL. */
+    /** A comment. Never touched: it can contain anything, including SQL that is not SQL. */
     case Comment;
 
     /** A run of whitespace. The one kind a formatter fully owns. */

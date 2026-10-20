@@ -65,7 +65,7 @@ final readonly class GrantCheck implements PreflightCheck
      * Missing OWNERSHIP, which is a different finding from a missing grant.
      *
      * Its own id because the two send a reader to different actions and because the confusion
-     * between them is the expensive one: a role can hold EVERY grant on a table and still be unable
+     * between them is the expensive one: a role can hold every grant on a table and still be unable
      * to `ALTER` it. A check that reported both under one id would let somebody read "missing
      * privilege", run the `GRANT` it names, and watch the next deploy fail identically.
      */
@@ -106,7 +106,7 @@ final readonly class GrantCheck implements PreflightCheck
             );
         }
 
-        // Asked ONCE, before any privilege question, because a role that does not exist makes every
+        // Asked once, before any privilege question, because a role that does not exist makes every
         // one of them raise with the same message — and that message reads as "the grants could not
         // be read", which sends somebody to study ACLs over what is almost always a typo in the
         // connection's `username`.
@@ -118,8 +118,8 @@ final readonly class GrantCheck implements PreflightCheck
             return CheckResult::undetermined(
                 self::ID,
                 UndeterminedReason::MigrationRoleMissing,
-                'the migration connection names the role `'.$role.'`, and this server has no such '
-                    .'role. Nothing was established about any privilege — check the username '
+                'the role the `username` of the migration connection names does not exist on this '
+                    .'server. Nothing was established about any privilege — check that `username` '
                     .'before reading grants.',
             );
         }
@@ -169,7 +169,7 @@ final readonly class GrantCheck implements PreflightCheck
     /**
      * Whether the role owns the named schema — `pg_namespace.nspowner`, with inheritance.
      *
-     * `pg_has_role(…, 'USAGE')` and NOT `'MEMBER'`, which is the same distinction the object case
+     * `pg_has_role(…, 'USAGE')` and not `'MEMBER'`, which is the same distinction the object case
      * makes and for the same measured reason: `MEMBER` answers whether the role could `SET ROLE` to
      * the owner, `USAGE` whether it holds the owner's privileges right now. A role that inherits
      * ownership answers true to the second and false to the first, so asking for `MEMBER` here would
@@ -183,7 +183,7 @@ final readonly class GrantCheck implements PreflightCheck
      * no grant produces. Reported the wrong way round, a reader is sent to hand out a privilege that
      * would change nothing.
      *
-     * ## What it does NOT cover, said out loud
+     * ## What it does not cover, said out loud
      *
      * `ALTER SCHEMA` does not reach here, because the grammar does not classify it — see
      * {@see StatementKind::DropSchema} for why that stayed out. The destructive sibling is the one
@@ -328,7 +328,7 @@ final readonly class GrantCheck implements PreflightCheck
         // refusal. Answering `true` would certify a permission nobody checked, so it raises and the
         // caller reports it as unanswered.
         if (! is_object($row)) {
-            // NAMED, and unconditionally so — which is a claim about the arms of the match above
+            // Named, and unconditionally so — which is a claim about the arms of the match above
             // rather than a shortcut. Only the two OWNERSHIP questions join `pg_class`, and only a
             // join can come back with nothing; `has_schema_privilege` and `has_table_privilege`
             // always answer with exactly one row, or they raise and never reach here. So an empty
@@ -364,7 +364,7 @@ final readonly class GrantCheck implements PreflightCheck
     private function finding(PreflightContext $context, string $role, PrivilegeRequirement $requirement, PrivilegeClass $class, array $answer): Finding
     {
         // Ownership and a missing grant are different findings, and telling them apart is the
-        // expensive distinction: a role can hold EVERY grant on a table and still not be able to
+        // expensive distinction: a role can hold every grant on a table and still not be able to
         // ALTER it. One id for both would let somebody read "missing privilege", run the GRANT it
         // names, and watch the next deploy fail identically.
         $ownership = in_array($class, [PrivilegeClass::Ownership, PrivilegeClass::Drop, PrivilegeClass::Index], true);

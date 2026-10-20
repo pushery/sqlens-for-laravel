@@ -15,7 +15,7 @@ use Pushery\SQLens\Severity\Severity;
  * chose themselves.
  *
  * It carries the whole finding on its own — {@see AbstractNoPasswordRule} stands down on an
- * anonymous account — because this is ONE fact, and two ids about one account read as two problems.
+ * anonymous account — because this is one fact, and two ids about one account read as two problems.
  */
 final class AnonymousAccountNoPasswordRule extends AbstractAnonymousAccountRule
 {

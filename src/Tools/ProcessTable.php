@@ -30,7 +30,7 @@ final readonly class ProcessTable
     /**
      * The table a `/proc` describes, one `<pid>/stat` per process.
      *
-     * The parent is read after the LAST closing parenthesis. The second field is the command name
+     * The parent is read after the last closing parenthesis. The second field is the command name
      * in parentheses, and a name may hold spaces and parentheses of its own, so splitting the line
      * on whitespace from its start would read a word of the name as the parent.
      */

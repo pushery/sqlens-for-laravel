@@ -17,7 +17,7 @@ use Pushery\SQLens\Rules\StabilityTier;
  *
  * The stability policy: the payload is `preview` for the whole 1.x line and only
  * promotes to stable at a
- * major, evidence-bound. The stability marker has ONE source of truth, a constant
+ * major, evidence-bound. The stability marker has one source of truth, a constant
  * `preview` — no code path marks a payload stable until that promotion, which is a
  * deliberate future change. It rides under its own `remediation` key, carrying its
  * `schema_version` and `stability` inline so a consumer sees the maturity without
@@ -37,7 +37,7 @@ final readonly class RemediationPayload
     public const int SCHEMA_VERSION = 3;
 
     /**
-     * Where the published contract lives, relative to the package root — in exactly ONE place.
+     * Where the published contract lives, relative to the package root — in exactly one place.
      *
      * A path written twice is a path that disagrees with itself the day somebody moves the file,
      * and the half that still points at the old place fails in whichever direction nobody is
@@ -52,7 +52,7 @@ final readonly class RemediationPayload
     // added the case, before a line of the new document existed.
     //
     // 2 since the `subject` field landed, and the version this replaced said 1 for a reason that had
-    // QUIETLY EXPIRED — which is why the old text is not left standing to be believed.
+    // quietly expired — which is why the old text is not left standing to be believed.
     //
     // It read: "no payload of any shape has ever been RELEASED, so no consumer has a version 1 to
     // migrate away from", and it closed with "the bump obligation is live from the first tagged
@@ -66,7 +66,7 @@ final readonly class RemediationPayload
     // ignores the key does read what it read before. A VALIDATOR does not. The v1 document carries
     // `additionalProperties: false`, so the copy a consumer vendored from v0.3.0 rejects every
     // payload this package now produces — and `subject` also went into `required`, so the v1
-    // document in THIS tree rejects every payload v0.3.0 produced. Both directions break while both
+    // document in this tree rejects every payload v0.3.0 produced. Both directions break while both
     // payloads claim to be version 1, which is the one thing a version field exists to prevent.
     //
     // So version 1 is frozen at the bytes v0.3.0 published and kept in the tree beside this one.
@@ -95,7 +95,7 @@ final readonly class RemediationPayload
      *                                        the same steps in different orders serialize alike
      * @param  string|null  $ruleId  which rule this fixes — carried so a payload lifted out of a
      *                               finding still says what it is about
-     * @param  list<string>  $preconditions  translation keys for what must be true BEFORE step one;
+     * @param  list<string>  $preconditions  translation keys for what must be true before step one;
      *                                       a sequence whose preconditions nobody checked is a
      *                                       sequence that fails halfway
      * @param  string|null  $verification  translation key for how to confirm it worked — the step
@@ -160,7 +160,7 @@ final readonly class RemediationPayload
             'schema_version' => self::SCHEMA_VERSION,
             'stability' => self::STABILITY->value,
             'rule_id' => $this->ruleId,
-            // Emitted ALWAYS, including for the default. A discriminator that appeared only on the
+            // Emitted always, including for the default. A discriminator that appeared only on the
             // unusual case would leave a consumer inferring the common one from its absence, which
             // is the guessing this field exists to end.
             'subject' => $this->subject->value,

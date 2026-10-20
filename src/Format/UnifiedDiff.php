@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Format;
 
 /**
- * The unified diff `sqlens:format --diff` prints: what a write run WOULD change, in the one
+ * The unified diff `sqlens:format --diff` prints: what a write run would change, in the one
  * notation every reviewer, editor and patch tool already reads.
  *
  * ## Why the package renders this itself
@@ -27,11 +27,11 @@ namespace Pushery\SQLens\Format;
  * untouched.
  *
  * What remains goes through a longest-common-subsequence table. That is O(n·m), which is fine for
- * the middle of a reformatted SQL file and is NOT fine for two files that share nothing. So the
+ * the middle of a reformatted SQL file and is not fine for two files that share nothing. So the
  * refinement is bounded: past {@see self::MAX_REFINED_CELLS} the differing middle is emitted as
  * one coarse block — every old line removed, every new line added.
  *
- * That fallback is still a CORRECT unified diff. It is a less minimal one, which is a readability
+ * That fallback is still a correct unified diff. It is a less minimal one, which is a readability
  * cost and never a wrong answer — the distinction that matters, because this output is read by
  * people deciding whether to run the write.
  */
@@ -354,7 +354,7 @@ final class UnifiedDiff
         $last = count($full) - 1;
         $hunks = [];
 
-        // Seeded from the FIRST change rather than from null. The nullable version needed a
+        // Seeded from the first change rather than from null. The nullable version needed a
         // "did we start one yet" test that, after the guard above, can only ever answer yes.
         $start = max(0, $changed[0] - self::CONTEXT);
         $end = min($last, $changed[0] + self::CONTEXT);
@@ -363,7 +363,7 @@ final class UnifiedDiff
             $from = max(0, $index - self::CONTEXT);
             $to = min($last, $index + self::CONTEXT);
 
-            // Overlapping context windows become ONE hunk. Two hunks whose context touches would
+            // Overlapping context windows become one hunk. Two hunks whose context touches would
             // print the same lines twice, and a patch tool would reject the second one.
             if ($from <= $end + 1) {
                 $end = max($end, $to);
@@ -433,8 +433,8 @@ final class UnifiedDiff
      * Both special cases were measured against it rather than reasoned about, because each is
      * invisible until something tries to APPLY the output:
      *
-     *   - a length of ONE omits the count entirely — `+1`, never `+1,1`;
-     *   - a length of ZERO names the line it comes AFTER, which over an empty side is line 0.
+     *   - a length of one omits the count entirely — `+1`, never `+1,1`;
+     *   - a length of zero names the line it comes after, which over an empty side is line 0.
      */
     private static function span(int $start, int $count): string
     {

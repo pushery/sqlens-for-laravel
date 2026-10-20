@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Catalog;
 
-use Pushery\SQLens\Findings\CredentialRedactor;
+use Pushery\SQLens\Findings\CompositeCredentialRedactor;
 use Pushery\SQLens\Findings\UndeterminedReason;
 
 /**
@@ -17,7 +17,7 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  * consuming that map can tell them apart no better than a person can.
  *
  * So the reading carries its own outcome. A rule that finds no entry for its name still reports
- * "could not check" — that part was always right — but a run can now say WHY the whole set is
+ * "could not check" — that part was always right — but a run can now say why the whole set is
  * missing instead of implying the server simply had nothing.
  */
 final readonly class SettingsReading
@@ -93,7 +93,7 @@ final readonly class SettingsReading
      */
     public static function failed(UndeterminedReason $reason, ?string $detail = null): self
     {
-        return new self([], $reason, null, true, $detail === null ? null : new CredentialRedactor()->redact($detail));
+        return new self([], $reason, null, true, $detail === null ? null : new CompositeCredentialRedactor()->redact($detail));
     }
 
     public function succeeded(): bool

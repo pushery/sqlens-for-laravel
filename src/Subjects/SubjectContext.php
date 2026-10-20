@@ -32,7 +32,7 @@ final readonly class SubjectContext
     /**
      * The version itself, derived from the run's resolution.
      *
-     * A rule that only needs to know WHICH version reads this and nothing else — it
+     * A rule that only needs to know which version reads this and nothing else — it
      * carries no version SOURCE, so a pin and a live read of the same version are
      * literally the same value here. That is the determinism the pin exists to guarantee,
      * and it holds by construction rather than by discipline.
@@ -71,7 +71,7 @@ final readonly class SubjectContext
         /**
          * How this run decides whether a file is a migration — the registered paths, resolved once.
          *
-         * A RUN fact, not a rule fact, and that is why it travels here rather than arriving through
+         * A run fact, not a rule fact, and that is why it travels here rather than arriving through
          * a rule's constructor. The paths are `databasePath('migrations')` plus everything a package
          * registered on the migrator, and the lint layer already resolves them once at the top of a
          * run. A rule resolving them again would be a second answer that can disagree with the first
@@ -88,7 +88,7 @@ final readonly class SubjectContext
         /**
          * Whether the server this run read from outlives the run — `persistent` or `disposable`.
          *
-         * A RUN fact for the same reason `instanceRole` above is one, and a string for the same
+         * A run fact for the same reason `instanceRole` above is one, and a string for the same
          * reason too: the enum lives in the audit suite, and this class is the driver-neutral core
          * every rule sees. The audit stamps the value; the core carries it.
          *
@@ -116,7 +116,7 @@ final readonly class SubjectContext
      * an assume_server_version pin, or a named "could not determine", alike.
      *
      * The whole resolution travels, but what a rule branches on stays the version: the
-     * source rides along only so a version-windowed data source can report the run's OWN
+     * source rides along only so a version-windowed data source can report the run's own
      * reason when there is no version to look one up with.
      */
     public function withResolvedServerVersion(?ResolvedServerVersion $resolvedServerVersion): self
@@ -149,15 +149,15 @@ final readonly class SubjectContext
     }
 
     /**
-     * The same context, carrying the run's OWN profile and strict-tools setting.
+     * The same context, carrying the run's own profile and strict-tools setting.
      *
      * For a finding built before either was known. The security suite's "this half examined
-     * nothing" notices are the case: they are produced INSIDE the audit or lint half, at a moment
+     * nothing" notices are the case: they are produced inside the audit or lint half, at a moment
      * when that half has just failed and the other has not run yet — so the only profile available
      * to them is a placeholder, and a placeholder in a notice whose whole purpose is to speak
      * honestly about the run is a contradiction a consumer reads in the JSON.
      *
-     * The driver is deliberately NOT taken along. A notice saying "this half examined nothing"
+     * The driver is deliberately not taken along. A notice saying "this half examined nothing"
      * names no engine, and borrowing `pgsql` from the half that did run would attach it to a
      * sentence that would read identically on MySQL — the same argument the analyse half already
      * makes for its own `unknown`.

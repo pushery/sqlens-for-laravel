@@ -43,7 +43,7 @@ enum SchemaObjectType: string
      *
      * The two engines put the body in different places, and the model does not try to hide it. On
      * MySQL the action statement is stored inline and is the thing that drifts. On PostgreSQL the
-     * trigger only NAMES a function, whose body is compared separately as a {@see self::Routine} —
+     * trigger only names a function, whose body is compared separately as a {@see self::Routine} —
      * so what drifts there is the binding: the timing, the events, and which function it calls.
      */
     case Trigger = 'trigger';
@@ -85,7 +85,7 @@ enum SchemaObjectType: string
      *
      * Distinct from {@see self::Schema} on PostgreSQL, where the two nest; on MySQL the reading maps
      * a database grant to this case and a table grant to {@see self::Table}, because MySQL's "schema"
-     * IS its database and splitting the word would invent a level that engine does not have.
+     * is its database and splitting the word would invent a level that engine does not have.
      */
     case Database = 'database';
 

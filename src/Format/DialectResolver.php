@@ -16,7 +16,7 @@ use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
  * the driver hierarchy into the formatter namespace, and the architecture test that keeps the two
  * apart would have to be weakened to allow it.
  *
- * ## An engine this package does not support is NAMED, not mapped onto its neighbor
+ * ## An engine this package does not support is named, not mapped onto its neighbor
  *
  * MariaDB arrives behind Laravel's `mysql` driver key and is a declared non-goal — the two share a
  * driver key and a wire protocol and not the semantics every MySQL rule here reasons about. Mapping

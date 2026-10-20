@@ -24,7 +24,7 @@ final readonly class DriftEntry
 {
     /**
      * @param  array<string, array{live: scalar|null, expected: scalar|null}>  $changes  attribute => both sides, for a divergence
-     * @param  array<string, scalar|null>  $attributes  the object as the side that HAS it describes it
+     * @param  array<string, scalar|null>  $attributes  the object as the side that has it describes it
      */
     public function __construct(
         public DriftClass $class,

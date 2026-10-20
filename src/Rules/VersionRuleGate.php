@@ -10,11 +10,11 @@ use Pushery\SQLens\Contracts\Rule;
  * The version axis of rule selection, the sibling of the level and category gates —
  * and the one place the fast path's "no live server" reality meets the rule set.
  *
- * The engine evaluates a rule's version window BEFORE it evaluates the subject, so a
+ * The engine evaluates a rule's version window before it evaluates the subject, so a
  * rule can never fire outside the versions it was written for. This gate makes that
  * evaluation three-valued, exactly as the {@see Rule} contract requires:
  *
- *   - A KNOWN version (detected on a live server, or pinned via assume_server_version):
+ *   - a known version (detected on a live server, or pinned via assume_server_version):
  *     a rule whose window matches runs; a rule whose window does not match produces NO
  *     finding — "not written for this version" is silence, correctly.
  *   - An UNKNOWN version (the fast path with no pin, an unreachable server): a

@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Reporting;
 
 use BackedEnum;
 use Illuminate\Contracts\Config\Repository;
+use Pushery\SQLens\Catalog\SealedBy;
 use Pushery\SQLens\Contracts\RunContextCollector;
 use Pushery\SQLens\PackageVersion;
 use Pushery\SQLens\Rules\StabilityGate;
@@ -34,12 +35,15 @@ final readonly class ConfigRunContextCollector implements RunContextCollector
      * @param  int|null  $timeBudgetMsConsumed  what the whole run cost, for a producer with a time
      *                                          budget; null for the lint and audit runs, which have
      *                                          none
+     * @param  SealedBy|null  $sealedBy  what the read-only guarantee of the producer's own catalog
+     *                                   session rested on, as its write probe proved it; null for a
+     *                                   producer that opens none or read nothing through it
      *
      * The mode is a parameter and not a config read: only the producer knows how it obtained the SQL.
      * `sqlens:drift` replays into a shadow database and `sqlens:postdeploy` captures in pretend,
      * whatever a configuration key would say.
      */
-    public function collect(CaptureMode $mode, ?array $sessionTimeouts = null, ?string $checkTimings = null, ?int $timeBudgetMsConsumed = null, ?Today $today = null): RunContext
+    public function collect(CaptureMode $mode, ?array $sessionTimeouts = null, ?string $checkTimings = null, ?int $timeBudgetMsConsumed = null, ?Today $today = null, ?SealedBy $sealedBy = null): RunContext
     {
         return new RunContext(
             serverVersions: [],
@@ -63,7 +67,7 @@ final readonly class ConfigRunContextCollector implements RunContextCollector
             checkTimings: $checkTimings,
             timeBudgetMsConsumed: $timeBudgetMsConsumed,
             // Read here rather than derived from whether anything was armed, and the difference is
-            // the whole point: `off` has to be SAID. A deactivated guard that does not appear in a
+            // the whole point: `off` has to be said. A deactivated guard that does not appear in a
             // header reads exactly like an active one, and a reader scanning for it and finding
             // nothing concludes the field is not emitted by this version.
             guardProfile: self::guardProfileFrom($this->config),
@@ -73,13 +77,16 @@ final readonly class ConfigRunContextCollector implements RunContextCollector
             // producers report this context as their header; the lint runner treats it as a base and
             // builds its own, so a null from there is not a gap.
             today: $today,
+            // Passed in for the same reason the day is: only the producer holds the session, and a
+            // seal read from anywhere else would be a claim about a session this collector never saw.
+            sealedBy: $sealedBy,
         );
     }
 
     /**
      * The active runtime-guard profile name, or the literal `off`.
      *
-     * A STATIC, and it is the reason there is one: four different places build a `RunContext` — this
+     * A static, and it is the reason there is one: four different places build a `RunContext` — this
      * collector, the lint runner, the audit runner and the security command — and a field that each
      * of them read for itself would be four chances for one to forget. A forgotten one emits null,
      * which in this field means "this producer has no guard stage at all", so the mistake would

@@ -33,7 +33,7 @@ final readonly class ShippedJson
     /**
      * The decoded artifact, or an exception naming what is wrong with it.
      *
-     * `$requiredKey`, when given, must be present, be an array, and NOT BE EMPTY. That check belongs
+     * `$requiredKey`, when given, must be present, be an array, and not be empty. That check belongs
      * here rather than in each caller: a file that parses but carries no entries list is the same
      * broken installation as one that does not parse, and a loader that checked only the parse would
      * hand back a valid-looking empty register — the exact answer this class exists to prevent.

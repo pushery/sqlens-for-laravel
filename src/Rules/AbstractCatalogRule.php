@@ -25,7 +25,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * ## It was a dual-subject base first, it lost that half, and it is back — with a user
  *
- * The first version dispatched on BOTH subjects: a rule would answer from a migration and from a
+ * The first version dispatched on both subjects: a rule would answer from a migration and from a
  * catalog, from one implementation, with the migration answer allowed to be `undetermined`. The
  * reasoning was that splitting a rule in two lets the halves drift on the one thing that must not —
  * what counts as a violation.
@@ -39,8 +39,8 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * WITH its first user.
  *
  * That user arrived: `PG.L5.FK_NO_INDEX` cannot prove the ABSENCE of an index from migration text
- * in general, but it CAN when the migration creates the table itself and therefore carries that
- * table's whole index history. The half is back as an OPT-IN — a rule declares it by implementing
+ * in general, but it can when the migration creates the table itself and therefore carries that
+ * table's whole index history. The half is back as an opt-in — a rule declares it by implementing
  * {@see JudgesMigrationStatements}, exactly as the mirror-image {@see JudgesSchemaObjects} lets a
  * lint rule declare a catalog half — so the twenty rules that can only read a catalog carry no
  * hook, and the machinery that exists is machinery something uses.
@@ -104,7 +104,7 @@ abstract class AbstractCatalogRule implements JudgesSchemaObjects, Rule
      *
      * The `final` stays for the same reason it does on {@see AbstractSafetyRule}: what a family
      * dispatches on must not be overridable per rule, or the one thing every rule in the family
-     * shares stops being shared. What a rule MAY do is declare the second subject by implementing
+     * shares stops being shared. What a rule may do is declare the second subject by implementing
      * {@see JudgesMigrationStatements}.
      */
     final public function appliesTo(Subject $subject): bool

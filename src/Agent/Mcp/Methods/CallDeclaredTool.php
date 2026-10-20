@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Agent\Mcp\Methods;
 
 use Generator;
+use Illuminate\Database\DatabaseManager;
 use Laravel\Mcp\Exceptions\JsonRpcException;
 use Laravel\Mcp\Server\Methods\CallTool;
 use Laravel\Mcp\Server\ServerContext;
@@ -27,7 +28,7 @@ use Pushery\SQLens\Config\ConfigSchema;
  * the log would go looking for a typo that is not there. Obscuring a real capability is a form of
  * silent green: the answer is comfortable and wrong.
  *
- * So a declared-but-disabled tool is refused BY NAME, with the two ways to enable it. A name
+ * So a declared-but-disabled tool is refused by name, with the two ways to enable it. A name
  * nothing declares still comes back not-found, from the SDK's own handler, because that answer is
  * correct for it.
  *
@@ -43,6 +44,14 @@ use Pushery\SQLens\Config\ConfigSchema;
  * answers a failure with the exception's message whenever the application runs with `app.debug` on.
  * The lookup is repeated here so the tool reaches {@see WithholdingToolInvoker} instead, which answers
  * with what failed and keeps the message out of the answer.
+ *
+ * ## Why it closes what a call opened
+ *
+ * A tool opens the connections it needs inside the services it reaches, and the database manager
+ * keeps each one it has resolved. In the CLI the process ends and takes them along; in this one
+ * they would stay for the rest of the editor session, idle, on a machine that may be pointed at
+ * production. So every connection the call added is closed once the call is answered, and one
+ * that was open before it is left alone, because it is not the call's.
  */
 final class CallDeclaredTool extends CallTool
 {
@@ -55,7 +64,11 @@ final class CallDeclaredTool extends CallTool
      * enter reads exactly like a branch that works, and this one carries a message a project would
      * otherwise never see again.
      */
-    public function __construct(private readonly McpToolPolicy $policy, private readonly ToolRegistry $registry) {}
+    public function __construct(
+        private readonly McpToolPolicy $policy,
+        private readonly ToolRegistry $registry,
+        private readonly DatabaseManager $database,
+    ) {}
 
     #[Override]
     public function handle(JsonRpcRequest $request, ServerContext $context): Generator|JsonRpcResponse
@@ -79,13 +92,23 @@ final class CallDeclaredTool extends CallTool
             static fn () => throw new JsonRpcException(sprintf('Tool [%s] not found.', is_scalar($name) ? (string) $name : get_debug_type($name)), -32602, $request->id),
         );
 
-        return new WithholdingToolInvoker()->invoke($tool, $request);
+        $open = array_keys($this->database->getConnections());
+
+        // Every tool of this package answers at once, so the call's work is done when invoke()
+        // returns, and `finally` closes its connections whether it answered or threw.
+        try {
+            return new WithholdingToolInvoker()->invoke($tool, $request);
+        } finally {
+            foreach (array_diff(array_keys($this->database->getConnections()), $open) as $opened) {
+                $this->database->purge($opened);
+            }
+        }
     }
 
     /**
      * Why this name cannot be called, or null when it can be.
      *
-     * THREE answers, not two, because there are three states and collapsing any pair of them tells
+     * Three answers, not two, because there are three states and collapsing any pair of them tells
      * somebody something untrue:
      *
      * - **built and switched off** — the capability is here and this project has not enabled it.

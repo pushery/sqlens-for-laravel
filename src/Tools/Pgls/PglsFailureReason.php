@@ -22,7 +22,7 @@ enum PglsFailureReason: string
      * contract does not use.
      *
      * All of those are "no measurement was taken", which is the distinction that matters against a
-     * run that DID measure and found nothing. The specific cause travels in the detail.
+     * run that did measure and found nothing. The specific cause travels in the detail.
      */
     case RunFailed = 'TOOL.PGLS.RUN_FAILED';
 
@@ -31,7 +31,7 @@ enum PglsFailureReason: string
      *
      * Its own reason, and the one this adapter needs most. Measured against 0.25.7: an unreachable
      * host, a database that does not exist and a role that does not exist all end the same way —
-     * exit 1 with PLAIN TEXT on the output, even though `--reporter=json` was asked for. So the
+     * exit 1 with plain text on the output, even though `--reporter=json` was asked for. So the
      * absence of JSON is not evidence of a broken tool here; it is the ordinary shape of this
      * particular failure, and reading it as anything else would report a configuration problem as
      * a defect in the tool.
@@ -55,7 +55,7 @@ enum PglsFailureReason: string
     /**
      * SQLens could not assemble the connection details the tool needs.
      *
-     * Decided BEFORE the tool runs, and deliberately so: the alternative is letting the tool fall
+     * Decided before the tool runs, and deliberately so: the alternative is letting the tool fall
      * back to its own defaults, which are `localhost:5432/postgres`. A run whose core rules
      * reasoned about the audited database and whose amplifier reasoned about whatever answers on
      * the local machine would produce one report, with nothing in it saying the two halves are

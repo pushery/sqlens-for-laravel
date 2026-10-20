@@ -51,7 +51,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  */
 final class DownMissingRule extends AbstractLifecycleRule implements ProvidesRemediation
 {
-    /** The considered `none` — the inverse of THIS up() is the project's to write. */
+    /** The considered `none` — the inverse of this up() is the project's to write. */
     private readonly NoSafeSequenceTemplate $template;
 
     public function __construct(string $projectRoot, ?RuleDriverNotes $driverNotes = null)
@@ -67,7 +67,7 @@ final class DownMissingRule extends AbstractLifecycleRule implements ProvidesRem
     }
 
     /**
-     * A considered `none`: the rollback that belongs here is the inverse of THIS `up()`, and only
+     * A considered `none`: the rollback that belongs here is the inverse of this `up()`, and only
      * the project knows what that is.
      *
      * The temptation is real and worth naming, because a template here would look so plausible: the
@@ -79,7 +79,7 @@ final class DownMissingRule extends AbstractLifecycleRule implements ProvidesRem
      *
      * What the reason does instead is name the answer this rule actually wants, and it is not always
      * a `down()` that undoes something: where the change genuinely cannot be undone, a `down()` that
-     * THROWS with that reason is a complete and correct answer. That distinction is the whole value
+     * throws with that reason is a complete and correct answer. That distinction is the whole value
      * here — it turns "you are missing something" into "here are the two things either of which
      * finishes this", one of which is often five lines.
      */

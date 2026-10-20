@@ -11,12 +11,12 @@ use Pushery\SQLens\Canonical\TransactionMode;
 
 /**
  * One entry in a migration's ordered statement stream — the canonical facts a rule
- * needs to reason about a statement OTHER than the one it is judging.
+ * needs to reason about a statement other than the one it is judging.
  *
  * Most rules judge a statement in isolation, or against migration-wide facts already
  * distilled onto {@see MigrationContext} (was this table created here? does this
  * migration drop a constraint?). A few cannot: "does the stream set a lock timeout
- * BEFORE the first lock-taking statement?" is a question about ORDER, and order is
+ * before the first lock-taking statement?" is a question about ORDER, and order is
  * lost the moment the migration is reduced to a set of booleans. So the context also
  * carries the statements themselves, in capture order, as these digests.
  *
@@ -51,7 +51,7 @@ final readonly class MigrationStatementDigest
          * referencing columns — or an empty list when it names none.
          *
          * ORDER is load-bearing and is why this is a list rather than a set. Index coverage is a
-         * LEFT PREFIX: an index on `(a, b)` answers a lookup on `(a)` and on `(a, b)`, and answers
+         * left PREFIX: an index on `(a, b)` answers a lookup on `(a)` and on `(a, b)`, and answers
          * nothing for `(b)`. A set would make the one question this field exists for unanswerable,
          * while looking like it had been answered.
          *
@@ -72,7 +72,7 @@ final readonly class MigrationStatementDigest
          * already stands — but because nothing here could be asked.
          *
          * Produced by the CLASSIFIER from the signature, never by a rule re-reading the canonical
-         * string, for the same reason every field above it is. The type goes through the SAME
+         * string, for the same reason every field above it is. The type goes through the same
          * normalizer the catalog reader uses, so a lint verdict and an audit verdict about one
          * column cannot disagree by construction.
          *
@@ -88,7 +88,7 @@ final readonly class MigrationStatementDigest
          * The later actions of an `ALTER TABLE` action list, each as a digest of its own: the
          * statement's position, text and transaction, with the action's kind, targets and columns.
          *
-         * The fields above describe the FIRST action, because a statement is classified from its
+         * The fields above describe the first action, because a statement is classified from its
          * start. A question about the whole migration or run asked of them alone missed a
          * `DROP COLUMN` behind an `ADD COLUMN`, and a rule then reported a contract step as missing
          * while it stood in the same statement. Kept apart rather than listed beside the statement,

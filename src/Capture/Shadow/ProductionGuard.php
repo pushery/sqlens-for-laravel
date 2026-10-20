@@ -13,8 +13,8 @@ namespace Pushery\SQLens\Capture\Shadow;
  * The checks are CUMULATIVE and ORDERED, and the order encodes the priority of the
  * refusals:
  *
- *   1. The environment must be on the allowed list. This is checked FIRST and is
- *      NOT overridable by `--force` — `--force` answers "yes, I mean it" to a
+ *   1. The environment must be on the allowed list. This is checked first and is
+ *      not overridable by `--force` — `--force` answers "yes, I mean it" to a
  *      confirmation, it does not answer "yes, run in production". A force flag that
  *      could override the environment would defeat the whole guard.
  *   2. The target connection must not be a production connection, and neither may the

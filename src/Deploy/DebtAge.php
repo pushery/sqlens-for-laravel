@@ -132,7 +132,7 @@ final readonly class DebtAge
             if ($parsed !== false && DateTimeImmutable::getLastErrors() === false) {
                 // `setTimezone()` before `setTime()`, and the order is the whole point: a timestamp
                 // keeps the offset it was written with, so without this the midnight below would be
-                // midnight THERE rather than on the UTC calendar day. The reference gets the same
+                // midnight there rather than on the UTC calendar day. The reference gets the same
                 // treatment on the other end.
                 return $parsed->setTimezone($utc)->setTime(0, 0);
             }

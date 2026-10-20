@@ -13,13 +13,13 @@ use Pushery\SQLens\Catalog\ReaderSession;
  *
  * ## Why this is not part of the catalog reader, and must not be
  *
- * A transaction pooler's whole guarantee is that everything inside ONE transaction reaches one
+ * A transaction pooler's whole guarantee is that everything inside one transaction reaches one
  * backend. {@see ReaderSession::read()} wraps its work in a transaction, so
  * a probe run in there would find a perfectly stable backend on a pooled connection every single
  * time — and report "direct" with complete confidence.
  *
  * That is why this contract takes the connection rather than the session, and why an implementation
- * runs its statements OUTSIDE any transaction. The seam exists because the correct answer is only
+ * runs its statements outside any transaction. The seam exists because the correct answer is only
  * observable in the one place the rest of the catalog layer deliberately never operates.
  *
  * An implementation opens no connection of its own — it is handed the one the audit already built —

@@ -27,6 +27,9 @@ final class InvalidPglsRuleMap extends LogicException
         return new self(sprintf('The Postgres Language Server rule map "%s" is not valid JSON: %s', $origin, $detail));
     }
 
+    /**
+     * @param  mixed  $declared  the file's `schema_version` as decoded, before its type is known
+     */
     public static function unsupportedSchemaVersion(string $origin, mixed $declared, int $supported): self
     {
         return new self(sprintf(

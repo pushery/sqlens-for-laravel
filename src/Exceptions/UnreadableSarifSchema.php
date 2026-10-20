@@ -10,7 +10,7 @@ use RuntimeException;
  * The bundled SARIF version/schema artifact could not be read as written.
  *
  * Thrown rather than defaulted, and that is the whole point. The pair it holds is what a SARIF
- * document DECLARES ITSELF to be — a consumer's validator resolves the schema from it and a security
+ * document declares itself to be — a consumer's validator resolves the schema from it and a security
  * tab decides how to read the file. Falling back to a hard-coded pair would let a broken installation
  * publish a document claiming a version nobody shipped, which is a lie with the shape of a success.
  *

@@ -23,7 +23,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * first `$table->string('email')->unique()` (VARCHAR(255) at 4 bytes = 1020) aborts the migration
  * with `ERROR 1071 Specified key was too long`.
  *
- * The timing is the damage. It aborts MID-DEPLOY, leaving some migrations applied and some not, on a
+ * The timing is the damage. It aborts mid-deploy, leaving some migrations applied and some not, on a
  * server every other check called healthy.
  *
  * ## Why this is worth a rule rather than a workaround
@@ -33,7 +33,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * every string column — invisible to whoever reads the migrations later, and carried forward onto
  * servers that never had the problem.
  *
- * ## What this rule does NOT report
+ * ## What this rule does not report
  *
  * A server correctly handing out `DYNAMIC` while the catalog still holds tables created years ago
  * under an older default. There is nothing in the configuration to fix there, and reporting it as a

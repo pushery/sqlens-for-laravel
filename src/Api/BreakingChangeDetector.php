@@ -30,7 +30,7 @@ use Pushery\SQLens\Severity\Severity;
  * ## The remediation schema is state-dependent, and both states are real
  *
  * While `remediation_schema_stability` is `preview`, a version bump is `allowed_in_minor` — that is
- * what preview MEANS, and pretending otherwise would freeze a schema nobody promised. Once it is
+ * what preview means, and pretending otherwise would freeze a schema nobody promised. Once it is
  * promoted, the same bump is forbidden without a major. The classifier reads the stability from the
  * RELEASED surface rather than the current one, because the promise a consumer relies on is the one
  * that shipped, not the one being proposed.
@@ -166,7 +166,7 @@ final readonly class BreakingChangeDetector
             );
         }
 
-        // A raise is the product working. A LOWERING is not: a consumer whose gate is set to the old
+        // A raise is the product working. A lowering is not: a consumer whose gate is set to the old
         // level would stop seeing a finding they had chosen to see, which is a silent loss.
         if ($field === 'severity') {
             return self::severityChange($id, $from, $to);
@@ -233,7 +233,7 @@ final readonly class BreakingChangeDetector
      * changes what every unconfigured project sees. Which is why this sits here rather than in the
      * catch-all below, where it lived until a measurement said otherwise.
      *
-     * @param  array<string, mixed>  $after  the candidate.s own entry, read for its deprecation
+     * @param  array<string, mixed>  $after  the candidate's own entry, read for its deprecation
      */
     private static function stabilityChange(string $id, mixed $from, mixed $to, array $after): SurfaceChange
     {
@@ -360,6 +360,10 @@ final readonly class BreakingChangeDetector
         return StabilityTier::tryFrom($stability)?->isEnabledByDefault() === true;
     }
 
+    /**
+     * @param  mixed  $from  the rule's `severity` in the older registry snapshot, as decoded: a string, or null for none
+     * @param  mixed  $to  the same field in the newer snapshot, read the same way
+     */
     private static function severityChange(string $id, mixed $from, mixed $to): SurfaceChange
     {
         $before = self::severityRank($from);
@@ -454,9 +458,9 @@ final readonly class BreakingChangeDetector
     }
 
     /**
-     * Any move in an extension contract's shape, which is a break for every rule package there is.
+     * Any move in an extension contract's shape, which is a break for every driver package's rules.
      *
-     * ## Why it is forbidden in BOTH directions, unlike a rule field
+     * ## Why it is forbidden in both directions, unlike a rule field
      *
      * A rule may gain a severity and that is a raise, not a break. An interface has no such
      * asymmetry: ADDING a method breaks every existing implementer, removing one breaks every
@@ -466,7 +470,7 @@ final readonly class BreakingChangeDetector
      *
      * ## Reported per METHOD, not per contract
      *
-     * "ProvidesRemediation changed" tells an implementer to go and diff nine interfaces. The method
+     * "ProvidesRemediation changed" leaves an implementer to diff the interface by hand. The method
      * and its two signatures are what somebody acts on, and the whole point of this gate is that a
      * consumer learns before their build does.
      *
@@ -502,7 +506,7 @@ final readonly class BreakingChangeDetector
                     'extension_contracts.'.$contract,
                     $method,
                     sprintf('%s::%s went from %s to %s', $contract, $method, self::render($from), self::render($to)),
-                    'this is the interface a third-party rule package implements. A signature that '
+                    'this is an interface the rules of a driver package implement. A signature that '
                     .'moves takes their build with it, and they find out at composer update rather '
                     .'than here.',
                 );
@@ -595,6 +599,9 @@ final readonly class BreakingChangeDetector
         return is_int($from) && is_int($to) && $to > $from;
     }
 
+    /**
+     * @param  mixed  $value  a registry field as decoded from JSON: null, a scalar, or a structure
+     */
     private static function render(mixed $value): string
     {
         return match (true) {

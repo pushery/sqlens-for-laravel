@@ -17,10 +17,11 @@ use Pushery\SQLens\Rules\VersionWindow;
 use Pushery\SQLens\Severity\Severity;
 
 /**
- * The central contract every rule in the package fulfills — and, from 1.0, the
- * extension API third-party rule packs implement. Anything missing here has to
- * be retrofitted into every single rule later, so the metadata surface is cut
- * whole, once.
+ * The central contract every rule in the package fulfills, and the one a
+ * driver package's rules implement too: a driver registered through
+ * DriverRegistry::extend() brings rules of its own, so the shape of this
+ * contract is public API. Anything missing here has to be retrofitted into
+ * every single rule later, so the metadata surface is cut whole, once.
  *
  * Two axes, never merged: level() models strictness appetite, severity() models
  * risk. A rule in a severity-gated category (security/privacy) may leave
@@ -28,7 +29,7 @@ use Pushery\SQLens\Severity\Severity;
  * engine gates the two independently.
  *
  * Version awareness is mandatory, not per-rule bolt-on: versionWindow() has no
- * default. The engine evaluates the window BEFORE appliesTo(); a real version
+ * default. The engine evaluates the window before appliesTo(); a real version
  * outside the window produces NO finding, an unknown version produces an
  * undetermined finding with a named reason — never a silent skip. The fallback
  * chain (real version → assume_server_version pin → unknown) is wired in a later
@@ -67,7 +68,7 @@ interface Rule
      *
      * It is a method on the contract rather than an opt-in marker (the shape
      * {@see StatisticsDependent} uses) because confidence is
-     * a property EVERY rule has, not a rare capability a few rules add. A marker would
+     * a property every rule has, not a rare capability a few rules add. A marker would
      * let a heuristic rule stay silent by simply not implementing it — and silence
      * would read as certainty, which is exactly the claim a heuristic must not make.
      * Stating it is the point.
@@ -123,7 +124,7 @@ interface Rule
     /**
      * What this rule's verdict is ABOUT — and therefore where it can be placed.
      *
-     * The audit suite addresses ONE instance, and a verdict scoped to the instance's write path
+     * The audit suite addresses one instance, and a verdict scoped to the instance's write path
      * cannot be given on a replica: the value reads fine there and describes the wrong machine.
      * Declared by the rule because its author is the one who knows what the rule is talking about;
      * guessing it per finding would put the most confident possible wrong answer in a report.

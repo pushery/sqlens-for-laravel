@@ -12,26 +12,31 @@ use Throwable;
  * Finds and removes shadow databases a previous run leaked — the safety net for the
  * one teardown path a `try/finally` cannot cover: a process killed mid-run (SIGKILL,
  * a fatal, a power loss) never reaches its own cleanup, so the leaked database is
- * removed on a LATER run instead.
+ * removed on a later run instead.
  *
  * Two guarantees keep this from ever touching a database the tool did not create:
  *
- *   - It lists ONLY databases carrying the shadow prefix (the catalog filters), so a
+ *   - It lists only databases carrying the shadow prefix (the catalog filters), so a
  *     user's own database can never enter the candidate set.
  *   - It ages a candidate by the timestamp embedded in its NAME, not by any server
  *     metadata; a name that does not match the scheme is never aged and so never
- *     dropped. Only databases OLDER than the configured threshold are swept, so a
- *     shadow database from a run happening right now is never removed out from under
- *     it.
+ *     dropped. Only databases OLDER than the configured threshold are swept.
  *
- * Dropping is a database-mutating action, so it happens ONLY behind the production
+ * The age is measured on one clock, the server's. The run that created a database
+ * stamped its name with the server's time, and the sweep compares that stamp with the
+ * server's time now, so a machine whose own clock runs behind cannot make the database
+ * of a run happening right now look old. What the threshold still assumes is that no
+ * run lasts longer than it, and that a database kept on failure is looked at within
+ * it: a later run removes either once it is older.
+ *
+ * Dropping is a database-mutating action, so it happens only behind the production
  * guard: handed a blocked decision it lists and reports, and removes nothing. The shadow
  * captor never hands it one, though, because a run the guard stopped does not reach
  * the server at all, not even to list. "No silent green" applies to cleanup too — a
  * found-but-kept orphan is visible in the run's report as `LINT.SHADOW.ORPHANS`, never
  * a quiet no-op.
  *
- * The same rule covers a drop that FAILS. The name stays in `orphansFound` and never
+ * The same rule covers a drop that fails. The name stays in `orphansFound` and never
  * reaches `dropped`, so the difference between the two arrays is the set that could
  * not be removed — and one obstinate database does not stop the sweep of the rest,
  * because the commonest cause is a connection that will be gone by the next run.
@@ -45,12 +50,11 @@ final readonly class ShadowOrphanSweeper
     ) {}
 
     /**
-     * List the stale shadow databases and, if the guard allows, drop them. $now is
-     * injected so the age boundary is deterministic and testable.
+     * List the stale shadow databases and, if the guard allows, drop them.
      */
-    public function sweep(GuardDecision $decision, DateTimeImmutable $now): ShadowSweepReport
+    public function sweep(GuardDecision $decision): ShadowSweepReport
     {
-        $cutoff = $now->getTimestamp() - $this->thresholdSeconds;
+        $cutoff = $this->catalog->serverTime()->getTimestamp() - $this->thresholdSeconds;
 
         $orphans = [];
 
@@ -78,7 +82,7 @@ final readonly class ShadowOrphanSweeper
                     // obstacle into a permanent leak of everything behind it in the list.
                     //
                     // Nothing is swallowed: the name stays in `orphansFound` and is absent from
-                    // `dropped`, so the difference between the two arrays IS the set that could not
+                    // `dropped`, so the difference between the two arrays is the set that could not
                     // be removed. A caller that reports one and not the other would be inventing
                     // the silence, not inheriting it.
                 }

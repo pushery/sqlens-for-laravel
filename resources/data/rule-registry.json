@@ -2,8 +2,8 @@
     "schema_version": 1,
     "documentation_base": "https://docs.pushery.com/sqlens-for-laravel/rules/",
     "counts": {
-        "total": 244,
-        "published": 244,
+        "total": 258,
+        "published": 258,
         "pending": 0
     },
     "entries": [
@@ -959,7 +959,7 @@
             "max_version": null,
             "downtime_class": null,
             "downtime_class_derived": false,
-            "message_prefix": "Unresolvable call from migration",
+            "message_prefix": "sqlens.lint",
             "reported_identifier": null,
             "debt_kind": null,
             "suites": [
@@ -989,7 +989,7 @@
             "max_version": null,
             "downtime_class": null,
             "downtime_class_derived": false,
-            "message_prefix": "Indirect call from migration",
+            "message_prefix": "sqlens.lint",
             "reported_identifier": null,
             "debt_kind": null,
             "suites": [
@@ -1019,7 +1019,7 @@
             "max_version": null,
             "downtime_class": null,
             "downtime_class_derived": false,
-            "message_prefix": "Schema introspection guard",
+            "message_prefix": "sqlens.lint",
             "reported_identifier": null,
             "debt_kind": null,
             "suites": [
@@ -1049,7 +1049,7 @@
             "max_version": null,
             "downtime_class": null,
             "downtime_class_derived": false,
-            "message_prefix": "Result-dependent migration",
+            "message_prefix": "sqlens.lint",
             "reported_identifier": null,
             "debt_kind": null,
             "suites": [
@@ -1079,7 +1079,7 @@
             "max_version": null,
             "downtime_class": null,
             "downtime_class_derived": false,
-            "message_prefix": "Side effect in migration",
+            "message_prefix": "sqlens.lint",
             "reported_identifier": null,
             "debt_kind": null,
             "suites": [
@@ -2986,6 +2986,36 @@
             "limitations": null
         },
         {
+            "id": "MY.L2.OPTIMIZE_TABLE",
+            "slug": "my-l2-optimize-table",
+            "source": "rule",
+            "covers": "exact",
+            "attribution": "authored",
+            "title": "MY.L2.OPTIMIZE_TABLE — OPTIMIZE TABLE rebuilds the whole table",
+            "summary": "OPTIMIZE TABLE rebuilds the table, and on a table with a FULLTEXT index the rebuild is a copy that blocks every write.",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/my-l2-optimize-table/",
+            "documentation_state": "published",
+            "category": "safety",
+            "level": 2,
+            "severity": null,
+            "severity_derived": false,
+            "stability": "stable",
+            "confidence": "deterministic",
+            "deprecated_since": null,
+            "replaced_by": null,
+            "min_version": "8.4.0",
+            "max_version": null,
+            "downtime_class": null,
+            "downtime_class_derived": true,
+            "message_prefix": "sqlens.lint",
+            "reported_identifier": null,
+            "debt_kind": null,
+            "suites": [
+                "lint"
+            ],
+            "limitations": null
+        },
+        {
             "id": "MY.L3.ALGORITHM_LOCK_UNEXPRESSIBLE",
             "slug": "my-l3-algorithm-lock-unexpressible",
             "source": "rule",
@@ -3354,6 +3384,38 @@
             "limitations": null
         },
         {
+            "id": "MY.L5.PK_NEAR_CEILING",
+            "slug": "my-l5-pk-near-ceiling",
+            "source": "rule",
+            "covers": "exact",
+            "attribution": "authored",
+            "title": "MY.L5.PK_NEAR_CEILING — A primary key whose AUTO_INCREMENT is closing in on its ceiling",
+            "summary": "AUTO_INCREMENT has handed out a large share of what the key can hold, and the INSERT that fails is now a date rather than a type choice.",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/my-l5-pk-near-ceiling/",
+            "documentation_state": "published",
+            "category": "safety",
+            "level": 5,
+            "severity": null,
+            "severity_derived": false,
+            "stability": "stable",
+            "confidence": "deterministic",
+            "deprecated_since": null,
+            "replaced_by": null,
+            "min_version": null,
+            "max_version": null,
+            "downtime_class": null,
+            "downtime_class_derived": false,
+            "message_prefix": "sqlens.lint",
+            "reported_identifier": null,
+            "debt_kind": null,
+            "suites": [
+                "audit"
+            ],
+            "limitations": [
+                "a key without AUTO_INCREMENT, filled by the application, has no counter to read, and its fill is not judged, because that would mean reading the table's rows"
+            ]
+        },
+        {
             "id": "MY.L5.SQL_MODE_DIVISION_BY_ZERO_SILENT",
             "slug": "my-l5-sql-mode-division-by-zero-silent",
             "source": "rule",
@@ -3699,6 +3761,36 @@
             "severity_derived": false,
             "stability": "stable",
             "confidence": "deterministic",
+            "deprecated_since": null,
+            "replaced_by": null,
+            "min_version": null,
+            "max_version": null,
+            "downtime_class": null,
+            "downtime_class_derived": false,
+            "message_prefix": "sqlens.lint",
+            "reported_identifier": null,
+            "debt_kind": null,
+            "suites": [
+                "audit"
+            ],
+            "limitations": null
+        },
+        {
+            "id": "MY.L6.TIMESTAMP_2038",
+            "slug": "my-l6-timestamp-2038",
+            "source": "rule",
+            "covers": "exact",
+            "attribution": "authored",
+            "title": "MY.L6.TIMESTAMP_2038 — A future instant held in a TIMESTAMP column",
+            "summary": "TIMESTAMP holds nothing after 2038-01-19, so a column for an expiry or a schedule refuses a date past it today.",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/my-l6-timestamp-2038/",
+            "documentation_state": "published",
+            "category": "idiom",
+            "level": 6,
+            "severity": null,
+            "severity_derived": false,
+            "stability": "stable",
+            "confidence": "heuristic",
             "deprecated_since": null,
             "replaced_by": null,
             "min_version": null,
@@ -4140,6 +4232,36 @@
             "limitations": null
         },
         {
+            "id": "PG.L2.CLUSTER",
+            "slug": "pg-l2-cluster",
+            "source": "rule",
+            "covers": "exact",
+            "attribution": "authored",
+            "title": "PG.L2.CLUSTER — CLUSTER locks the table for the whole rewrite",
+            "summary": "CLUSTER rewrites the table in an index's order under an ACCESS EXCLUSIVE lock that blocks every read and write until it finishes.",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l2-cluster/",
+            "documentation_state": "published",
+            "category": "safety",
+            "level": 2,
+            "severity": null,
+            "severity_derived": false,
+            "stability": "stable",
+            "confidence": "deterministic",
+            "deprecated_since": null,
+            "replaced_by": null,
+            "min_version": null,
+            "max_version": null,
+            "downtime_class": "rewrite",
+            "downtime_class_derived": false,
+            "message_prefix": "sqlens.lint",
+            "reported_identifier": null,
+            "debt_kind": null,
+            "suites": [
+                "lint"
+            ],
+            "limitations": null
+        },
+        {
             "id": "PG.L2.CONSTRAINT_NOT_VALIDATED",
             "slug": "pg-l2-constraint-not-validated",
             "source": "rule",
@@ -4230,6 +4352,66 @@
             "limitations": null
         },
         {
+            "id": "PG.L2.REFRESH_MATERIALIZED_VIEW_NOT_CONCURRENT",
+            "slug": "pg-l2-refresh-materialized-view-not-concurrent",
+            "source": "rule",
+            "covers": "exact",
+            "attribution": "authored",
+            "title": "PG.L2.REFRESH_MATERIALIZED_VIEW_NOT_CONCURRENT — Refreshing a view blocks every read of it",
+            "summary": "REFRESH MATERIALIZED VIEW without CONCURRENTLY holds ACCESS EXCLUSIVE on the view until its query has run again.",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l2-refresh-materialized-view-not-concurrent/",
+            "documentation_state": "published",
+            "category": "safety",
+            "level": 2,
+            "severity": null,
+            "severity_derived": false,
+            "stability": "stable",
+            "confidence": "deterministic",
+            "deprecated_since": null,
+            "replaced_by": null,
+            "min_version": null,
+            "max_version": null,
+            "downtime_class": "blocking",
+            "downtime_class_derived": false,
+            "message_prefix": "sqlens.lint",
+            "reported_identifier": null,
+            "debt_kind": null,
+            "suites": [
+                "lint"
+            ],
+            "limitations": null
+        },
+        {
+            "id": "PG.L2.REINDEX_NOT_CONCURRENT",
+            "slug": "pg-l2-reindex-not-concurrent",
+            "source": "rule",
+            "covers": "exact",
+            "attribution": "authored",
+            "title": "PG.L2.REINDEX_NOT_CONCURRENT — Rebuilding an index blocks every write until it finishes",
+            "summary": "REINDEX without CONCURRENTLY holds SHARE on the table and ACCESS EXCLUSIVE on the index. CONCURRENTLY does not.",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l2-reindex-not-concurrent/",
+            "documentation_state": "published",
+            "category": "safety",
+            "level": 2,
+            "severity": null,
+            "severity_derived": false,
+            "stability": "stable",
+            "confidence": "deterministic",
+            "deprecated_since": null,
+            "replaced_by": null,
+            "min_version": null,
+            "max_version": null,
+            "downtime_class": "blocking",
+            "downtime_class_derived": false,
+            "message_prefix": "sqlens.lint",
+            "reported_identifier": null,
+            "debt_kind": null,
+            "suites": [
+                "lint"
+            ],
+            "limitations": null
+        },
+        {
             "id": "PG.L2.SET_NOT_NULL_SCAN",
             "slug": "pg-l2-set-not-null-scan",
             "source": "rule",
@@ -4280,6 +4462,36 @@
             "min_version": null,
             "max_version": null,
             "downtime_class": "blocking",
+            "downtime_class_derived": false,
+            "message_prefix": "sqlens.lint",
+            "reported_identifier": null,
+            "debt_kind": null,
+            "suites": [
+                "lint"
+            ],
+            "limitations": null
+        },
+        {
+            "id": "PG.L2.VACUUM_FULL",
+            "slug": "pg-l2-vacuum-full",
+            "source": "rule",
+            "covers": "exact",
+            "attribution": "authored",
+            "title": "PG.L2.VACUUM_FULL — VACUUM FULL locks the table for the whole rewrite",
+            "summary": "VACUUM FULL rewrites the table under an ACCESS EXCLUSIVE lock that blocks every read and write until it finishes.",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l2-vacuum-full/",
+            "documentation_state": "published",
+            "category": "safety",
+            "level": 2,
+            "severity": null,
+            "severity_derived": false,
+            "stability": "stable",
+            "confidence": "deterministic",
+            "deprecated_since": null,
+            "replaced_by": null,
+            "min_version": null,
+            "max_version": null,
+            "downtime_class": "rewrite",
             "downtime_class_derived": false,
             "message_prefix": "sqlens.lint",
             "reported_identifier": null,
@@ -4430,6 +4642,36 @@
             "min_version": null,
             "max_version": null,
             "downtime_class": "blocking",
+            "downtime_class_derived": false,
+            "message_prefix": "sqlens.lint",
+            "reported_identifier": null,
+            "debt_kind": null,
+            "suites": [
+                "lint"
+            ],
+            "limitations": null
+        },
+        {
+            "id": "PG.L3.VACUUM_IN_TRANSACTION",
+            "slug": "pg-l3-vacuum-in-transaction",
+            "source": "rule",
+            "covers": "exact",
+            "attribution": "authored",
+            "title": "PG.L3.VACUUM_IN_TRANSACTION — VACUUM cannot run inside Laravel's transaction",
+            "summary": "PostgreSQL refuses VACUUM inside a transaction block, and Laravel opens one for every migration.",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l3-vacuum-in-transaction/",
+            "documentation_state": "published",
+            "category": "safety",
+            "level": 3,
+            "severity": null,
+            "severity_derived": false,
+            "stability": "stable",
+            "confidence": "deterministic",
+            "deprecated_since": null,
+            "replaced_by": null,
+            "min_version": null,
+            "max_version": null,
+            "downtime_class": "online",
             "downtime_class_derived": false,
             "message_prefix": "sqlens.lint",
             "reported_identifier": null,
@@ -4714,6 +4956,39 @@
             "limitations": null
         },
         {
+            "id": "PG.L5.FK_NEAR_CEILING",
+            "slug": "pg-l5-fk-near-ceiling",
+            "source": "rule",
+            "covers": "exact",
+            "attribution": "authored",
+            "title": "PG.L5.FK_NEAR_CEILING — A foreign-key column the referenced key is about to outgrow",
+            "summary": "A column narrower than the key it references fails every insert past its own ceiling, and the parent's sequence has nearly reached it.",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l5-fk-near-ceiling/",
+            "documentation_state": "published",
+            "category": "safety",
+            "level": 5,
+            "severity": null,
+            "severity_derived": false,
+            "stability": "stable",
+            "confidence": "deterministic",
+            "deprecated_since": null,
+            "replaced_by": null,
+            "min_version": null,
+            "max_version": null,
+            "downtime_class": null,
+            "downtime_class_derived": false,
+            "message_prefix": "sqlens.lint",
+            "reported_identifier": null,
+            "debt_kind": null,
+            "suites": [
+                "audit"
+            ],
+            "limitations": [
+                "a referenced key filled by the application rather than by a sequence has no counter to read, and the column pointing at it is not judged",
+                "a referenced table outside the audited schemas is not read, so a column pointing into it is not judged"
+            ]
+        },
+        {
             "id": "PG.L5.FK_NO_INDEX",
             "slug": "pg-l5-fk-no-index",
             "source": "rule",
@@ -4895,6 +5170,39 @@
             "limitations": null
         },
         {
+            "id": "PG.L5.PK_NEAR_CEILING",
+            "slug": "pg-l5-pk-near-ceiling",
+            "source": "rule",
+            "covers": "exact",
+            "attribution": "authored",
+            "title": "PG.L5.PK_NEAR_CEILING — A primary key whose sequence is closing in on its ceiling",
+            "summary": "The sequence behind the key has handed out a large share of what the key can hold, and the INSERT that fails is now a date rather than a type choice.",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l5-pk-near-ceiling/",
+            "documentation_state": "published",
+            "category": "safety",
+            "level": 5,
+            "severity": null,
+            "severity_derived": false,
+            "stability": "stable",
+            "confidence": "deterministic",
+            "deprecated_since": null,
+            "replaced_by": null,
+            "min_version": null,
+            "max_version": null,
+            "downtime_class": null,
+            "downtime_class_derived": false,
+            "message_prefix": "sqlens.lint",
+            "reported_identifier": null,
+            "debt_kind": null,
+            "suites": [
+                "audit"
+            ],
+            "limitations": [
+                "a key filled by the application rather than by a sequence has no counter to read, and its fill is not judged, because that would mean reading the table's rows",
+                "with CACHE above 1 the position read is the last value the sequence reserved, which can stand ahead of the last value an insert used"
+            ]
+        },
+        {
             "id": "PG.L6.DEFAULT_TRANSACTION_ISOLATION_DRIFT",
             "slug": "pg-l6-default-transaction-isolation-drift",
             "source": "rule",
@@ -4935,6 +5243,36 @@
             "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l6-default-transaction-read-only/",
             "documentation_state": "published",
             "category": "safety",
+            "level": 6,
+            "severity": null,
+            "severity_derived": false,
+            "stability": "stable",
+            "confidence": "deterministic",
+            "deprecated_since": null,
+            "replaced_by": null,
+            "min_version": null,
+            "max_version": null,
+            "downtime_class": null,
+            "downtime_class_derived": false,
+            "message_prefix": "sqlens.lint",
+            "reported_identifier": null,
+            "debt_kind": null,
+            "suites": [
+                "audit"
+            ],
+            "limitations": null
+        },
+        {
+            "id": "PG.L6.FK_NARROWER_THAN_KEY",
+            "slug": "pg-l6-fk-narrower-than-key",
+            "source": "rule",
+            "covers": "exact",
+            "attribution": "authored",
+            "title": "PG.L6.FK_NARROWER_THAN_KEY — A foreign key narrower than the key it references",
+            "summary": "An int column referencing a bigint key can address only the first 2.1 billion of it, and the day the sequence passes that number is years away.",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l6-fk-narrower-than-key/",
+            "documentation_state": "published",
+            "category": "idiom",
             "level": 6,
             "severity": null,
             "severity_derived": false,
@@ -5195,6 +5533,36 @@
             "limitations": null
         },
         {
+            "id": "PG.L7.AUTOVACUUM_OFF",
+            "slug": "pg-l7-autovacuum-off",
+            "source": "rule",
+            "covers": "exact",
+            "attribution": "authored",
+            "title": "PG.L7.AUTOVACUUM_OFF — A server with autovacuum switched off for every table",
+            "summary": "What turning autovacuum off for the whole server costs, why no table's own setting turns it back on, and why the freeze horizon brings a vacuum anyway.",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l7-autovacuum-off/",
+            "documentation_state": "published",
+            "category": "performance",
+            "level": 7,
+            "severity": null,
+            "severity_derived": false,
+            "stability": "stable",
+            "confidence": "deterministic",
+            "deprecated_since": null,
+            "replaced_by": null,
+            "min_version": null,
+            "max_version": null,
+            "downtime_class": null,
+            "downtime_class_derived": false,
+            "message_prefix": "sqlens.lint",
+            "reported_identifier": null,
+            "debt_kind": null,
+            "suites": [
+                "audit"
+            ],
+            "limitations": null
+        },
+        {
             "id": "PG.L7.DATA_CHECKSUMS_DISABLED",
             "slug": "pg-l7-data-checksums-disabled",
             "source": "rule",
@@ -5223,6 +5591,39 @@
                 "audit"
             ],
             "limitations": null
+        },
+        {
+            "id": "PG.L7.INDEX_INVALID",
+            "slug": "pg-l7-index-invalid",
+            "source": "rule",
+            "covers": "exact",
+            "attribution": "authored",
+            "title": "PG.L7.INDEX_INVALID — An index a concurrent build left invalid",
+            "summary": "What remains of a concurrent index build that did not finish: used by no query, sometimes still written, and in the way of the next run of its migration.",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l7-index-invalid/",
+            "documentation_state": "published",
+            "category": "performance",
+            "level": 7,
+            "severity": null,
+            "severity_derived": false,
+            "stability": "stable",
+            "confidence": "deterministic",
+            "deprecated_since": null,
+            "replaced_by": null,
+            "min_version": null,
+            "max_version": null,
+            "downtime_class": null,
+            "downtime_class_derived": false,
+            "message_prefix": "sqlens.lint",
+            "reported_identifier": null,
+            "debt_kind": null,
+            "suites": [
+                "audit"
+            ],
+            "limitations": [
+                "a build is matched by its table, not by its index, so the remains of a failed build on a table where another build is running come back undetermined rather than flagged",
+                "an index created with CREATE INDEX ON ONLY on a partitioned table stays invalid until every partition has an index attached to it, and it is reported while that sequence is under way"
+            ]
         },
         {
             "id": "PG.L7.INDEX_REDUNDANT",
@@ -5269,6 +5670,36 @@
             "severity": null,
             "severity_derived": false,
             "stability": "experimental",
+            "confidence": "deterministic",
+            "deprecated_since": null,
+            "replaced_by": null,
+            "min_version": null,
+            "max_version": null,
+            "downtime_class": null,
+            "downtime_class_derived": false,
+            "message_prefix": "sqlens.lint",
+            "reported_identifier": null,
+            "debt_kind": null,
+            "suites": [
+                "audit"
+            ],
+            "limitations": null
+        },
+        {
+            "id": "PG.L7.TRACK_COUNTS_OFF",
+            "slug": "pg-l7-track-counts-off",
+            "source": "rule",
+            "covers": "exact",
+            "attribution": "authored",
+            "title": "PG.L7.TRACK_COUNTS_OFF — A server that stopped counting what autovacuum decides by",
+            "summary": "With track_counts off, autovacuum stays on and does nothing on its own, and every index looks unused.",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l7-track-counts-off/",
+            "documentation_state": "published",
+            "category": "performance",
+            "level": 7,
+            "severity": null,
+            "severity_derived": false,
+            "stability": "stable",
             "confidence": "deterministic",
             "deprecated_since": null,
             "replaced_by": null,
@@ -5443,7 +5874,7 @@
             "covers": "exact",
             "attribution": "authored",
             "title": "PG.L9.TYPE_IMPLICIT_CAST — A foreign key whose two ends are different types",
-            "summary": "An int column referencing a bigint key can address only the first 2.1 billion of it — and the day the sequence passes that number is years away.",
+            "summary": "Two ends of one foreign key that PostgreSQL compares by converting one of them: a key wider than what it references, or two types that are not two widths of one number.",
             "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/pg-l9-type-implicit-cast/",
             "documentation_state": "published",
             "category": "idiom",
@@ -6035,7 +6466,7 @@
                 "audit"
             ],
             "limitations": [
-                "reads the RUNNING value, not the file: a setting changed on disk and not yet reloaded is invisible here, and one changed only for this session would be read as the server's",
+                "reads the GLOBAL value, not the file: a setting changed on disk and not yet reloaded is invisible here, and a value set for one session is never read",
                 "reads the DESTINATION (`log_output`) but not what happens to it. A file that ships to an aggregator and one that never leaves the host are the same `FILE` here, and who may read the `mysql.general_log` table is a grant question this rule does not ask",
                 "says nothing about what is IN the statements. A project whose queries are fully parameterized still writes the parameters to this log, which is the part people are surprised by"
             ]
@@ -6099,7 +6530,7 @@
                 "audit"
             ],
             "limitations": [
-                "reads the RUNNING value, not the file: a setting changed on disk and not yet reloaded is invisible here, and one changed only for this session would be read as the server's",
+                "reads the GLOBAL value, not the file: a setting changed on disk and not yet reloaded is invisible here, and a value set for one session is never read",
                 "judges the server's willingness, not any client's use of it. `local_infile` on with no client that asks for it exposes nothing today; it is the client somebody adds later that this exists to get ahead of"
             ]
         },
@@ -6132,7 +6563,7 @@
                 "audit"
             ],
             "limitations": [
-                "reads the RUNNING value, not the file: a setting changed on disk and not yet reloaded is invisible here, and one changed only for this session would be read as the server's",
+                "reads the GLOBAL value, not the file: a setting changed on disk and not yet reloaded is invisible here, and a value set for one session is never read",
                 "reads the setting and the grant, and cannot tell whether the account holding the grant is one anything actually connects as — a provisioning account that exists and is never used carries the same catalog rows as one in daily use"
             ]
         },
@@ -6165,7 +6596,7 @@
                 "audit"
             ],
             "limitations": [
-                "reads the RUNNING value, not the file: a setting changed on disk and not yet reloaded is invisible here, and one changed only for this session would be read as the server's",
+                "reads the reset value, not the file: a setting changed on disk and not yet reloaded is invisible here, and defaults set with ALTER ROLE or ALTER DATABASE for the connecting role and its database are part of that value, while those set for other roles are not read",
                 "governs only passwords set FROM NOW ON. Every verifier already stored keeps the algorithm it was written with, so changing this setting fixes nothing retroactively — which is exactly why the finding matters before the next password is set rather than after",
                 "cannot see which verifiers are already stored: that is the role-attribute rules' question, and answering it here would report the same fact twice"
             ]
@@ -6232,7 +6663,7 @@
                 "audit"
             ],
             "limitations": [
-                "reads the RUNNING value, not the file: a setting changed on disk and not yet reloaded is invisible here, and one changed only for this session would be read as the server's",
+                "reads the GLOBAL value, not the file: a setting changed on disk and not yet reloaded is invisible here, and a value set for one session is never read",
                 "says the server ACCEPTS unencrypted connections, not that anything makes one. A deployment where every client is configured to require TLS is not transmitting in the clear today — it is one misconfigured client away from doing so, which is the distinction this rule is about"
             ]
         },
@@ -6265,7 +6696,7 @@
                 "audit"
             ],
             "limitations": [
-                "reads the RUNNING value, not the file: a setting changed on disk and not yet reloaded is invisible here, and one changed only for this session would be read as the server's",
+                "reads the GLOBAL value, not the file: a setting changed on disk and not yet reloaded is invisible here, and a value set for one session is never read",
                 "reads the directory the setting names, never its contents or its permissions. A restricted path that anyone can write to is as reachable as an unrestricted one, and that is a filesystem fact outside this run"
             ]
         },
@@ -6328,7 +6759,7 @@
                 "audit"
             ],
             "limitations": [
-                "reads the RUNNING value, not the file: a setting changed in postgresql.conf and not yet reloaded is invisible here, and one changed only for this session would be read as the server's",
+                "reads the reset value, not the file: a setting changed on disk and not yet reloaded is invisible here, and defaults set with ALTER ROLE or ALTER DATABASE for the connecting role and its database are part of that value, while those set for other roles are not read",
                 "cannot see where the log GOES. Statements written to a file only root can read are a different exposure from ones shipped to an aggregator a whole team queries, and the destination — not this switch — decides how far a credential travels",
                 "says nothing about what is IN the statements. A project that binds every value still writes those values to this log, because the server logs the statement it executed, not the one the application wrote",
                 "judges only `log_statement`. PostgreSQL can put statement text into a log through other settings — `log_min_duration_statement` logs slow queries in full, and the auto_explain module logs them with their parameters — and neither is read here, so a quiet verdict from this rule is not a statement about the server's logging as a whole",
@@ -6364,7 +6795,7 @@
                 "audit"
             ],
             "limitations": [
-                "reads the RUNNING value, not the file: a setting changed on disk and not yet reloaded is invisible here, and one changed only for this session would be read as the server's",
+                "reads the reset value, not the file: a setting changed on disk and not yet reloaded is invisible here, and defaults set with ALTER ROLE or ALTER DATABASE for the connecting role and its database are part of that value, while those set for other roles are not read",
                 "describes the SERVER's offer. A connection reaching it through a proxy or a service mesh that terminates TLS elsewhere may still be encrypted on the wire that matters; whether a pooler is in the path is established and reported beside this finding, but what any proxy negotiates with a client is not visible from the catalog"
             ]
         },
@@ -6397,7 +6828,7 @@
                 "audit"
             ],
             "limitations": [
-                "reads the RUNNING value, not the file: a setting changed on disk and not yet reloaded is invisible here, and one changed only for this session would be read as the server's",
+                "reads the reset value, not the file: a setting changed on disk and not yet reloaded is invisible here, and defaults set with ALTER ROLE or ALTER DATABASE for the connecting role and its database are part of that value, while those set for other roles are not read",
                 "says what the server will ACCEPT, not what anybody negotiates. A deployment whose clients all insist on TLS 1.3 is never exposed to the older version this reports, and nothing about the clients is visible from the catalog",
                 "cannot read the TLS policy of anything standing in front of the server. Whether a pooler is in the path is established and reported beside this finding; what it negotiates with a client is not, so a proxy that terminates or re-negotiates TLS may put this parameter out of reach while the parameter reads the same either way"
             ]
@@ -7010,7 +7441,8 @@
             "limitations": [
                 "cannot know what the network already prevents: an account reachable only through a private subnet or a proxy may be perfectly safe with `%`, and the statement says nothing about what is in front of the server",
                 "reads the grant, not the account: a host restriction applied by a separate CREATE USER or RENAME USER statement is invisible to this one",
-                "a containerized or serverless deployment often has no stable client address to name, which is a real reason to accept this id rather than a reason to narrow the rule"
+                "a containerized or serverless deployment often has no stable client address to name, which is a real reason to accept this id rather than a reason to narrow the rule",
+                "reads a host that is written: an account named without one, which MySQL takes as `%`, stays silent, because a PostgreSQL grantee has exactly that shape and the rule tells the engines apart by the statement alone"
             ]
         },
         {

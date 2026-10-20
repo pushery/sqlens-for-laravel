@@ -9,17 +9,22 @@ use Pushery\SQLens\Drivers\Pgsql\Rules\L1\DropColumnRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L1\DropSchemaRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L1\DropTableRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L1\TruncateRule;
+use Pushery\SQLens\Drivers\Pgsql\Rules\L2\ClusterRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L2\ConstraintNotValidatedRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L2\CreateIndexNotConcurrentRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L2\DropIndexNotConcurrentRule;
+use Pushery\SQLens\Drivers\Pgsql\Rules\L2\RefreshMaterializedViewNotConcurrentRule;
+use Pushery\SQLens\Drivers\Pgsql\Rules\L2\ReindexNotConcurrentRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L2\SetNotNullScanRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L2\TypeChangeRewriteRule;
+use Pushery\SQLens\Drivers\Pgsql\Rules\L2\VacuumFullRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L3\ConcurrentlyInTransactionRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L3\LockTimeoutIneffectiveRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L3\MissingLockTimeoutRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L3\MissingStatementTimeoutRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L3\RiskyOpsSingleTransactionRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L3\Support\ExpectedTimeouts;
+use Pushery\SQLens\Drivers\Pgsql\Rules\L3\VacuumInTransactionRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L4\CheckEnumChangeRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L4\ConstraintValidationPendingRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L4\DropWithoutDeployWindowRule;
@@ -30,13 +35,16 @@ use Pushery\SQLens\Drivers\Pgsql\Rules\L4\IdentifierLengthRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L4\TypeNarrowingRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L5\CollationVersionMismatchRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L5\FloatForMoneyRule;
+use Pushery\SQLens\Drivers\Pgsql\Rules\L5\ForeignKeyNearCeilingRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L5\ForeignKeyWithoutIndexRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L5\MoneyTypeRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L5\NullableForeignKeyInUniqueRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L5\PolymorphicPairWithoutIndexRule;
+use Pushery\SQLens\Drivers\Pgsql\Rules\L5\PrimaryKeyNearCeilingRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L5\TableWithoutPrimaryKeyRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L6\DefaultTransactionIsolationDriftRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L6\DefaultTransactionReadOnlyRule;
+use Pushery\SQLens\Drivers\Pgsql\Rules\L6\ForeignKeyNarrowerThanKeyRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L6\JsonNotJsonbRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L6\NarrowIntegerPrimaryKeyRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L6\SerialNotIdentityRule;
@@ -45,8 +53,11 @@ use Pushery\SQLens\Drivers\Pgsql\Rules\L6\TimestampWithoutTimeZoneRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L6\TimeZoneNotUtcRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L6\UuidV4PrimaryKeyRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L7\AutovacuumDisabledRule;
+use Pushery\SQLens\Drivers\Pgsql\Rules\L7\AutovacuumOffRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L7\DataChecksumsDisabledRule;
+use Pushery\SQLens\Drivers\Pgsql\Rules\L7\InvalidIndexRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L7\RedundantIndexRule;
+use Pushery\SQLens\Drivers\Pgsql\Rules\L7\TrackCountsOffRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L7\UnbatchedMassDmlRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L7\UnusedIndexRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L8\ForeignKeyIdSuffixRule;
@@ -102,7 +113,7 @@ final readonly class PgsqlRuleSet
      *
      * This is the single source of the production rules: the driver returns it, and
      * the fixture-pair suite judges against it, so what a user runs and what the tests
-     * prove are the very same objects. A rule added to the family is added HERE, once,
+     * prove are the very same objects. A rule added to the family is added here, once,
      * and both the driver and the tests see it without a second edit.
      *
      * The projectRoot reaches each rule so a finding's location is repo-relative — the
@@ -111,7 +122,7 @@ final readonly class PgsqlRuleSet
      * the shipped values, so the driver passes the project's configured ones and the
      * fixture suite gets the strict defaults without wiring config.
      */
-    public static function forProjectRoot(string $projectRoot, ?ExpectedTimeouts $expectedTimeouts = null, int $maxLocksPerTransaction = 1, ?string $uuidGeneratedBy = null, ?MoneyColumnDictionary $moneyColumns = null, ?int $unusedIndexMinDays = null, ?NamingConvention $naming = null, ?DocumentationPolicy $documentation = null, ?string $migrationsTable = null): self
+    public static function forProjectRoot(string $projectRoot, ?ExpectedTimeouts $expectedTimeouts = null, int $maxLocksPerTransaction = 1, ?string $uuidGeneratedBy = null, ?MoneyColumnDictionary $moneyColumns = null, ?int $unusedIndexMinDays = null, ?NamingConvention $naming = null, ?DocumentationPolicy $documentation = null, ?string $migrationsTable = null, ?int $keyCeilingPercent = null): self
     {
         $expectedTimeouts ??= ExpectedTimeouts::all();
 
@@ -120,15 +131,20 @@ final readonly class PgsqlRuleSet
             new DropSchemaRule($projectRoot),
             new DropTableRule($projectRoot),
             new TruncateRule($projectRoot),
+            new ClusterRule($projectRoot),
             new ConstraintNotValidatedRule($projectRoot),
             new CreateIndexNotConcurrentRule($projectRoot),
             new DropIndexNotConcurrentRule($projectRoot),
+            new RefreshMaterializedViewNotConcurrentRule($projectRoot),
+            new ReindexNotConcurrentRule($projectRoot),
             new SetNotNullScanRule($projectRoot),
             new TypeChangeRewriteRule($projectRoot),
+            new VacuumFullRule($projectRoot),
             new ConcurrentlyInTransactionRule($projectRoot),
             new MissingLockTimeoutRule($projectRoot, $expectedTimeouts->requires(ExpectedTimeouts::LOCK_TIMEOUT)),
             new MissingStatementTimeoutRule($projectRoot, $expectedTimeouts->requires(ExpectedTimeouts::STATEMENT_TIMEOUT)),
             new RiskyOpsSingleTransactionRule($projectRoot, $maxLocksPerTransaction),
+            new VacuumInTransactionRule($projectRoot),
             new CheckEnumChangeRule($projectRoot),
             new ConstraintValidationPendingRule($projectRoot),
             new ExpandWithoutContractRule($projectRoot),
@@ -143,8 +159,11 @@ final readonly class PgsqlRuleSet
             new NullableForeignKeyInUniqueRule($projectRoot),
             new PolymorphicPairWithoutIndexRule($projectRoot),
             new CollationVersionMismatchRule($projectRoot),
+            new PrimaryKeyNearCeilingRule($projectRoot, $keyCeilingPercent),
+            new ForeignKeyNearCeilingRule($projectRoot, $keyCeilingPercent),
             new JsonNotJsonbRule($projectRoot),
             new NarrowIntegerPrimaryKeyRule($projectRoot, $migrationsTable ?? 'migrations'),
+            new ForeignKeyNarrowerThanKeyRule($projectRoot),
             new SerialNotIdentityRule($projectRoot),
             new TimestampWithoutTimeZoneRule($projectRoot),
             new UuidV4PrimaryKeyRule($projectRoot, $uuidGeneratedBy),
@@ -157,6 +176,9 @@ final readonly class PgsqlRuleSet
             new LockTimeoutIneffectiveRule($projectRoot),
             new DataChecksumsDisabledRule($projectRoot),
             new AutovacuumDisabledRule($projectRoot),
+            new AutovacuumOffRule($projectRoot),
+            new TrackCountsOffRule($projectRoot),
+            new InvalidIndexRule($projectRoot),
             new RedundantIndexRule($projectRoot),
             new UnbatchedMassDmlRule($projectRoot),
             new UnusedIndexRule($projectRoot, $unusedIndexMinDays),

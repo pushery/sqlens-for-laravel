@@ -15,7 +15,7 @@ use PhpParser\ParserFactory;
  * No `include`, no `eval`, no instantiation of the migration class. That is not
  * a performance choice: loading a migration to inspect it would execute its
  * top-level code, and the whole point of the pre-scan is to find out whether
- * running this file is safe BEFORE anything of it runs. A scanner that had to
+ * running this file is safe before anything of it runs. A scanner that had to
  * run the file first could not answer its own question.
  *
  * The file is parsed exactly once and the resolved call list is shared with every
@@ -26,7 +26,7 @@ final class MigrationFileScanner
     /**
      * How many times any scanner has invoked the PHP parser this process.
      *
-     * The pre-scan's whole cost model rests on parsing each file ONCE and sharing
+     * The pre-scan's whole cost model rests on parsing each file once and sharing
      * the result with every detector — a per-detector parse would multiply the
      * scan's cost by the number of patterns, and the scan sits in front of the
      * sub-second fast path. That "once, not once per detector" is a promise a
@@ -60,11 +60,11 @@ final class MigrationFileScanner
      */
     public function scan(string $file): ScannedMigration|ScanFailure
     {
-        // ONE read, ONE error path. Splitting "does not exist" from "exists but
+        // One read, one error path. Splitting "does not exist" from "exists but
         // could not be read" would add a second arm only a filesystem race can
         // reach — untestable by construction, and an untested arm inside a guard
         // is exactly where guards rot. The warning is suppressed because turning
-        // it into a named three-valued result IS this method's job.
+        // it into a named three-valued result is this method's job.
         $source = @file_get_contents($file);
 
         if ($source === false) {

@@ -44,7 +44,7 @@ final readonly class SqlKeywords
     ];
 
     /**
-     * The words of ALL that MySQL does not reserve, and which therefore can name a table unquoted.
+     * The words of all that MySQL does not reserve, and which therefore can name a table unquoted.
      *
      * On MySQL they keep the case they were written in. A table name there is compared by case on
      * Linux (`lower_case_table_names=0`, the server default), so `from comment` upper-cased is

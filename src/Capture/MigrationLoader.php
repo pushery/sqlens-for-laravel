@@ -11,13 +11,13 @@ use Pushery\SQLens\Exceptions\UnloadableMigration;
 use ReflectionClass;
 
 /**
- * Loads a migration from its file — at most ONCE per file, per run.
+ * Loads a migration from its file — at most once per file, per run.
  *
  * ## Why this is not just `require`
  *
- * A Laravel 13 migration is an anonymous class, so the file RETURNS the instance and requiring it
- * twice simply produces two of them. A migration written before Laravel 8 is a NAMED class, and
- * requiring THAT file twice is a `Cannot redeclare class` fatal — E_ERROR, uncatchable, the process
+ * A Laravel 13 migration is an anonymous class, so the file returns the instance and requiring it
+ * twice simply produces two of them. A migration written before Laravel 8 is a named class, and
+ * requiring that file twice is a `Cannot redeclare class` fatal — E_ERROR, uncatchable, the process
  * is gone. Not an exception a captor could turn into a finding: no output, no report, exit 1.
  *
  * That is not hypothetical and it is not only a legacy concern. The moment anything needs a
@@ -58,7 +58,7 @@ final class MigrationLoader
             $cached = $this->loaded[$key];
 
             // Same as the framework: a migration with a constructor is required again rather than
-            // cloned, because a clone would share whatever its constructor built. A NAMED class
+            // cloned, because a clone would share whatever its constructor built. A named class
             // never gets here — the class-exists shortcut in resolve() answers it first — so the
             // second require cannot be the redeclare fatal this class exists to prevent.
             return method_exists($cached, '__construct') ? $this->resolve($file) : clone $cached;

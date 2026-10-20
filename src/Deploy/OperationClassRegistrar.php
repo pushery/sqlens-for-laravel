@@ -52,7 +52,7 @@ final readonly class OperationClassRegistrar
     }
 
     /**
-     * The class for ONE finding, or null when its rule declares none.
+     * The class for one finding, or null when its rule declares none.
      *
      * @param  array<string, string>  $declared  from {@see self::byRuleId()}
      */

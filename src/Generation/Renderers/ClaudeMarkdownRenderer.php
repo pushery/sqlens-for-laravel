@@ -40,10 +40,10 @@ use Pushery\SQLens\Generation\RuleCatalogSnapshot;
  * ## No generated-file notice here, and that is deliberate
  *
  * The other two targets carry one, because a reader opening a file this tool owns has no other
- * signal. Here the marker pair IS the signal, and it is visible to a person reading the raw
+ * signal. Here the marker pair is the signal, and it is visible to a person reading the raw
  * markdown while costing the model nothing — the vendor documents that block-level HTML comments
  * are stripped before the file reaches it. A second notice inside the block would be text the model
- * DOES read, spending part of that file's stated context budget to say something the reader can
+ * does read, spending part of that file's stated context budget to say something the reader can
  * already see.
  */
 final readonly class ClaudeMarkdownRenderer implements MetadataRenderer
@@ -65,7 +65,7 @@ final readonly class ClaudeMarkdownRenderer implements MetadataRenderer
         $format = AgentContextFormat::Claude;
 
         // The pair is asked of MarkerBlock rather than of the format's nullable accessor: this
-        // renderer KNOWS it writes a region, and defending against a null that cannot happen would
+        // renderer knows it writes a region, and defending against a null that cannot happen would
         // be a branch no test can reach. The format table still answers the general question.
         $markers = MarkerBlock::agentRules($this->generatorVersion, $snapshot->hash());
 

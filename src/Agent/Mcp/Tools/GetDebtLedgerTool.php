@@ -212,7 +212,7 @@ final class GetDebtLedgerTool extends SqlensTool
         $kind = $validated['kind'] ?? null;
 
         return array_values(array_filter($rows, static function (array $row) use ($minimum, $kind): bool {
-            // An age this build could not read is NOT filtered out by a minimum: the entry exists
+            // An age this build could not read is not filtered out by a minimum: the entry exists
             // and is owed, and hiding it because its date is unreadable would answer a question
             // about age by removing the evidence.
             if (is_int($minimum) && $row['age'] !== null && $row['age'] < $minimum) {

@@ -21,7 +21,7 @@ final readonly class SquawkInvocation
      *                                verbatim, and a real file path would put a machine-specific
      *                                absolute path into a report that has to read the same in CI.
      * @param  string|null  $pgVersion  the assumed server version to pass through, or null when it
-     *                                  is not established. The tool accepts ANY string here without
+     *                                  is not established. The tool accepts any string here without
      *                                  complaint — `999.0` was measured as accepted — so validating
      *                                  it is this side's job, not something the run will surface.
      * @param  bool|null  $insideTransaction  whether the statements run inside a transaction, or

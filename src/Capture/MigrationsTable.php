@@ -10,7 +10,7 @@ namespace Pushery\SQLens\Capture;
  * ## Why this is a class and not a literal
  *
  * It was a literal, in two places, and both were wrong for every application that renames the
- * table. `database.migrations` has TWO shapes — the name itself (the historical form) and an array
+ * table. `database.migrations` has two shapes — the name itself (the historical form) and an array
  * carrying it under `table` (Laravel 11 and later) — and the framework narrows them in
  * `MigrationServiceProvider`. A caller that wrote `'migrations'` was not choosing a default; it
  * was overriding a decision the application had already made.

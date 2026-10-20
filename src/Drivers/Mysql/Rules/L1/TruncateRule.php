@@ -37,7 +37,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * protects them. It does not. That is why this is its own rule rather than a shared one with a
  * footnote: the difference is not an aside, it is the whole advice.
  *
- * ## What it does NOT re-decide
+ * ## What it does not re-decide
  *
  * The same-migration exception and the opt-in behavior follow the PostgreSQL rule exactly, because
  * those parts genuinely are engine-neutral: a helper table this migration just created holds no
@@ -63,7 +63,7 @@ final class TruncateRule extends AbstractMysqlRule implements ProvidesRemediatio
     /**
      * A considered `none` — with MySQL's sentence, not PostgreSQL's.
      *
-     * The PostgreSQL sibling's reason is about what to do INSTEAD, and every word of it applies
+     * The PostgreSQL sibling's reason is about what to do instead, and every word of it applies
      * here: reference data being reloaded wants an idempotent seeder, a table being retired wants
      * the staged drop, a fixture in the wrong file wants deleting. What it cannot carry is the fact
      * that makes this rule its own — on MySQL `TRUNCATE` is DDL and causes an implicit commit, so

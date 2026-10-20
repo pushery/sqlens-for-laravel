@@ -15,7 +15,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * ## Why it is shared rather than written per rule
  *
- * Two rules now need it and they describe the SAME server value from two angles — the general query
+ * Two rules now need it and they describe the same server value from two angles — the general query
  * log as a credential leak and as personal data. Two copies of a three-valued environment check
  * would eventually disagree about what "cannot tell" means, and the disagreement would show as one
  * of them reporting a pass on a server the other called undetermined. Over one setting.
@@ -38,7 +38,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * ## Asked of a wrong value only
  *
  * The rules call this from `findingCondition()`, which runs after the value was judged a violation.
- * The three answers describe a value that WOULD be reported: the pass sentence says it is set, and
+ * The three answers describe a value that would be reported: the pass sentence says it is set, and
  * the undetermined says the environment decides. For `general_log = OFF` both would be false, and
  * the undetermined would fail a `ci` run over a server in its factory settings.
  */

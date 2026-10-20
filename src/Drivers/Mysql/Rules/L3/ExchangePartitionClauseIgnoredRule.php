@@ -45,7 +45,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  * indistinguishable from agreement.
  *
  * It matters more than it looks, because the operation's real cost sits somewhere the clause never
- * addressed: by default MySQL validates EVERY row of the incoming table against the partition
+ * addressed: by default MySQL validates every row of the incoming table against the partition
  * definition, and the table is not writable while that scan runs. Somebody who believes `LOCK=NONE`
  * protects them is wrong twice — the clause does nothing, and the thing they were worried about is
  * real.

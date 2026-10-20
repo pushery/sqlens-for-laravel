@@ -8,7 +8,7 @@ use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Levels\Level;
 
 /**
- * One finding, measured against both gates, with the blocking axis NAMED.
+ * One finding, measured against both gates, with the blocking axis named.
  *
  * ## Why the axis travels with the verdict
  *
@@ -20,13 +20,13 @@ use Pushery\SQLens\Levels\Level;
  *
  * ## Why a finding never blocks on both
  *
- * Each finding belongs to exactly ONE axis, decided by its category ({@see GateAxis::forCategory()}).
+ * Each finding belongs to exactly one axis, decided by its category ({@see GateAxis::forCategory()}).
  * Security and privacy findings answer to severity and are not measured against the level at all;
  * everything else answers to the level and — even carrying a severity — cannot be blocked by the
  * risk gate. That is the invariant this object exists to make checkable: `blockedBy` is one value,
  * so a report cannot double-count, and a finding cannot be smuggled past one gate by the other.
  *
- * The exit code reads `blockedBy` rather than recomputing anything, and both axes produce the SAME
+ * The exit code reads `blockedBy` rather than recomputing anything, and both axes produce the same
  * "findings over the gate" code: a pipeline needs to stop either way, and a second code would make
  * a critical security finding look like a misconfiguration.
  */
@@ -34,7 +34,7 @@ final readonly class GateDecision
 {
     private function __construct(
         /**
-         * Which gate this finding ANSWERS TO, blocking or not.
+         * Which gate this finding answers to, blocking or not.
          *
          * Separate from `blockedBy` because the two questions have different answers for most
          * findings, and only one of them can be reconstructed afterwards. A security check that
@@ -70,7 +70,7 @@ final readonly class GateDecision
      */
     public static function for(Finding $finding, Level $level, SeverityGate $severity): self
     {
-        // The category decides the axis, once, and it decides it for EVERY finding — a pass and an
+        // The category decides the axis, once, and it decides it for every finding — a pass and an
         // undetermined belong to an axis too, they just do not breach it. Deciding it here rather
         // than at each consumer is what keeps a severity on a safety rule from doing anything at all.
         $axis = GateAxis::forCategory($finding->category);

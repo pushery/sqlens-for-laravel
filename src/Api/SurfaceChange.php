@@ -13,10 +13,12 @@ namespace Pushery\SQLens\Api;
  * major release, or delete the gate. Neither is what the promise wants, and the second is what
  * actually happens under time pressure.
  *
- * There is almost always a third option — rename becomes deprecate-plus-new-id, a severity raise
- * becomes a severity raise WITH a changelog callout — and the message is where it belongs, because
- * a maintainer reading a red build is exactly the person who needs it and exactly the moment they
- * have no patience to go looking.
+ * There is almost always a third option — a rename becomes deprecate-plus-new-id — and the message
+ * is where it belongs, because a maintainer reading a red build is exactly the person who needs it
+ * and exactly the moment they have no patience to go looking.
+ *
+ * A change the gate allows can still owe something. A severity raise passes in a minor, and its
+ * message asks for a changelog callout; this class names that callout and does not check for it.
  */
 final readonly class SurfaceChange
 {

@@ -47,7 +47,7 @@ use Pushery\SQLens\Subjects\CaptureMode;
  * A protocol has nobody to ask. Laravel's confirmable path needs a terminal, and an MCP server has
  * none — so `interactive: false` is passed, and the guard's own rule then applies unchanged: without
  * an explicit yes, the run is refused rather than assumed. The explicit yes is a project setting
- * (`agent.mcp.shadow_consent`) that somebody wrote down in advance, deliberately NOT a parameter: a
+ * (`agent.mcp.shadow_consent`) that somebody wrote down in advance, deliberately not a parameter: a
  * consent a caller can send with the call is not consent, it is a field.
  *
  * That setting is also separate from enabling the tool, because they answer different questions —
@@ -112,7 +112,7 @@ final class LintShadowTool extends SqlensTool
             guard: $clearance->decide(
                 $connection,
                 // The standing consent is the force. It is recorded as such in the run header, which
-                // is honest: a run nobody was asked about, that happened anyway, IS a forced run.
+                // is honest: a run nobody was asked about, that happened anyway, is a forced run.
                 force: $config->get('sqlens.agent.mcp.shadow_consent') === true,
                 // Nobody to ask, so nobody was asked. Both false, and the guard's own rule does the
                 // rest — without the standing yes above, this combination is a refusal.
@@ -168,7 +168,7 @@ final class LintShadowTool extends SqlensTool
     }
 
     /**
-     * The parameters this tool does NOT take, and it is a short list on purpose.
+     * The parameters this tool does not take, and it is a short list on purpose.
      *
      * No `file`: the fast path is pretend-only by construction, and `lint_pending` is where it lives.
      * No confirmation, no force, no environment override — every one of those would move a decision

@@ -11,7 +11,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
 /**
  * The base of the driver-neutral migration-lifecycle rule family.
  *
- * These rules judge what a migration DOES rather than what a specific engine makes of a
+ * These rules judge what a migration does rather than what a specific engine makes of a
  * statement — a missing down(), a WHERE-less bulk write, DML mixed into a schema change.
  * The behavior is the same on PostgreSQL and MySQL, so the family is Core, not under a
  * driver: it extends the same driver-neutral {@see AbstractSafetyRule} the PostgreSQL
@@ -22,7 +22,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
 abstract class AbstractLifecycleRule extends AbstractSafetyRule
 {
     /**
-     * Whether this statement is the migration's FIRST — the one a per-migration fact is
+     * Whether this statement is the migration's first — the one a per-migration fact is
      * reported on.
      *
      * Several rules in this family judge the migration rather than the statement (is there a

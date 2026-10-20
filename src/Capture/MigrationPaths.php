@@ -10,7 +10,7 @@ use Illuminate\Database\Migrations\Migrator;
 use Pushery\SQLens\ProjectPath;
 
 /**
- * Where this project's migrations live — resolved in ONE place, because two places would disagree.
+ * Where this project's migrations live — resolved in one place, because two places would disagree.
  *
  * The lint layer needs them to decide what to capture. The capture layer needs them to decide
  * whether a captured statement came from a migration at all — the difference between a password
@@ -59,12 +59,11 @@ final readonly class MigrationPaths
     }
 
     /**
-     * The project's explicit list, or null when it made none.
+     * The project's explicit list, or null when it names no path.
      *
-     * Null rather than an empty array, and the distinction is load-bearing: an empty list is a
-     * project saying "no migration paths", which is a legitimate if unusual answer, while null is
-     * "did not say" and falls through to the framework. Collapsing them would make a deliberate
-     * empty list silently mean the opposite of what it says.
+     * An empty list is the shipped default and reads like a missing key: both come back null and fall
+     * through to the application's registered migration paths, the ones a run with no `--path` scans.
+     * Only a list that names at least one path replaces them, as the published configuration says.
      *
      * @return list<string>|null
      */

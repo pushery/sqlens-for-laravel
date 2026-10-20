@@ -61,7 +61,7 @@ final readonly class ResolvedServerVersion
     /**
      * A pin was set and could not be read as a version.
      *
-     * The source stays {@see VersionSource::Assumed}: the run was TOLD to reason about
+     * The source stays {@see VersionSource::Assumed}: the run was told to reason about
      * a pinned version, and reporting the failure as a detection problem would point
      * the reader at the server instead of at the one setting that needs fixing. The
      * offending text is kept so the report can quote it back — "could not be parsed"
@@ -93,7 +93,7 @@ final readonly class ResolvedServerVersion
             return $this->version->toString();
         }
 
-        // The header carries WHY, not just "unknown". A broken pin and a fast path with
+        // The header carries why, not just "unknown". A broken pin and a fast path with
         // nothing to ask both leave the version blank, and only one of them is a mistake
         // somebody has to go and fix — a shared wording would hide it in the other's noise.
         return $this->unreadablePin === null

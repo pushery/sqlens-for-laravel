@@ -21,7 +21,7 @@ use Pushery\SQLens\Drivers\Mysql\Canonical\MysqlCanonicalization;
  * DUMP carries beyond raw SQL:
  *
  *   - Dump preamble and comment lines (`-- …`, `# …`) glued to the front of the
- *     following statement are stripped; a statement that was ONLY comments is
+ *     following statement are stripped; a statement that was only comments is
  *     dropped as noise.
  *   - A whole-statement version-gated conditional comment is read by what it
  *     CONTAINS, because the server executes it like any other statement:
@@ -258,7 +258,7 @@ final readonly class MysqlSchemaDumpReader
      * plain comment as well. The MariaDB client writes one in front of every dump
      * (`/*M!999999\- enable the sandbox mode *​/`), so a dump made with it starts its first statement
      * with a comment, and a statement that is only such a comment is dropped as noise. A MySQL
-     * version-gated `/*! *​/` directive is deliberately NOT stripped here: the server executes it,
+     * version-gated `/*! *​/` directive is deliberately not stripped here: the server executes it,
      * so it is classified separately.
      */
     private function stripLeadingComments(string $statement): string
@@ -307,7 +307,7 @@ final readonly class MysqlSchemaDumpReader
 
     /**
      * The statement without the `DEFINER` clause of its head. Measured on MySQL 8.0.36 with the dump
-     * mysqldump 8.4.10 writes: an account holding ALL on the shadow database is refused each object
+     * mysqldump 8.4.10 writes: an account holding all on the shadow database is refused each object
      * with a definer (error 1227), and replays all of them without the clause, as their definer.
      */
     private function withoutDefiner(string $statement): string

@@ -17,12 +17,13 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
 
 /**
  * Which statements take a lock strong enough to matter — the shared PostgreSQL reading
- * the three level-3 timeout/transaction rules all build on, so it is defined ONCE here
+ * the three level-3 timeout/transaction rules all build on, so it is defined once here
  * and not re-derived (subtly differently) in each.
  *
  * A "strong lock" here is one that blocks concurrent access and must WAIT in the lock
  * queue to be taken: `ALTER TABLE` in its forms (ACCESS EXCLUSIVE), a non-concurrent
- * `CREATE INDEX`/`DROP INDEX`, `TRUNCATE`, and `DROP TABLE`. It is the class of
+ * `CREATE INDEX`/`DROP INDEX`/`REINDEX`/`REFRESH MATERIALIZED VIEW`, `TRUNCATE`, `DROP TABLE`,
+ * `VACUUM FULL` and `CLUSTER`. It is the class of
  * operation that a `lock_timeout` bounds and that, un-bounded, can pile every later
  * query up behind it — and the class `MISSING_LOCK_TIMEOUT`, `MISSING_STATEMENT_TIMEOUT`
  * and `RISKY_OPS_SINGLE_TX` all reason about.
@@ -86,9 +87,16 @@ final class StrongLockStatements
             StatementKind::DropConstraint,
             StatementKind::DropColumn,
             StatementKind::DropTable,
-            StatementKind::TruncateTable => true,
+            StatementKind::TruncateTable,
+            // `VACUUM FULL` and `CLUSTER`, which hold ACCESS EXCLUSIVE for the whole rewrite and queue
+            // for it first.
+            StatementKind::RebuildTable => true,
+            // A `REINDEX` holds SHARE on its table and a `REFRESH MATERIALIZED VIEW` ACCESS EXCLUSIVE
+            // on its view, each unless it runs concurrently.
             StatementKind::CreateIndex,
-            StatementKind::DropIndex => ! self::isConcurrent($digest->canonical),
+            StatementKind::DropIndex,
+            StatementKind::Reindex,
+            StatementKind::RefreshMaterializedView => ! self::isConcurrent($digest->canonical),
             StatementKind::DropSchema => self::cascades($digest->canonical),
             StatementKind::DdlOther => self::otherDdlTakesStrongLock($digest->canonical),
             default => false,
@@ -159,7 +167,7 @@ final class StrongLockStatements
 
     /**
      * The first strong-lock statement in the stream that acts on an object this
-     * migration did NOT create — the point at which a timeout should already be in
+     * migration did not create — the point at which a timeout should already be in
      * effect. A strong lock on a table the same migration just created contends with no
      * one (the table is invisible outside the transaction until commit), so it is
      * skipped, exactly as the blocking-DDL rules skip a same-migration table. A
@@ -190,7 +198,7 @@ final class StrongLockStatements
 
     /**
      * Whether every table this statement locks was created in the same migration — the
-     * carve-out scaled to a statement that touches MORE than one table. A foreign key
+     * carve-out scaled to a statement that touches more than one table. A foreign key
      * `ADD CONSTRAINT` names both the constrained AND the referenced table, so a single
      * `soleTarget` cannot see it; a pivot migration that creates both tables and then wires
      * the key would otherwise be flagged, which is the commonest migration shape there is.
@@ -216,15 +224,15 @@ final class StrongLockStatements
     }
 
     /**
-     * Whether the stream sets the named timeout at any point BEFORE the given gate
-     * index. Order is the whole question: a `SET lock_timeout` AFTER the risky DDL does
+     * Whether the stream sets the named timeout at any point before the given gate
+     * index. Order is the whole question: a `SET lock_timeout` after the risky DDL does
      * not protect it, so only statements ahead of the gate count.
      *
      * @param  list<MigrationStatementDigest>  $stream
      */
     public static function timeoutSetBefore(array $stream, int $gateIndex, string $timeout): bool
     {
-        // The LAST statement that touches the timeout decides, not any of them: a `RESET`, a
+        // The last statement that touches the timeout decides, not any of them: a `RESET`, a
         // `SET … TO DEFAULT` or a `SET … = 0` after a bound takes the bound away again.
         $bounded = false;
 
@@ -372,7 +380,7 @@ final class StrongLockStatements
      * Whether the stream declares the named timeout with `SET LOCAL` somewhere before the gate while
      * running outside a transaction — the shape that reads as a bound and is none.
      *
-     * It exists so the finding can say WHICH mistake was made. Without it the rule tells an operator
+     * It exists so the finding can say which mistake was made. Without it the rule tells an operator
      * that no timeout was set, while the operator is looking at the line that sets it, and the most
      * likely conclusion is that the tool is wrong.
      *

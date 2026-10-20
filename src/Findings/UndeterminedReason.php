@@ -30,7 +30,7 @@ enum UndeterminedReason: string
      * replaces the reading whatever the reading was. Two reasons would ask a pipeline to branch where
      * the operator's next step does not.
      *
-     * Kept apart from {@see self::SettingValueUnrecognized}. There a value WAS read, a TLS protocol
+     * Kept apart from {@see self::SettingValueUnrecognized}. There a value was read, a TLS protocol
      * name or the version string the end-of-life check compares, and this build has no place for it.
      * Those checks judge the live value rather than the version the run reasons about, so a pin changes
      * nothing there, and the remedy sits on this side rather than on the server's.
@@ -73,7 +73,7 @@ enum UndeterminedReason: string
     /**
      * An external tool reported a finding under a rule this build's map does not describe.
      *
-     * The shape a NEW tool version takes: it grows a rule, and every pipeline that upgraded the
+     * The shape a new tool version takes: it grows a rule, and every pipeline that upgraded the
      * binary would otherwise see a finding appear out of nowhere, at a level and category nobody
      * chose. Reported as undetermined with the rule named, so it is visible and does not silently
      * become a failure somebody else's build has to explain.
@@ -94,7 +94,7 @@ enum UndeterminedReason: string
      * The engine is supported and its VERSION is not: the server — or the pinned version the
      * run reasons from — is below the floor this driver's rules were written for.
      *
-     * Deliberately NOT `unsupported_engine`. That reason means "SQLens will never reason about
+     * Deliberately not `unsupported_engine`. That reason means "SQLens will never reason about
      * this engine", and its only fix is to stop pointing SQLens at it; this one means "upgrade,
      * and until then read the report as advisory". A pipeline branching on the reason has to be
      * able to tell a dead end from a deadline.
@@ -102,7 +102,7 @@ enum UndeterminedReason: string
     case ServerBelowSupportedFloor = 'server_below_supported_floor';
 
     /**
-     * The catalog read hit its OWN time budget — the reader's bound, not the database's fault.
+     * The catalog read hit its own time budget — the reader's bound, not the database's fault.
      *
      * Distinct from a server timeout on purpose: this package sets that bound itself, and filing its
      * own self-restraint as a database problem would send somebody looking for a fault that is not
@@ -132,7 +132,7 @@ enum UndeterminedReason: string
     case CatalogReadingImplausible = 'catalog_reading_implausible';
 
     /**
-     * The statistics reading came back WITHOUT the object a finding names, so it could not be weighed.
+     * The statistics reading came back without the object a finding names, so it could not be weighed.
      *
      * Distinct from {@see self::StatisticsUnavailable}, and the distinction is the reason this case
      * exists rather than reusing it: that one means a statistics-DEPENDENT rule could not run at all
@@ -190,7 +190,7 @@ enum UndeterminedReason: string
      * How long a debt has been outstanding could not be established.
      *
      * Two ways in, and both are real rather than hypothetical: the recorded `first_seen` is not a
-     * date this build can read, or it lies AFTER the instant the run measures against — a machine
+     * date this build can read, or it lies after the instant the run measures against — a machine
      * with a skewed clock, or a hand-edited ledger.
      *
      * Neither is rounded away, and the direction is why. Clamping an unreadable or future date to
@@ -307,7 +307,7 @@ enum UndeterminedReason: string
     /**
      * The column stores raw bytes, and raw bytes are what server-side encryption leaves behind.
      *
-     * Measured on PostgreSQL: a column pgcrypto wrote and a column holding an avatar are BOTH
+     * Measured on PostgreSQL: a column pgcrypto wrote and a column holding an avatar are both
      * `bytea`, and nothing in the catalog separates them — the type is simply what the engine uses
      * for bytes. MySQL's `blob` family says exactly as little.
      *
@@ -322,7 +322,7 @@ enum UndeterminedReason: string
     case OpaqueBinaryColumn = 'opaque_binary_column';
 
     /**
-     * A preflight check asked who OWNS an object and the catalog answered with no row at all.
+     * A preflight check asked who owns an object and the catalog answered with no row at all.
      *
      * `ALTER` and `DROP` cannot be granted on PostgreSQL — they require ownership, so the question is
      * membership in the owning role rather than a privilege. When that question comes back empty the
@@ -446,7 +446,7 @@ enum UndeterminedReason: string
      * The setting this rule judged carries a change that takes effect at the next restart.
      *
      * `pending_restart` means somebody already changed the value, the server accepted the change, and
-     * it is waiting for a restart to apply it. From that moment the RUNNING value and the DECIDED
+     * it is waiting for a restart to apply it. From that moment the running value and the decided
      * value are two different things, and only the running one is readable here.
      *
      * A rule that judged the running value and said "fine" would be right until the next minor
@@ -454,7 +454,7 @@ enum UndeterminedReason: string
      * with a change pending is reported as a gap rather than as a pass: what the run cannot say is
      * whether the setting will still be fine afterwards.
      *
-     * A value that is ALREADY wrong is still reported as wrong. The pending change is added to that
+     * A value that is already wrong is still reported as wrong. The pending change is added to that
      * finding rather than replacing it, because the problem is present-tense either way.
      */
     case SettingChangePendingRestart = 'setting_change_pending_restart';
@@ -544,7 +544,7 @@ enum UndeterminedReason: string
      * So a catalog check cannot answer whether the view was written with a star, and the two
      * confident answers are both wrong: `pass` says a view was checked and is clean when nothing
      * was checked, and `fail` accuses a view whose author named every column. The honest answer
-     * names where the question CAN be answered — the migration, in the lint suite.
+     * names where the question can be answered — the migration, in the lint suite.
      *
      * It is not {@see self::MissingPrivilege} or {@see self::CatalogReadFailed}: the read succeeded
      * and the privilege was there. The information was destroyed before it ever reached the
@@ -611,7 +611,7 @@ enum UndeterminedReason: string
      * opposite places: there the rules were filtered away over real migrations, here there were
      * rules and nothing to apply them to. And not a pending-SKIP reason either, because nothing
      * failed to resolve — the answer is known and it is zero. (Named in prose rather than with a
-     * `{@see}`: the capture layer already imports THIS enum, and a reference back would make the
+     * `{@see}`: the capture layer already imports this enum, and a reference back would make the
      * two files cite each other for a docblock's sake.)
      *
      * The state that produces it is the ordinary one, which is why it needed naming: `--path` lints
@@ -717,9 +717,10 @@ enum UndeterminedReason: string
 
     /**
      * How long the server has been counting index scans could not be
-     * established — the statistics view was unreadable, or the counters have
+     * established — the statistics view was unreadable, the counters have
      * never been reset and so cover a window starting at a moment nobody
-     * recorded. A zero count over an unknown window is not evidence of
+     * recorded, or the server hands new connections `track_counts = off` and
+     * so counts no scan at all. A zero count over an unknown window is not evidence of
      * anything, and reporting it as one would advise dropping an index on the
      * strength of a number whose age nobody knows. The opposite reading is no
      * better: a table whose indexes are genuinely unused and a role that could
@@ -753,10 +754,10 @@ enum UndeterminedReason: string
     case ShadowTransactionPooling = 'shadow_transaction_pooling';
 
     /**
-     * `capture.shadow.direct_connection` names a connection on a DIFFERENT server than the one under
+     * `capture.shadow.direct_connection` names a connection on a different server than the one under
      * examination. That setting exists to reach the same server around a transaction pooler, so a
      * different one would create and drop databases on an instance the run never named. Detected
-     * BEFORE any DDL, from configuration alone — no connection is opened to find out.
+     * before any DDL, from configuration alone — no connection is opened to find out.
      */
     case ShadowDirectConnectionElsewhere = 'shadow_direct_connection_elsewhere';
 
@@ -793,7 +794,7 @@ enum UndeterminedReason: string
     case ShadowTemplateInUse = 'shadow_template_in_use';
 
     /**
-     * ONE object type, on ONE side of the drift comparison, could not be read — so that slice of the
+     * One object type, on one side of the drift comparison, could not be read — so that slice of the
      * schema was never compared.
      *
      * Distinct from {@see self::CatalogReadFailed}, and the distinction is the whole reason this
@@ -947,7 +948,7 @@ enum UndeterminedReason: string
      * The canonical statement carries no operation key the online-DDL matrix could be asked
      * about — the shape is recognized as a schema change, but which operation it performs is
      * not derivable from it. Distinct from the unclassified case above, which means the matrix
-     * has no entry for a key that WAS derived: this one never got as far as a key.
+     * has no entry for a key that was derived: this one never got as far as a key.
      */
     case OperationKeyUnmapped = 'operation_key_unmapped';
 
@@ -967,7 +968,7 @@ enum UndeterminedReason: string
     case OnlineDdlConditionUndecidable = 'online_ddl_condition_undecidable';
 
     /**
-     * A named table or session fact is decided AGAINST the entry's best case — the table is
+     * A named table or session fact is decided against the entry's best case — the table is
      * compressed, or the row-version limit is reached — so the cheap classification does not
      * apply and the matrix has no classified alternative for the degraded case. Undetermined
      * with the predicate named, never a guess at how much worse it is.
@@ -990,7 +991,7 @@ enum UndeterminedReason: string
      * The online-DDL matrix could not be read at all — the file is missing, unreadable, or not
      * the shape the loader expects.
      *
-     * Distinct from {@see self::UnclassifiedOnlineDdlOperation}, which means the matrix WAS read
+     * Distinct from {@see self::UnclassifiedOnlineDdlOperation}, which means the matrix was read
      * and has no entry for the operation. Here nothing was read, so nothing is known about any
      * operation — and a run whose data source vanished must say so rather than take the whole
      * lint down with an exception a user cannot act on.
@@ -1004,9 +1005,9 @@ enum UndeterminedReason: string
      * The patch-currency check has nothing to compare a server version against without it, and
      * "nothing to compare against" is not "up to date". Loaded quietly, a missing advisory file
      * would turn every server into a clean one, which is the reading a person makes and the one
-     * this package exists to prevent: the check that CANNOT run must say so.
+     * this package exists to prevent: the check that cannot run must say so.
      *
-     * The finding names WHICH path was tried and why it failed, because the fix differs — a typo
+     * The finding names which path was tried and why it failed, because the fix differs — a typo
      * in `sqlens.security.advisories.path`, a publish that never ran, and a truncated download are
      * three different problems that look identical from a bare "unavailable".
      */
@@ -1046,7 +1047,7 @@ enum UndeterminedReason: string
      * Never a pass and never a finding about the line's content. Both would be wrong in opposite
      * directions: a `trust` on a broken line does not let anybody in, so flagging it invents a hole;
      * and the line's intended restriction is not in force, so clearing it invents a wall. The
-     * finding that DOES belong is `SEC.AUTH.HBA_PARSE_ERROR`, which reports the broken line itself.
+     * finding that does belong is `SEC.AUTH.HBA_PARSE_ERROR`, which reports the broken line itself.
      */
     case HostAuthRuleUnparsable = 'host_auth_rule_unparsable';
 
@@ -1285,7 +1286,7 @@ enum UndeterminedReason: string
     case WriteAcceptanceUnsupported = 'write_acceptance_unsupported';
 
     /**
-     * Online-schema-change artifacts are present, and a run still IN FLIGHT looks exactly like one
+     * Online-schema-change artifacts are present, and a run still in flight looks exactly like one
      * that died.
      *
      * The same shape as {@see self::IndexBuildInProgress} one layer out: the object is real, and
@@ -1299,7 +1300,7 @@ enum UndeterminedReason: string
      * The engine has no such state, so the check has nothing to look at on this driver.
      *
      * Distinct from {@see self::StructurallyNotApplicable}, which is an object that does not exist
-     * in THIS schema and could exist in another. This one can never apply here: InnoDB has no
+     * in this schema and could exist in another. This one can never apply here: InnoDB has no
      * invalid-index state, and no configuration changes that.
      */
     case NotApplicableOnThisEngine = 'not_applicable_on_this_engine';

@@ -64,9 +64,9 @@ final readonly class MatrixEntry
     /**
      * Whether running this operation means rewriting the whole table.
      *
-     * A FACT about the operation, named so a reader outside this namespace can act on it without
-     * evaluating an axis: what to DO about a rewrite — plan a window, stage the change — is a
-     * decision that belongs to whoever is advising, and what a rewrite IS belongs here.
+     * A fact about the operation, named so a reader outside this namespace can act on it without
+     * evaluating an axis: what to do about a rewrite — plan a window, stage the change — is a
+     * decision that belongs to whoever is advising, and what a rewrite is belongs here.
      */
     public function rewritesTheTable(): bool
     {

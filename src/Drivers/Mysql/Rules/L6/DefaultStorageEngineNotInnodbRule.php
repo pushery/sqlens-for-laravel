@@ -34,7 +34,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * Reporting nothing there would be indistinguishable from a rule that never ran, and reporting a
  * failure would send somebody to change a setting that is already harmless. So this is one of the
- * few rules that says `pass` OUT LOUD, with the reason: a reasoned pass is part of the statement
+ * few rules that says `pass` out loud, with the reason: a reasoned pass is part of the statement
  * rather than silence.
  */
 final class DefaultStorageEngineNotInnodbRule extends AbstractServerSettingRule

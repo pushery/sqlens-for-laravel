@@ -33,14 +33,14 @@ enum ConfigViolationKind: string
     /**
      * A schema key the config does not set, so the shipped default applies.
      *
-     * NOT a violation, and the distinction is the whole decision behind it. While a published copy
+     * Not a violation, and the distinction is the whole decision behind it. While a published copy
      * was merged with Laravel's flat `mergeConfigFrom()`, an application that published
      * `config/sqlens.php` before a release added a nested key had that key missing for good, and
      * treating that as fatal meant a package release could not be installed at all. Published
      * copies are merged map by map now (`PublishedConfigMerge`); a key can still be absent where a
      * value is set at runtime, and it is answered the same way.
      *
-     * The strictness that remains is ONE-SIDED and is the half that was doing the work: an UNKNOWN
+     * The strictness that remains is one-sided and is the half that was doing the work: an unknown
      * key is still fatal, because a typo that silently enables nothing is the failure the validator
      * exists for. What is given up is spotting a published copy that dropped a whole section — and
      * that is not given up silently, which is what this kind is for.
@@ -61,7 +61,7 @@ enum ConfigViolationKind: string
     /**
      * A key a guard profile leaves out, in the configuration the application actually runs on.
      *
-     * A VIOLATION, where an absent key anywhere else is a notice, and the difference is what the
+     * A violation, where an absent key anywhere else is a notice, and the difference is what the
      * reader of the key does with nothing. Everywhere else the shipped default applies. The guard
      * falls back to its own default instead, which turns a switch off, so an absent key here is the
      * silently disabled guardrail the guard's schema exists to prevent. A profile in the published
@@ -79,10 +79,10 @@ enum ConfigViolationKind: string
     {
         return match ($this) {
             self::UnknownKey => 'unknown key',
-            self::UnknownRuleId => 'unknown rule id (the rule keeps running; a suppression that names nothing suppresses nothing)',
+            self::UnknownRuleId => 'unknown rule id (a suppression that names no rule suppresses nothing)',
             self::RuleNotInSuite => 'a rule that does not answer in this suite (the id is real; the block it was written into is the wrong one)',
             self::DottedLiteralKey => 'literal dotted key (Laravel config nests sections as arrays; it does not split a dotted key into one)',
-            self::MissingKey => 'missing key (a published config section replaces the package default wholesale, so re-add every key of the section)',
+            self::MissingKey => 'missing key (the field is required and has no default to fall back on)',
             self::DefaultedKey => 'not set, so the shipped default applies (harmless; re-add the key to your published config if you meant to set it)',
             self::RetiredKey => 'retired key (this package no longer reads it, so it is ignored and the run continues; delete it from your published config)',
             self::UnsetGuardKey => 'not set, so the guard falls back to its own default, which turns a switch off (a profile in your published config takes every key it leaves out from the shipped production profile, so this configuration did not come from that file: rebuild a cached config after an upgrade, or write the key)',

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Generation;
 
+use ErrorException;
 use Illuminate\Filesystem\Filesystem;
 
 /**
@@ -69,12 +70,24 @@ final readonly class ArtifactWriting
      * A regenerated artifact always ends at {@see self::FILE_MODE}, whatever it was before. That is
      * a deliberate reset of a file the tool owns, and it is the one place this path overrides
      * something a project may have set by hand — stated here rather than discovered later.
+     *
+     * Whether the file holds the content afterwards, answered by reading it back. A directory that
+     * refuses the write reaches a run in one of two ways, and neither is an answer: under Laravel's
+     * error handler, which every `php artisan` installs, the warning of `mkdir()`, `tempnam()` or
+     * `rename()` is thrown as an ErrorException, and without the handler `replace()` returns as if it
+     * had written. So the exception is caught, the file is read back, and a caller reports a write
+     * only on `true`.
      */
-    public static function write(Filesystem $files, string $path, string $content): void
+    public static function write(Filesystem $files, string $path, string $content): bool
     {
-        $files->ensureDirectoryExists(dirname($path), self::DIRECTORY_MODE);
+        try {
+            $files->ensureDirectoryExists(dirname($path), self::DIRECTORY_MODE);
+            $files->replace($path, $content, self::FILE_MODE);
+        } catch (ErrorException) {
+            return false;
+        }
 
-        $files->replace($path, $content, self::FILE_MODE);
+        return @file_get_contents($path) === $content;
     }
 
     /**

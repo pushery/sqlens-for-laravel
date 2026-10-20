@@ -16,7 +16,7 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * lint.
  *
  * This is the lint suite's very lowest assurance made real: before any rule can
- * say anything about a migration's SQL, there has to BE SQL. A migration whose
+ * say anything about a migration's SQL, there has to be SQL. A migration whose
  * `up()` emits nothing — an empty method, a method that calls no schema or DB
  * builder, or one whose every statement the canonicalization layer rejected —
  * comes out of the capture as a clean pass with an empty statement list. The
@@ -25,7 +25,7 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * a migration that contributes no SQL to a lint run is a migration the run never
  * actually checked, and "no silent green" means saying so.
  *
- * **The boundary this rule must not cross.** It fires ONLY on a successful,
+ * **The boundary this rule must not cross.** It fires only on a successful,
  * empty capture. A migration the static pre-scan flagged is `undetermined`, not
  * an empty pass — the capture was never attempted — so it never reaches this
  * rule, and the two states can never overlap. A migration that threw under

@@ -1,5 +1,4 @@
 {
-    "$schema": "https://getcomposer.org/schema.json",
     "name": "pushery/sqlens-for-laravel",
     "description": "SQLens — database safety toolkit for Laravel. It lints pending migrations for lock and downtime risk and audits the live schema, on PostgreSQL and MySQL.",
     "keywords": [
@@ -64,13 +63,6 @@
     "autoload": {
         "psr-4": {
             "Pushery\\SQLens\\": "src/"
-        }
-    },
-    "config": {
-        "process-timeout": 0,
-        "sort-packages": true,
-        "allow-plugins": {
-            "pestphp/pest-plugin": true
         }
     },
     "extra": {

@@ -9,8 +9,8 @@ use Pushery\SQLens\Reporting\Baseline\FindingFingerprint;
 use Pushery\SQLens\Subjects\MigrationSql;
 
 /**
- * A finding offered to the suppression chain, together with what the three layers
- * need in order to answer.
+ * A finding offered to the suppression chain, together with what the layers need in
+ * order to answer.
  *
  * These extras do not live on the Finding on purpose. The fingerprint needs the
  * CANONICAL excerpt, and the annotation layer needs the migration subject itself

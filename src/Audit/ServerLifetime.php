@@ -37,9 +37,9 @@ namespace Pushery\SQLens\Audit;
  * project that never heard of the key — and a security check that stops reporting without anybody
  * asking is the exact failure this package exists to refuse.
  *
- * ## What it does NOT touch, and this is the load-bearing half
+ * ## What it does not touch, and this is the load-bearing half
  *
- * Only the checks whose subject IS the server or the role the audit connects as. Everything about
+ * Only the checks whose subject is the server or the role the audit connects as. Everything about
  * the SCHEMA — the thing the pipeline is actually there to judge, and the thing that will be
  * deployed onto a real server — reports unchanged. A declaration that quieted schema findings would
  * be a way to make a red run green, which is a different feature and one this package should not

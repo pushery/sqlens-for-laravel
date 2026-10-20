@@ -17,14 +17,14 @@ use Pushery\SQLens\Rules\RuleDocumentationUrl;
  *
  * ## Why an exemption needs an expiry, and why this is the more valuable half
  *
- * {@see UnjustifiedRawSqlRule} asks for a reason when the raw SQL is WRITTEN. Nothing asked again
+ * {@see UnjustifiedRawSqlRule} asks for a reason when the raw SQL is written. Nothing asked again
  * afterwards. Rewrite the call into a query-builder chain, delete the statement, move it to another
  * class — the annotation stays, sitting on code that runs no raw SQL, and reads for the rest of the
  * project's life as an exemption somebody weighed. Nobody deletes it, because nothing says it is
  * dead.
  *
  * A consuming project had built exactly this by hand: a gate step pinning an explicit list of raw-SQL
- * call sites and comparing it in BOTH directions — a new site with no entry is red, and an entry
+ * call sites and comparing it in both directions — a new site with no entry is red, and an entry
  * whose site is gone is red too. It could not retire that guard in favor of this package, because
  * the package only had the first direction, and trading a two-way check for a one-way one is not
  * adoption. This is the second direction.
@@ -144,7 +144,7 @@ final readonly class StaleRawSqlReasonRule implements Rule
      * The mirror of the policy rule's own join, run the other way round: there a call site looks for
      * a name, here a name looks for a call site. Written out rather than shared, because the two
      * differ in the direction of the prefix test — a class-level annotation is kept alive by a call
-     * in ANY of its methods, while a call is justified by its own class.
+     * in any of its methods, while a call is justified by its own class.
      *
      * @param  list<string>  $scopes
      */

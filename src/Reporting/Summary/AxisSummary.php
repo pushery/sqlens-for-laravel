@@ -13,7 +13,7 @@ use Pushery\SQLens\Severity\Severity;
 use Pushery\SQLens\Severity\SeverityGate;
 
 /**
- * Separates the two orthogonal gates so a reader can see WHICH one a run breached —
+ * Separates the two orthogonal gates so a reader can see which one a run breached —
  * never a single merged number without provenance (that is the pitfall this exists
  * to close). The level gate counts the ordinary fails within the run's strictness
  * level; the severity gate counts the security/privacy fails at or above the
@@ -73,7 +73,7 @@ final readonly class AxisSummary
         return new self($context->level, $context->minSeverity, $levelBreaches, $severityBreaches, $severityUndetermined);
     }
 
-    /** Did this run breach either gate? Its true does not say WHICH — the fields do. */
+    /** Did this run breach either gate? Its true does not say which — the fields do. */
     public function breached(): bool
     {
         return $this->levelBreaches > 0 || $this->severityBreaches > 0;

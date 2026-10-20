@@ -22,12 +22,12 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * - **audit** reads the `foreign_keys` attribute the catalog attached to the table, which is a list
  *   of real constraints and the columns each one covers;
- * - **lint** judges only a statement whose canonical kind IS `add_foreign_key`, and takes its
+ * - **lint** judges only a statement whose canonical kind is `add_foreign_key`, and takes its
  *   columns from the statement's own key columns.
  *
  * Neither can be satisfied by a name, which is what makes the rule able to fail.
  *
- * ## A composite foreign key is NOT judged, and that is a decision
+ * ## A composite foreign key is not judged, and that is a decision
  *
  * A multi-column key references a compound key on the other side, and the parts of a compound key
  * carry their own meaning: `(country_code, area_code)` is a reference whose columns are named after
@@ -87,7 +87,7 @@ final readonly class ForeignKeyIdSuffix
 
         // A column named exactly `_id` satisfies `str_ends_with` and is not what the convention
         // asks for: the suffix is meant to follow the thing being referenced, and on its own it
-        // names nothing. Reported rather than passed, because a name that is ONLY the suffix is a
+        // names nothing. Reported rather than passed, because a name that is only the suffix is a
         // stronger sign of a mistake than one that lacks it.
         return $bare === $suffix || ! str_ends_with($bare, $suffix);
     }
@@ -116,7 +116,7 @@ final readonly class ForeignKeyIdSuffix
      * `tenant_id` there would report a correct schema.
      *
      * So the rule speaks only where the intended name is unambiguous: the column is the singular of
-     * the referenced table, which is precisely the case where Laravel WOULD have derived
+     * the referenced table, which is precisely the case where Laravel would have derived
      * `<column>_id` and the migration wrote `<column>`. Anywhere else — `owner` referencing `users`,
      * `tenant_slug` referencing `tenants` — the rule would be guessing what the column should have
      * been called, and a convention rule that guesses is one a project switches off.

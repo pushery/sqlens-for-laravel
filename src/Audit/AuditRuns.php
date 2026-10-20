@@ -16,7 +16,7 @@ use Pushery\SQLens\Deploy\DebtMode;
  * and testing the reader rather than the contract.
  *
  * It is also what keeps the command honest about its own scope: it holds no SQL and no driver
- * branch, so the only thing it CAN do is resolve flags, call this, and translate the answer into an
+ * branch, so the only thing it can do is resolve flags, call this, and translate the answer into an
  * exit code. A command that could reach a catalog directly would eventually do so.
  */
 interface AuditRuns
@@ -25,7 +25,7 @@ interface AuditRuns
      * Audit one connection's live schema.
      *
      * @param  string|null  $connection  the connection name, or null for the configured default
-     * @param  string|null  $host  the ONE read host to address, when the connection configures a
+     * @param  string|null  $host  the one read host to address, when the connection configures a
      *                             choice. Null leaves it to the configuration — which refuses the
      *                             run rather than choosing, when more than one is offered.
      * @param  int|null  $level  the cumulative strictness level, or null to take the configured one

@@ -162,13 +162,13 @@ enum ConstraintShape
         // The named not-null spelling belongs to `PG.L2.SET_NOT_NULL_SCAN`, which reads it through
         // {@see SetNotNullChange} and reports the identical operation. Returning a shape here would
         // report one statement twice, under two rule ids, with two different remediations -- and the
-        // scan rule's is the right one, because this IS a not-null validation and not a constraint
+        // scan rule's is the right one, because this is a not-null validation and not a constraint
         // whose index has to be built. A deliberate `null`, with the owner named.
         if (preg_match('/\bADD CONSTRAINT\s+"?[a-z_][a-z0-9_]*"?\s+NOT NULL\b/i', $canonical) === 1) {
             return null;
         }
 
-        // Everything else. NOT silence -- see the case's own docblock.
+        // Everything else. Not silence -- see the case's own docblock.
         return self::Unrecognized;
     }
 

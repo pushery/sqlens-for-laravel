@@ -50,13 +50,13 @@ enum GrantOrigin: string
      *     grant select on t to public;          relacl → {me=arwdDxtm/me, =r/me}
      *     select acldefault('r', relowner);            → {me=arwdDxtm/me}
      *
-     * So `SEC.PRIV.GRANT_ALL` reported the owner of EVERY table that had received any grant at all,
+     * So `SEC.PRIV.GRANT_ALL` reported the owner of every table that had received any grant at all,
      * saying "holds EVERY privilege … there is no privilege escalation left to perform" about the
      * role that owns the thing. Trivially true, and exactly the noise that gets a security tool
      * switched off in its first week — which is the failure this enum exists to prevent, met again
      * on a source it did not yet know about.
      *
-     * It is NOT judged, and the direction is deliberate: an owner's full access is a consequence of
+     * It is not judged, and the direction is deliberate: an owner's full access is a consequence of
      * ownership, not a grant somebody may revoke. Revoking it is not the remedy, transferring
      * ownership is — a different finding, and not this one.
      */

@@ -11,7 +11,7 @@ use Pushery\SQLens\Findings\Outcome;
 /**
  * A verdict was asked to move in a direction nothing is allowed to move it.
  *
- * {@see Finding::settledBySecondReading()} is the ONLY way a finding's outcome changes after it is
+ * {@see Finding::settledBySecondReading()} is the only way a finding's outcome changes after it is
  * built, and it goes one way: undetermined to fail, when an independent reading settles what the
  * first one could not decide. Everything else — a pass talked into a failure, a failure quietly
  * downgraded, a second promotion of something already settled — is refused here rather than

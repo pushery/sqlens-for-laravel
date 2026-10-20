@@ -184,7 +184,7 @@ final readonly class PgsqlStatisticsReader implements StatisticsReader
      * own accessors line up with what the caller asked.
      *
      *
-     * The requested objects, offered to BOTH comparisons the queries make.
+     * The requested objects, offered to both comparisons the queries make.
      *
      * A migration says `orders`; the catalog holds `public.orders`. Matching only the composed name
      * meant a finding about an unqualified statement — which is almost every Laravel migration —
@@ -210,7 +210,7 @@ final readonly class PgsqlStatisticsReader implements StatisticsReader
             $request->objects,
         );
 
-        // Bound TWICE, once per comparison, in the order the two appear in the SQL.
+        // Bound twice, once per comparison, in the order the two appear in the SQL.
         return [...$names, ...$names];
     }
 
@@ -296,7 +296,7 @@ final readonly class PgsqlStatisticsReader implements StatisticsReader
      * and a reading that reported `acme_orders` for a request about `orders` would look to both of
      * them like a table nobody asked for beside a table nobody answered.
      *
-     * Which requested object this row answers, matched on the SAME two forms the query offered.
+     * Which requested object this row answers, matched on the same two forms the query offered.
      *
      * The query gained a bare arm so that `orders` — what a Laravel migration actually says — finds
      * `public.orders`. Matching the way back on the composed name alone undid exactly that: the row
@@ -328,22 +328,26 @@ final readonly class PgsqlStatisticsReader implements StatisticsReader
      * The row estimate, always marked as one, carrying whatever freshness the server reported.
      *
      * Three ways out, and they are not interchangeable. A timestamp means the statistics behind this
-     * number were refreshed then. No timestamp on a table that HAS a row estimate means the counters
+     * number were refreshed then. No timestamp on a table that has a row estimate means the counters
      * were reset or the statistics view is not answering — the age is unknown, which is not the same
      * as never collected, and the difference is whether an ANALYZE would help.
      */
     private function rowCount(int $value, ?DateTimeImmutable $analyzedAt, ?float $modifiedSince): Estimate
     {
-        // The DRIFT rides along with both, and it is the fact the timestamp cannot give: a statistic
-        // from a year ago on a table nobody wrote to is exactly right, and one from an hour ago on a
-        // table that doubled since is out by a factor of two. `n_mod_since_analyze` is what tells the
-        // two apart, and it is as useful on the unknown-age road as on the measured one — arguably
-        // more, since it is the only evidence left there.
-        $drift = $modifiedSince === null ? null : (int) round($modifiedSince);
+        // The DRIFT rides along with a timestamp, and it is the fact the timestamp cannot give: a
+        // statistic from a year ago on a table nobody wrote to is exactly right, and one from an hour
+        // ago on a table that doubled since is out by a factor of two. `n_mod_since_analyze` is what
+        // tells the two apart.
+        //
+        // Not without one. A table with an estimate and no analyze time had its counters reset, or is
+        // read on a standby that never sees the writes, and `n_mod_since_analyze` then counts from the
+        // reset or not at all: "0 rows changed since" would vouch for an estimate the table may have
+        // left behind before the reset.
+        if (! $analyzedAt instanceof DateTimeImmutable) {
+            return Estimate::freshnessUnknown($value, EstimateSource::RowCount);
+        }
 
-        return $analyzedAt instanceof DateTimeImmutable
-            ? Estimate::measured($value, EstimateSource::RowCount, $analyzedAt, $drift)
-            : Estimate::freshnessUnknown($value, EstimateSource::RowCount, $drift);
+        return Estimate::measured($value, EstimateSource::RowCount, $analyzedAt, $modifiedSince === null ? null : (int) round($modifiedSince));
     }
 
     /**

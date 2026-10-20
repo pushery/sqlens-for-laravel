@@ -18,7 +18,7 @@ use Pushery\SQLens\Catalog\CatalogSkip;
  *   not tell those apart would report a database with no `SECURITY DEFINER` routines when what
  *   actually happened is that nobody was allowed to look at half of them.
  * - **refused** — the catalog answered nothing. It has no factory of its own here, unlike
- *   {@see HbaReading::refused()}, and that is deliberate rather than an omission: refused IS
+ *   {@see HbaReading::refused()}, and that is deliberate rather than an omission: refused is
  *   `partial([], $skips)` — the same object, down to the field — and neither reader can produce it
  *   any other way, because `attempt()` already answers with an empty list and a recorded skip when a
  *   read fails. A second name for one object would be a factory with no caller, which is a promise

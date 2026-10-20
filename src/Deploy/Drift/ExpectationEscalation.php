@@ -30,7 +30,7 @@ use Pushery\SQLens\Findings\Outcome;
  * class sits on the other side of it: the check owns the catalog reading and the name heuristic,
  * this owns the agreement between two readings, and nothing owns both.
  *
- * ## What it will NOT do
+ * ## What it will not do
  *
  * It never demotes, and it never promotes on silence. A comparison that did not run, or ran and
  * found the object perfectly expected, leaves the undetermined finding exactly as it was: the name
@@ -48,8 +48,8 @@ final readonly class ExpectationEscalation
      * The finding ids this promotion applies to — the two name-based leftover checks and nothing
      * else.
      *
-     * Named rather than derived from the undetermined reason, because the reason says WHY an answer
-     * is uncertain and this is about WHICH question a second reading can settle. A future check that
+     * Named rather than derived from the undetermined reason, because the reason says why an answer
+     * is uncertain and this is about which question a second reading can settle. A future check that
      * is undetermined for its own reasons must not be promoted by a comparison that never asked
      * about it.
      *

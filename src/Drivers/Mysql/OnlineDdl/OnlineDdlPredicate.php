@@ -53,9 +53,9 @@ enum OnlineDdlPredicate: string
     case TableIsPartitioned = 'table_is_partitioned';
 
     /**
-     * The FULLTEXT index being added is the table's FIRST. Deliberately its own predicate rather
+     * The FULLTEXT index being added is the table's first. Deliberately its own predicate rather
      * than a reuse of {@see self::TableHasFulltextIndex}: that one asks whether an existing
-     * FULLTEXT index blocks some OTHER operation's cheap path, and its safe answer is "no such
+     * FULLTEXT index blocks some other operation's cheap path, and its safe answer is "no such
      * index". Here the polarity is reversed — an existing one is what makes the operation cheap —
      * and folding the two together would give one predicate two safe values.
      */
@@ -90,12 +90,12 @@ enum OnlineDdlPredicate: string
     case ColumnHasIndex = 'column_has_index';
 
     /**
-     * A character-set change leaves the STORED ENCODING alone, so no byte has to be rewritten.
+     * A character-set change leaves the stored encoding alone, so no byte has to be rewritten.
      *
      * Measured on a real MySQL 8.4.10 rather than reasoned about, because the obvious rule is
      * wrong. `utf8mb3` to `utf8mb4` is accepted in place, with `LOCK=NONE`; `latin1` to `utf8mb4`
      * is refused in place entirely and falls back to a copy. So far so expected — but `ascii` to
-     * `utf8mb4` is ALSO refused, even though every ASCII byte is already valid UTF-8. This is
+     * `utf8mb4` is also refused, even though every ASCII byte is already valid UTF-8. This is
      * therefore not "the target encoding is a superset of the source": it is the one pair MySQL
      * treats as a widening of the same encoding, plus conversions that change nothing.
      *
@@ -106,7 +106,7 @@ enum OnlineDdlPredicate: string
     case CharacterSetEncodingUnchanged = 'character_set_encoding_unchanged';
 
     /**
-     * The value under which the entry's stated best-case algorithm HOLDS. Most predicates
+     * The value under which the entry's stated best-case algorithm holds. Most predicates
      * name a hazard that must be ABSENT (false) for the cheap path; the two "unchanged" ones
      * are the opposite — there the cheap path needs the fact to be TRUE.
      *

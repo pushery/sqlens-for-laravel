@@ -23,18 +23,22 @@ use Pushery\SQLens\Guard\Violations\Violation;
  * So a cumulative budget runs beside it. When a request crosses it, the report says how many
  * queries got it there — which is the number that names the cause.
  *
- * ## The per-request state lives HERE, and it is deliberately not on a singleton
+ * ## The per-request state lives here, and it is deliberately not on a singleton
  *
  * `phpstan.neon.dist` runs `checkOctaneCompatibility: true`: a container singleton holding request
  * state survives into the next request under Octane, and the accumulated total would then be the
- * sum of two unrelated requests. This object is built once per activation and the counter is reset
- * the moment it reports, so the worst case is one request's worth of over-counting rather than an
- * ever-growing number nobody can explain.
+ * sum of two unrelated requests. This object is built once per activation, and its window starts
+ * afresh at every `RequestHandled`, `JobProcessing` and `CommandStarting` the query watcher passes
+ * on: that is where the total and the count go back to zero. Reporting does not reset them; it only
+ * latches, so one window reports once. The edge that remains is the terminate phase: a window starts
+ * when a request is HANDLED, so what its terminable middleware and `terminating` callbacks query
+ * counts toward the next window. That is one request's tail at most, never an ever-growing number
+ * nobody can explain.
  */
 final class SlowQueryGuard implements AccumulatesPerWindow, QueryInspector
 {
     /**
-     * The ONE sentence that points at the APM layer, owned here and quoted nowhere else.
+     * The one sentence that points at the APM layer, owned here and quoted nowhere else.
      *
      * A slow query is where somebody starts wanting trends, percentiles and history — and this
      * package deliberately provides none of those. Saying so in the finding itself, rather than only
@@ -102,7 +106,7 @@ final class SlowQueryGuard implements AccumulatesPerWindow, QueryInspector
             return;
         }
 
-        // ONCE per request, not once per query past the line. Without the latch a request that went
+        // Once per request, not once per query past the line. Without the latch a request that went
         // 10 ms over its budget would log every remaining query it ran — hundreds of lines saying
         // the same thing, which is how a log stops being read.
         $this->reported = true;

@@ -101,7 +101,7 @@ final class RlsPolicyAlwaysTrueRule extends AbstractSchemaObjectSecurityRule imp
             return [];
         }
 
-        // ONE verdict naming every offending policy, never one per policy: a catalog finding is
+        // One verdict naming every offending policy, never one per policy: a catalog finding is
         // located at the OBJECT, so a second verdict about the same table is dropped by the dedupe
         // without a word — and the policy nobody was told about goes on admitting everything.
         return [RuleVerdict::flag(sprintf(

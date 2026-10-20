@@ -27,13 +27,13 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * `GRANT ALL PRIVILEGES` leaves no trace of the word `ALL`. Both engines expand it immediately —
  * MySQL into one `Y` per column, PostgreSQL into one ACL entry per privilege — so recognizing it
- * afterwards means knowing what "every privilege" IS on that engine, for that kind of object. That
+ * afterwards means knowing what "every privilege" is on that engine, for that kind of object. That
  * is engine vocabulary, and the core is kept free of it by an architecture test rather than by
  * habit. So each driver answers for itself, from a source that cannot go stale: PostgreSQL asks
  * `acldefault()`, which is the server stating its own complete set, and MySQL compares against the
  * grant-table columns its reading was generated from.
  *
- * ## What the finding does NOT say
+ * ## What the finding does not say
  *
  * That the account is wrong. An administrative account, a replication account and a migration
  * account are all deliberately broad, and a rule treating every hit as a mistake would be switched

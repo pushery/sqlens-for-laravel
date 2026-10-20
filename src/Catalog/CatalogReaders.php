@@ -15,7 +15,7 @@ use Pushery\SQLens\Contracts\StatisticsReader;
 use Pushery\SQLens\Tests\Feature\Catalog\ReaderSurfaceCensusTest;
 
 /**
- * The three readers an audit needs, over ONE session.
+ * The readers an audit needs, over one session.
  *
  * They are handed out together rather than resolved separately because they must share a session:
  * "this audit opened exactly one connection" is a promise the package makes, and two independently
@@ -31,8 +31,8 @@ final readonly class CatalogReaders
         /**
          * The server's own configuration.
          *
-         * Third rather than first because it arrived last, and it shares the session for the same
-         * reason the other two do: a settings reading taken over a second connection would describe
+         * Third rather than first because it arrived after the two above, and it shares the session
+         * for the same reason they do: a settings reading taken over a second connection would describe
          * a session this run never used, and on MySQL that is not academic — Laravel installs
          * per-connection values, so a second connection genuinely answers differently.
          */
@@ -78,12 +78,12 @@ final readonly class CatalogReaders
          * would look right in isolation.
          *
          * The session sharing matters as much here as anywhere else. A statistics reading taken on
-         * a second connection could be pointed at a different database (MySQL's "schema" IS the
+         * a second connection could be pointed at a different database (MySQL's "schema" is the
          * connection's database), so the sizes would describe a server the rest of the run never
          * looked at.
          *
          * Nullable for the reason the two above are: a driver without one is a real state, and a
-         * caller that finds null reports a NAMED undetermined rather than an empty reading — see
+         * caller that finds null reports a named undetermined rather than an empty reading — see
          * {@see CatalogReaderFactory::supports()}. An empty reading is the one answer that must
          * never be possible, because "no statistics" and "no blockers" read alike.
          */
@@ -92,7 +92,7 @@ final readonly class CatalogReaders
          * What the server is doing right now, or null when this driver reads no activity.
          *
          * It travels beside the statistics reader for the same reason that one does: the
-         * registration IS the census entry. A reader resolved by a second mechanism would be
+         * registration is the census entry. A reader resolved by a second mechanism would be
          * invisible to {@see ReaderSurfaceCensusTest},
          * and its statements would go unchecked — which is the one thing a reader that promises to
          * take no locks must not be.
@@ -103,7 +103,7 @@ final readonly class CatalogReaders
          * is about could be invisible to the reading meant to find it.
          *
          * Nullable for the reason the others are, and the null is louder here: a caller that finds
-         * one reports a NAMED undetermined, because an empty activity reading and a quiet server
+         * one reports a named undetermined, because an empty activity reading and a quiet server
          * are the same object, and "nothing is blocking" is the conclusion a deploy gate must never
          * reach by accident.
          */
@@ -112,7 +112,7 @@ final readonly class CatalogReaders
          * The session every reader above shares, or null when the readers were assembled without one.
          *
          * Exposed so a run can report what the session proved about itself: which refusal sealed it
-         * read-only, and which bounds it read back. Those are facts about THIS session, so they are
+         * read-only, and which bounds it read back. Those are facts about this session, so they are
          * asked of it rather than of a second one opened to answer them.
          *
          * Nullable because a double or a partial set of readers has no session to offer, and a run

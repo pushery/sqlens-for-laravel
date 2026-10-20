@@ -72,7 +72,7 @@ final readonly class AlgorithmLockTemplate
     }
 
     /**
-     * The pinned statement for THIS matrix entry, or null when the entry names no clause to pin.
+     * The pinned statement for this matrix entry, or null when the entry names no clause to pin.
      *
      * @param  array<string, string>  $context  the table, when the statement named one
      */

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Canonical;
 
 /**
- * What one piece of a split batch IS — and the reason splitting returns a kind at all.
+ * What one piece of a split batch is — and the reason splitting returns a kind at all.
  *
  * A batch read from a hand-written `.sql` file holds two different things. Most of it is SQL the
  * server executes. Some of it is addressed to the CLIENT — `\i other.sql`, `\set ON_ERROR_STOP on` —

@@ -28,7 +28,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * protection a project believes it has is not there.
  *
  * The finding still states the limit rather than overclaiming: this rule reads roles, not policies, so
- * it says WHAT TO CHECK instead of asserting that a particular table is exposed.
+ * it says what to check instead of asserting that a particular table is exposed.
  */
 final class BypassRlsRoleRule extends AbstractRoleAttributeRule
 {

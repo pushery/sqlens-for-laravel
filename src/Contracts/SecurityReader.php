@@ -29,7 +29,7 @@ use Pushery\SQLens\Catalog\Setting;
  * reporting that it could not run when in truth nobody wrote it. That is the exact silent green this
  * package exists against, dressed as compliance with its own three-valued rule.
  *
- * So each area is declared here in the change that implements it on BOTH engines, and until then it
+ * So each area is declared here in the change that implements it on both engines, and until then it
  * is absent — which no reader can misreport. The order is one area per change, each proven on both engines before the next is declared.
  *
  * ## Settings are absent for a different reason
@@ -81,7 +81,7 @@ interface SecurityReader
     /**
      * The host-based authentication rules the server is running, in the order it evaluates them.
      *
-     * Declared now because BOTH engines answer it, which is what this interface requires before a
+     * Declared now because both engines answer it, which is what this interface requires before a
      * method may exist — and the two answers are deliberately different KINDS of answer rather than
      * one real and one placeholder. PostgreSQL reads `pg_hba_file_rules`, which refuses `42501` to
      * anything short of superuser or `pg_read_all_settings`; that refusal becomes a named skip on the
@@ -108,7 +108,7 @@ interface SecurityReader
      * substitutes their own function and the routine calls it, as the owner.
      *
      * Which is why this is a reading of its own rather than a column on the grant reading. The grants
-     * already say WHO may execute a routine; this says what executing it is worth, and the two are
+     * already say who may execute a routine; this says what executing it is worth, and the two are
      * only dangerous together.
      *
      * The body is deliberately not part of the answer, on the same terms as `pg_authid.rolpassword`

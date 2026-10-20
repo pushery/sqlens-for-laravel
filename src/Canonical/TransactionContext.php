@@ -12,7 +12,7 @@ namespace Pushery\SQLens\Canonical;
  *
  * Built through the named constructors so the mode and its reason stay consistent
  * (an Undetermined always carries a reason). `withinTransaction()` is the plain
- * yes/no a rule usually wants — true ONLY when the statement definitely runs in a
+ * yes/no a rule usually wants — true only when the statement definitely runs in a
  * transaction, so an undetermined context never reads as "yes".
  */
 final readonly class TransactionContext

@@ -6,7 +6,7 @@ namespace Pushery\SQLens\Reporting;
 
 /**
  * How the undetermined findings of a run affect its gate — a third class, never a
- * boolean. The policy must NOT relabel an undetermined as a `fail`; an undetermined
+ * boolean. The policy must not relabel an undetermined as a `fail`; an undetermined
  * stays its own outcome, and this enum only says whether, under the run's
  * strictness, it blocks the gate.
  */

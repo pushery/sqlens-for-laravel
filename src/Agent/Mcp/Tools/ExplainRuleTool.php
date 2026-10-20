@@ -144,7 +144,7 @@ final class ExplainRuleTool extends SqlensTool
             )->toErrorResponse();
         }
 
-        // The registry row and the example register are two shipped artifacts, joined HERE rather
+        // The registry row and the example register are two shipped artifacts, joined here rather
         // than in the catalog: that class is "the shipped rule registry, read", and a second file
         // inside it would make the name a half-truth. Composing an explanation is this tool's job.
         //
@@ -160,7 +160,7 @@ final class ExplainRuleTool extends SqlensTool
     }
 
     /**
-     * The registered example for a rule — or an absence that SAYS SO.
+     * The registered example for a rule — or an absence that says so.
      *
      * The discriminator is the whole point. Omitting the key when nothing is registered would leave
      * an agent unable to tell "this rule has no example" from "the tool did not send one", and a
@@ -171,7 +171,7 @@ final class ExplainRuleTool extends SqlensTool
      *
      * The count used to be written here as "76 of the 202 rules" and is not any more, because a
      * hand-counted number in prose is the half of a derived claim that rots: the catalog reached 207
-     * rules and the sentence did not notice. What the population IS remains checkable — the
+     * rules and the sentence did not notice. What the population is remains checkable — the
      * completeness gates say which families owe an example — and a number nobody can re-derive from
      * the text it sits in is worth less than the sentence without it.
      *

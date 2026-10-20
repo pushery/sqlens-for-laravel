@@ -19,10 +19,12 @@ use Pushery\SQLens\Levels\Level;
  * A duplicate rule id throws at build — never "last wins": a duplicate id is
  * public API damage that would make a finding unresolvable and hide a rule.
  *
- * Rules enter through the contract, not a class list in the core, so a
- * third-party rule pack registers the same way the package's own rules do. The
- * registry knows only the driver name the manager hands it — which rules belong
- * to pgsql vs mysql is the manager's job, not the registry's.
+ * Rules enter through the contract, not a class list in the core: whatever a
+ * driver's rules() returns is registered the same way, the rules of a driver
+ * package registered through DriverRegistry::extend() included. A rule cannot
+ * join the set of a driver that is already registered. The registry knows only
+ * the driver name the manager hands it — which rules belong to pgsql vs mysql
+ * is the manager's job, not the registry's.
  *
  * Deprecation-aware: all() enumerates every rule (deprecated included, for docs
  * and completeness checks); executable() drops the deprecated ones. A deprecated
@@ -89,7 +91,7 @@ final readonly class RuleRegistry
      *
      * A deprecated rule is deliberately kept in `all()`: a baseline entry, an ignore list and a
      * suppression may still name it, and an upgrade that made those ids unknown would break other
-     * people's configuration. What it must NOT be is invisible. Dropping it from the executable set
+     * people's configuration. What it must not be is invisible. Dropping it from the executable set
      * without saying so is a check that stopped running and a report that looks the same as before
      * — the silent green this package refuses everywhere else.
      *

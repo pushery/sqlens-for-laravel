@@ -12,7 +12,7 @@ use Pushery\SQLens\Severity\Severity;
 use Pushery\SQLens\Subjects\MigrationStatementView;
 
 /**
- * A grant to a NAMED role that is permanently more than the role needs — or that lets it grant on.
+ * A grant to a named role that is permanently more than the role needs — or that lets it grant on.
  *
  * The sibling of {@see GrantToPublicRule}, and split from it deliberately. `PUBLIC` is a question
  * about the GRANTEE; this is a question about the PRIVILEGE. A team can legitimately accept one and
@@ -63,7 +63,7 @@ final class ExcessiveGrantRule extends AbstractMigrationSecurityRule
     /** The delegation clause. Trailing `;` and whitespace are already normalized away. */
     private const string GRANT_OPTION = '/\bWITH\s+GRANT\s+OPTION\b/i';
 
-    /** The sibling rule's subject — matched here only in order to STAY QUIET. */
+    /** The sibling rule's subject — matched here only in order to stay quiet. */
     private const string GRANTEE_PUBLIC = '/\bTO\s+PUBLIC\b/i';
 
     public function id(): string
@@ -118,7 +118,7 @@ final class ExcessiveGrantRule extends AbstractMigrationSecurityRule
             return null;
         }
 
-        // The partition with the sibling rule. Checked BEFORE the privilege shapes, so
+        // The partition with the sibling rule. Checked before the privilege shapes, so
         // `GRANT ALL … TO PUBLIC` — which matches both — is answered by exactly one rule.
         if (preg_match(self::GRANTEE_PUBLIC, $canonical) === 1) {
             return null;

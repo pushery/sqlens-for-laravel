@@ -13,8 +13,8 @@ use DateTimeZone;
  * It is the one handle that ties provisioning to teardown: the provisioner
  * returns it, the captor runs against it, and the teardown drops exactly the
  * database it names — never a guessed one. Carrying the source connection makes
- * the clone traceable, and the start time lets the session-defense layer bound
- * how long a shadow run may hold resources on the source instance.
+ * the clone traceable, and the start time says when it was made. Nothing bounds a
+ * run by it: the session defense budgets each statement, not the run.
  *
  * It holds no PDO and opens nothing. It is a value object describing a database
  * that exists; acting on it (dropping it, connecting to it) is the provisioner's
@@ -37,6 +37,14 @@ final readonly class ShadowSession
          * straight into the clone), which is a real absence, not an unset field.
          */
         public ?string $templateDatabase = null,
+        /**
+         * What setting this database up left out that a person reading the run should know, such
+         * as a dump directive that set the SQL mode. Never part of a result: the command writes it
+         * on STDERR.
+         *
+         * @var list<string>
+         */
+        public array $notes = [],
     ) {}
 
     /**

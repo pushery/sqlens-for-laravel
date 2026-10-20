@@ -26,12 +26,12 @@ final readonly class Setting
     private function __construct(
         public string $name,
         /**
-         * The value in effect for the READING SESSION, or null when the server withheld it.
+         * The value in effect for the reading session, or null when the row carried none.
          *
-         * PostgreSQL withholds exactly this way for superuser-restricted settings: the `pg_settings`
-         * row is there, `setting` is NULL, and nothing raises. Reading that as an empty string would
-         * turn "you may not see this" into "it is not set" — the same sentence with the opposite
-         * meaning, and the one that sends a reader to change a value they cannot even read.
+         * Null is kept rather than read as an empty string, which would turn "no value came back"
+         * into "it is set to nothing". It is not how PostgreSQL withholds a setting: a role without
+         * `pg_read_all_settings` loses the whole row, silently, and {@see SettingsReading::$sawEverything}
+         * is what says a name may be missing for that reason.
          *
          * **This is the session's value, not the server's**, and a rule about the server's
          * configuration wants {@see self::serverValue()} instead. The distinction is not pedantry:

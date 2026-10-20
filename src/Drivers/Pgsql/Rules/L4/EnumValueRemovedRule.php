@@ -59,7 +59,7 @@ final class EnumValueRemovedRule extends AbstractPgsqlSafetyRule implements Prov
      *
      * Not "removing is expensive": `ALTER TYPE … DROP VALUE` does not exist. So the remedy is a new
      * type and a column moved onto it, which is expand/contract and already has a template. Handing
-     * over THAT one rather than writing an enum-flavored copy is the whole point: two four-phase
+     * over that one rather than writing an enum-flavored copy is the whole point: two four-phase
      * plans drift the first time either is touched, and both look correct alone.
      *
      * The plan's placeholders stay standing here, and that is honest rather than lazy. Neither the
@@ -117,11 +117,11 @@ final class EnumValueRemovedRule extends AbstractPgsqlSafetyRule implements Prov
     }
 
     /**
-     * Which of the two removal shapes this statement is, if either — read ONCE, for both consumers.
+     * Which of the two removal shapes this statement is, if either — read once, for both consumers.
      *
      * The verdict and the fix material must never disagree about what they are looking at, and two
      * copies of these patterns would be exactly how they came to. The type-name capture is the
-     * reason the two branches cannot simply be booleans: each shape is excused by a DIFFERENT
+     * reason the two branches cannot simply be booleans: each shape is excused by a different
      * question about the same name — a rename of a type born here breaks no old version, and a drop
      * of a type born here is the migration cleaning up after itself.
      *

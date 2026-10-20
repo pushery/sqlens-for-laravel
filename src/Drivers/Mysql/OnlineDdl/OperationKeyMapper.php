@@ -20,14 +20,14 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  * the classifier, which already turned them into a kind through its signature machinery. A second matcher
  * here would duplicate work the classifier already does.
  *
- * WHAT IT DELIBERATELY DOES NOT DO YET, so the limit is visible rather than assumed. The kinds in
+ * What it deliberately does not do yet, so the limit is visible rather than assumed. The kinds in
  * {@see self::DIRECT} map one-to-one onto a matrix operation. Two are RECOGNIZED but too coarse to
  * key on: {@see StatementKind::AlterColumn} covers a type change, a VARCHAR resize in either
  * direction and a nullability flip — six matrix operations whose difference lives in the type
  * expression, which the kind does not carry — and {@see StatementKind::AddConstraint} stays the
  * GENERIC named constraint (a CHECK, a UNIQUE) that the matrix does not classify as one operation.
  *
- * Those return a NAMED undetermined rather than a guess. Picking the most likely operation would
+ * Those return a named undetermined rather than a guess. Picking the most likely operation would
  * be the silent-green this package exists to refuse — and picking the most expensive one would
  * cry wolf on every ordinary migration. Narrowing them needs a finer signal than the kind, which
  * is a design decision on the classification layer rather than something to improvise here.
@@ -37,6 +37,8 @@ final readonly class OperationKeyMapper
     /**
      * The kinds that name exactly one matrix operation. Kept as data rather than a match, so the
      * set that is decidable today is readable at a glance next to the set that is not.
+     *
+     * `rebuild_table` is `OPTIMIZE TABLE`, the one MySQL statement the classifier gives that kind.
      *
      * @var array<string, string>
      */
@@ -49,6 +51,7 @@ final readonly class OperationKeyMapper
         StatementKind::CreateIndex->value => 'add_secondary_index',
         StatementKind::CreateFulltextIndex->value => 'add_fulltext_index',
         StatementKind::CreateSpatialIndex->value => 'add_spatial_index',
+        StatementKind::RebuildTable->value => 'optimize_table',
     ];
 
     /**

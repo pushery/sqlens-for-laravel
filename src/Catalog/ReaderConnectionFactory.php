@@ -18,7 +18,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
 use Pushery\SQLens\Subjects\SubjectContext;
 
 /**
- * Builds the reader its OWN named connection, from a copy of the application's config.
+ * Builds the reader its own named connection, from a copy of the application's config.
  *
  * The copy is the whole idea. Bounding the application's connection would work — and would leave
  * the host application running under SQLens's timeouts and read-only seal long after the audit
@@ -63,10 +63,10 @@ final readonly class ReaderConnectionFactory
      *
      * A catalog finding is about one instance, and "a foreign key is unindexed" is unactionable on
      * a project with more than one database without saying which. The reader connection carries a
-     * suffixed name of this factory's own making, so recovering the source belongs HERE, where both
+     * suffixed name of this factory's own making, so recovering the source belongs here, where both
      * halves of that name are defined, rather than in each caller that would have to know the
      * suffix. A connection this factory never made is returned unchanged, which is also correct:
-     * that IS its name.
+     * that is its name.
      */
     public static function sourceOf(Connection $connection): string
     {
@@ -135,7 +135,7 @@ final readonly class ReaderConnectionFactory
      * database manager caches by name — so a run does not accumulate sessions on the server it is
      * trying not to burden.
      *
-     * @param  string|null  $pinnedHost  the ONE host this run addresses, when the configuration
+     * @param  string|null  $pinnedHost  the one host this run addresses, when the configuration
      *                                   offered a choice. Written onto the reader's own copy of the
      *                                   config, never onto the application's.
      */
@@ -251,12 +251,15 @@ final readonly class ReaderConnectionFactory
      * Replaced by key rather than merged: the options are keyed by PDO attribute constants, which are
      * integers, and a merge would renumber them into different attributes.
      *
+     * The driver is read the way every reader in this package reads it, so a copy of a connection
+     * configured by `url` alone gets the attributes its scheme calls for.
+     *
      * @param  array<array-key, mixed>  $settings
      * @return array<array-key, mixed>
      */
     private function openedForReading(array $settings): array
     {
-        $driver = $settings['driver'] ?? null;
+        $driver = EffectiveConnectionConfig::driverFor($settings);
         $attributes = is_string($driver) && $this->defenses instanceof SessionDefenses
             ? $this->defenses->readerConnectionOptions($driver)
             : [];
@@ -286,7 +289,7 @@ final readonly class ReaderConnectionFactory
      * package already uses — never a second way to ask, because the whole point of the check that
      * consumes it is that one of two answers is wrong.
      *
-     * It is resolved HERE rather than handed to the caller as a connection, and the reason is a
+     * It is resolved here rather than handed to the caller as a connection, and the reason is a
      * collision between two of this repo's own rules: the console may name no database class, and
      * Rector rewrites a null check on one into an `instanceof` that names it. Returning the parsed
      * version instead means the console never holds a connection at all, which satisfies both
@@ -368,7 +371,7 @@ final readonly class ReaderConnectionFactory
         $driver = (string) $connection->getDriverName();
 
         if (! $readers->supports($driver)) {
-            // A driver this build has no readers for is a NAMED refusal, not an exception. The gate
+            // A driver this build has no readers for is a named refusal, not an exception. The gate
             // runs inside a deploy script, and a throw there stops the deploy with a stack trace
             // instead of a sentence — about a scope decision this package made, not about anything
             // wrong with the database.
@@ -386,7 +389,7 @@ final readonly class ReaderConnectionFactory
             ), $driver);
         }
 
-        // Built ONCE and reused, deliberately. `CatalogReaderFactory::for()` constructs a fresh set
+        // Built once and reused, deliberately. `CatalogReaderFactory::for()` constructs a fresh set
         // each call, so asking it three times would hand three checks three different reader objects
         // over the same connection — harmless today and exactly the kind of thing that stops being
         // harmless the first time a reader caches anything.
@@ -442,6 +445,7 @@ final readonly class ReaderConnectionFactory
             statistics: $built->statistics,
             activity: $built->activity,
             migrationRole: $resolution->migrationRole,
+            identity: $identity,
         );
     }
 

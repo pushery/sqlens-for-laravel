@@ -12,7 +12,7 @@ use Pushery\SQLens\Severity\Severity;
  * The bands exist because a number alone does not tell anybody what to do. "Open since 94 days" is
  * information; "open since 94 days, past the warning threshold this project set" is a decision the
  * project already made, applied. The thresholds are configurable and the bands are not: a project
- * chooses WHEN a debt gets louder, never invents a new loudness.
+ * chooses when a debt gets louder, never invents a new loudness.
  */
 enum DebtTier: string
 {
@@ -26,7 +26,7 @@ enum DebtTier: string
     case Error = 'error';
 
     /**
-     * The severity a debt in this band is worth AT LEAST.
+     * The severity a debt in this band is worth at least.
      *
      * `Error` maps to {@see Severity::High} and deliberately not to `Critical`. Critical is the top
      * of the SECURITY severity axis — an exposed credential, an open policy — and an unvalidated

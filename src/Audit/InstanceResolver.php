@@ -24,11 +24,11 @@ use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
  *
  * 1. `--connection` was given → it holds. The operator said which.
  * 2. `sqlens.connection` is configured → it holds. The project said which, once, in writing. That is
- *    the SAME key the capture and lint paths read, deliberately: a project that stated its
+ *    the same key the capture and lint paths read, deliberately: a project that stated its
  *    connection once should not find the audit reading a different one, and the audit-scoped key
  *    this originally named was never in the shipped config file — so the rule was reachable from a
  *    test and from nowhere else.
- * 3. Exactly ONE supported connection exists → it holds, and the report names it. There was nothing
+ * 3. Exactly one supported connection exists → it holds, and the report names it. There was nothing
  *    to choose between.
  * 4. Otherwise → refused, listing the candidates.
  *
@@ -147,7 +147,7 @@ final readonly class InstanceResolver
 
         $topology = ReadTopology::of($settings);
 
-        // Refused BEFORE anything connects, because the choice is the problem. Laravel shuffles a
+        // Refused before anything connects, because the choice is the problem. Laravel shuffles a
         // host array and picks the read and write sides independently, so leaving it to the
         // framework means two runs of an unchanged project can reach different servers — and the
         // difference between a primary and its replica reads as drift in a report that never said

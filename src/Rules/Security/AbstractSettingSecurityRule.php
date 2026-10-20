@@ -10,7 +10,7 @@ use Pushery\SQLens\Contracts\JudgesTheServerItRunsOn;
 use Pushery\SQLens\Rules\Settings\AbstractServerSettingRule;
 
 /**
- * A security rule whose subject is a SERVER SETTING.
+ * A security rule whose subject is a server setting.
  *
  * The sibling of {@see AbstractSchemaObjectSecurityRule}, and the reason there are two rather than
  * one is the same single-inheritance fact that made {@see DeclaresSecurityPosture} a contract in the

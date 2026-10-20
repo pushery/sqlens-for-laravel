@@ -17,7 +17,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * The distinction is the finding. MySQL 8 negotiates TLS by default and most clients take it, so a
  * server with `require_secure_transport = OFF` usually looks encrypted from the inside: every
  * connection somebody checks is one that happened to negotiate it. What the setting decides is
- * whether a connection that does NOT is refused — and a client that omits it, or one whose TLS setup
+ * whether a connection that does not is refused — and a client that omits it, or one whose TLS setup
  * silently failed, connects exactly as before, in the clear, with no error anywhere.
  *
  * So this is not "encryption is off". It is "nothing enforces that it is on", which is the state in
@@ -32,7 +32,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * ## What this cannot see
  *
- * Whether a managed provider enforces transport OUTSIDE the server's own configuration. Several do,
+ * Whether a managed provider enforces transport outside the server's own configuration. Several do,
  * at the proxy, and the server variable then reads `OFF` on a connection that cannot be made in the
  * clear at all. The finding says the SERVER does not require it, and says that is what it means.
  */
@@ -95,7 +95,7 @@ final class RequireSecureTransportRule extends AbstractSettingSecurityRule
     public function limitations(): array
     {
         return [
-            'reads the RUNNING value, not the file: a setting changed on disk and not yet reloaded is invisible here, and one changed only for this session would be read as the server\'s',
+            'reads the GLOBAL value, not the file: a setting changed on disk and not yet reloaded is invisible here, and a value set for one session is never read',
             'says the server ACCEPTS unencrypted connections, not that anything makes one. A deployment where every client is configured to require TLS is not transmitting in the clear today — it is one misconfigured client away from doing so, which is the distinction this rule is about',
         ];
     }

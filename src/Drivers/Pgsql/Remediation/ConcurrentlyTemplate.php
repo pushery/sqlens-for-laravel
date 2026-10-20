@@ -73,7 +73,7 @@ final readonly class ConcurrentlyTemplate
      * The shipped evidence register, which is where this template's references come from.
      *
      * Not a URL constant in this file, and the reason is not only that a foreign endpoint literal
-     * in `src/` is refused by the no-implicit-network guard. The register ALREADY holds the
+     * in `src/` is refused by the no-implicit-network guard. The register already holds the
      * PostgreSQL anchor for each of these rules, because a safety rule has to be able to answer
      * "why is this dangerous" — so writing the address a second time here would create a copy that
      * can disagree with the rule's own citation, in whichever direction nobody is reading.
@@ -164,6 +164,71 @@ final readonly class ConcurrentlyTemplate
                 self::LANG.'precondition.migrator_leaves_transaction',
             ],
             verification: self::LANG.'verification',
+            references: $this->references($ruleId),
+        );
+    }
+
+    /**
+     * The sequence for a `REINDEX` that should have been concurrent.
+     *
+     * The statement as the migration wrote it, with CONCURRENTLY after `INDEX` or `TABLE`, in a
+     * migration of its own whose transaction is switched off. An interrupted concurrent rebuild
+     * leaves an invalid index behind under a name ending in `_ccnew`, which the step's note names
+     * and `sqlens:postdeploy` reports.
+     */
+    public function forReindex(MigrationStatementView $statement, string $ruleId, DowntimeClass $downtimeClass): RemediationPayload
+    {
+        return new RemediationPayload(
+            steps: $this->fill([
+                $this->timeoutPreamble(),
+                $this->separateMigration(),
+                new RemediationStep(
+                    order: 3,
+                    kind: RemediationStepKind::MigrationStatement,
+                    noteKey: self::LANG.'reindex',
+                    sqlTemplate: $this->reindexConcurrently($statement->canonical),
+                    withinTransaction: false,
+                ),
+            ], $statement),
+            strategy: RemediationStrategy::Concurrently,
+            ruleId: $ruleId,
+            downtimeClass: $downtimeClass,
+            preconditions: [
+                self::LANG.'precondition.migrator_leaves_transaction',
+            ],
+            verification: self::LANG.'verification',
+            references: $this->references($ruleId),
+        );
+    }
+
+    /**
+     * The sequence for a `REFRESH MATERIALIZED VIEW` that should have been concurrent.
+     *
+     * One statement, and no migration of its own: unlike the index forms, the concurrent refresh
+     * runs inside a transaction block. What it needs is on the view, and the statement does not say
+     * whether the view has it, so both conditions are preconditions: a unique index over plain
+     * columns that covers every row, and a view that already holds data.
+     */
+    public function forRefreshMaterializedView(MigrationStatementView $statement, string $ruleId, DowntimeClass $downtimeClass): RemediationPayload
+    {
+        return new RemediationPayload(
+            steps: $this->fill([
+                new RemediationStep(
+                    order: 1,
+                    kind: RemediationStepKind::MigrationStatement,
+                    noteKey: self::LANG.'refresh_materialized_view',
+                    sqlTemplate: $this->refreshConcurrently($statement->canonical),
+                    withinTransaction: true,
+                ),
+            ], $statement),
+            strategy: RemediationStrategy::Concurrently,
+            ruleId: $ruleId,
+            downtimeClass: $downtimeClass,
+            preconditions: [
+                self::LANG.'precondition.unique_index_on_view',
+                self::LANG.'precondition.view_populated',
+            ],
+            verification: self::LANG.'refresh_verification',
             references: $this->references($ruleId),
         );
     }
@@ -276,7 +341,7 @@ final readonly class ConcurrentlyTemplate
     }
 
     /**
-     * The placeholder values THIS statement carries — and only the ones it carries.
+     * The placeholder values this statement carries — and only the ones it carries.
      *
      * A key is absent rather than empty when the statement does not name the fact: an absent key
      * leaves `{{index}}` visible in the rendered SQL, which reads as a hole somebody must fill,
@@ -304,5 +369,23 @@ final readonly class ConcurrentlyTemplate
     private function concurrently(string $canonical): string
     {
         return preg_replace('/^CREATE (UNIQUE )?INDEX (?!CONCURRENTLY\b)/', 'CREATE $1INDEX CONCURRENTLY ', $canonical, 1) ?? $canonical;
+    }
+
+    /**
+     * A `REINDEX` that runs concurrently: the keyword right after `INDEX` or `TABLE`, behind any
+     * option list, and the rest of the statement as it was.
+     */
+    private function reindexConcurrently(string $canonical): string
+    {
+        return preg_replace('/^(REINDEX (?:\([^)]*\) ?)?(?:INDEX|TABLE)) (?!CONCURRENTLY\b)/', '$1 CONCURRENTLY ', $canonical, 1) ?? $canonical;
+    }
+
+    /**
+     * A `REFRESH MATERIALIZED VIEW` that runs concurrently, written in capitals as the manual writes
+     * it, with the view and anything after it as they were.
+     */
+    private function refreshConcurrently(string $canonical): string
+    {
+        return preg_replace('/^REFRESH materialized view (?:CONCURRENTLY )?/i', 'REFRESH MATERIALIZED VIEW CONCURRENTLY ', $canonical, 1) ?? $canonical;
     }
 }

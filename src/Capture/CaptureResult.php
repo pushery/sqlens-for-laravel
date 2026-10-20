@@ -20,7 +20,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
 use Pushery\SQLens\Subjects\SubjectContext;
 
 /**
- * What a capture produced for ONE migration: its statements, or a named reason
+ * What a capture produced for one migration: its statements, or a named reason
  * why it could not produce them.
  *
  * "No silent green" is cast into the type here exactly as `FindingStatus` casts
@@ -195,7 +195,7 @@ final readonly class CaptureResult
      * A migration the capture attempted and that failed outright — it threw, or
      * the mode could not run it at all. Carries whatever statements were seen
      * before the failure, because they are evidence, and the failure detail (the
-     * exception message) so the level-0 capture rule can report WHY without the
+     * exception message) so the level-0 capture rule can report why without the
      * message having to be re-derived from an exception that no longer exists by
      * the time a rule runs. The detail is kept separate from `reason`, which is
      * the enum for the undetermined axis — a failure is not an undetermined.
@@ -220,7 +220,7 @@ final readonly class CaptureResult
      * what it would have produced is unknown, and half a sequence read as whole
      * is worse than none.
      *
-     * Pre-scan hits ride along ONLY here: a migration the static pre-scan flagged
+     * Pre-scan hits ride along only here: a migration the static pre-scan flagged
      * is never captured, so its whole answer is the reasons it was flagged for. A
      * caller that does not pass hits gets the empty default — an undetermined for
      * another reason (an unrepresentable binding, an unreadable file) carries no
@@ -282,9 +282,13 @@ final readonly class CaptureResult
      *                                                              run: a caller holding one
      *                                                              migration must not have a rule
      *                                                              reasoning as if it held none.
+     * @param  int|null  $runOffset  where this migration's statements begin in `$runStatements`, or
+     *                               null where that list cannot say what ran before them — see
+     *                               {@see MigrationContext::$runOffset}. Without a run, this result
+     *                               is its own run and begins it.
      * @return list<MigrationSql>
      */
-    public function toSubjects(SubjectContext $context, ?array $runStatements = null): array
+    public function toSubjects(SubjectContext $context, ?array $runStatements = null, ?int $runOffset = 0): array
     {
         // Computed once, from every statement, and shared by all of them: whether a
         // table was created earlier in this migration is a fact about the migration,
@@ -300,6 +304,7 @@ final readonly class CaptureResult
             $this->downMethodState,
             $this->downLeg,
             $runStatements ?? $digests,
+            $runStatements === null ? 0 : $runOffset,
         );
 
         return array_map(
@@ -325,7 +330,7 @@ final readonly class CaptureResult
                     columnDefinitions: $statement->columnDefinitions,
                     // Derived here, from the bindings the captured statement already carries. No
                     // new plumbing and no byte-range tracking: the fact a secrets rule needs is
-                    // whether ANY value came from outside the file, and the empty bindings array is
+                    // whether any value came from outside the file, and the empty bindings array is
                     // the positive statement that none did.
                     valueOrigin: ValueOrigin::of($statement->bindings),
                     actions: $statement->actions,

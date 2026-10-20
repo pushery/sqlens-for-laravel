@@ -9,7 +9,7 @@ namespace Pushery\SQLens\Catalog\Activity;
  *
  * A deploy-time question rather than an operational one: a migration that runs on the primary
  * reaches the replicas whenever they catch up, so a project reading from replicas is running
- * against the OLD schema for exactly as long as the lag lasts. On a large table that can be
+ * against the old schema for exactly as long as the lag lasts. On a large table that can be
  * minutes, and the failures it produces during that window — a column that does not exist yet —
  * look like application bugs rather than like a deploy still in progress.
  *

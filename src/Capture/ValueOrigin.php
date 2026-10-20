@@ -24,7 +24,7 @@ namespace Pushery\SQLens\Capture;
  * text was typed into the file. That is the only statement this needs to make with certainty, and
  * it is the one a secrets rule acts on.
  *
- * ## What it deliberately does NOT claim
+ * ## What it deliberately does not claim
  *
  * {@see self::AllValuesBound} does not mean every value is bound. A statement can carry a binding
  * AND a hard-coded literal — `… PASSWORD 'x' … WHERE id = ?` — and this marker reports the binding.

@@ -19,9 +19,9 @@ use Pushery\SQLens\Severity\Severity;
  * ## Why these ids name no command
  *
  * They started life as `AUDIT.DEBT.*`, because `sqlens:audit` was the first command that needed
- * them. `sqlens:postdeploy` needs the same five, and adding a `DEPLOY.DEBT.*` family beside this one
+ * them. `sqlens:postdeploy` needs the same ones, and adding a `DEPLOY.DEBT.*` family beside this one
  * would have been a duplicate of exactly the kind this package refuses everywhere else: "this debt
- * is still open" is the SAME statement about the SAME object, and reporting it under two ids
+ * is still open" is the same statement about the same object, and reporting it under two ids
  * depending on which command asked is a determinism break moved from the catalog layer to the
  * report layer.
  *
@@ -113,7 +113,7 @@ enum DebtNotice: string implements RunNotice
     /**
      * The prefix these notices report under.
      *
-     * Neutral for the same reason the ids are. What `messagePrefix` fundamentally IS — a translation
+     * Neutral for the same reason the ids are. What `messagePrefix` fundamentally is — a translation
      * namespace, or a statement of provenance — is a question this package has not settled; either
      * way, a finding about the account should not claim to come from a command that merely looked.
      */
@@ -160,10 +160,10 @@ enum DebtNotice: string implements RunNotice
      *
      * `DEBT.UNRECORDED` is the one run notice in the package whose finding is severity-bearing, and
      * the value is load-bearing rather than cosmetic: `DebtThresholds::escalate()` ages a debt from
-     * `info` through `low` to `high`, so the severity is where that ageing starts. It used to be a
+     * `info` through `low` to `high`, so the severity is where that aging starts. It used to be a
      * literal at the construction site in `DebtNotices::unrecorded()`, invisible to the registry
      * export, which stamped `severity: null` on it. Named here so the finding and the published
-     * artifact read the SAME value out of one place.
+     * artifact read the same value out of one place.
      *
      * The others describe the account rather than a debt, so they carry none — stated case by case
      * instead of via `CarriesNoSeverity`, because this family can no longer make that blanket claim.

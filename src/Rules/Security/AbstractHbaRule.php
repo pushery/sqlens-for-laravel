@@ -34,11 +34,11 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *   `hba_supported => false`, so the six rules stay quiet there without any of them knowing what
  *   engine it is. That is a property of the data rather than a driver check somebody has to remember.
  *
- * ## What this base deliberately does NOT handle: the refusal
+ * ## What this base deliberately does not handle: the refusal
  *
  * `pg_hba_file_rules` is a VIEW over a superuser-only FUNCTION, and `pg_read_all_settings` is NOT enough to read it — measured on PostgreSQL 18.4: a role holding `pg_read_all_settings` gets `permission denied for function pg_hba_file_rules`, and `has_function_privilege` says `f`. Only superuser, or a role that has been granted EXECUTE on that function explicitly (`GRANT EXECUTE ON FUNCTION pg_hba_file_rules() TO …`, measured: 6 rows afterwards). On a managed instance that refusal is the normal case rather
  * than a fault. It produces no rule subjects at all
- * — but it is NOT silent, because the reading carries a named skip that the audit runner turns into
+ * — but it is not silent, because the reading carries a named skip that the audit runner turns into
  * `SEC.SKIPPED.PG.HBA`. A rule that also spoke there would report one refusal seven times over. The
  * state that genuinely has nobody to report it is a reading that SUCCEEDED and returned nothing, and
  * that one has a hook below.
@@ -105,7 +105,7 @@ abstract class AbstractHbaRule extends AbstractSchemaObjectSecurityRule implemen
      *
      * False for five of the six: the fields they read are the ones PostgreSQL left empty, so there is
      * nothing to judge and the honest answer is `undetermined`. True only for
-     * {@see HbaParseErrorRule}, whose subject IS the broken line.
+     * {@see HbaParseErrorRule}, whose subject is the broken line.
      */
     protected function judgesBrokenLines(): bool
     {
@@ -192,7 +192,7 @@ abstract class AbstractHbaRule extends AbstractSchemaObjectSecurityRule implemen
         // MySQL has no host-based authentication file in any version — so there is nothing here for
         // these checks to look at, and that is a different statement from "checked and fine".
         //
-        // Exactly ONE rule in the family says it, on the same terms as judgeEmptyReading() below: six
+        // Exactly one rule in the family says it, on the same terms as judgeEmptyReading() below: six
         // rules repeating "this engine has no such file" is five repetitions of one fact, and the
         // earlier reading of this branch — stay silent, or somebody goes looking for a file their
         // server does not have — was right about the noise and wrong about the silence. A reader who

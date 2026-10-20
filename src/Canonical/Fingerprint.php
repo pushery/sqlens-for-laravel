@@ -9,7 +9,7 @@ namespace Pushery\SQLens\Canonical;
  * the canonical-form version, the statement kind, and the (order-independent) set
  * of targets, plus the transaction mode. Its identity variant,
  * {@see self::forFindingIdentity()}, is what a baseline entry stores, so a change a
- * rule can see — a different kind or a different target under identical SQL — MUST
+ * rule can see — a different kind or a different target under identical SQL — must
  * change it, or the hash would be blind to exactly the fields rules read.
  *
  * Deterministic by construction: sets are ordered explicitly (never left to PHP
@@ -18,7 +18,7 @@ namespace Pushery\SQLens\Canonical;
  * a dev Mac and in CI.
  *
  * Three-valued: an undetermined form (a CanonicalizationFailure) gets its own
- * fingerprint that FOLDS IN the named reason and is disjoint from every determined
+ * fingerprint that folds in the named reason and is disjoint from every determined
  * statement's — never collapsed onto one catch-all hash.
  */
 final readonly class Fingerprint

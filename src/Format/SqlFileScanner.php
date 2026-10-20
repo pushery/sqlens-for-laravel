@@ -20,7 +20,7 @@ use SplFileInfo;
  * would then list the same files in a different order on two machines, and a `--check` step's output
  * could not be diffed against a previous run.
  *
- * ## `.sql` ONLY — and this is the most consequential line in the file
+ * ## `.sql` only — and this is the most consequential line in the file
  *
  * A Laravel migration is a PHP file whose SQL, where there is any, lives inside a heredoc. Running a
  * SQL formatter over that file does not format the SQL: it reads PHP as SQL, and rewrites the whole
@@ -31,7 +31,7 @@ use SplFileInfo;
  *
  * Formatting SQL inside a heredoc needs a PHP parser, a way to find the heredocs that hold SQL, and
  * a way to write the formatted text back at the original indentation. That is a real feature and it
- * is deliberately NOT in v1.x — the scope decision, not an oversight.
+ * is deliberately not in v1.x — the scope decision, not an oversight.
  *
  * ## Generated files are left alone
  *
@@ -41,10 +41,10 @@ use SplFileInfo;
  *
  * ## A symlink is never followed, and that is a WRITE decision
  *
- * `format` is the only suite that writes, so a symlink out of a configured root is a way for a run
- * to rewrite a file outside its blast radius — and for a cycle to make the walk never finish. Both
- * are refused by rejecting the link itself rather than by trying to detect where it goes: a link is
- * not a file this project keeps here, whatever it points at.
+ * `format` is the only suite that rewrites project SQL, so a symlink out of a configured root is a
+ * way for a run to rewrite a file outside its blast radius — and for a cycle to make the walk never
+ * finish. Both are refused by rejecting the link itself rather than by trying to detect where it
+ * goes: a link is not a file this project keeps here, whatever it points at.
  *
  * ## Everything else comes from {@see FormatDiscovery}
  *
@@ -64,7 +64,7 @@ final readonly class SqlFileScanner
 
         foreach ($paths as $path) {
             if (is_file($path)) {
-                // A path named EXPLICITLY is still judged. `--path` is not an override of the scope
+                // A path named explicitly is still judged. `--path` is not an override of the scope
                 // decision — somebody naming a migration by hand would otherwise get the
                 // destroyed-migration outcome the class docblock describes, having asked for it by
                 // accident.

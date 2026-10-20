@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Reporting;
 
+use Illuminate\Container\Container;
 use Illuminate\Contracts\Config\Repository;
 use InvalidArgumentException;
 use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
@@ -31,7 +32,7 @@ use Throwable;
  *
  * Eleven check classes quote an exception message today, and each has a good reason to: the reason a
  * check could not answer is exactly what a reader needs. Rewriting all eleven to classify instead
- * would lose that, and the twelfth would arrive without the treatment. And the driver's OWN text is
+ * would lose that, and the twelfth would arrive without the treatment. And the driver's own text is
  * outside anybody's control — a future PostgreSQL release could name a host in a sentence nobody
  * anticipated.
  *
@@ -70,7 +71,11 @@ final readonly class CredentialRedaction
      */
     private const array EXACT_FIELDS = ['password', 'url', 'dsn'];
 
-    public function __construct(private Repository $config) {}
+    /**
+     * @param  Repository|null  $config  the configuration whose connections are taken out; without one,
+     *                                   the application's own, looked up at each call
+     */
+    public function __construct(private ?Repository $config = null) {}
 
     /** A throwable's message, redacted. */
     public function fromThrowable(Throwable $error): string
@@ -131,7 +136,7 @@ final readonly class CredentialRedaction
      */
     private function secrets(array $fields): array
     {
-        $connections = $this->config->get('database.connections');
+        $connections = $this->configuration()?->get('database.connections');
         $secrets = [];
 
         foreach (is_array($connections) ? $connections : [] as $connection) {
@@ -168,6 +173,21 @@ final readonly class CredentialRedaction
         usort($unique, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
 
         return $unique;
+    }
+
+    /**
+     * The configuration the connections are read from: the one this was given, or the application's.
+     *
+     * Looked up at each read, for the reason secrets() gives. A process without an application
+     * configures no connection either, so there is nothing to take out, and the text comes back as
+     * it was.
+     */
+    private function configuration(): ?Repository
+    {
+        $container = Container::getInstance();
+        $config = $this->config ?? ($container->bound('config') ? $container->make('config') : null);
+
+        return $config instanceof Repository ? $config : null;
     }
 
     /**

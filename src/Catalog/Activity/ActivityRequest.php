@@ -9,7 +9,7 @@ use Pushery\SQLens\Exceptions\InvalidActivityRequest;
 /**
  * What a live-activity reading was ASKED for.
  *
- * Unlike a statistics request, this one does NOT name objects it must be given. The difference is
+ * Unlike a statistics request, this one does not name objects it must be given. The difference is
  * the question: statistics weight findings that already exist, so the objects worth reading about
  * are the ones some finding already references — while a lock queue is dangerous precisely when it
  * involves a table nobody predicted. A preflight scoped to the migration's own tables would miss

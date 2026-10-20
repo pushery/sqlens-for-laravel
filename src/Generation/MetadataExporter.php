@@ -11,7 +11,7 @@ use Pushery\SQLens\Reporting\Agent\Redactor;
  * One generator, several outputs — the technical form of the promise that preventive guidance and
  * actual enforcement cannot drift.
  *
- * Every renderer is fed the SAME {@see RuleCatalogSnapshot} and nothing else. Not the rule
+ * Every renderer is fed the same {@see RuleCatalogSnapshot} and nothing else. Not the rule
  * registry, not the configuration, not a connection: one question was asked once, and every
  * artifact answers from that one answer. A renderer allowed to consult the registry itself would
  * be a second source, and two sources agree for a long time before disagreeing quietly in the one
@@ -74,7 +74,7 @@ final class MetadataExporter
     }
 
     /**
-     * The artifacts of ONE family, from one snapshot.
+     * The artifacts of one family, from one snapshot.
      *
      * Ordered by path rather than by registration, so the same set of renderers produces the same
      * report whatever order a service provider happened to register them in — the same determinism
@@ -104,7 +104,7 @@ final class MetadataExporter
 
             $claimedBy[$artifact->path] = $renderer->name();
 
-            // THE enforcement point for this family, and it is here rather than in each renderer for
+            // The enforcement point for this family, and it is here rather than in each renderer for
             // the reason the reporter's is at its own single seam: a redactor each renderer had to
             // call is a redactor the next renderer can be written without. These artifacts are
             // COMMITTED into a consuming repository, so a leak here reaches the git history, every

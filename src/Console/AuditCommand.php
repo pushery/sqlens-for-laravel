@@ -19,7 +19,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 /**
  * `sqlens:audit` — the audit suite's shell, and nothing more.
  *
- * It resolves flags, decides what is a misconfiguration BEFORE anything reads a database, hands the
+ * It resolves flags, decides what is a misconfiguration before anything reads a database, hands the
  * run to {@see AuditRuns}, gives the result to a reporter and returns the exit code. It holds no
  * SQL, no driver branch and no rule: everything it could get wrong is a flag, and an architecture
  * test keeps it that way.
@@ -33,11 +33,15 @@ use Symfony\Component\Console\Output\OutputInterface;
  * were addressing, and the exit code would arrive after the side effects rather than instead of
  * them.
  *
- * ## The flags it shares with `sqlens:lint`, and the two it does not
+ * ## The flags it shares with `sqlens:lint`, and the ones it does not
  *
- * `--connection`, `--profile`, `--level`, `--category`, `--format`, `--output` and `--strict` mean
- * exactly what they mean there, deliberately: a user who has learned one suite has learned both,
- * and two spellings of one idea is how the suites start behaving differently.
+ * `--connection`, `--profile`, `--level`, `--category`, `--min-severity`, `--format`, `--output` and
+ * `--debt` mean exactly what they mean there, deliberately: a user who has learned one suite has
+ * learned both, and two spellings of one idea is how the suites start behaving differently.
+ *
+ * `--strict` is this suite's own, and the only option with that name: it turns an undetermined
+ * result into a failure. `sqlens:lint` has no `--strict`; its `--strict-tools` is about missing
+ * external tools. `--host` is this suite's too, because only a live reading has a host to choose.
  *
  * `--path`, `--file`, `--pretend`, `--shadow` and `--roundtrip` are absent, and their absence is
  * the point rather than an omission: every one of them is about migration FILES. There is no fast
@@ -71,7 +75,7 @@ final class AuditCommand extends Command
 
     public function handle(AuditRuns $runner, ReporterManager $reporters, Translator $translator, Repository $config): int
     {
-        // BEFORE the reporter, before the profile, before anything opens a connection: is the
+        // Before the reporter, before the profile, before anything opens a connection: is the
         // configuration one this package understands at all? An unknown key is a key that gets
         // IGNORED, and ignoring is silent — a `levl: 3` typo produces a green run that checked
         // less, and nothing on screen says so. The machinery for this existed and was tested from
@@ -201,6 +205,15 @@ final class AuditCommand extends Command
                 $outcome->connectionName,
                 is_string($driver) ? $driver : 'unknown',
             ));
+
+            return $outcome->exitCode->value;
+        }
+
+        // A baseline that cannot be read is a message for the same reason: nothing was audited, and
+        // a run that could not read its own suppression list prints nothing a reader could mistake
+        // for a verdict.
+        if ($outcome->unreadableBaseline !== null) {
+            $this->stderr()->writeln($outcome->unreadableBaseline);
 
             return $outcome->exitCode->value;
         }

@@ -15,7 +15,7 @@ use RuntimeException;
  * `resolve(): Return value must be of type Migration, int returned` — true, useless, and about a
  * file the message never named.
  *
- * Whatever this package decides to support, a refusal says WHICH file and WHY.
+ * Whatever this package decides to support, a refusal says which file and why.
  */
 final class UnloadableMigration extends RuntimeException
 {
@@ -23,7 +23,7 @@ final class UnloadableMigration extends RuntimeException
      * The file neither returned a migration nor declared one this loader could find.
      *
      * Both shapes Laravel accepts are handled before this is reached — an anonymous class the file
-     * RETURNS, and a named class it DECLARES. Reaching here means the file is a third thing: it
+     * returns, and a named class it DECLARES. Reaching here means the file is a third thing: it
      * returns something that is not a migration and declares no class whose name matches its own,
      * so nothing in it can be run as a migration.
      */

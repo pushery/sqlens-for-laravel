@@ -17,7 +17,7 @@ use Pushery\SQLens\ProjectPath;
  * string. Both are guesses, and both are wrong in ordinary projects:
  *
  * - A package registers its own migrations through `loadMigrationsFrom()`, at a path that is
- *   usually `vendor/<vendor>/<package>/database/migrations` and can be anything at all. Those ARE
+ *   usually `vendor/<vendor>/<package>/database/migrations` and can be anything at all. Those are
  *   migrations, and a name check would file them as seeders.
  * - A tenant setup nests migrations in `database/migrations/tenant/`. A path check comparing for
  *   equality misses it; one comparing prefixes does not, which is why this class compares prefixes.
@@ -99,9 +99,7 @@ final readonly class PathBinding
      */
     public function relative(string $path): string
     {
-        $root = rtrim($this->projectRoot, '/\\').DIRECTORY_SEPARATOR;
-
-        return str_starts_with($path, $root) ? substr($path, strlen($root)) : $path;
+        return ProjectPath::relative($path, $this->projectRoot);
     }
 
     /** The absolute, symlink-resolved path, or null when it does not exist. */

@@ -9,7 +9,7 @@ namespace Pushery\SQLens\Rules\Pedantic;
  *
  * ## Built once, outside the rules, for the reason every other policy here is
  *
- * There are TWO comment rules, one per engine, sharing one judgment. A rule that read the
+ * There are two comment rules, one per engine, sharing one judgment. A rule that read the
  * configuration itself would have a verdict its own tests cannot see, and the two would eventually
  * disagree about what a malformed value means. So this is constructed where the rule set is, from
  * the raw `sqlens.audit.documentation` array, and handed down.

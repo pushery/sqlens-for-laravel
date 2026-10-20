@@ -95,14 +95,14 @@ final class ReporterManager extends Manager
 
     protected function createAgentDriver(): Reporter
     {
-        // The redactor is built HERE, like the SARIF anchor below and for the same reason: a
+        // The redactor is built here, like the SARIF anchor below and for the same reason: a
         // reporter that fetched its own configuration would be a second place a run's settings are
         // resolved, and the two would eventually disagree about a run.
         //
         // It is a required argument rather than an optional one. A redactor a caller may omit is
         // one a caller will omit, and this is the surface where omitting it publishes somebody's
         // password with a heading on it.
-        // The translator comes from the container HERE rather than inside the renderer, for the
+        // The translator comes from the container here rather than inside the renderer, for the
         // reason every other resolution in this manager does: shipped code that reached for the
         // Foundation would behave differently depending on what booted it.
         return new AgentReporter(

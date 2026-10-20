@@ -11,10 +11,10 @@ use Pushery\SQLens\Contracts\BindingFormatter;
 use Pushery\SQLens\Contracts\DriverCanonicalization;
 
 /**
- * Turns a statement plus its bindings into ONE complete SQL string for rules to
+ * Turns a statement plus its bindings into one complete SQL string for rules to
  * read.
  *
- * **This is NOT an escaper and must never be used as one.** The result is
+ * **This is not an escaper and must never be used as one.** The result is
  * analysis material and is never executed — no statement produced here reaches a
  * database. Reading it as a safe-to-run string would be a security bug, not a
  * feature request.
@@ -170,7 +170,7 @@ final readonly class BindingSubstitutor
      *
      * JSON number formatting is locale-independent by specification, so a machine
      * with a comma decimal separator produces byte-identical output — and a comma
-     * would be worse than ugly here: `1,5` parses as TWO values in an argument
+     * would be worse than ugly here: `1,5` parses as two values in an argument
      * list, so the corrupted statement would still look plausible.
      *
      * A whole float encodes as `1`, which would read as an integer. The decimal

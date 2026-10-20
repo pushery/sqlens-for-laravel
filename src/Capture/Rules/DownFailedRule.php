@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Capture\Rules;
 use Pushery\SQLens\Capture\CaptureResult;
 use Pushery\SQLens\Capture\CaptureRuleMetadata;
 use Pushery\SQLens\Capture\CaptureSection;
-use Pushery\SQLens\Findings\CredentialRedactor;
+use Pushery\SQLens\Findings\CompositeCredentialRedactor;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
@@ -18,7 +18,7 @@ use Pushery\SQLens\Subjects\CaptureMode;
  * `CAP.L0.DOWN_FAILED` — the roundtrip's `down` leg itself raised an error.
  *
  * This is the sibling of `CAP.L0.DOWN_NOT_INVERTIBLE`, and keeping the two apart is
- * the point of both. A `down()` that THROWS and a `down()` that runs but does not
+ * the point of both. A `down()` that throws and a `down()` that runs but does not
  * restore are different defects with different fixes, and — more importantly — the
  * first makes the second unanswerable: once `down` has failed, the database holds a
  * state nobody planned, so a second `up` run against it would fail for a reason no
@@ -26,7 +26,7 @@ use Pushery\SQLens\Subjects\CaptureMode;
  * why rather than letting an unattributable failure stand in for a verdict.
  *
  * That is also why this is never reported as "down() is not invertible". Invertible
- * is a question about what `down()` LEFT BEHIND; a `down()` that did not finish left
+ * is a question about what `down()` left behind; a `down()` that did not finish left
  * behind nothing anyone can reason about. Claiming the stronger verdict would be
  * inventing evidence the run does not have.
  *
@@ -101,18 +101,27 @@ final readonly class DownFailedRule implements CaptureRule
     }
 
     /**
-     * The driver message, made safe and deterministic: credentials redacted first,
-     * then the project root relativized out so the same failure reads identically on
-     * every machine.
+     * The driver message, made safe and deterministic: the project root relativized
+     * out so the same failure reads identically on every machine, then credentials
+     * redacted.
      */
     private function detail(CaptureResult $result, string $projectRoot): string
     {
-        $detail = (new CredentialRedactor)->redact($result->failureDetail ?? 'the capture recorded no further detail');
+        $detail = $result->failureDetail ?? 'the capture recorded no further detail';
 
-        // Two passes, and they catch different things. `CredentialRedactor` knows the values
-        // this application configured — it takes the connection's own host, user and password out
-        // of the text. It cannot know a password somebody typed straight into a migration, because
-        // that value appears in no configuration.
+        // The project root comes out first. The configured values are taken out wherever a host, a
+        // user or a database name stands as a word of its own, and a project often lives in a
+        // directory named like its database: redacted first, that name would cut the root apart and
+        // leave the rest of the absolute path in the message.
+        $detail = str_replace(rtrim($projectRoot, '/').'/', '', $detail);
+
+        $detail = new CompositeCredentialRedactor()->redact($detail);
+
+        // Two passes, and they catch different things. `CompositeCredentialRedactor` takes out the
+        // values this application's connections are configured with, and then the coordinates a
+        // driver prints by their form: the host, user and database of the connection block Laravel
+        // appends to an error. Neither half could know a password somebody typed straight into a
+        // migration, because that value appears in no configuration and in no shape a driver prints.
         //
         // `SecretLiteralMask` is the other half: it finds a secret by the shape of the statement
         // (`PASSWORD '…'`, `IDENTIFIED BY '…'`) rather than by knowing its value. A database error
@@ -130,6 +139,6 @@ final readonly class DownFailedRule implements CaptureRule
         $detail = RowValueMask::in($detail);
 
         // The sentence around the detail ends it with a period of its own.
-        return rtrim(str_replace(rtrim($projectRoot, '/').'/', '', $detail), '.');
+        return rtrim($detail, '.');
     }
 }

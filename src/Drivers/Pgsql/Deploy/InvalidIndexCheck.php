@@ -73,7 +73,7 @@ final readonly class InvalidIndexCheck implements PreflightCheck
     public const string DEBT_KIND = 'invalid_index';
 
     /**
-     * The same wreckage, but the deploy about to run WILL fail on it.
+     * The same wreckage, but the deploy about to run will fail on it.
      *
      * A separate id rather than a louder severity on the first, because the two call for different
      * decisions. An invalid index nobody is about to re-create is debt: real, worth clearing,
@@ -82,6 +82,10 @@ final readonly class InvalidIndexCheck implements PreflightCheck
      * matter of degree.
      */
     public const string COLLISION_ID = 'DEPLOY.LEGACY.INVALID_INDEX_NAME_COLLISION';
+
+    /** What a half-built partitioned index adds when a pending migration re-creates its name. */
+    private const string PARTITIONED_COLLISION = ' A migration in THIS deploy creates an index by that same name, and '
+        .'`CREATE INDEX` refuses a name that already exists, so the deploy will stop at that statement.';
 
     public function id(): string
     {
@@ -103,7 +107,7 @@ final readonly class InvalidIndexCheck implements PreflightCheck
         try {
             $rows = $context->session->read(static fn (Connection $db): array => $db->select(
                 'select n.nspname as schema_name, c.relname as index_name, t.relname as table_name,'
-                .' i.indisready as is_ready'
+                .' i.indisready as is_ready, c.relkind as index_kind'
                 .' from pg_index i'
                 .' join pg_class c on c.oid = i.indexrelid'
                 .' join pg_class t on t.oid = i.indrelid'
@@ -138,7 +142,7 @@ final readonly class InvalidIndexCheck implements PreflightCheck
         // was unreachable — the driver answers with objects, every time, and the coverage gate said
         // so by never entering it. A cast states the same requirement without a line nothing can
         // execute, and an unexecutable guard is worse than none: it looks like a check somebody made.
-        // The names the pending migrations will try to create, read ONCE rather than per row: the
+        // The names the pending migrations will try to create, read once rather than per row: the
         // set is the same for every index, and rebuilding it inside the loop would make a hundred
         // invalid indexes cost a hundred passes over the same statements.
         $pendingIndexNames = $this->pendingIndexNames($context);
@@ -146,6 +150,21 @@ final readonly class InvalidIndexCheck implements PreflightCheck
         foreach (array_map(static fn (mixed $row): object => (object) $row, $rows) as $row) {
             $schema = $this->text($row, 'schema_name');
             $index = $this->text($row, 'index_name');
+
+            // A partitioned index (`relkind = 'I'`) is invalid on purpose while `CREATE INDEX … ON
+            // ONLY` waits for its partitions, and it refuses `DROP INDEX CONCURRENTLY`: the advice
+            // for a failed concurrent build would be wrong twice over.
+            if ($this->text($row, 'index_kind') === 'I') {
+                $findings[] = $this->partitionedFinding(
+                    $context,
+                    $schema,
+                    $index,
+                    $this->text($row, 'table_name'),
+                    $this->collides($pendingIndexNames, $schema, $index),
+                );
+
+                continue;
+            }
 
             $findings[] = $this->collides($pendingIndexNames, $schema, $index)
                 ? $this->collisionFinding($context, $schema, $index, $this->text($row, 'table_name'))
@@ -264,6 +283,45 @@ final readonly class InvalidIndexCheck implements PreflightCheck
             // "how bad is this" instead of "what does it do to concurrent traffic".
             DowntimeClass::Online,
         );
+    }
+
+    /**
+     * A partitioned index that is not valid yet.
+     *
+     * The documented state between `CREATE INDEX … ON ONLY` and the last `ALTER INDEX … ATTACH
+     * PARTITION`, which a migration path often spreads over several deploys, so it is not the
+     * leftover of a failed build and does not get that advice: PostgreSQL refuses `DROP INDEX
+     * CONCURRENTLY` on a partitioned index, and a plain drop tears down the half-built set. Low on
+     * its own, and the collision's High when a pending migration re-creates the name, because that
+     * deploy stops at that statement either way.
+     */
+    private function partitionedFinding(PreflightContext $context, string $schema, string $index, string $table, bool $collides): Finding
+    {
+        $qualified = $schema === '' ? $index : $schema.'.'.$index;
+        $ruleId = $collides ? self::COLLISION_ID : self::ID;
+
+        return Finding::fail(
+            ruleId: $ruleId,
+            messagePrefix: DeployNotice::MESSAGE_PREFIX,
+            message: sprintf(
+                'The index `%s` on `%s` is a partitioned index that is not valid yet. That is the state '
+                .'`CREATE INDEX … ON ONLY` leaves until every partition has a matching index attached '
+                .'with `ALTER INDEX … ATTACH PARTITION`, not wreckage from a failed build: build the '
+                .'missing partition indexes, concurrently and one partition at a time, and attach '
+                .'them. A partitioned index refuses `DROP INDEX CONCURRENTLY`, and a plain `DROP INDEX` '
+                .'takes the half-built set with it.%s This command drops nothing itself.',
+                $index,
+                $table,
+                $collides ? self::PARTITIONED_COLLISION : '',
+            ),
+            location: Location::inCatalog($context->driver, $context->connection, $qualified, SchemaObjectType::Index),
+            category: Category::Safety,
+            level: Level::Capturable,
+            stability: StabilityTier::Stable,
+            documentationUrl: RuleDocumentationUrl::for($ruleId),
+            context: new SubjectContext(driver: $context->driver, profile: $context->profile, strictTools: false),
+            severity: $collides ? Severity::High : Severity::Low,
+        )->withDowntimeClass(DowntimeClass::Online);
     }
 
     /**

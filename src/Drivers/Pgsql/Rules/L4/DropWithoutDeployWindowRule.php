@@ -29,7 +29,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * openly `heuristic`: SQLens sees the SQL, not the application code, so it cannot prove
  * the old version is gone — the finding spells out the safe sequence (deploy 1: ship code
  * that no longer uses the object; deploy 2: drop it) as a prompt to check, never as a
- * verdict. It stays silent when the object is created in the SAME migration (it never
+ * verdict. It stays silent when the object is created in the same migration (it never
  * existed for a prior deploy). A `#[SqlensAllowDestructive]` opt-in no longer silences it
  * either: the finding is produced, and that same explicit "I have reviewed this
  * destructive drop" signal is applied at the reporting layer as a named, visible

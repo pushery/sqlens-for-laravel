@@ -14,12 +14,14 @@ use Pushery\SQLens\Today;
  * Because `rules()` carries two jobs and only one of them knows a day. Measured over its callers:
  *
  *     src/Lint/LintRunner.php          judges a database   <- has a run
+ *     src/Audit/AuditRunner.php        judges a database   <- has a run; its header counts enumerate
  *     src/Drivers/DriverManager.php    judges a database   <- has a run
  *     src/Catalog/RuleRegistryExport.php   enumerates rules
  *     src/Deploy/FindingEscalation.php     enumerates rules
+ *     src/Generation/ActiveRuleResolver.php    enumerates rules
  *
- * The last two build artifacts out of the rule set. Neither judges a database, neither has a
- * "today", and a required parameter would force both to invent one — a fabricated date inside an
+ * The last three build artifacts out of the rule set. None judges a database, none has a
+ * "today", and a required parameter would force each to invent one — a fabricated date inside an
  * artifact that is compared against a golden file is a non-deterministic artifact.
  *
  * And an optional parameter does not help in PHP. `rules(): iterable` takes none, so a parameter

@@ -12,7 +12,7 @@ use SplFileInfo;
  *
  * The registry export has to say whether a rule's page is written or still {@see
  * RuleDocumentationState::Pending}, and that is the only thing it needs to know about
- * documentation: a set of slugs it can ask. Where those pages live is deliberately NOT encoded
+ * documentation: a set of slugs it can ask. Where those pages live is deliberately not encoded
  * here — the directory arrives through {@see self::fromDirectory()}. The package's own pages sit
  * in a private tree that never ships, so a shipped class naming that path would be both wrong
  * for a consumer and a private path in a public file.
@@ -32,7 +32,7 @@ use SplFileInfo;
  * them into a second hand-maintained place would be a second thing to keep in step; reading them is
  * not.
  *
- * `rationale` deliberately does NOT follow. There is no existing source for it: the page BODY is
+ * `rationale` deliberately does not follow. There is no existing source for it: the page body is
  * the rationale, it is long, and it is what the stable `documentation_url` on every entry exists to
  * point at. Putting it in the catalog would mean authoring 200 new texts and carrying them in the
  * public contract from 1.0 onward, to duplicate something a reader can already reach.
@@ -116,7 +116,7 @@ final readonly class DocumentationPageIndex
      * a two-key header can be read would put a library in every consumer's vendor directory to
      * solve a problem no consumer has: they read the artifact, never the pages.
      *
-     * What it does NOT do is guess. A key it cannot find yields an empty string, and the export's
+     * What it does not do is guess. A key it cannot find yields an empty string, and the export's
      * own completeness arm is what turns that into a failure — a parser that invented a title
      * would produce a catalog that looks complete and says the wrong thing.
      *

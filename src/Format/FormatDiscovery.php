@@ -11,10 +11,10 @@ use Illuminate\Contracts\Config\Repository;
  *
  * ## This is a SAFETY surface, not a convenience one
  *
- * `format` is the only suite in this package that writes. The set of candidate files is therefore
- * the blast radius, and every rule below is written from that side: the defaults are narrow, the
- * two dangerous widenings are refused rather than warned about, and nothing here is discovered by
- * walking somewhere the configuration did not name.
+ * `format` is the only suite in this package that rewrites project SQL. The set of candidate files
+ * is therefore the blast radius, and every rule below is written from that side: the defaults are
+ * narrow, the two dangerous widenings are refused rather than warned about, and nothing here is
+ * discovered by walking somewhere the configuration did not name.
  *
  * ## Three keys, and why `include` is not a fourth
  *
@@ -24,7 +24,7 @@ use Illuminate\Contracts\Config\Repository;
  * precedence rule nobody would remember correctly at the moment it mattered. A project that needs
  * one directory takes it as a root.
  *
- * ## The reserved extensions are refused TWICE, on purpose
+ * ## The reserved extensions are refused twice, on purpose
  *
  * The config validator reports `format.extensions: ['php']` as out of range, and this class drops
  * it again at runtime. That is not the redundant belt this repository usually argues against: the
@@ -100,9 +100,9 @@ final readonly class FormatDiscovery
             // over a misconfigured project — refusing outright would turn one bad list entry into a
             // command nobody can use, and the validator is where a configuration is judged.
             //
-            // Cleaned HERE so the field others read is honest, and cleaned AGAIN in `admits()` so
+            // Cleaned here so the field others read is honest, and cleaned again in `admits()` so
             // the decision is safe however the object was built. Two filters, two jobs: this one is
-            // about what the run REPORTS about itself, that one about what it TOUCHES.
+            // about what the run reports about itself, that one about what it TOUCHES.
             extensions: self::formattable(self::strings($config->get('sqlens.format.extensions'), self::DEFAULT_EXTENSIONS)),
         );
     }

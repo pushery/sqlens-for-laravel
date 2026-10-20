@@ -35,7 +35,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * them as coverage would stay silent about a table that scans on every parent delete — the exact
  * false NEGATIVE this package's caution is aimed at. So `comparable_indexes` holds only what
  * {@see IndexComprehension} already judged comparable AND what the server would actually use, and a
- * rule that wants coverage reads that one. Both are present, so a rule can also say "there IS an
+ * rule that wants coverage reads that one. Both are present, so a rule can also say "there is an
  * index here, it just is not one I can reason about" instead of implying none exists. A MySQL
  * `INVISIBLE` index is used for what it enforces and not for lookups, so it stays in the list and
  * is named again in `invisible_indexes`, which a rule about lookups reads beside it.
@@ -47,24 +47,24 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * partition list, so this is the house form rather than a new one. Plain column lists use the same
  * separator without the parentheses, because a column has no members of its own.
  *
- * ## Why the key facts are FOUR attributes and not one flag
+ * ## Why the key facts are four attributes and not one flag
  *
  * "Is this table adequately keyed?" is a rule's question, not a reader's, and answering it here
  * would put the judgment in the layer that must only report. So the reading contributes the facts
  * it can stand behind, each separately:
  *
  * - `primary_key` — the primary key's own entry, empty when there is none.
- * - `unique_indexes` — the unique indexes that are NOT the primary key. Both engines list the
+ * - `unique_indexes` — the unique indexes that are not the primary key. Both engines list the
  *   primary key as unique as well, and folding them together would make "a unique key but no
  *   primary key" — the case where a substitute identity is even possible — unaskable.
- * - `column_types` and `column_default_functions` — what a column IS and what it defaults to
+ * - `column_types` and `column_default_functions` — what a column is and what it defaults to
  *   calling. Both are projections, not copies: the type is the canonical one, and only a
  *   zero-argument function default travels, because the `name(value)` encoding cannot carry a
  *   value with parentheses of its own. A rule needing more than that needs the column object.
  * - `column_charsets` and `column_collations` — what a column stores characters in, and what it
  *   sorts them by. Two attributes rather than one, because they are two decisions: a schema can be
  *   on `utf8mb4` throughout and still sort by a collation from before MySQL 8.0. Only columns that
- *   HAVE one appear, so a column present in `columns` and absent here holds no characters at all —
+ *   have one appear, so a column present in `columns` and absent here holds no characters at all —
  *   an `int`, a `blob` — which a rule must not confuse with one whose encoding went unread.
  * - `invisible_indexes` — MySQL's `INVISIBLE` indexes, of any kind. The optimizer ignores them, so
  *   none serves a lookup, and each still enforces what it declares, so a comparable one stays in
@@ -88,7 +88,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * - `unique_null_treatment` — whether each unique index counts two NULLs as the same value. Three-
  *   valued by construction: an index absent from the list had the flag unread, which a rule must not
  *   confuse with either answer. See {@see self::nullTreatment()}.
- * - `foreign_key_collations` — the one fact here that is NOT the table's own: each foreign key's
+ * - `foreign_key_collations` — the one fact here that is not the table's own: each foreign key's
  *   text columns paired with the columns they point at, on other tables, both collations named. See
  *   {@see self::edges()} for why a table has to be handed it and what an omission means.
  * - `unsigned_columns` — the columns the catalog reported as UNSIGNED. MySQL only; empty on
@@ -245,7 +245,7 @@ final readonly class TableMembers
 
                 if ($collation !== null && $collation !== '') {
                     $collations[$parent][] = self::shortName($object).'('.$collation.')';
-                    // Keyed by the column's own qualified name, so an edge landing on ANOTHER table
+                    // Keyed by the column's own qualified name, so an edge landing on another table
                     // can be answered in the second pass. A per-table map would need the caller to
                     // know how each engine qualifies a column; this needs nothing.
                     $columnCollation[$object->qualifiedName] = $collation;
@@ -261,7 +261,7 @@ final readonly class TableMembers
                 continue;
             }
 
-            // Collected, NOT encoded. Encoding rewrites each column into the spelling its column
+            // Collected, not encoded. Encoding rewrites each column into the spelling its column
             // object carries, and that map is only complete once every column has been seen.
             if ($object->type === SchemaObjectType::Constraint && self::isForeignKey($object)) {
                 $members['fk'][$parent][] = $object;
@@ -306,7 +306,7 @@ final readonly class TableMembers
                     $predicates[$object->qualifiedName] = $reading;
                 }
 
-                // An index whose ACCESS METHOD is what kept it out of `comparable` — a GIN, a GiST,
+                // An index whose access method is what kept it out of `comparable` — a GIN, a GiST,
                 // a FULLTEXT. Same move as the line above, one attribute along: it is collected
                 // under the method it shares, for the one comparison that needs no knowledge of how
                 // that method searches. See {@see self::accessMethodKey()}.
@@ -387,7 +387,7 @@ final readonly class TableMembers
      * ## The one fact a table cannot hold about itself
      *
      * Everything else here is a table's own members. This is not: the far end of a foreign key lives
-     * on ANOTHER table, and a rule judges one object at a time. Two columns compared across a
+     * on another table, and a rule judges one object at a time. Two columns compared across a
      * collation boundary force MySQL to convert one side at runtime, and the converted side stops
      * being able to use its index — the join the application runs constantly turns into a scan. That
      * question is unaskable without both ends, so the reading answers it here and the rule still
@@ -443,7 +443,7 @@ final readonly class TableMembers
             $table = $constraint->parent ?? '';
             $referenced = $constraint->getString('referenced_relation');
             // Spelled through the same map as every other member: this list is looked up against
-            // column objects on BOTH tables, so a raw name would miss on a quoted schema exactly
+            // column objects on both tables, so a raw name would miss on a quoted schema exactly
             // the way an index's would.
             $local = self::columnList($constraint->getString('key_columns'), $spelling[$table] ?? []);
             $far = self::columnList($constraint->getString('referenced_columns'), $spelling[$referenced ?? ''] ?? []);
@@ -509,7 +509,7 @@ final readonly class TableMembers
      *
      * PostgreSQL spells this in one character — `a` for GENERATED ALWAYS, `d` for GENERATED BY
      * DEFAULT, empty for neither — and `information_schema` flattens the two into one YES. They are
-     * kept apart because they answer different questions: ALWAYS refuses an explicit insert, BY
+     * kept apart because they answer different questions: always refuses an explicit insert, by
      * DEFAULT accepts one, and a rule about migrating off `serial` has to say which one it means.
      */
     private static function identityKind(?string $identity): ?string
@@ -531,7 +531,7 @@ final readonly class TableMembers
      * `nextval('s') + 0`, both constructible and both measured on 18.4 — is sequence-driven and can
      * even own its sequence, but it is not the macro. An identity column cannot express either one,
      * so recommending the conversion there would break the default; and calling it clean would claim
-     * a check that never happened. The two shapes are therefore separated HERE, as a fact about the
+     * a check that never happened. The two shapes are therefore separated here, as a fact about the
      * text, and the rule decides what each one means.
      *
      * Deliberately blind to the sequence's NAME: `pg_get_expr` qualifies it or not depending on the
@@ -557,7 +557,7 @@ final readonly class TableMembers
     }
 
     /**
-     * The SQL keyword functions a server writes WITHOUT parentheses.
+     * The SQL keyword functions a server writes without parentheses.
      *
      * They are spelled out rather than matched by a general "bare word" pattern, because such a
      * pattern would also swallow `true`, `false`, `null` and a bare enum literal — none of which is
@@ -633,7 +633,7 @@ final readonly class TableMembers
      * ## Why this exists, and why an absence here is not "no payload"
      *
      * Measured on PostgreSQL 18.4: `CREATE INDEX ON t (a) INCLUDE (b)` and `CREATE INDEX ON t (a)`
-     * report the SAME key columns, because `indnkeyatts` deliberately excludes the payload — an
+     * report the same key columns, because `indnkeyatts` deliberately excludes the payload — an
      * INCLUDE column covers no lookup, so counting it as a key column would make a foreign key look
      * indexed when it is not.
      *
@@ -669,7 +669,7 @@ final readonly class TableMembers
      *
      * Null covers three different states on purpose, because the caller treats them the same: the
      * index carries no predicate at all, it carries one whose shape {@see IndexPredicate} refuses to
-     * read, or something OTHER than its condition keeps it from being compared — see
+     * read, or something other than its condition keeps it from being compared — see
      * {@see IndexComprehension::comparableApartFromItsPredicate()}. All three mean "this index cannot
      * be grouped by condition".
      *
@@ -701,7 +701,7 @@ final readonly class TableMembers
      * `comparable_indexes` holds what may be compared against a b-tree's column list, and a GIN
      * index is correctly absent from it: it answers a different question, and the prefix arithmetic
      * that serves b-tree does not describe it. Measured on PostgreSQL 18.4 — a GIN index on
-     * `(tags, doc)` serves a query touching `doc` ALONE, with nothing said about `tags`, because
+     * `(tags, doc)` serves a query touching `doc` alone, with nothing said about `tags`, because
      * multicolumn GIN matches any SUBSET of its columns rather than a leading run.
      *
      * That measurement is the reason this returns a group rather than admitting the index to the
@@ -785,7 +785,7 @@ final readonly class TableMembers
      *
      * ## What a universe is, and why two different attributes build one the same way
      *
-     * An attribute that makes an index incomparable IN GENERAL still cancels between two indexes
+     * An attribute that makes an index incomparable in general still cancels between two indexes
      * that share it. A predicate does — two partial indexes under the same condition cover the same
      * rows, so the condition drops out and the columns decide. An access method does too: two GIN
      * indexes are not comparable against a b-tree, and they are perfectly comparable against each
@@ -845,10 +845,10 @@ final readonly class TableMembers
      * constraint holds for exactly the rows that do not need it.
      *
      * PostgreSQL 15 added `NULLS NOT DISTINCT`, which makes the key hold across those rows — so the
-     * SAME shape is a defect or a correct schema depending on one catalog flag. MySQL has no such
+     * same shape is a defect or a correct schema depending on one catalog flag. MySQL has no such
      * mode at all.
      *
-     * An index missing from this list therefore means the flag was NOT READ, and a rule must answer
+     * An index missing from this list therefore means the flag was not read, and a rule must answer
      * undetermined rather than either verdict. Encoding only the hazardous ones would collapse
      * "nobody looked" into "this one is fine" — the exact failure a two-valued flag cannot avoid,
      * and the reason this projection spells the answer out instead of implying it by absence.
@@ -917,7 +917,7 @@ final readonly class TableMembers
      *
      * ## Why this exists, measured rather than assumed
      *
-     * One column reaches a rule under THREE spellings, and they come from three different places in
+     * One column reaches a rule under three spellings, and they come from three different places in
      * the same reading. On PostgreSQL 18.4, for a column created as `"customerRef"`:
      *
      * | Where it comes from | What arrives |
@@ -945,7 +945,7 @@ final readonly class TableMembers
      * never got. Rewriting something unrecognized would be the guessing the rest of this class
      * exists to avoid.
      *
-     * A token whose key matches TWO read columns is also returned untouched, and that is the
+     * A token whose key matches two read columns is also returned untouched, and that is the
      * important half. PostgreSQL can hold `foo` and `"Foo"` on one table; picking either would hand
      * a rule a confident answer about the wrong column. A rule seeing a name it cannot join is
      * strictly better than one seeing the wrong join, because the first shows up as an unanswered
@@ -962,7 +962,7 @@ final readonly class TableMembers
      * The key two spellings of one column agree on: unquoted, case-folded.
      *
      * Both engines are covered by one key rather than by a per-driver rule, because the difference
-     * is not between the engines — it is between two places in the SAME reading. MySQL's
+     * is not between the engines — it is between two places in the same reading. MySQL's
      * `information_schema` reports column names unquoted everywhere, so the rewrite is a no-op
      * there; that is the shape of a normalization that is safe to apply unconditionally.
      */

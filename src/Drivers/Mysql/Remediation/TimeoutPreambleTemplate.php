@@ -24,7 +24,7 @@ use Pushery\SQLens\Rules\RuleEvidenceEntry;
  *   transaction so it cannot leak into whatever the connection does next. MySQL has no such form,
  *   so the preamble is `SET SESSION` and the value stays for the rest of the connection. That is a
  *   real consequence and the note says so rather than pretending the two are equivalent.
- * - **There is only ONE line to write.** The PostgreSQL preamble has two, because that engine bounds
+ * - **There is only one line to write.** The PostgreSQL preamble has two, because that engine bounds
  *   the wait and the run separately. MySQL has no DDL counterpart to a statement timeout, so a
  *   second line would have to invent one — and the setting that looks like it, `max_execution_time`,
  *   demonstrably does not reach a non-SELECT.

@@ -11,7 +11,7 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  *
  * Three answers, and the third is the whole reason this type exists. Two more say the question
  * could not be answered at all, and why, so that an open question is never dressed as an absence.
- * {@see DebtReconciliation} compares a ledger against what a RUN FOUND, which can only ever produce
+ * {@see DebtReconciliation} compares a ledger against what a run found, which can only ever produce
  * two: the debt was reported again, or it was not. That is enough for the repo side, where "not
  * reported" means "the migration no longer leaves it".
  *
@@ -32,7 +32,7 @@ enum DebtStanding: string
     /**
      * The object could not be found, so neither of the above can be said.
      *
-     * NOT a resolution. A table that was dropped, a schema outside this run's scope, a role without
+     * Not a resolution. A table that was dropped, a schema outside this run's scope, a role without
      * the privilege to see it — every one of them looks like this, and every one of them is a
      * different thing to go and check.
      */
@@ -42,7 +42,7 @@ enum DebtStanding: string
      * No catalog question settles this debt, so none was put.
      *
      * An engine this build has no debt reader for, a kind it has no question for, and an expand
-     * whose added column is still there, which says nothing about the column it replaces. NOT an
+     * whose added column is still there, which says nothing about the column it replaces. Not an
      * absence: reporting one would send somebody looking for a table that exists.
      */
     case Unaskable = 'unaskable';

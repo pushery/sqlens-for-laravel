@@ -101,19 +101,19 @@ final class AlgorithmLockNotExpressibleRule extends AbstractMysqlRule implements
      *
      * ## Where the matrix declines, the answer is a considered `none` rather than an absence
      *
-     * It used to be `null` for both of the ways that can happen, and `null` is the WRONG shape for
+     * It used to be `null` for both of the ways that can happen, and `null` is the wrong shape for
      * either. An absent payload says only that nobody wrote a template; here a rule has looked, has
-     * flagged the statement, and has a specific thing to report about WHY it will not name a clause.
+     * flagged the statement, and has a specific thing to report about why it will not name a clause.
      * Those are different facts and a reader acts differently on each.
      *
-     * There is exactly ONE way it can happen, and the reason the other one is absent is worth
+     * There is exactly one way it can happen, and the reason the other one is absent is worth
      * recording. "The matrix has no entry" cannot reach here: the rule's own trigger is a resolved
      * matrix entry — {@see disruptiveClassOf()} asks the same source for the same key at the same
      * version, and an unresolved lookup produces an undetermined mapping, no class, and therefore no
      * finding. A branch for it would be a case this rule cannot enter, which is worse than no
      * branch: it would claim to handle something and never be executed to prove it.
      *
-     * What DOES happen is an entry whose clause guarantees nothing. A handful of statements ACCEPT
+     * What does happen is an entry whose clause guarantees nothing. A handful of statements accept
      * `ALGORITHM=` and ignore it — `EXCHANGE PARTITION` takes even `ALGORITHM=COPY, LOCK=NONE`, a
      * self-contradictory pair every other statement rejects. The shipped matrix records those only
      * for partition operations, which no mapped statement kind reaches today; a revision that gave

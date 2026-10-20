@@ -22,7 +22,7 @@ namespace Pushery\SQLens\Security\Analyse;
 enum AnalyseMode: string
 {
     /**
-     * The shipped state. The half does not run, and the run SAYS the half did not run.
+     * The shipped state. The half does not run, and the run says the half did not run.
      *
      * Not "no findings" — no reading. The difference is the entire point of the three-valued model,
      * and it is why this is the default rather than an omission: a default that stayed quiet would

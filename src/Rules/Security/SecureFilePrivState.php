@@ -16,7 +16,7 @@ use Pushery\SQLens\Catalog\Canonical\IdentifierFolding;
  * | Raw value | Means | What a naive reading makes of it |
  * |---|---|---|
  * | `'NULL'` — the four-character STRING | file I/O disabled; the SAFEST state | "some value, so it is set, so probably fine" |
- * | `''` | unrestricted; the MOST DANGEROUS state | "empty, so nothing is set, so it does not matter" |
+ * | `''` | unrestricted; the most dangerous state | "empty, so nothing is set, so it does not matter" |
  * | a path | confined to that directory | correct |
  *
  * Measured on MySQL 8.4.10, through both read paths — `performance_schema.global_variables` and

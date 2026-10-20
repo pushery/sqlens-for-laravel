@@ -18,7 +18,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ## Why an unreadable message is not a failure
  *
- * Exactly ONE message shape was measured, because a plain database produces exactly one finding:
+ * Exactly one message shape was measured, because a plain database produces exactly one finding:
  *
  * ```text
  * Function \`public.f\` has a role mutable search_path

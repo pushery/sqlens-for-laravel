@@ -32,7 +32,7 @@ enum PinVerdict: string
     case Confirmed = 'confirmed';
 
     /**
-     * The server named a DIFFERENT host than the one pinned.
+     * The server named a different host than the one pinned.
      *
      * The run is reading a database nobody asked for — the exact failure pinning exists to prevent,
      * arrived at anyway. Refused rather than reported, because every finding that followed would be

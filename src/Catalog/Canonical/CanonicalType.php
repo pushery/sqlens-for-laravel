@@ -13,7 +13,7 @@ namespace Pushery\SQLens\Catalog\Canonical;
  * is what rules compare on, and `raw` is what they fall back to when the question is genuinely
  * engine-specific — which for the level-6 idiom rules it often is.
  *
- * ## Three mappings this deliberately does NOT make
+ * ## Three mappings this deliberately does not make
  *
  * All three are tempting, all three would be wrong, and all three were found by reading what the
  * servers actually return rather than by reasoning about type names:
@@ -36,7 +36,7 @@ namespace Pushery\SQLens\Catalog\Canonical;
 final readonly class CanonicalType
 {
     /**
-     * The cross-engine spellings that DO mean the same thing.
+     * The cross-engine spellings that do mean the same thing.
      *
      * Read off both catalogs rather than recalled: PostgreSQL's `information_schema` answers in
      * SQL-standard spellings (`integer`, `character varying`) while its own catalog answers in
@@ -75,8 +75,8 @@ final readonly class CanonicalType
         'float8' => 'double precision',
         'double' => 'double precision',
 
-        // Time. `timestamptz` and its long spelling are the SAME type; MySQL's `timestamp` is
-        // deliberately NOT mapped to either (see the class docblock).
+        // Time. `timestamptz` and its long spelling are the same type; MySQL's `timestamp` is
+        // deliberately not mapped to either (see the class docblock).
         'timestamptz' => 'timestamp with time zone',
         'timetz' => 'time with time zone',
 

@@ -11,7 +11,7 @@ use Pushery\SQLens\Severity\GateDecision;
 use Pushery\SQLens\Severity\Severity;
 
 /**
- * How a finding's weight reaches GitHub — and it is NOT through `level`.
+ * How a finding's weight reaches GitHub — and it is not through `level`.
  *
  * This is the part of a SARIF upload that is easy to get wrong in a way nobody notices. GitHub's
  * code-scanning UI sorts and filters alerts by **`security-severity`**, a numeric property in the
@@ -75,7 +75,7 @@ final readonly class SeverityMapper
      *    indicate a problem". Carried rather than dropped, so the record stays complete while the tab
      *    stays quiet.
      * 2. An undetermined is a `note`, for the reason in the class docblock, whatever its severity.
-     *    Placed ABOVE the severity rung deliberately: a critical check that could not run is still a
+     *    Placed above the severity rung deliberately: a critical check that could not run is still a
      *    check that did not run.
      * 3. A finding on the risk axis takes the table.
      * 4. Everything else takes the LEVEL gate — `error` when this run's level would block it,
@@ -99,7 +99,7 @@ final readonly class SeverityMapper
         // Reached by a security rule that declares no severity as well as by every level-gated
         // finding. That first case is one `RuleMetadataAuditTest` forbids outright, so it cannot
         // ship — but a mapper that silently guessed a weight for it would make the audit's job
-        // harder rather than easier. Falling to the level gate states what IS known.
+        // harder rather than easier. Falling to the level gate states what is known.
         return $decision->blockedBy === GateAxis::Level ? 'error' : 'warning';
     }
 
@@ -142,10 +142,11 @@ final readonly class SeverityMapper
     /**
      * The table, in one place, as a total match over the enum.
      *
-     * The numbers are GitHub's own bands rather than invented: it reads 9.0 and above as critical,
-     * 7.0–8.9 as high, 4.0–6.9 as medium and below 4.0 as low. Picking the bottom of each band means
-     * a severity lands where its name says it does — and a value one tenth lower would silently
-     * demote every finding of that class.
+     * The numbers sit in GitHub's own bands rather than invented ones: it reads 9.0 and above as
+     * critical, 7.0–8.9 as high, 4.0–6.9 as medium and below 4.0 as low. Critical and high take the
+     * bottom of their bands, because a value one tenth lower would silently demote every finding of
+     * that class. Medium, low and info sit inside theirs, at 5.0, 3.0 and 1.0, so each lands where its
+     * name says and a step stays between them.
      *
      * @return array{level: string, security_severity: string}
      */

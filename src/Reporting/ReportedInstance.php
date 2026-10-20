@@ -10,7 +10,7 @@ namespace Pushery\SQLens\Reporting;
  * ## Why the reporting layer has its own shape for this
  *
  * The audit suite already has a richer object for the same subject — it carries the configured
- * intent, the observed identity, the pooler reading and the logic that compares them. Putting THAT
+ * intent, the observed identity, the pooler reading and the logic that compares them. Putting that
  * into the run header would make the reporting layer, which the lint suite also uses, depend on
  * the audit suite. The header would then be unavailable to the suite that has no instance to
  * report, and a layer that exists to render would start knowing how instances are resolved.

@@ -17,7 +17,7 @@ use Pushery\SQLens\Deploy\DebtStanding;
  * driver knowledge the purity census keeps out of the core, and it would have to grow a branch per
  * debt kind per engine in the one class that is supposed to be about arithmetic.
  *
- * ## What an implementation must NOT do
+ * ## What an implementation must not do
  *
  * It must not re-derive a debt this package already reads elsewhere. For a debt, whether a
  * constraint is validated or an index is valid is answered by the check that owns the question,

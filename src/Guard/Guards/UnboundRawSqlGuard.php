@@ -30,7 +30,7 @@ use Throwable;
  * variable arrives with the value sitting in the SQL text. That difference is visible, and it is
  * the whole signal here.
  *
- * What it CANNOT see is whether the value came from user input. A hand-written `where status =
+ * What it cannot see is whether the value came from user input. A hand-written `where status =
  * 'active'` is a literal and perfectly safe; the same shape with a request parameter in it is an
  * injection. Nothing at this layer separates them, and this guard does not pretend to: it reports a
  * SHAPE, at a level a reader can filter, and says so in its message.
@@ -43,7 +43,7 @@ use Throwable;
  *
  * "No bindings" is not the signal: a great many correct statements have none. What matters is a
  * quoted literal in a comparison, which is what concatenating a string leaves behind. A bare number
- * is NOT matched, and that is a boundary rather than an oversight: the framework writes numbers into
+ * is not matched, and that is a boundary rather than an oversight: the framework writes numbers into
  * statements itself, the integer keys of every eager load and the count of a `has()`, so a guard
  * that matched them would report nearly every request. A number concatenated into a statement is
  * therefore not reported here; `sqlens:analyse` reads the code that built it.
@@ -64,7 +64,7 @@ use Throwable;
  * one vocabulary rather than two that are free to drift.
  *
  * Reusing the ANALYZER was measured and is structurally impossible: it takes a PHP-Parser `Expr` and
- * a PHPStan `Scope`, because it reasons about the CODE THAT BUILT the statement. At runtime that
+ * a PHPStan `Scope`, because it reasons about the code that built the statement. At runtime that
  * code is gone — a listener sees the finished string and an array of bindings, and nothing about
  * where either came from. That is not an implementation gap, it is the reason the two layers exist:
  * one can see whether a value came from a request, and this one cannot, which is exactly why it
@@ -100,7 +100,7 @@ final readonly class UnboundRawSqlGuard implements QueryInspector
             connection: $query->connectionName,
             sql: $query->sql,
             bindings: $query->bindings,
-            // The SAME enum the static analyzer answers with. `interpolated` is a syntactic
+            // The same enum the static analyzer answers with. `interpolated` is a syntactic
             // observation — "the text carries a value where a placeholder would go" — and never a
             // security verdict, which is a distinction that type was created to hold.
             context: ['parametrization' => ParametrizationSignal::Interpolated->value],
@@ -115,7 +115,7 @@ final readonly class UnboundRawSqlGuard implements QueryInspector
      * Whether a comparison in this statement is against a LITERAL rather than a placeholder.
      *
      * Deliberately narrow. It looks for a comparison operator or `LIKE` followed by a quoted string,
-     * which is the shape string concatenation produces. A bare number is NOT matched: `limit 10`,
+     * which is the shape string concatenation produces. A bare number is not matched: `limit 10`,
      * `offset 0` and `where deleted_at is null` are ordinary, and a guard that reported them would
      * fire on nearly every query an application runs.
      *

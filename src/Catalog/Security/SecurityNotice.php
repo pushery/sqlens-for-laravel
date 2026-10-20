@@ -90,8 +90,9 @@ enum SecurityNotice: string implements RunNotice
         'pg_auth_members' => 'PG.AUTH_MEMBERS',
         'pg_class.relacl' => 'PG.ACL',
         'pg_policy' => 'PG.POLICY',
-        // Superuser-or-pg_read_all_settings only, and it REFUSES rather than omitting — so on a
-        // managed instance this id is the normal answer, not the exception.
+        // Superuser only, or a role granted EXECUTE on pg_hba_file_rules() explicitly —
+        // pg_read_all_settings is not enough, measured in AbstractHbaRule. And it refuses rather
+        // than omitting, so on a managed instance this id is the normal answer, not the exception.
         'pg_hba_file_rules' => 'PG.HBA',
         // World-readable on PostgreSQL, so a refusal here is genuinely unusual — which is exactly why
         // it needs an id of its own rather than the fallback: on the one engine where this catalog can

@@ -27,8 +27,8 @@ use Throwable;
  * the reproducibility parameters every reporter will later carry — the tool
  * versions and, per configured connection, the driver and the REAL server version.
  *
- * Three-valued and read-only: no write, no lock, and no query beyond a handshake (primum non
- * nocere). A version that cannot be had is reported as `undetermined` WITH a named reason — never
+ * Three-valued and read-only: no write, no lock, and no statement beyond the session ones
+ * Laravel's connectors send when `--probe` opens a connection (primum non nocere). A version that cannot be had is reported as `undetermined` WITH a named reason — never
  * a silent "ok".
  *
  * By DEFAULT it opens nothing, and the reason it says so out loud is a measured one. Reading the
@@ -128,11 +128,12 @@ final class DoctorCommand extends Command
         // The rule is the package's own, stated in AuditCommand: an unknown format is a
         // misconfiguration with a clear message, never a quiet fall back to console.
         if (! is_string($format) || ! in_array($format, self::FORMATS, true)) {
-            $this->output->getErrorStyle()->writeln(sprintf(
-                'Unknown report format "%s". Available formats: %s.',
-                is_scalar($format) ? (string) $format : get_debug_type($format),
-                implode(', ', self::FORMATS),
-            ));
+            $this->output->getErrorStyle()->writeln(
+                $this->laravel->make(Translator::class)->get('sqlens::messages.commands.unknown_format', [
+                    'format' => is_scalar($format) ? (string) $format : get_debug_type($format),
+                    'available' => implode(', ', self::FORMATS),
+                ], ShippedLocale::CODE),
+            );
 
             return ExitCode::Misconfiguration->value;
         }
@@ -228,7 +229,7 @@ final class DoctorCommand extends Command
     }
 
     /**
-     * Under `--strict`, name the tools a strict-tools run would fail on — or say plainly that none would.
+     * Under `--strict-tools`, name the tools a strict-tools run would fail on — or say plainly that none would.
      *
      * Both halves are printed, and the second is not politeness: a command that says nothing when
      * everything is fine is one whose silence a reader has to interpret, and the interpretation
@@ -381,7 +382,7 @@ final class DoctorCommand extends Command
         /** @var array<string, mixed> $guard */
         $guard = is_array($declared = $config->get('sqlens.guard')) ? $declared : [];
 
-        // ONE gate, and it is the resolver's. An `if (! is_string($named) || $named === '')` stood
+        // One gate, and it is the resolver's. An `if (! is_string($named) || $named === '')` stood
         // here first and did two things wrong at once: it made the resolver's own null unreachable
         // from this method — a branch no test can enter — and it answered `off` / `pass` for
         // `profile: ''`, which the resolver treats as a misconfiguration. An empty profile name is
@@ -390,11 +391,11 @@ final class DoctorCommand extends Command
         try {
             $profile = GuardProfile::resolve($guard);
         } catch (InvalidGuardProfile $refusal) {
-            // Reported rather than thrown, and only HERE. Everywhere else this exception ends the
+            // Reported rather than thrown, and only here. Everywhere else this exception ends the
             // boot, which is right — but the one command whose job is diagnosing a broken setup must
             // survive long enough to describe it.
             return [
-                // The name as WRITTEN when it is one at all, and the type otherwise: `profile: true`
+                // The name as written when it is one at all, and the type otherwise: `profile: true`
                 // has no name to echo, and printing an empty string there tells the reader nothing
                 // about what they typed.
                 'profile' => is_string($named) && $named !== '' ? $named : get_debug_type($named),
@@ -440,18 +441,18 @@ final class DoctorCommand extends Command
     }
 
     /**
-     * The banner comes from the ONE acquisition unit, never from a second read of
+     * The banner comes from the one acquisition unit, never from a second read of
      * the same server. It used to call getPdo() here, which resolves the lazy
      * connection closure — that is a CONNECT, and opening a production database
      * just to print its version is exactly the harm this package promises not to
      * do. ServerVersion reads the handle that is already open, or says it cannot.
      *
      * ── and the default alone was not enough, measured ───────────────────────────────────────
-     * In a fresh CLI child with correct credentials and a reachable PostgreSQL 18, EVERY
+     * In a fresh CLI child with correct credentials and a reachable PostgreSQL 18, every
      * connection reported undetermined — `sqlite` included, which needs no server at all. Nothing
      * had connected, so there was no handle, so there was no version: a healthy environment
      * printing the same line as a broken one, from the command whose only job is telling them
-     * apart. The default keeps its restraint and now says WHY, naming the switch that answers it;
+     * apart. The default keeps its restraint and now says why, naming the switch that answers it;
      * `--probe` opens the connection, because a human asking a diagnostic to go and look is a
      * different act from a lint run touching a database nobody pointed it at.
      *
@@ -535,7 +536,7 @@ final class DoctorCommand extends Command
         // `--probe=all` is a deliberate choice with a known hazard, spelled out at the call site:
         // an entry inheriting a port from another engine can block on a handshake that never comes.
         // It stays available because a full sweep is genuinely useful on a machine where every
-        // connection IS configured — it just must never be what someone gets by accident.
+        // connection is configured — it just must never be what someone gets by accident.
         return array_map(strval(...), array_keys($connections));
     }
 

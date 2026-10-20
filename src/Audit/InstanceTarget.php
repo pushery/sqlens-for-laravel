@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Audit;
 
 use Pushery\SQLens\Catalog\InstanceIdentity;
 use Pushery\SQLens\Catalog\PoolerReading;
+use Pushery\SQLens\Reporting\ReportedInstance;
 
 /**
  * Which instance an audit is about — the configured intent and, once read, the observed reality.
@@ -33,7 +34,7 @@ final readonly class InstanceTarget
         /**
          * The read host this run is pinned to, when the configuration offered a choice.
          *
-         * Null when there was nothing to choose — a single host, a socket, a DSN. It is NOT a
+         * Null when there was nothing to choose — a single host, a socket, a DSN. It is not a
          * default: a null here means the question never arose, not that one was picked.
          */
         public ?string $pinnedHost = null,
@@ -50,6 +51,19 @@ final readonly class InstanceTarget
         ?string $pinnedHost = null,
     ): self {
         return new self($connection, $driver, $configuredHost, $configuredPort, $configuredDatabase, null, $pinnedHost);
+    }
+
+    /**
+     * A target known only by what the server said about itself.
+     *
+     * The deploy commands read the primary through a session of their own and resolve no configured
+     * intent beside it: nothing is pinned, and there is no configuration to compare the answer with.
+     */
+    public static function observed(string $connection, string $driver, ?InstanceIdentity $identity): self
+    {
+        $target = self::of($connection, $driver);
+
+        return $identity instanceof InstanceIdentity ? $target->withIdentity($identity) : $target;
     }
 
     /** The same target, now carrying what the server said about itself. */
@@ -86,7 +100,7 @@ final readonly class InstanceTarget
      * Where the configuration and the server disagree — field name => [configured, observed].
      *
      * Empty before anything connected, and empty when they agree. A field the server could not
-     * answer is NOT a divergence: "the reading could not say" and "the reading said something else"
+     * answer is not a divergence: "the reading could not say" and "the reading said something else"
      * are different, and reporting the first as the second would raise an alarm about a local
      * socket.
      *
@@ -120,7 +134,7 @@ final readonly class InstanceTarget
     /**
      * Whether the server this run reached is the one it pinned.
      *
-     * Asked AFTER connecting, of the server itself — the pin is written onto a config the driver
+     * Asked after connecting, of the server itself — the pin is written onto a config the driver
      * then uses, and "the config says db2" is not the same claim as "db2 answered". A pin that
      * silently did not take effect would produce a report about the wrong database that reads
      * exactly like a right one.
@@ -169,11 +183,42 @@ final readonly class InstanceTarget
      * Whether this instance accepts writes, which decides what its answers are worth.
      *
      * Derived rather than stored, for the same reason {@see pinVerdict()} is: the role is a reading
-     * OF the identity, and a second field holding it could be set while the identity said otherwise.
+     * of the identity, and a second field holding it could be set while the identity said otherwise.
      */
     public function role(): InstanceRole
     {
         return InstanceRole::of($this->identity);
+    }
+
+    /**
+     * The resolution flattened into the shape a report prints.
+     *
+     * Projected rather than handed over whole: this class carries the comparison between configured
+     * intent and observed reality, and the reporting layer, which the lint suite also uses, has no
+     * business depending on the audit suite to render a header.
+     */
+    public function reported(): ReportedInstance
+    {
+        $identity = $this->identity;
+
+        return new ReportedInstance(
+            connection: $this->connection,
+            driver: $this->driver,
+            // The observed host wins over the configured one, and falls back to the pin rather
+            // than to the config: the pin is what this run asked for, while the config may name a
+            // list the framework chose from at random.
+            // `->` rather than `?->` on the left of `??`, which looks unsafe and is not: `??`
+            // uses isset semantics, so a property read on null yields the right-hand side instead
+            // of erroring. PHPStan enforces the shorter form; the note is here so the next reader
+            // does not "fix" it back.
+            host: $identity->host ?? $this->pinnedHost,
+            port: $identity->port ?? $this->configuredPort,
+            database: $identity->database ?? $this->configuredDatabase,
+            role: $this->role()->value,
+            roleReason: InstanceRole::undeterminedBecause($identity)?->value,
+            pinVerdict: $this->pinVerdict()->value,
+            poolerVerdict: $this->pooler?->verdict->value,
+        );
     }
 
     /** A stable one-line rendering for the report header. */

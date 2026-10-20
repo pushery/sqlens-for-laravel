@@ -97,7 +97,7 @@ final readonly class AuditVersionGate
     }
 
     /**
-     * The rules that did NOT run, each with its reason — what keeps a shrinking rule set visible.
+     * The rules that did not run, each with its reason — what keeps a shrinking rule set visible.
      *
      * @param  list<Rule>  $rules
      * @return array<string, string> rule id => the sentence explaining it

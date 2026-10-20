@@ -29,7 +29,7 @@ use Attribute;
  *
  * ## `interpolation:` is a SECOND question, and it is separate on purpose
  *
- * `reason:` answers *"why raw SQL"*. It does NOT answer *"why is this runtime value in the
+ * `reason:` answers *"why raw SQL"*. It does not answer *"why is this runtime value in the
  * statement's text instead of in its parameters"*, and letting it do so would be the expensive
  * mistake available here: a method reasoned *"we need a window function"* would then silently
  * accept an interpolated request value, and the injection rule would be off wherever this
@@ -51,15 +51,16 @@ use Attribute;
  * **Why a justification and not a suppression here.** The alternative a project has today is a
  * PHPStan `ignoreErrors` entry, and it is worse in both directions that matter: it carries no
  * reason, so nobody later knows whether the line was considered; and it is scoped by PATH, so the
- * next interpolation in that file — one that DOES have a binding available — is silenced with it.
+ * next interpolation in that file — one that does have a binding available — is silenced with it.
  * An annotation is at the call site, carries the sentence, and covers what it sits on.
  *
  * ## The reason is mandatory, at the language level
  *
- * Not checked by a rule, not validated at runtime — a constructor argument. An annotation without a
- * reason is a PHP error before any analysis starts, which is the only enforcement that cannot be
- * forgotten. An empty string still fails the rule, because a reason nobody wrote is the state this
- * whole mechanism exists to surface.
+ * A constructor argument, so PHP refuses to instantiate an annotation without one. The analyse
+ * suite never instantiates it, though: it reads the attribute from the source, and a missing reason
+ * fails its rule like an empty one or one that is only whitespace, because a reason nobody wrote is
+ * the state this whole mechanism exists to surface. {@see AttributeReason} is that rule, shared by
+ * every attribute this package reads.
  *
  * ## Targets a METHOD as well as a class
  *
@@ -98,7 +99,7 @@ final readonly class RawSql
      */
     public function justifiesInterpolation(): bool
     {
-        return $this->interpolation !== null && trim($this->interpolation) !== '';
+        return $this->interpolation !== null && AttributeReason::states($this->interpolation);
     }
 
     /**
@@ -111,6 +112,6 @@ final readonly class RawSql
      */
     public function isReasoned(): bool
     {
-        return trim($this->reason) !== '';
+        return AttributeReason::states($this->reason);
     }
 }

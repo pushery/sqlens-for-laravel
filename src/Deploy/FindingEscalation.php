@@ -80,7 +80,7 @@ final readonly class FindingEscalation
             return new EscalationOutcome($findings);
         }
 
-        // The budget the run has LEFT, not a fresh one. A preflight holds one deadline across every
+        // The budget the run has left, not a fresh one. A preflight holds one deadline across every
         // check, and a read that started its own would let the escalation overrun a bound the rest
         // of the run is honoring, in front of a deploy.
         $budget = $context->remainingBudgetMs();
@@ -116,7 +116,7 @@ final readonly class FindingEscalation
                 return $this->escalator->escalate(
                     $finding,
                     $operation,
-                    // ONE LINE, and the shape is load-bearing: a standalone `: null,` compiles to no
+                    // One line, and the shape is load-bearing: a standalone `: null,` compiles to no
                     // opcode of its own, pcov never records it, PHPUnit counts it as executable, and a
                     // 100% floor is then permanently red on a line no test can reach.
                     $table instanceof TableStatistics ? StatisticsContext::of($table->rows, $table->totalBytes) : null,
@@ -194,7 +194,7 @@ final readonly class FindingEscalation
     }
 
     /**
-     * The objects worth asking about, as ONE list.
+     * The objects worth asking about, as one list.
      *
      * One request rather than one per finding, because each is a catalog round trip against a
      * database somebody is about to deploy to, on a budget shared with every check after it. Three

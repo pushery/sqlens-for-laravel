@@ -15,7 +15,7 @@ use Pushery\SQLens\Exceptions\InvalidPreScanCatalog;
  * inside a name, no regular expressions:
  *
  * - `Vendor\Package\Thing::method` — that method on that class.
- * - `*::method` — that method on ANY receiver, for the case where the receiver's
+ * - `*::method` — that method on any receiver, for the case where the receiver's
  *   type is not statically knowable (a query builder handed around in a variable).
  * - `method()` — a free function.
  * - `Vendor\Package\Thing` — any call on that class.
@@ -24,7 +24,7 @@ use Pushery\SQLens\Exceptions\InvalidPreScanCatalog;
  *   that hand the container a literal key: `app('key')`, `resolve('key')`,
  *   `app()->make('key')`, `Container::getInstance()->make('key')`, `App::make('key')`.
  *
- * Static and instance calls are matched by the SAME shape on purpose. A facade
+ * Static and instance calls are matched by the same shape on purpose. A facade
  * reached as `Notification::send(...)` and one resolved out of the container as
  * `$notification->send(...)` fire the same side effect, and a catalog that
  * distinguished them would be bypassed by the spelling rather than by the fact.
@@ -58,7 +58,7 @@ final readonly class CatalogTarget
     ) {}
 
     /**
-     * Parse a written target. A form this grammar does not describe is a NAMED
+     * Parse a written target. A form this grammar does not describe is a named
      * error, never a silently non-matching entry: an entry that matches nothing
      * looks exactly like a surface that is not dangerous, which is the one
      * mistake a catalog must not be able to make quietly.
@@ -75,7 +75,7 @@ final readonly class CatalogTarget
     /**
      * The same parse, answering with null instead of throwing.
      *
-     * The config validator needs to judge a user-written target WITHOUT an
+     * The config validator needs to judge a user-written target without an
      * exception: a bad key in an application's config is a collected violation
      * that names the key, never a stack trace — while a bad entry in the
      * package's own artifact is a packaging bug and does throw. One grammar, two
@@ -132,7 +132,7 @@ final readonly class CatalogTarget
     /**
      * Whether the resolved call hits this target.
      *
-     * A call the scanner could NOT resolve never matches here. That is not an
+     * A call the scanner could not resolve never matches here. That is not an
      * acquittal: an unresolved call is its own pre-scan hit with its own reason,
      * and letting it match a catalog entry would report the wrong cause — the
      * user would go looking for a `Notification::send` that is not in the file.

@@ -18,7 +18,7 @@ use Pushery\SQLens\Rules\RuleDocumentationUrl;
  * ## Why this is not the interpolation rule with a different subject
  *
  * A value can be bound; an identifier cannot. `whereRaw('status = ?', [$status])` keeps the value
- * out of the statement — there is no equivalent for `orderBy($column)`, because the column name IS
+ * out of the statement — there is no equivalent for `orderBy($column)`, because the column name is
  * part of the statement's grammar. So the advice differs, and that is the whole reason for a second
  * rule: the raw-SQL rules say *bind it*, and here the only safe answer is *choose from a list you
  * wrote*.
@@ -33,7 +33,7 @@ use Pushery\SQLens\Rules\RuleDocumentationUrl;
  * its first week — taking the real findings with it. Request-origin alone says nothing either: a
  * request value that has passed an allowlist is a constant string, and the classifier says so.
  *
- * When the value is unknown and the request is NOT visible, the finding is `undetermined` with
+ * When the value is unknown and the request is not visible, the finding is `undetermined` with
  * {@see UndeterminedReason::IdentifierOriginUnresolved} — reported as a check that could not answer,
  * never as a pass. The allowlist may well be one method away, and this rule sees one expression in
  * one scope; saying so is the only honest reading.

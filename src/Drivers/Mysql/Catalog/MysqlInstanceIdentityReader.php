@@ -16,7 +16,7 @@ use Throwable;
  * Who this MySQL server is, asked of the server.
  *
  * The PostgreSQL sister's shape, with MySQL's own vocabulary and one difference worth stating:
- * `@@hostname` is the server's OWN name, not the host the client dialed. Measured — a server
+ * `@@hostname` is the server's own name, not the host the client dialed. Measured — a server
  * reached at `127.0.0.1` reports its machine name. That is the right answer to "which machine am I
  * on" and the wrong answer to "did I reach the host I configured", so a consumer comparing it
  * against a configured host has to know which question it asked. Recorded rather than reconciled
@@ -30,7 +30,7 @@ use Throwable;
  * because `read_only` alone does not hold a `SUPER` user back, and an audit connecting with an
  * elevated account would otherwise read a replica as writable.
  *
- * Deliberately NOT the replication views: how far behind a replica is, and who its primary is, are
+ * Deliberately not the replication views: how far behind a replica is, and who its primary is, are
  * a different question for a different suite.
  */
 final readonly class MysqlInstanceIdentityReader implements InstanceIdentityReader
@@ -41,7 +41,7 @@ final readonly class MysqlInstanceIdentityReader implements InstanceIdentityRead
     public function read(string $connection): InstanceIdentity
     {
         try {
-            // Every field is read INSIDE the try, and there is deliberately no separate "no row
+            // Every field is read inside the try, and there is deliberately no separate "no row
             // came back" branch: this statement selects constants, so a server that answered at all
             // answered with a row. A branch for the impossible case would be a guard that guards
             // nothing — and if a driver ever did return nothing, the property access raises and the
@@ -85,6 +85,9 @@ final readonly class MysqlInstanceIdentityReader implements InstanceIdentityRead
         );
     }
 
+    /**
+     * @param  mixed  $row  the row `selectOne()` answered: an object, or null when the server returned none
+     */
     private function text(mixed $row, string $key): ?string
     {
         $value = is_object($row) ? ($row->{$key} ?? null) : null;
@@ -92,6 +95,9 @@ final readonly class MysqlInstanceIdentityReader implements InstanceIdentityRead
         return is_scalar($value) && (string) $value !== '' ? (string) $value : null;
     }
 
+    /**
+     * @param  mixed  $row  the row `selectOne()` answered: an object, or null when the server returned none
+     */
     private function int(mixed $row, string $key): ?int
     {
         $value = is_object($row) ? ($row->{$key} ?? null) : null;
@@ -99,6 +105,9 @@ final readonly class MysqlInstanceIdentityReader implements InstanceIdentityRead
         return is_numeric($value) ? (int) $value : null;
     }
 
+    /**
+     * @param  mixed  $row  the row `selectOne()` answered: an object, or null when the server returned none
+     */
     private function truthy(mixed $row, string $key): bool
     {
         $value = is_object($row) ? ($row->{$key} ?? null) : null;

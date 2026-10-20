@@ -16,7 +16,7 @@ use Throwable;
  * ## Why it is a heuristic and says so
  *
  * A pooler is transparent by design. There is no `am_i_behind_pgbouncer()` to call, so this reads
- * tells and reports what it saw rather than an authority's answer. Both measurements run OUTSIDE a
+ * tells and reports what it saw rather than an authority's answer. Both measurements run outside a
  * transaction, which is the whole trick: transaction pooling guarantees one backend per
  * transaction, so anything measured inside one is measured in the one place the effect is
  * suppressed.
@@ -28,8 +28,10 @@ use Throwable;
  *
  * **Session persistence.** A custom GUC is set and read back in a following statement. On a direct
  * connection it survives; behind a transaction pooler the read may land on a backend that never saw
- * the `SET`. `sqlens.probe` is namespaced, which PostgreSQL permits for exactly this kind of use,
- * and is a session variable — nothing in any database is touched.
+ * the `SET`. `sqlens.pooler_probe` is namespaced, which PostgreSQL permits for exactly this kind of
+ * use, and is a session variable — nothing in any database is touched. Its value is this run's own:
+ * a session `SET` outlives its client on a pooled backend, so a constant left behind by an earlier
+ * run would read back as "survived" on a backend that never saw this run's `SET`.
  *
  * Neither measurement is a false-positive risk: a stable pid and a surviving setting are what a
  * direct connection produces, and neither can be produced by multiplexing *on the statement that
@@ -48,9 +50,6 @@ final readonly class PgsqlPoolerReader implements PoolerReader
 {
     /** The custom GUC the persistence probe sets. Namespaced, so it can never collide with a real one. */
     private const string PROBE_SETTING = 'sqlens.pooler_probe';
-
-    /** The value it is set to — a constant, because a random one would make two runs differ. */
-    private const string PROBE_VALUE = 'sqlens';
 
     /** Ports a transaction pooler conventionally listens on. */
     private const array POOLER_PORTS = [6432];
@@ -98,10 +97,17 @@ final readonly class PgsqlPoolerReader implements PoolerReader
                 ]);
             }
 
-            $this->connection->statement(sprintf("set %s = '%s'", self::PROBE_SETTING, self::PROBE_VALUE));
+            // A value of this run alone. It appears in no output, so the report stays the same
+            // from run to run, and only this run's own SET can answer it.
+            $marker = bin2hex(random_bytes(8));
+
+            // set_config() with is_local false sets the session value SET would, and takes both as
+            // bindings. It is sent as a statement because it is a write, and qualified with
+            // pg_catalog so that no function of the same name on the search path can answer it.
+            $this->connection->statement('select pg_catalog.set_config(?, ?, false)', [self::PROBE_SETTING, $marker]);
             $survived = $this->probeSetting();
 
-            if ($survived !== self::PROBE_VALUE) {
+            if ($survived !== $marker) {
                 return PoolerReading::pooled([
                     'a session setting did not survive into the next statement',
                     ...$convention,
@@ -128,6 +134,14 @@ final readonly class PgsqlPoolerReader implements PoolerReader
         $signals = [];
         $port = $this->connection->getConfig('port');
         $host = $this->connection->getConfig('host');
+
+        // Laravel lets a PostgreSQL connection be declared pooled: a `pooled` key in its connection
+        // config, which the shipped `config/database.php` reads from `DB_POOLED`.
+        // The strongest of these signals, because somebody stated it rather than chose a port, and
+        // still not a measurement.
+        if ($this->connection->getConfig('pooled') === true) {
+            $signals[] = 'the connection is declared pooled';
+        }
 
         if (is_numeric($port) && in_array((int) $port, self::POOLER_PORTS, true)) {
             $signals[] = sprintf('the port %s is a pooler convention', (int) $port);

@@ -36,7 +36,7 @@ final readonly class CheckSequence
      * the PostgreSQL grant check AND its MySQL twin — deliberately, because it is one question. A
      * map keyed by id collapsed them to whichever was registered last, so on PostgreSQL the
      * surviving entry answered `appliesTo('pgsql') === false` and the grant check simply never ran.
-     * It was then listed as NOT APPLICABLE, which reads like a decision rather than a loss.
+     * It was then listed as not applicable, which reads like a decision rather than a loss.
      *
      * The whole suite stayed green. Two checks may share an id — the driver is what tells them
      * apart — so position is the only handle that cannot silently drop one.
@@ -56,7 +56,7 @@ final readonly class CheckSequence
         $notApplicable = [];
 
         // Per check, not one total. A budget that breaks tells you the run is too slow; the
-        // per-check split tells you WHICH check made it so — and without that, the first response
+        // per-check split tells you which check made it so — and without that, the first response
         // to a broken budget is to raise the number, because nobody can see what to fix.
         $timings = [];
 
@@ -78,7 +78,7 @@ final readonly class CheckSequence
                 continue;
             }
 
-            // Asked before each one rather than once at the top: the budget is spent BY the checks,
+            // Asked before each one rather than once at the top: the budget is spent by the checks,
             // so the only reading that means anything is the one taken now.
             if ($exhausted()) {
                 $results[] = CheckResult::undetermined(

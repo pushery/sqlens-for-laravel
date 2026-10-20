@@ -43,7 +43,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * protects them. It does not. That is the same reason {@see TruncateRule}
  * exists separately, and the reasoning is deliberately identical rather than freshly invented.
  *
- * ## What it does NOT re-decide
+ * ## What it does not re-decide
  *
  * The same-migration exception and the opt-in behavior follow the PostgreSQL rule exactly, because
  * those parts genuinely are engine-neutral: a table this migration just created never held data a

@@ -68,7 +68,7 @@ final readonly class PgsqlActivityReader implements ActivityReader
      * application does, and it blocks `VACUUM`, `ANALYZE` and another `CREATE INDEX CONCURRENTLY` —
      * so a migration built to be online queues behind it indefinitely while every dashboard is green.
      *
-     * A mode absent from this map is NOT dropped. See {@see self::lockWaits()}.
+     * A mode absent from this map is not dropped. See {@see self::lockWaits()}.
      */
     private const array LOCK_MODES = [
         'AccessShareLock' => LockMode::Shared,
@@ -121,7 +121,7 @@ final readonly class PgsqlActivityReader implements ActivityReader
             ? []
             : DatabaseErrorTranslator::attemptBounded(
                 fn (): array => array_values($session->read(
-                    // Bound TWICE — once per comparison in the query above. The two IN lists carry
+                    // Bound twice — once per comparison in the query above. The two IN lists carry
                     // the same values on purpose; see `heldRelationQuery()` for why offering every
                     // object to both is safer than deciding which form it is.
                     fn (Connection $db): array => $db->select(
@@ -145,10 +145,10 @@ final readonly class PgsqlActivityReader implements ActivityReader
     }
 
     /**
-     * Sessions and the visibility of the view, in ONE statement.
+     * Sessions and the visibility of the view, in one statement.
      *
      * The window counts are the point. Asked separately they would describe a different instant, and
-     * the whole question here is whether the rows in THIS answer are masked — a second query could
+     * the whole question here is whether the rows in this answer are masked — a second query could
      * be answered by a moment in which they were not.
      *
      * `now()` rather than `clock_timestamp()`, deliberately: inside the reading's transaction it is
@@ -257,7 +257,7 @@ final readonly class PgsqlActivityReader implements ActivityReader
     }
 
     /**
-     * Which of the focus relations each session currently HOLDS a lock on.
+     * Which of the focus relations each session currently holds a lock on.
      *
      * Deliberately the opposite filter from {@see self::lockQuery()}: that one reports `not granted`
      * because a server has thousands of granted locks at any moment and listing them would bury the
@@ -338,7 +338,7 @@ final readonly class PgsqlActivityReader implements ActivityReader
      * one row per session, target table and lock mode. A session holding two modes on one table
      * answers twice, and {@see self::stronger()} keeps the one that decides what it is in the way of.
      *
-     * ## Why it matches TWO ways, and why that is not belt-and-braces
+     * ## Why it matches two ways, and why that is not belt-and-braces
      *
      * A canonical target keeps the qualification the SOURCE wrote, and `Schema::table('users', …)`
      * writes none — so the target is the bare `users`. Comparing that against the composed catalog
@@ -448,7 +448,7 @@ final readonly class PgsqlActivityReader implements ActivityReader
 
             // The mapping that must not drop a row. A mode absent from the table arrives as null
             // beside the server's own spelling, and `ActivitySnapshot` turns that into a named skip
-            // on its own — so an unfamiliar lock is MORE visible than a familiar one, not less.
+            // on its own — so an unfamiliar lock is more visible than a familiar one, not less.
             $waitingForMs = $this->number($row, 'waiting_for_ms');
 
             $waits[] = new LockWait(
@@ -490,7 +490,7 @@ final readonly class PgsqlActivityReader implements ActivityReader
                     // no matter how much WAL is outstanding. The byte figure says how much is left
                     // to ship, and it is what a heavy migration is about to add to.
                     //
-                    // From `pg_current_wal_lsn()`, NOT from `sent_lsn`. The first version measured
+                    // From `pg_current_wal_lsn()`, not from `sent_lsn`. The first version measured
                     // `sent_lsn - replay_lsn`, which is the APPLY lag only — the gap between what
                     // the primary has already sent and what the replica has applied. Everything the
                     // primary has not sent yet is missing from it, and on the case that matters most

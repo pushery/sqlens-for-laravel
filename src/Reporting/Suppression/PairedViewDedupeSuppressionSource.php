@@ -9,7 +9,7 @@ use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Resources\ShippedJson;
 
 /**
- * Two of our own rules read the same server setting from different angles; this shows ONE of them
+ * Two of our own rules read the same server setting from different angles; this shows one of them
  * and records the other as suppressed against it.
  *
  * ## The pair, and why it exists at all
@@ -20,7 +20,7 @@ use Pushery\SQLens\Resources\ShippedJson;
  * a run on a production MySQL server produces both for one server value. Reporting both unchanged
  * counts one problem twice, and a report that double-counts is read as inaccurate.
  *
- * ## Why this is NOT the same shape as {@see RlsDedupeSuppressionSource}
+ * ## Why this is not the same shape as {@see RlsDedupeSuppressionSource}
  *
  * That one is a static table: a foreign checker's finding is superseded by ours whether ours fired
  * or not, because ours is the authoritative reading of that fact. Correct there, and wrong here.
@@ -35,7 +35,7 @@ use Pushery\SQLens\Resources\ShippedJson;
  *
  * The partner must be VISIBLE, not merely present among the candidates. A project that ignores the
  * hardening rule through config, accepts it in a baseline or annotates it away has a run where the
- * hardening view is produced and then hidden — and if the privacy view deferred to it anyway, BOTH
+ * hardening view is produced and then hidden — and if the privacy view deferred to it anyway, both
  * would be gone and the server value nobody looked at would be reported by nothing.
  *
  * That cannot be decided while resolving one candidate, because whether the partner survives is only
@@ -89,7 +89,7 @@ final readonly class PairedViewDedupeSuppressionSource
     /**
      * The suppression covering this finding, or null.
      *
-     * @param  list<string>  $reportedIds  the rule ids that produced a finding in THIS run. A pair
+     * @param  list<string>  $reportedIds  the rule ids that produced a finding in this run. A pair
      *                                     whose hardening half is silent leaves the privacy half
      *                                     standing — that is the whole difference from a static table.
      */

@@ -18,7 +18,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * ## What it decides, and what it deliberately does not
  *
  * It decides which findings describe lasting state, and what the canonical identity of the object
- * is. It does NOT decide whether to write them: it hands back candidates, and the command that
+ * is. It does not decide whether to write them: it hands back candidates, and the command that
  * asked owns the file. Recording is a write, writes belong to a command a person invoked, and a
  * registrar that wrote on its own would put a run's opinion into version control without anyone
  * asking for it.
@@ -27,7 +27,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * `"Public"."Orders"` and `public.orders` are one object, and the ledger has to agree — otherwise
  * the account grows a duplicate every time the quoting in a migration changes. Canonicalizing in
- * ONE place means there is no rule that can forget to; canonicalizing per rule would mean the
+ * one place means there is no rule that can forget to; canonicalizing per rule would mean the
  * guarantee holds until the first one that does.
  *
  * ## Why it knows the clock only as an argument
@@ -44,7 +44,7 @@ final readonly class DebtRegistrar
      * @param  list<Finding>  $findings
      * @param  list<Rule|ProducesDebt>  $rules  what ran, so a finding can be traced back to the
      *                                          thing that claims it — a finding carries an id, not
-     *                                          an object. Rules and deploy CHECKS both appear here:
+     *                                          an object. Rules and deploy checks both appear here:
      *                                          the catalog side is where a legacy debt is visible
      *                                          at all, and it is not made of rules
      * @param  string  $firstSeen  the UTC calendar date this run records, `YYYY-MM-DD`
@@ -57,7 +57,7 @@ final readonly class DebtRegistrar
         string $firstSeen,
     ): array {
         // A driver whose canonicalization the registry could not produce proposes nothing. The
-        // union is taken HERE rather than narrowed by the caller, and that placement was measured:
+        // union is taken here rather than narrowed by the caller, and that placement was measured:
         // no run can reach this method with a failure in hand, because the same registry decides
         // whether the driver is known at all — a driver without a canonicalization is refused at
         // resolution, with a message about the ENGINE and long before any finding exists. A guard

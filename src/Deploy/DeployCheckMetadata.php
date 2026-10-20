@@ -28,18 +28,18 @@ use Pushery\SQLens\Severity\Severity;
  * were exactly that — written as literals, in no registry, each shipping a dead link."* This is the
  * same defect in a family that did not exist when that sentence was written.
  *
- * ## The values are MOVED, not chosen
+ * ## The values are moved, not chosen
  *
  * Each check already names its category, level and severity where it constructs the finding. This
  * record is where those values now live, and the check reads them from here — writing them a second
  * time would be the drift this package guards against everywhere else.
  *
- * ## A severity that is decided per finding is null, and SAYS so
+ * ## A severity that is decided per finding is null, and says so
  *
- * Three checks pick their severity from what they read: a replication slot is Low, Medium or High by
- * how far it has fallen behind; a server setting by which setting it is; a lock blocker by what the
- * blocking session is doing. A catalog naming ONE severity for those would be asserting something
- * the finding itself contradicts.
+ * Some checks pick their severity from what they read, and `EveryDeployCheckIsInTheCatalogTest` names
+ * each: a replication slot is Low, Medium or High by how far it has fallen behind; a server setting
+ * by which setting it is; a lock blocker by what the blocking session is doing. A catalog naming one
+ * severity for those would be asserting something the finding itself contradicts.
  *
  * So they carry `severity: null` together with {@see self::$severityDerived} — the same pair
  * `downtime_class` / `downtime_class_derived` already uses, and for the same reason: without the
@@ -47,12 +47,10 @@ use Pushery\SQLens\Severity\Severity;
  *
  * ## The downtime class is declared here too, and the first version of this class got it wrong
  *
- * Seven of the twelve checks end their finding with `->withDowntimeClass(…)` — measured, and the
- * count is stated here only because the sentence below needs it. The five that do not are registered
- * WITH REASONS in `EveryDeployCheckIsInTheCatalogTest`, which is where the number actually lives: a
- * count in prose rots the first time somebody adds a check, and this one already had (it said
- * eight). The first version of
- * this record carried none at all, which the export writes as `downtime_class: null` with
+ * Most checks end their finding with `->withDowntimeClass(…)`. Those that do not are registered WITH
+ * REASONS in `EveryDeployCheckIsInTheCatalogTest`, which is where the count lives: a count in prose
+ * rots the first time somebody adds a check, and the one this paragraph used to carry did, twice.
+ * The first version of this record carried none at all, which the export writes as `downtime_class: null` with
  * `downtime_class_derived: false` — and that pair means "classifies no downtime whatsoever". So the
  * catalog said one thing while the finding beside it said `blocking`, and a page generated from the
  * catalog promised a reader something the report contradicts.

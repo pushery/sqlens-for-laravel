@@ -32,13 +32,13 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ## Why an unconfigured project gets `undetermined` rather than a pass
  *
- * The rule needs to know WHICH connection is the runtime one. Without `security.runtime_connection`
+ * The rule needs to know which connection is the runtime one. Without `security.runtime_connection`
  * there is nothing to judge — and guessing would be worse than silence: on a project with one
  * connection the guess is right by accident, and on a project with five it names the wrong role and
  * sends somebody to revoke a privilege their deploy depends on.
  *
  * A project that genuinely runs everything on one connection says so by leaving both keys null, and
- * gets the finding that state deserves: the runtime role IS the migration role, so it holds DDL by
+ * gets the finding that state deserves: the runtime role is the migration role, so it holds DDL by
  * necessity, and the fix is a second connection rather than a revoke.
  */
 final class RuntimeDdlRule extends AbstractSchemaObjectSecurityRule implements DeclaresJudgedObjectTypes
@@ -82,7 +82,7 @@ final class RuntimeDdlRule extends AbstractSchemaObjectSecurityRule implements D
      * `GRANT_OPTION_STRUCTURAL` are high; `ROLE_CREATEROLE`, `GRANT_OPTION`, `GRANT_PROCESS`,
      * `GRANT_PUBLIC` and `CONNECTIONS_UNSEPARATED` are medium.
      *
-     * DDL on the application's OWN database is broad and bounded, which puts it with
+     * DDL on the application's own database is broad and bounded, which puts it with
      * `ROLE_CREATEROLE` rather than with `ROLE_SUPERUSER`. The comparison that settles it is the one
      * next door: `GRANT_OPTION` is medium and `GRANT_OPTION_STRUCTURAL` is high, over the same
      * privilege, differing only in reach.
@@ -137,7 +137,7 @@ final class RuntimeDdlRule extends AbstractSchemaObjectSecurityRule implements D
     }
 
     /**
-     * The half no grant row carries: the runtime role OWNS the application's tables.
+     * The half no grant row carries: the runtime role owns the application's tables.
      *
      * ## Why it speaks only when the run is looking at the runtime connection
      *
@@ -198,7 +198,7 @@ final class RuntimeDdlRule extends AbstractSchemaObjectSecurityRule implements D
     }
 
     /**
-     * What to do when the same connection deploys and serves — and it is NOT a revoke.
+     * What to do when the same connection deploys and serves — and it is not a revoke.
      *
      * The distinction decides whether the advice is usable at all: on a one-connection project the DDL
      * rights are there because the DEPLOY needs them, and revoking them breaks the next migration.

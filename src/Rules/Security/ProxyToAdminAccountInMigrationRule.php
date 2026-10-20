@@ -83,7 +83,7 @@ final class ProxyToAdminAccountInMigrationRule extends AbstractMigrationSecurity
      *
      * That rule reports an account acquiring one server power. This one reports an account acquiring
      * **every** power of another account, without naming any of them — a proxy onto root is a root
-     * session. The severity does NOT vary with which administrative target it found, and the
+     * session. The severity does not vary with which administrative target it found, and the
      * limitations say so: `mysql.infoschema` carries no `SUPER` while `mysql.session` does, and both
      * report here at High because a project should be impersonating neither.
      */

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Contracts;
 
 /**
- * A rule that can tell when its OWN configuration has left it unable to report.
+ * A rule that can tell when its own configuration has left it unable to report.
  *
  * ## The gap this closes, and why no other layer could
  *
@@ -18,7 +18,7 @@ namespace Pushery\SQLens\Contracts;
  * from the catalog therefore tells an agent a convention is covered when nothing covers it — the
  * expensive direction, because the reader stops checking.
  *
- * ## Only a rule that KNOWS may implement this
+ * ## Only a rule that knows may implement this
  *
  * The reach of a switch is a property of the rule that reads it, and nothing else can derive it
  * without modeling every configuration key in the package. A second model would agree for a while

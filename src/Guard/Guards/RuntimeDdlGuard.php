@@ -24,7 +24,7 @@ use Pushery\SQLens\Guard\Violations\Violation;
  * It is also how a schema stops being reproducible. The next `migrate:fresh` on a rebuilt
  * environment silently loses whatever the runtime created.
  *
- * ## Migrations are excluded by the ARTISAN CONTEXT, not by the statement
+ * ## Migrations are excluded by the artisan context, not by the statement
  *
  * A `CREATE TABLE` from `php artisan migrate` and one from a controller are the same statement, so
  * no amount of SQL reading separates them. What separates them is the command the process runs:
@@ -41,7 +41,7 @@ final readonly class RuntimeDdlGuard implements QueryInspector
     /**
      * The leading keywords that make a statement DDL.
      *
-     * Matched on the FIRST word rather than searched for anywhere in the statement. `select * from
+     * Matched on the first word rather than searched for anywhere in the statement. `select * from
      * audit where action = 'drop table'` contains the word and is not DDL, and a guard that reported
      * it would be teaching its reader to skim.
      *
@@ -57,8 +57,11 @@ final readonly class RuntimeDdlGuard implements QueryInspector
      * quoting. A table name in double quotes, in backticks or bare all follow the same leading
      * word, so the drift a canonicalizer protects against is not drift this reading can suffer.
      *
-     * What it CANNOT read is a statement that opens with a comment, and that case is reported as
-     * `undetermined` rather than waved through.
+     * What it cannot read is a statement that opens with a comment, and that case is reported as
+     * `undetermined` rather than waved through. What it does not SEE is DDL behind a first word that
+     * is not a keyword: a second statement after a semicolon in a call that sends several, such as
+     * `DB::unprepared()`, and `SELECT … INTO`, which creates a table on PostgreSQL. Both pass in
+     * silence, and that is the price of a reading that never parses.
      *
      * @var list<string>
      */
@@ -150,15 +153,30 @@ final readonly class RuntimeDdlGuard implements QueryInspector
      */
     private function opensWithComment(string $sql): bool
     {
-        $sql = ltrim($sql);
+        $sql = $this->trimmed($sql);
 
         return str_starts_with($sql, '--') || str_starts_with($sql, '/*') || str_starts_with($sql, '#');
     }
 
+    /**
+     * Whether the statement's first word is a DDL keyword.
+     *
+     * The word is the run of letters at the start, so it ends wherever the engines end it: at any
+     * whitespace, form feed and vertical tab included, at a parenthesis, and at a block comment
+     * written straight after it. A keyword followed directly by a block comment or by a form feed
+     * is a statement both engines run, and a split at the four common whitespace characters alone
+     * read it as one word that is no keyword and stayed silent.
+     */
     private function isDdl(string $sql): bool
     {
-        $first = strtolower(strtok(ltrim($sql), " \t\n\r") ?: '');
+        $first = preg_match('/^[a-z]+/i', $this->trimmed($sql), $word) === 1 ? strtolower($word[0]) : '';
 
         return in_array($first, self::DDL_KEYWORDS, true);
+    }
+
+    /** The statement without its leading whitespace, form feed included, which `ltrim()` keeps. */
+    private function trimmed(string $sql): string
+    {
+        return ltrim($sql, " \t\n\r\0\x0B\f");
     }
 }

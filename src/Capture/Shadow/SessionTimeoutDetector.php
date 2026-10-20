@@ -8,7 +8,7 @@ use PDOException;
 use Throwable;
 
 /**
- * Recognizes the exceptions a shadow session's OWN timeouts raise, so a bounded
+ * Recognizes the exceptions a shadow session's own timeouts raise, so a bounded
  * session that fires is reported as `undetermined` (`shadow_session_timeout`) rather
  * than passed through as a failure or a raw exception.
  *
@@ -83,7 +83,7 @@ final class SessionTimeoutDetector
     /** The driver-specific error number a query exception carries, if any. */
     private static function driverCode(Throwable $throwable): ?int
     {
-        // The WHOLE chain, starting at the throwable itself. Laravel wraps the `PDOException`
+        // The whole chain, starting at the throwable itself. Laravel wraps the `PDOException`
         // behind a `QueryException`, so `getPrevious()` was the common case — but several catalog
         // readers catch the PDO error directly, and for those this returned null. On MySQL null is
         // the same as "not a timeout", because the SQLSTATE there is the general class either way.

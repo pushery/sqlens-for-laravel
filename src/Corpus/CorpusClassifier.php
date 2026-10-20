@@ -12,7 +12,7 @@ use Pushery\SQLens\Findings\Outcome;
  * ## Why this is a pure function over data rather than something that runs a lint
  *
  * The measurement has to run against real PostgreSQL 18 and MySQL 8.4 servers to be worth anything,
- * and those runs happen outside this class. What must NOT differ between the two engines is the
+ * and those runs happen outside this class. What must not differ between the two engines is the
  * classification: if PostgreSQL and MySQL disagreed about what counts as a false positive, the two
  * rates would not be comparable and neither would mean much.
  *

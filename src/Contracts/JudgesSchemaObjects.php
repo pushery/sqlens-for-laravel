@@ -18,7 +18,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * {@see AbstractSafetyRule} has `appliesTo()` and `evaluate()` `final`, and
  * that is worth keeping: it is what makes the dispatch of every lint rule impossible to get wrong.
- * A rule that ALSO reads a catalog therefore cannot simply override them. Nor should the base grow
+ * A rule that also reads a catalog therefore cannot simply override them. Nor should the base grow
  * a catalog branch every lint rule must implement and almost none would use — machinery reachable
  * only from a test written to reach it is the shape of a guard that guards nothing.
  *
@@ -31,7 +31,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * key?" is one question; a migration answers it about a table being born and a catalog answers it
  * about every table that exists, and the second can settle cases the first cannot. Splitting that
  * into two rules would be the same rule twice, free to drift on the one thing that must not: what
- * counts as a violation. Two DIFFERENT questions that happen to touch the same object are two
+ * counts as a violation. Two different questions that happen to touch the same object are two
  * rules, and giving them one id would make an ignore-list entry mean two things.
  *
  * The finding is built by {@see CatalogVerdicts} either way, so a rule

@@ -14,7 +14,7 @@ namespace Pushery\SQLens\Agent\Mcp;
  * would look identical to one that had it, right up to the moment a supervisor sent SIGTERM and the
  * process died mid-frame instead of finishing cleanly.
  *
- * So the absence is stated ONCE, by name, on the diagnostic channel: the operator learns that this
+ * So the absence is stated once, by name, on the diagnostic channel: the operator learns that this
  * installation stops abruptly rather than politely, and can decide whether that matters. Everything
  * else keeps working — the EOF path, which is how a session normally ends, needs no signals at all.
  *

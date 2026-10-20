@@ -44,9 +44,20 @@ use Throwable;
  * ## Still `undetermined`, and for a different reason than its PostgreSQL sibling
  *
  * The sibling is undetermined because a NAME is not evidence. Here the name genuinely is a tool's
- * output — but a run IN FLIGHT looks exactly like one that died. gh-ost creates `_t_gho` and works
+ * output — but a run in flight looks exactly like one that died. gh-ost creates `_t_gho` and works
  * in it for hours; catching that mid-migration and calling it wreckage reports the healthy case as
  * the broken one, which is the more expensive of the two mistakes.
+ *
+ * ## Where InnoDB keeps its own `#sql` tables
+ *
+ * An intermediate table InnoDB creates for an `ALTER TABLE` does not appear in
+ * `information_schema.TABLES`: measured on MySQL 8.0.36, a table being rebuilt with
+ * `ALGORITHM=COPY` showed no `#sql` row there. The manual's "Troubleshooting InnoDB Data Dictionary
+ * Operations" finds the orphan a crash in the middle of an in-place `ALTER TABLE` leaves behind in
+ * `information_schema.INNODB_TABLES`, by its `#sql` name, so that view is read as well. A user table
+ * given such a name is stored there encoded (`@0023sql`) and does not match, so the view yields
+ * InnoDB's own tables only. It needs the `PROCESS` privilege; without it, that half reads nothing and
+ * the rest of the check stands as before.
  *
  * ## Primum non nocere
  *
@@ -88,7 +99,7 @@ final readonly class OrphanTransitionObjectCheck implements PostdeployCheck
         } catch (Throwable $failure) {
             // Undetermined, never a pass — and on MySQL this branch is the ORDINARY case rather than
             // the exotic one. `information_schema` is filtered by privilege without a word, so an
-            // under-privileged read succeeds and comes back empty; a read that FAILS is the honest
+            // under-privileged read succeeds and comes back empty; a read that fails is the honest
             // half of that, and collapsing it into "nothing found" would be the same silent green
             // the privilege probe exists to prevent.
             return CheckResult::undetermined(
@@ -107,6 +118,10 @@ final readonly class OrphanTransitionObjectCheck implements PostdeployCheck
             if ($name !== '' && OnlineSchemaChangeArtifacts::isTable($name)) {
                 $findings[] = $this->tableFinding($context, $this->text($row, 'schema_name'), $name);
             }
+        }
+
+        foreach ($this->intermediateTables($context) as [$schema, $name]) {
+            $findings[] = $this->tableFinding($context, $schema, $name);
         }
 
         foreach (array_map(static fn (mixed $row): object => (object) $row, $triggers) as $row) {
@@ -134,6 +149,40 @@ final readonly class OrphanTransitionObjectCheck implements PostdeployCheck
                 ),
                 $findings,
             );
+    }
+
+    /**
+     * The `#sql` tables InnoDB lists in `information_schema.INNODB_TABLES`, as database and table, or
+     * none where the account may not read that view.
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    #[RawSql(reason: 'reads information_schema.INNODB_TABLES for the intermediate tables InnoDB leaves, which information_schema.TABLES does not show')]
+    private function intermediateTables(PostdeployContext $context): array
+    {
+        try {
+            $rows = $context->session->read(static fn (Connection $db): array => $db->select(
+                "select NAME as innodb_name from information_schema.INNODB_TABLES where NAME like '%#sql%' order by NAME",
+            ));
+        } catch (Throwable) {
+            // The view needs PROCESS, which an ordinary account lacks. The other halves still answer.
+            return [];
+        }
+
+        $tables = [];
+
+        foreach (array_map(static fn (mixed $row): object => (object) $row, $rows) as $row) {
+            // `database/table`, both parts as InnoDB encodes them (a slash in a name becomes `@002f`),
+            // so the first slash is the separator.
+            $name = $this->text($row, 'innodb_name');
+            $slash = strpos($name, '/');
+
+            if ($slash !== false) {
+                $tables[] = [substr($name, 0, $slash), substr($name, $slash + 1)];
+            }
+        }
+
+        return $tables;
     }
 
     private function tableFinding(PostdeployContext $context, string $schema, string $name): Finding

@@ -25,14 +25,14 @@ use Pushery\SQLens\Rules\CatalogVerdicts;
  * ## What implementing it costs a rule, and what it must not cost
  *
  * Nothing about its verdict. A rule that implements this judges exactly as it did — the declaration
- * is read by {@see CatalogVerdicts} AFTER the rule has spoken, and only when
+ * is read by {@see CatalogVerdicts} after the rule has spoken, and only when
  * the project declared {@see ServerLifetime::Disposable}. A rule may not consult the lifetime
  * itself: two places deciding one thing is two places to disagree, and the rule would then be
  * answering a question about the run instead of about its subject.
  *
  * ## The phrase is prose because a reader reads it
  *
- * The finding that replaces the flagged one has to say WHAT went unjudged, in the words of the thing
+ * The finding that replaces the flagged one has to say what went unjudged, in the words of the thing
  * rather than the id of the rule. "this server's host-based authentication file" tells an operator
  * where to look on the target host; `SEC.AUTH.HBA_TRUST` tells them to go and look up a rule id
  * first.

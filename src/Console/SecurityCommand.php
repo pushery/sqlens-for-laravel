@@ -122,7 +122,7 @@ final class SecurityCommand extends Command
             return ExitCode::Misconfiguration->value;
         }
 
-        // BEFORE the profile, the reporter and anything that connects — a refresh is not a check
+        // Before the profile, the reporter and anything that connects — a refresh is not a check
         // and shares none of a check's setup. Running it through them would make an unreachable
         // database a reason the data cannot be refreshed, which is exactly backwards: refreshing is
         // what somebody does when the check told them the data was old.
@@ -153,9 +153,10 @@ final class SecurityCommand extends Command
             $config->set('sqlens.security.min_severity', $minSeverity);
         }
 
-        // The reporter and the output stream are resolved FIRST, the same order the other suites
-        // use: an unknown format or an unwritable path is a misconfiguration, and discovering it
-        // should not cost a connection — let alone a full catalog read against production.
+        // The reporter and the output stream are resolved before anything opens a connection: an
+        // unknown format or an unwritable path is a misconfiguration, and discovering it should not
+        // cost a connection — let alone a full catalog read against production. The profile and
+        // `--min-severity` come first here, because they are read from the input and reach nothing.
         $format = $this->option('format');
 
         try {
@@ -194,7 +195,7 @@ final class SecurityCommand extends Command
      *
      * Split out so the caller's `finally` covers every exit from it, the same shape `sqlens:audit`
      * uses. `$reported` is by reference rather than returned because the caller needs it on the
-     * path where this method THROWS — which is the path where a truncated file would otherwise
+     * path where this method throws — which is the path where a truncated file would otherwise
      * survive as a report nobody wrote.
      */
     private function examine(
@@ -268,13 +269,13 @@ final class SecurityCommand extends Command
         $outcome = $this->laravel->make(AdvisoryRefresher::class)->refresh();
 
         if (! $outcome->succeeded()) {
-            $this->stderr()->writeln('The advisory data was NOT refreshed: '.$outcome->reason);
+            $this->stderr()->writeln($this->translate('sqlens::messages.commands.advisory_not_refreshed', ['reason' => (string) $outcome->reason]));
 
             return ExitCode::Misconfiguration->value;
         }
 
         if (! $outcome->written) {
-            $this->output->writeln(sprintf('The advisory source agrees with %s — nothing to commit.', (string) $outcome->path));
+            $this->output->writeln($this->translate('sqlens::messages.commands.advisory_unchanged', ['path' => (string) $outcome->path]));
 
             return ExitCode::Clean->value;
         }
@@ -282,7 +283,7 @@ final class SecurityCommand extends Command
         // The diff, and it is the point of the command rather than decoration: this file is meant to
         // be committed, and a reviewer needs to see that PostgreSQL 14's end date moved rather than
         // that line 87 changed.
-        $this->output->writeln(sprintf('Wrote %s:', (string) $outcome->path));
+        $this->output->writeln($this->translate('sqlens::messages.commands.advisory_written', ['path' => (string) $outcome->path]));
 
         foreach ($outcome->changes as $change) {
             $this->output->writeln('  '.$change);
@@ -296,7 +297,7 @@ final class SecurityCommand extends Command
      *
      * `--allow-undetermined` is the pre-deploy escape hatch: a deploy window is a bad moment to be
      * blocked by a check that could not run, and somebody standing at the console can weigh that.
-     * It returns `false` — a decision AGAINST strictness, not the `null` that would leave the
+     * It returns `false` — a decision against strictness, not the `null` that would leave the
      * configured value alone — because the flag's whole purpose is to beat a strict project config.
      *
      * It changes the exit code and nothing else. Every undetermined finding stays in the report
@@ -317,7 +318,7 @@ final class SecurityCommand extends Command
     /**
      * Everything this run found, plus the one sentence it owes when it found nowhere to look.
      *
-     * The notice is added only when BOTH halves failed. One half that could not run already says so
+     * The notice is added only when both halves failed. One half that could not run already says so
      * through its own finding, and repeating it at the aggregate level would report one absence
      * twice — while a run where neither half happened has no finding of its own to carry the fact
      * that nothing at all was examined.
@@ -350,7 +351,7 @@ final class SecurityCommand extends Command
             .'could happen, so nothing about this connection was examined. This is not a clean '
             .'result — each half names its own reason above.',
             $this->reasonOfTheHalves($findings),
-            // The connection, named as the subject: what was NOT examined is the thing a reader
+            // The connection, named as the subject: what was not examined is the thing a reader
             // needs, and an unnamed subject would leave the finding true of nothing in particular.
             Location::inCatalog(
                 'unknown',
@@ -404,14 +405,14 @@ final class SecurityCommand extends Command
     /**
      * The connection this run examines: the flag, else the project's setting, else the run's own.
      *
-     * ONE resolution rather than two reads of `--connection`. The report used to answer that option
+     * One resolution rather than two reads of `--connection`. The report used to answer that option
      * directly, which was right while the option was the only way in — and would have become a lie
      * the moment `sqlens.security.audit_connection` existed: the header would say `default` while
      * the readers examined a least-privilege connection somewhere else entirely. On a read/write
      * split that is not a cosmetic difference; a replica answers with different server variables,
      * so which instance was examined is a statement about the findings.
      *
-     * The flag wins, because a run somebody typed is a decision about THAT run.
+     * The flag wins, because a run somebody typed is a decision about that run.
      */
     private function auditConnection(Repository $config): ?string
     {
@@ -435,7 +436,7 @@ final class SecurityCommand extends Command
     /**
      * Refuse a connection name, from the flag or from the setting, that no database config defines.
      *
-     * A MISCONFIGURATION either way, and the two sources fail differently if one is let through. A
+     * A misconfiguration either way, and the two sources fail differently if one is let through. A
      * configured name would make the run fall back to its own connection — the application role,
      * with the application's rights — and report the result as if the audit connection had been
      * used: real findings, about the wrong instance. A flag reaches no instance at all. Nothing
@@ -454,17 +455,10 @@ final class SecurityCommand extends Command
             return false;
         }
 
+        // The key travels as a value: the catalog may not carry the finding prefix this key begins with.
         $this->stderr()->writeln($this->option('connection') === $name
-            ? sprintf(
-                '--connection names "%s", which config/database.php does not define. '
-                .'Refused: no half of the run would reach an instance, and it would still end clean.',
-                $name,
-            )
-            : sprintf(
-                'sqlens.security.audit_connection names "%s", which config/database.php does not define. '
-                .'Refused rather than falling back: the run would examine a different instance and report it as clean.',
-                $name,
-            ));
+            ? $this->translate('sqlens::messages.commands.connection_option_undefined', ['name' => $name])
+            : $this->translate('sqlens::messages.commands.configured_connection_undefined', ['name' => $name, 'key' => 'sqlens.security.audit_connection']));
 
         return true;
     }

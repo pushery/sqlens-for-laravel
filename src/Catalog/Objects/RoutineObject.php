@@ -61,6 +61,16 @@ final readonly class RoutineObject
          */
         public bool $pathConfigurable,
         public Readability $readability,
+        /**
+         * The argument list an overload is told apart by, as PostgreSQL writes it, or null on an
+         * engine without overloading.
+         *
+         * Part of the identity: two overloads share a name and are two routines, each with its own
+         * settings and owner, and under the bare name they collapsed into one subject whose finding
+         * depended on the order the server listed them in. `ALTER FUNCTION` refuses the bare name
+         * of an overloaded routine for the same reason.
+         */
+        public ?string $arguments,
     ) {}
 
     /**
@@ -74,6 +84,7 @@ final readonly class RoutineObject
         Readability $readability,
         array $settings = [],
         bool $pathConfigurable = true,
+        ?string $arguments = null,
     ): self {
         return new self(
             trim($schema),
@@ -83,13 +94,20 @@ final readonly class RoutineObject
             array_values(array_filter(array_map(trim(...), $settings), static fn (string $s): bool => $s !== '')),
             $pathConfigurable,
             $readability,
+            $arguments === null ? null : trim($arguments),
         );
     }
 
-    /** How a finding names it: schema-qualified, the way somebody would go and look for it. */
+    /**
+     * How a finding names it: schema-qualified, the way somebody would go and look for it, and with
+     * its argument list where the engine tells overloads apart by one — `app.f(uid bigint)`, the
+     * form the grant reading names a routine by too.
+     */
     public function identity(): string
     {
-        return $this->schema === '' ? $this->name : $this->schema.'.'.$this->name;
+        $name = $this->schema === '' ? $this->name : $this->schema.'.'.$this->name;
+
+        return $this->arguments === null ? $name : $name.'('.$this->arguments.')';
     }
 
     /**

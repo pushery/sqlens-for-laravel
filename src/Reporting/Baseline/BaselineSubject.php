@@ -12,7 +12,7 @@ use Pushery\SQLens\Findings\LocationKind;
  * never identity (the fingerprint is the identity). It names the migration class, the
  * schema object, or the callsite method the finding addressed, per location kind.
  *
- * It is deliberately NOT a file path: the location's file is already repo-relative,
+ * It is deliberately not a file path: the location's file is already repo-relative,
  * but a class or object name reads better in a diff and never risks leaking an
  * absolute path into the file. It is always non-empty — the serializer refuses a
  * blank subject — falling back to the location kind when a finding somehow carries no

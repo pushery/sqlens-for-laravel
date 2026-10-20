@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Security\Privacy;
 
+use Closure;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Rules\RuleVerdict;
 use Pushery\SQLens\Severity\Severity;
@@ -39,10 +40,11 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
 final readonly class UnencryptedColumnEvaluator
 {
     /**
+     * @param  PrivacyDictionary|(Closure(): PrivacyDictionary)  $dictionary  the dictionary, or a loader that remembers what it read
      * @param  list<string>  $ignoredColumns  qualified names this project has already decided about
      */
     public function __construct(
-        private PrivacyDictionary $dictionary,
+        private PrivacyDictionary|Closure $dictionary,
         private ModelCastReader $models,
         private array $ignoredColumns = [],
     ) {}
@@ -68,16 +70,16 @@ final readonly class UnencryptedColumnEvaluator
             return null;
         }
 
-        $signal = $this->dictionary->signalFor($column);
+        $signal = $this->dictionary()->signalFor($column);
 
         if ($signal === null) {
             return null;
         }
 
-        $group = (string) $this->dictionary->groupFor($column);
+        $group = (string) $this->dictionary()->groupFor($column);
         $protection = $this->models->protectionFor($table, $column);
 
-        // The `instanceof` IS the undetermined test, not a null-check bolted onto one — the same
+        // The `instanceof` is the undetermined test, not a null-check bolted onto one — the same
         // shape RuleVerdict::isUndetermined() uses. A reason that is present or absent cannot
         // express a contradiction, and it narrows the type in the same move.
         if ($protection->reason instanceof UndeterminedReason) {
@@ -98,7 +100,7 @@ final readonly class UnencryptedColumnEvaluator
             return null;
         }
 
-        // The LAST gate before a finding, and it is about the column's TYPE rather than the model's
+        // The last gate before a finding, and it is about the column's type rather than the model's
         // casts. A `bytea` or a `blob` is what server-side encryption leaves behind, and it is also
         // what an avatar looks like — measured, nothing in either catalog separates them. So
         // encryption applied at the server may SUPPRESS a finding here and can never raise one.
@@ -136,6 +138,15 @@ final readonly class UnencryptedColumnEvaluator
             // quieter one can be quieter. Both stay below the gate default.
             $signal === 'strong' ? Severity::Low : Severity::Info,
         );
+    }
+
+    /**
+     * The dictionary in force, read when a column first needs it if it was handed over as its
+     * loader, so a command that never judges a column never reads the file.
+     */
+    private function dictionary(): PrivacyDictionary
+    {
+        return $this->dictionary instanceof Closure ? ($this->dictionary)() : $this->dictionary;
     }
 
     /**

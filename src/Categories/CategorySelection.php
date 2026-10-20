@@ -57,7 +57,7 @@ final readonly class CategorySelection
      * ## Why both suites come through here
      *
      * `--category` means the same thing in `sqlens:lint` and `sqlens:audit`, and a user who has
-     * learned one has learned both — which is only true while there is ONE implementation of what
+     * learned one has learned both — which is only true while there is one implementation of what
      * "defaults to the configured set" means. It was two: the lint runner read the key, the audit
      * runner did not, and the difference was invisible from either side. A project that scoped its
      * audit in `config/sqlens.php` got every category checked, with a header that said `categories=all`

@@ -13,7 +13,7 @@ use Pushery\SQLens\Contracts\CanonicalizationStage;
 use Pushery\SQLens\Contracts\DriverCanonicalization;
 
 /**
- * The ONE place the canonicalization stage order is declared.
+ * The one place the canonicalization stage order is declared.
  *
  * The order is load-bearing and every consumer must run the same one — the
  * capture decorator, the drift comparison, the golden corpus — or two of them

@@ -638,7 +638,7 @@ That produces three files, one per target, and touches nothing else:
 | `copilot` | `.github/instructions/sqlens-migrations.instructions.md` |
 
 Every target at once by default, or one at a time with `--target=`. A single target can be sent
-somewhere else with `--output=<path>`. No database is opened, so this works in a fresh clone and offline.
+somewhere else with `--output=<path>`, a path relative to the project root. No database is opened, so this works in a fresh clone and offline.
 
 If the project's default connection is SQLite, name the one you deploy against with
 `--connection=pgsql`. SQLens ships no rules for SQLite, so the command refuses with that reason

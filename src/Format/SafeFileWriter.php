@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Format;
 
 /**
- * Writing a formatted file back, without the three ways that destroys work.
+ * Writing a file back, without the three ways that destroys work: the SQL `sqlens:format` rewrites,
+ * and the files a project's decisions live in — the baseline, the debt ledger, the drift excludes and
+ * the advisory data, which {@see self::ensure()} writes.
  *
  * ## The three failures this exists to prevent
  *
@@ -83,7 +85,7 @@ final readonly class SafeFileWriter
             return false;
         }
 
-        // Permissions are carried over BEFORE the rename, because the rename is the moment the file
+        // Permissions are carried over before the rename, because the rename is the moment the file
         // becomes the real one. A migration that came out 0600 because the umask happened to be
         // strict is a deploy that fails on a machine running as a different user.
         if (is_file($path) && ($mode = fileperms($path)) !== false) {
@@ -103,6 +105,18 @@ final readonly class SafeFileWriter
         }
 
         return true;
+    }
+
+    /**
+     * Write the contents through {@see self::write()}, and answer whether the file holds them afterwards.
+     *
+     * For a caller that needs the file to say something rather than to know whether it moved. An
+     * unchanged file is a success here and a failed write is not, the distinction write() leaves
+     * to its caller. A failed write leaves the file that was there before, whole.
+     */
+    public static function ensure(string $path, string $contents): bool
+    {
+        return self::write($path, $contents) || (is_file($path) && @file_get_contents($path) === $contents);
     }
 
     /**

@@ -20,14 +20,18 @@ use Pushery\SQLens\Severity\Severity;
  * link inside the finding resolves to nothing. A baseline naming one is rejected as unknown, which
  * is the message written for a typo.
  *
- * ## The three bands, and why the ids say which
+ * ## The bands, and why the ids say which
  *
- * - **`DEPLOY.PREFLIGHT.*`** — asked immediately BEFORE the migration runs, against the target. They
+ * - **`DEPLOY.PREFLIGHT.*`** — asked immediately before the migration runs, against the target. They
  *   answer "should this deploy start at all".
  * - **`DEPLOY.CONTEXT.*`** — facts about the target that shape how a finding should be read rather
  *   than whether to go. A read-only replica and a version skew belong here.
- * - **`DEPLOY.LEGACY.*`** — debt the database is already carrying from an EARLIER deploy: an invalid
+ * - **`DEPLOY.LEGACY.*`** — debt the database is already carrying from an earlier deploy: an invalid
  *   index, a constraint left unvalidated. Nothing about the migration at hand.
+ * - **`DEPLOY.DRIFT.*`** — what `sqlens:drift` finds between the schema the migrations describe and
+ *   the one the target holds, and what it could not compare.
+ * - **`DEPLOY.RUN.*`** — the run's own account of itself, such as a time budget it went over.
+ *   Nothing about the target.
  *
  * The band is part of the id, so a pipeline can filter on it without a lookup table.
  */

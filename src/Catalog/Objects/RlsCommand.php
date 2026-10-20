@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Catalog\Objects;
 /**
  * Which statement a policy governs — `pg_policy.polcmd`, in words.
  *
- * The catalog stores one character, and the mapping is not guessable from it (`*` for ALL, `r` for
+ * The catalog stores one character, and the mapping is not guessable from it (`*` for all, `r` for
  * SELECT), so it is written down once here rather than repeated at every reader that touches it.
  *
  * A rule needs the distinction because the consequences differ: a permissive `SELECT` policy that

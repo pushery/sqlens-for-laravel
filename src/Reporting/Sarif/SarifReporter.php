@@ -21,7 +21,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  *
  * Like the JSON reporter, this writes one document verbatim to the given output, so a run
  * redirecting `--format=sarif` to a file must keep diagnostics off this stream for the file to stay
- * valid SARIF. Everything about WHAT is emitted lives on the document; this class is the write path
+ * valid SARIF. Everything about what is emitted lives on the document; this class is the write path
  * and the format name, deliberately nothing more — a reporter that decided anything would be a
  * second place the run's meaning is made.
  */

@@ -25,7 +25,7 @@ use Throwable;
  *
  * - **Connection::pretend()** runs the closure with the connection in pretend
  *   mode and returns the query log — statements are logged, never sent. A table
- *   "created" inside it does not exist afterwards. The captor wraps ONLY the
+ *   "created" inside it does not exist afterwards. The captor wraps only the
  *   migration method in that closure: anything else it did there (resolving,
  *   bootstrapping) would land in the log as the migration's own SQL.
  * - **useDefaultSchemaGrammar()** is called first. A connection resolves its
@@ -43,7 +43,7 @@ use Throwable;
  *   two modes give the same text. The log is still read, to hold it to the same
  *   statements: when the two disagree, the migration is undetermined and says so.
  *
- * The captor resolves NOTHING about which migrations are pending — it is handed
+ * The captor resolves nothing about which migrations are pending — it is handed
  * an already-ordered list and works exactly that list, so a run can never quietly
  * cover fewer migrations than the caller believes. A migration the pre-scan has
  * already flagged never reaches here; that gate is wired separately (a detector
@@ -82,7 +82,7 @@ final readonly class PretendCaptor implements Captor
 
     public function capture(iterable $migrations, CaptureSection $section): CaptureRun
     {
-        // The grammar is built ONCE, from the connection object, before the first
+        // The grammar is built once, from the connection object, before the first
         // capture — so neither the first migration nor an offline run pays the
         // lazy driver round-trip. Idempotent: calling it again just rebuilds the
         // same grammar.
@@ -220,7 +220,7 @@ final readonly class PretendCaptor implements Captor
         }
 
         // A migration without the method for this section (a down-less migration
-        // for a `down` run) is a clean, empty result — NOT a failure and NOT an
+        // for a `down` run) is a clean, empty result — not a failure and not an
         // undetermined. The framework's own migrator guards with method_exists for
         // exactly this; capturing nothing here is the honest answer.
         if (! $migration instanceof Migration || ! method_exists($migration, $method)) {

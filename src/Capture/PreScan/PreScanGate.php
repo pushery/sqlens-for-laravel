@@ -18,7 +18,7 @@ use Pushery\SQLens\Subjects\DownMethodState;
 
 /**
  * The gate that turns a pre-scan hit into a safe consequence: a flagged migration
- * is NOT executed, and its result is `undetermined` with the hits that flagged it.
+ * is not executed, and its result is `undetermined` with the hits that flagged it.
  *
  * One kind of hit is answered differently in shadow mode. An introspection guard asks
  * the schema a question pretend cannot answer, and the throwaway database a shadow run
@@ -34,7 +34,7 @@ use Pushery\SQLens\Subjects\DownMethodState;
  * pretend run where the mail would actually be sent. Recognition without this
  * gate would be a report written after the disaster.
  *
- * It is the ONE decision point for whether a migration enters the pretend path,
+ * It is the one decision point for whether a migration enters the pretend path,
  * and it is deliberately detector-agnostic: every `PreScanDetector` — side
  * effects, result-dependent patterns, introspection guards, indirect calls —
  * runs through the same interface, and none gets a special path. The single-file fast path uses this same gate, so there is no second
@@ -91,7 +91,7 @@ final readonly class PreScanGate implements Captor
             new DynamicCallDetector,
         ];
 
-        // The maturity axis, applied HERE — at the one place the default list exists, rather than a
+        // The maturity axis, applied here — at the one place the default list exists, rather than a
         // second time downstream. Two of these five are `preview`, and the gate never saw them: it
         // was applied to the rule registry only, so the promise the tier makes ("a new check runs
         // only on request, so a minor release cannot start failing a build over code nobody
@@ -144,7 +144,7 @@ final readonly class PreScanGate implements Captor
         );
 
         // What the file declared about deliberate emptiness rides back the same way, and for the
-        // same reason. Read for THIS section only: the run captures one direction at a time, and a
+        // same reason. Read for this section only: the run captures one direction at a time, and a
         // migration whose `up()` is deliberately empty on SQLite may still owe a real `down()`.
         $captured = array_map(
             static fn (CaptureResult $result): CaptureResult => ($declaredEmpty[$result->file] ?? []) !== []
@@ -170,7 +170,7 @@ final readonly class PreScanGate implements Captor
      *
      * Read here, and only here, for three reasons that all point at this class:
      *
-     * - it is the one decorator wrapping EVERY capture mode, so a rule about `down()` gets the
+     * - it is the one decorator wrapping every capture mode, so a rule about `down()` gets the
      *   same material in pretend and in shadow — one reading, not a fast one and a correct one;
      * - it has already decided each of these files is safe to execute, so reading the rollback
      *   leg needs no second pre-scan and cannot run a migration the gate held back;

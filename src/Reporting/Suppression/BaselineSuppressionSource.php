@@ -11,8 +11,8 @@ use Pushery\SQLens\Reporting\Baseline\BaselineFile;
 use Pushery\SQLens\Reporting\Baseline\FindingFingerprint;
 
 /**
- * The first suppression layer: match findings against the accepted-findings
- * ledger by fingerprint.
+ * The third suppression layer, after the two standing decisions: match findings
+ * against the accepted-findings ledger by fingerprint.
  *
  * Two rules make this layer honest rather than a mute filter.
  *
@@ -20,7 +20,7 @@ use Pushery\SQLens\Reporting\Baseline\FindingFingerprint;
  * covers which finding; hiding it from the gate while keeping it in the balance
  * is the resolver's job, and nothing here deletes anything.
  *
- * And an `undetermined` is NEVER suppressed. A check that could not run is not a
+ * And an `undetermined` is never suppressed. A check that could not run is not a
  * finding somebody accepted — baselining it would permanently hide the fact that
  * it never ran, which is precisely the silent green this package exists to
  * refuse. It stays visible no matter what the file says.
@@ -30,7 +30,26 @@ final readonly class BaselineSuppressionSource
     /** The suppression-source name a resolver records on a finding it hides. */
     public const string SOURCE = 'baseline';
 
-    public function __construct(private BaselineFile $baseline) {}
+    /**
+     * Every entry by its key, built once, so a match is a lookup. Searched entry by entry, the
+     * match cost the number of findings times the number of entries, which is the shape of the
+     * project the baseline exists for: a large schema whose existing findings were all accepted.
+     * A key the file lists twice keeps its first entry, the one a search in file order finds.
+     *
+     * @var array<string, BaselineEntry>
+     */
+    private array $byKey;
+
+    public function __construct(private BaselineFile $baseline)
+    {
+        $byKey = [];
+
+        foreach ($baseline->entries as $entry) {
+            $byKey[$entry->key()] ??= $entry;
+        }
+
+        $this->byKey = $byKey;
+    }
 
     /**
      * The baseline entry covering this finding, or null.
@@ -47,15 +66,7 @@ final readonly class BaselineSuppressionSource
             return null;
         }
 
-        $key = $fingerprint->value.'#'.$ordinal;
-
-        foreach ($this->baseline->entries as $entry) {
-            if ($entry->key() === $key) {
-                return $entry;
-            }
-        }
-
-        return null;
+        return $this->byKey[$fingerprint->value.'#'.$ordinal] ?? null;
     }
 
     /**
@@ -80,10 +91,11 @@ final readonly class BaselineSuppressionSource
     public function staleEntries(array $matchedKeys, array $unverifiablePrefixes = [], ?BaselineScope $scope = null): array
     {
         $scope ??= BaselineScope::everything();
+        $matched = array_flip($matchedKeys);
 
         return array_values(array_filter(
             $this->baseline->entries,
-            fn (BaselineEntry $entry): bool => ! in_array($entry->key(), $matchedKeys, true)
+            fn (BaselineEntry $entry): bool => ! isset($matched[$entry->key()])
                 && ! $this->isUnverifiable($entry, $unverifiablePrefixes)
                 && $scope->judges($entry),
         ));
@@ -94,7 +106,7 @@ final readonly class BaselineSuppressionSource
      * not answer, not one that was fixed.
      *
      * The distinction is the whole point. "Stale" means the problem is gone and the line can go
-     * with it; telling somebody that about an entry NOBODY LOOKED AT sends them to delete a line
+     * with it; telling somebody that about an entry nobody looked at sends them to delete a line
      * that comes straight back on the next machine that has the tool. Reported under its own
      * name and kept in the file.
      *
@@ -108,10 +120,11 @@ final readonly class BaselineSuppressionSource
     public function unverifiableEntries(array $matchedKeys, array $unverifiablePrefixes, ?BaselineScope $scope = null): array
     {
         $scope ??= BaselineScope::everything();
+        $matched = array_flip($matchedKeys);
 
         return array_values(array_filter(
             $this->baseline->entries,
-            fn (BaselineEntry $entry): bool => ! in_array($entry->key(), $matchedKeys, true)
+            fn (BaselineEntry $entry): bool => ! isset($matched[$entry->key()])
                 && $this->isUnverifiable($entry, $unverifiablePrefixes)
                 && $scope->judges($entry),
         ));

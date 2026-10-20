@@ -44,6 +44,13 @@ final readonly class AuditOutcome
          * the run got that far, so an outcome built anywhere else keeps meaning one that did not.
          */
         public bool $examined = false,
+        /**
+         * Why the configured baseline could not be read, naming the file, when that stopped the run.
+         *
+         * Carried as the reason rather than as a finding, as {@see $unsupported} is: nothing was
+         * audited, and the command says why instead of printing a report.
+         */
+        public ?string $unreadableBaseline = null,
     ) {}
 
 }

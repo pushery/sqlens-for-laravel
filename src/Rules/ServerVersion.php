@@ -12,7 +12,7 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  * `8.4.3-log` — into major/minor/patch, and compares numerically, never by
  * string.
  *
- * "No silent green": an unparsable string does NOT become a quiet 0.0.0 — it
+ * "No silent green": an unparsable string does not become a quiet 0.0.0 — it
  * yields UndeterminedReason::UnknownServerVersion. parse() returns either a
  * ServerVersion or that reason, so the caller cannot ignore the failure.
  *
@@ -34,7 +34,7 @@ final readonly class ServerVersion
      * numeric version can be read at all — never a silent default.
      *
      * The scan is deliberately lenient, because the server writes this string and we
-     * only get to cope with it. That tolerance is WRONG for a pin, which a human writes
+     * only get to cope with it. That tolerance is wrong for a pin, which a human writes
      * on purpose — see {@see parsePin()}.
      */
     public static function parse(string $raw, string $driver): self|UndeterminedReason

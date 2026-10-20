@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Deploy;
 
 use Illuminate\Contracts\Config\Repository;
+use Pushery\SQLens\Audit\InstanceTarget;
 use Pushery\SQLens\Catalog\CatalogReaderFactory;
 use Pushery\SQLens\Catalog\PreflightConnection;
 use Pushery\SQLens\Catalog\ReaderConnectionFactory;
@@ -12,11 +13,14 @@ use Pushery\SQLens\Catalog\ReaderSession;
 use Pushery\SQLens\Console\ExitCode;
 use Pushery\SQLens\Contracts\ReadsSessionBounds;
 use Pushery\SQLens\Contracts\SessionDefenses;
+use Pushery\SQLens\Drivers\DriverRegistry;
+use Pushery\SQLens\Drivers\MeasuredServerVersion;
 use Pushery\SQLens\Findings\Result;
 use Pushery\SQLens\Lint\LintRuns;
 use Pushery\SQLens\Reporting\CaptureMode as ReportingCaptureMode;
 use Pushery\SQLens\Reporting\ConfigRunContextCollector;
 use Pushery\SQLens\Reporting\CredentialRedaction;
+use Pushery\SQLens\Reporting\ReportedServerVersion;
 use Pushery\SQLens\Rules\ServerVersion;
 use Pushery\SQLens\Subjects\CaptureMode;
 use Pushery\SQLens\Subjects\SubjectContext;
@@ -58,11 +62,12 @@ final readonly class PreflightService implements PreflightRuns
         private ReadsSessionBounds $sessionBounds,
         private ConfigRunContextCollector $runContext,
         private FindingEscalation $escalation,
+        private DriverRegistry $drivers,
     ) {}
 
     public function run(?string $connection = null, ?string $profile = null, ?int $budgetMs = null): PreflightOutcome
     {
-        // The clock starts HERE, before the session opens and before the pending migrations are
+        // The clock starts here, before the session opens and before the pending migrations are
         // linted, because the budget is promised for the whole run. It used to start after the lint
         // half, so the reading, the capture and the rules over every pending migration ran outside
         // it, unbounded and unmeasured. The lint half cannot be interrupted; what it spends comes out
@@ -96,7 +101,7 @@ final readonly class PreflightService implements PreflightRuns
 
         $budget = $this->budgetMs($budgetMs);
 
-        // The migrations this deploy is about to run, linted through the SAME entry point
+        // The migrations this deploy is about to run, linted through the same entry point
         // `sqlens:lint` uses. Not a second rule engine and not a second resolution: the lint route
         // already owns resolve → capture → canonicalize → rule, and calling it here is what makes
         // the subset guarantee STRUCTURAL rather than asserted — the ids a predeploy run reports
@@ -123,7 +128,7 @@ final readonly class PreflightService implements PreflightRuns
             includeVendorMigrations: true,
         );
 
-        // The lint half REFUSED, and it is the half this gate stands on. An engine it does not
+        // The lint half refused, and it is the half this gate stands on. An engine it does not
         // support behind a supported driver, a MariaDB behind `mysql`, comes back with no finding
         // and no pending migration, and the checks below would read "nothing pending" and pass: a
         // verdict about migrations nobody linted, moments before they run. The exit code decides,
@@ -134,7 +139,7 @@ final readonly class PreflightService implements PreflightRuns
         if ($lint->exitCode === ExitCode::Misconfiguration && ! $lint->examined) {
             return PreflightOutcome::refused(sprintf(
                 'the pending migrations could not be linted, so this preflight checked nothing: %s.',
-                $lint->unsupported->detail ?? 'the lint run stopped as a misconfiguration',
+                rtrim($lint->unsupported->detail ?? $lint->unreadableBaseline ?? 'the lint run stopped as a misconfiguration', '.'),
             ), $name, $profileName);
         }
 
@@ -180,7 +185,7 @@ final readonly class PreflightService implements PreflightRuns
         // JSON report, the console, and the MCP answer. One place, every check, both callers.
         $report = $this->runner->run($context)->redactedWith(new CredentialRedaction($this->config));
 
-        // Weighed against the live database BEFORE the budget is read off, so the reading it needs
+        // Weighed against the live database before the budget is read off, so the reading it needs
         // comes out of the same budget every check spends rather than out of the slack afterwards.
         //
         // `use_statistics` decides this half. It is documented as deciding "whether checks may reason
@@ -198,7 +203,7 @@ final readonly class PreflightService implements PreflightRuns
         // script reading the header. `sqlens:postdeploy` measures the same way for the same reason.
         $consumed = (int) round((hrtime(true) - $startedAt) / 1_000_000);
 
-        // Read from the SAME call the check judges on: two reads of one fact are two chances to
+        // Read from the same call the check judges on: two reads of one fact are two chances to
         // disagree, and the disagreement would surface as a header claiming a bound beside a verdict
         // saying there is none.
         try {
@@ -223,7 +228,7 @@ final readonly class PreflightService implements PreflightRuns
             $budget,
             $consumed,
             $profileName,
-            // Both halves travel as ONE result, assembled here rather than by whoever renders it. A
+            // Both halves travel as one result, assembled here rather than by whoever renders it. A
             // finding about a migration and a finding about the instance are the same kind of
             // statement, and two documents would make a consumer choose which one is "the" verdict —
             // so the choice is not offered.
@@ -236,7 +241,30 @@ final readonly class PreflightService implements PreflightRuns
             // `pretend`, because that is what this run DID: it lints the pending migrations with
             // Laravel's --pretend and then reads the catalog. The header used to say whatever
             // `sqlens.mode` held, for a run that never consulted it.
-            $this->runContext->collect(ReportingCaptureMode::Pretend, $timeouts, $report->describeTimings() ?: null, $consumed, $today),
+            // The seal as the session's last probe proved it, which the timeout read above has just
+            // made: the header says what this run's reading rested on, as an audit's does.
+            $this->runContext->collect(ReportingCaptureMode::Pretend, $timeouts, $report->describeTimings() ?: null, $consumed, $today, $context->session->sealedBy())
+                ->withServerVersions($this->serverVersions($name, $preflight->driver, $preflight->serverVersion))
+                // The instance the session opened on, from the identity read the version above came
+                // from. No pooler is probed: that probe sets a value on its session, and this one
+                // runs moments before a deploy.
+                ->withInstance(InstanceTarget::observed($name, $preflight->driver, $preflight->identity)->reported()),
+        );
+    }
+
+    /**
+     * The server this run read, as its header names it: the version the session's server reported,
+     * marked when it is newer than the release the rules were measured against, and the pin beside
+     * it when the project set one.
+     *
+     * @return list<ReportedServerVersion>
+     */
+    private function serverVersions(string $connection, string $driver, ?ServerVersion $version): array
+    {
+        return ReportedServerVersion::detectedAndPinned(
+            $connection,
+            $version instanceof ServerVersion ? new MeasuredServerVersion()->headerVersion($this->drivers->resolve($driver), $version, $version->toString()) : null,
+            $this->config->get('sqlens.assume_server_version'),
         );
     }
 

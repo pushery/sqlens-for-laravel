@@ -16,10 +16,12 @@ use Pushery\SQLens\Remediation\RemediationSubject;
  *
  * A half-filled fix template is more dangerous than none at all: an agent acting on `ALTER TABLE
  *  ADD CONSTRAINT  CHECK` — a statement whose substitution blanked what it could not fill — is
- * acting on something that reads like SQL and is not. So a payload that cannot be vouched for does
- * not ship, and the reason ships instead.
+ * acting on something that reads like SQL and is not. The fill never writes that shape: a value it
+ * was not given, or one that is empty, leaves its placeholder standing
+ * ({@see RemediationStep::filled()}). What is checked here is what the fill cannot rule out, and a
+ * payload that cannot be vouched for does not ship: the reason ships instead.
  *
- * ## What the TYPE SYSTEM already guarantees, and is therefore not checked here
+ * ## What the type system already guarantees, and is therefore not checked here
  *
  * Enum-value validation and required-field validation are both already made by
  * the language: {@see RemediationPayload} is a readonly object whose `strategy` is a
@@ -29,17 +31,17 @@ use Pushery\SQLens\Remediation\RemediationSubject;
  * branches no run can enter, which is worse than no branch: they would claim a guarantee and could
  * never be executed to prove it.
  *
- * What CAN go wrong is everything the constructor does not police, and each check below exists
+ * What can go wrong is everything the constructor does not police, and each check below exists
  * because a specific mistake would produce it.
  *
  * ## The check first specified backwards, corrected against the built layer
  *
  * "No unresolved `{{…}}` in the result" would reject nearly every payload this package produces —
  * and rightly produces. A placeholder STANDS when its value is a decision rather than a fact: the
- * name of a column that does not exist yet, a collation, a batch size. Blanking those is the exact
- * failure this validator exists to catch, so demanding they be filled would enforce the bug.
+ * name of a column that does not exist yet, a collation, a batch size. Blanking those is the
+ * failure described above, so demanding they be filled would enforce it.
  *
- * What is checked instead is that a placeholder is WELL FORMED — `{{name}}`, closed, named. A
+ * What is checked instead is that a placeholder is well formed — `{{name}}`, closed, named. A
  * substitution that went wrong leaves `{{tab`, `{{}}`, or `{{ table }}`, and those are the shapes a
  * reader cannot act on.
  *
@@ -116,7 +118,7 @@ final readonly class RemediationValidator
     /**
      * Whether any step says "in this migration" — the one step kind a state finding cannot use.
      *
-     * `SeparateMigration` is the right kind there and stays valid: the fix for a state IS a new
+     * `SeparateMigration` is the right kind there and stays valid: the fix for a state is a new
      * migration. What cannot be true is a step that edits the migration at hand, because a catalog
      * rule was not handed one.
      */
@@ -174,9 +176,10 @@ final readonly class RemediationValidator
     /**
      * Braces that are not a well-formed placeholder.
      *
-     * The test is deliberately "braces present but no valid placeholder in the same text", not
-     * "every brace belongs to a placeholder": a snippet may legitimately contain PHP braces beside a
-     * placeholder, and a check that counted them would reject the batch recipe.
+     * Every `{{` and every `}}` must belong to a well-formed placeholder. A single brace is free, so
+     * the PHP of a snippet passes, closures and interpolation included, while two in a row are a
+     * placeholder's: a snippet that closes two blocks on one line (`}});`) is refused, and none of
+     * the package's templates writes one.
      */
     private function hasMalformedPlaceholder(?string $text): bool
     {
@@ -184,7 +187,7 @@ final readonly class RemediationValidator
             return false;
         }
 
-        // Remove every WELL-FORMED placeholder, then ask whether a `{{` or `}}` survived. What is
+        // Remove every well-formed placeholder, then ask whether a `{{` or `}}` survived. What is
         // left can only be a broken one — an unclosed brace pair, an empty name, or a spaced name
         // that a substitution will never match.
         return preg_match(self::ANY_BRACES, (string) preg_replace(self::PLACEHOLDER, '', $text)) === 1;

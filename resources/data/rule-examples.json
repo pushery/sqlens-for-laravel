@@ -80,6 +80,12 @@
             "note": "An InnoDB table without a primary key makes row-based replication scan the whole table for every row it applies, and every online schema-change tool refuses to work on it. Give the table a key when you create it — $table->id(), or $table->primary([...]) for a natural composite one; adding it later rebuilds the whole table.",
             "false_positives": "A deliberately keyless log or staging table is a real case and is reported. It is handled with a baseline entry, a config ignore or an annotation rather than by weakening the rule, because a rule loose enough to miss it would also miss the tables that matter. A table with a UNIQUE key but no primary key is NOT flagged — it is reported as undetermined, since InnoDB may promote that index to the clustered one."
         },
+        "MY.L2.OPTIMIZE_TABLE": {
+            "bad": "DB::statement('OPTIMIZE TABLE orders');",
+            "good": "// The same rebuild, refused by MySQL where it would block writes:\nDB::statement('ALTER TABLE orders FORCE, ALGORITHM=INPLACE, LOCK=NONE');",
+            "note": "OPTIMIZE TABLE rebuilds the whole table. InnoDB keeps the table writable during the rebuild only while it has no FULLTEXT index; with one, the rebuild is a copy and every write waits for the whole run. ALTER TABLE ... FORCE, ALGORITHM=INPLACE, LOCK=NONE does the same rebuild and is refused where it would be a copy, so it cannot block writes by surprise.",
+            "false_positives": "The rule reads the migration and not the table, so it reports every OPTIMIZE TABLE, also one over a table without a FULLTEXT index, where the rebuild leaves the table writable. That rebuild still takes time and disk in proportion to the table, and its downtime class stays undetermined rather than online."
+        },
         "MY.L3.ALGORITHM_LOCK_UNEXPRESSIBLE": {
             "bad": "Schema::table('orders', fn (Blueprint $table) => $table->primary('id'));",
             "good": "// Laravel 13.33.0 and later names both clauses itself:\n//     $table->primary('id')->inplace()->lock('none');\n// An earlier framework cannot, so the statement says them directly, and naming them makes the\n// server refuse rather than silently copy the table if it cannot do this in place.\nDB::statement('ALTER TABLE orders ADD PRIMARY KEY (id), ALGORITHM=INPLACE, LOCK=NONE');",
@@ -153,6 +159,12 @@
             "note": "A polymorphic relation resolves by BOTH columns at once — the id is unique only within one type — so without an index over the pair every read through the relation scans the table, and the cost grows with the table rather than with the number of relations. morphs() writes the columns and the index together; the flagged shape is what hand-written columns produce.",
             "false_positives": "The pair is identified by naming: a <prefix>_type column holding characters beside a <prefix>_id column holding an integer or a fixed-width identifier. The catalog can prove the columns exist and what they hold, never that morphs() wrote them — so a pair that merely happens to be named this way is a false positive by construction and belongs on the ignore list. An index whose leading columns are (type, id) satisfies the rule, including a unique one and a wider one; an index that leads with the id does not, and is reported as an index to REPLACE rather than one that is missing."
         },
+        "MY.L5.PK_NEAR_CEILING": {
+            "bad": "Schema::create('events', function (Blueprint $table) {\n    $table->increments('id');   // INT UNSIGNED: 4,294,967,295 values\n});\n\n// Years later, AUTO_INCREMENT stands at 3,865,470,567: 90.0% of the ceiling.",
+            "good": "Schema::create('events', function (Blueprint $table) {\n    $table->id();               // BIGINT UNSIGNED\n});",
+            "note": "MY.L6.PK_NOT_BIGINT reported the type the day the table was created. This rule reports the same key once AUTO_INCREMENT has used the configured share of the ceiling, half by default, because from then on the failing INSERT is a date. The value comes from SHOW CREATE TABLE: information_schema.TABLES serves a cached one that can be a day old.",
+            "false_positives": "A key without AUTO_INCREMENT, filled by the application, is not judged: its fill could only be read from the table's rows. A BIGINT key is not read at all, because no table reaches that ceiling. The rule serves the audit suite only: a migration carries no counter position."
+        },
         "MY.L5.SQL_MODE_DIVISION_BY_ZERO_SILENT": {
             "bad": "SET GLOBAL sql_mode = 'NO_ZERO_DATE';",
             "good": "SET GLOBAL sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';",
@@ -172,7 +184,7 @@
             "good": "SET GLOBAL character_set_server = utf8mb4;",
             "language": "sql",
             "note": "Laravel's schema builder emits an explicit CHARACTER SET for the tables it creates, so the common failure is not those tables — it is everything else: a database an operator created by hand, a table added by hand, a raw-SQL migration. Those take the server default, and on latin1 they silently cannot hold most of Unicode. Depending on the SQL mode MySQL replaces the character or truncates the value at it rather than refusing the write, so the row is stored, altered, and nobody finds out until somebody asks why their name is wrong.",
-            "false_positives": "The COLLATION within utf8mb4 is deliberately not judged: utf8mb4_0900_ai_ci and utf8mb4_unicode_ci are both legitimate, and the second pins an older Unicode version, which is a real reason on a database that must keep sort order stable across an upgrade. Nor is collation_server judged as its own finding — measured on 8.4.10, MySQL will not let the two disagree: setting character_set_server to latin1 moved collation_server to latin1_swedish_ci by itself, and setting collation_server to utf8mb4_unicode_ci moved character_set_server to utf8mb4. Two rules would report one misconfiguration twice, and an ignore entry for one would leave the other shouting."
+            "false_positives": "The COLLATION within utf8mb4 is not this rule's question: MY.L6.COLLATION_LEGACY reports a pre-8.0 collation on the database default and on each table, Laravel's default utf8mb4_unicode_ci among them, and says when pinning one is the right call. Nor is collation_server judged as its own finding — measured on 8.4.10, MySQL will not let the two disagree: setting character_set_server to latin1 moved collation_server to latin1_swedish_ci by itself, and setting collation_server to utf8mb4_unicode_ci moved character_set_server to utf8mb4. Two rules would report one misconfiguration twice, and an ignore entry for one would leave the other shouting."
         },
         "MY.L6.CHARSET_NOT_UTF8MB4": {
             "bad": "Schema::create('messages', function (Blueprint $table) {\n    $table->id();\n    $table->string('body')->charset('utf8mb3');\n});",
@@ -234,6 +246,12 @@
             "note": "The flag this rule requires is ONLY_FULL_GROUP_BY. A GROUP BY may select a column that is neither grouped nor aggregated, and the server returns an arbitrary row's value for it — not random enough to notice in development, not stable enough to rely on.",
             "false_positives": "A codebase carrying queries written against the loose behavior is the expected exception, and turning the flag on would break them rather than fix them — which is why this is an idiom finding rather than a safety one. It belongs on the ignore list with a note about the migration owed."
         },
+        "MY.L6.TIMESTAMP_2038": {
+            "bad": "Schema::create('licenses', function (Blueprint $table) {\n    $table->id();\n    $table->timestamp('expires_at');   // TIMESTAMP: nothing after 2038-01-19\n});",
+            "good": "Schema::create('licenses', function (Blueprint $table) {\n    $table->id();\n    $table->dateTime('expires_at');    // DATETIME: up to 9999-12-31\n});",
+            "note": "timestamp() declares MySQL's TIMESTAMP, which holds nothing after 2038-01-19 03:14:07 UTC, and in strict mode a later value is refused with error 1292. A license sold today with fifteen years to run cannot be stored today. dateTime() declares DATETIME, which reaches 9999-12-31 and stores the value as it is given, so the session runs in UTC.",
+            "false_positives": "The rule reads the column name, not the values. A column named for a future instant that only ever holds past ones is reported anyway and can stay as it is. A column that holds future instants under a name without such a word, valid_to for example, is not reported. created_at, updated_at and deleted_at are never reported: they hold the past and reach the limit in 2038, with every other TIMESTAMP column."
+        },
         "MY.L6.TIME_ZONE_NOT_UTC": {
             "bad": "SET GLOBAL time_zone = 'SYSTEM';",
             "good": "SET GLOBAL time_zone = '+00:00';",
@@ -262,8 +280,8 @@
         },
         "MY.L7.UNBATCHED_MASS_DML": {
             "bad": "DB::table('orders')->where('status', 'old')->update(['status' => 'new']);",
-            "good": "// MySQL accepts LIMIT on UPDATE, so a chunk is readable in the statement itself:\nDB::table('orders')->where('status', 'old')->limit(1000)->update(['status' => 'new']);\n// …or walk a key range, which bounds it just as well:\n// DB::table('orders')->whereBetween('id', [$from, $to])->update(['status' => 'new']);",
-            "note": "A write with a predicate but no bound runs as one statement over every row it matches, holding row locks for the whole of it while the migration blocks the deploy. Bound it with a LIMIT or a key range — or, for a large table, move the backfill into a queued job so a deploy is not waiting on it.",
+            "good": "// Walk a key range, so every batch reads only the rows it changes:\nDB::table('orders')->whereBetween('id', [$from, $to])->where('status', 'old')->update(['status' => 'new']);\n// …or bound the statement with LIMIT, which keeps the locks small only when an index serves the predicate:\n// DB::table('orders')->where('status', 'old')->limit(1000)->update(['status' => 'new']);",
+            "note": "A write with a predicate but no bound runs as one statement over every row it matches, locking every row its scan reads while the migration blocks the deploy. Bound it with a key range, or with a LIMIT where an index serves the predicate, since under REPEATABLE READ a LIMIT batch on an unindexed predicate still locks every row its scan passes. For a large table, move the backfill into a queued job so a deploy is not waiting on it.",
             "false_positives": "This is a heuristic and says so in the finding: it can see that a statement is unbounded, never how many rows that means, and it never asks the server for a row count. On a small lookup table an unbounded write is a non-event and is still reported — which is why the rule sits at level 7, the band a project turns on when it wants estimates as well as facts. It is lenient in the other direction too: a BETWEEN silences it, because a key-range walk is the fix it recommends, and a BETWEEN on a non-key column bounds nothing."
         },
         "MY.L8.FK_ID_SUFFIX": {
@@ -320,6 +338,12 @@
             "note": "TRUNCATE takes a lock that excludes every concurrent reader and writer for its duration and cannot be undone by a forgotten WHERE clause; a batched delete keeps the table readable and is filterable.",
             "false_positives": "A TRUNCATE on a table that is already empty is reported exactly like one that discards a million rows — the rule reads the statement, not the table's contents. The same-migration carve-out covers a helper table this migration created and nothing wider, so a staging table from an earlier migration in the same run still fires. The lock half of the finding holds either way: ACCESS EXCLUSIVE is taken whether or not there is anything to remove."
         },
+        "PG.L2.CLUSTER": {
+            "bad": "DB::statement('CLUSTER orders USING orders_created_at_index');",
+            "good": "// Reorder the table with pg_repack outside the deploy. A migration can refresh\n// the planner's statistics without a lock that blocks anyone:\nDB::statement('ANALYZE orders');",
+            "note": "CLUSTER writes the table into a new file in the order of an index and holds an ACCESS EXCLUSIVE lock until the rewrite is done, so every read and every write waits for the whole run, and the order is not kept as rows change. pg_repack writes a table in an index's order while it stays in use and holds the exclusive lock only for a moment at the start and at the end.",
+            "false_positives": "Every CLUSTER that names a table is reported, because the lock does not depend on the table. A CLUSTER without a table is not reported but undetermined: it re-clusters every table clustered before, and the statement does not say which."
+        },
         "PG.L2.CONSTRAINT_NOT_VALIDATED": {
             "bad": "DB::statement('ALTER TABLE orders ADD CONSTRAINT orders_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES customers (id)');",
             "good": "// Migration 1 — add the key NOT VALID. New rows are checked at once, and the lock is brief:\nDB::statement('ALTER TABLE orders ADD CONSTRAINT orders_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES customers (id) NOT VALID');\n\n// Migration 2 — validate it. In a transaction of its own the scan takes only SHARE UPDATE EXCLUSIVE:\nDB::statement('ALTER TABLE orders VALIDATE CONSTRAINT orders_customer_id_fkey');",
@@ -338,6 +362,18 @@
             "note": "A plain CREATE INDEX holds a lock that blocks writes to the table while it builds; CREATE INDEX CONCURRENTLY builds without blocking writes, at the cost of running outside a transaction.",
             "false_positives": "An index on a table that is small, or not yet receiving writes, blocks nobody for a measurable time, and the finding does not distinguish it — the rule reads the statement, not the table. The exception it does make is exact: an index on a table the SAME migration created is silent, because there are no writers to block and no rows to scan."
         },
+        "PG.L2.REFRESH_MATERIALIZED_VIEW_NOT_CONCURRENT": {
+            "bad": "DB::statement('REFRESH MATERIALIZED VIEW order_totals');",
+            "good": "// The view needs a unique index over plain columns that covers every row,\n// and it must already hold data:\nDB::statement('REFRESH MATERIALIZED VIEW CONCURRENTLY order_totals');",
+            "note": "REFRESH MATERIALIZED VIEW without CONCURRENTLY holds an ACCESS EXCLUSIVE lock on the view while its query runs, so every read of the view waits. The concurrent refresh lets reads through; it needs a unique index on the view that covers every row, and a view that already holds data.",
+            "false_positives": "A view nobody reads during the deploy loses nothing to the lock, and the rule cannot know who reads it. The first refresh of a view created WITH NO DATA has to be the ordinary one, because the concurrent form refuses an empty view; answer that one with #[SqlensIgnore]."
+        },
+        "PG.L2.REINDEX_NOT_CONCURRENT": {
+            "bad": "DB::statement('REINDEX INDEX orders_created_at_index');",
+            "good": "// public $withinTransaction = false; on the migration class, because\n// PostgreSQL refuses the concurrent rebuild inside a transaction block:\nDB::statement('REINDEX INDEX CONCURRENTLY orders_created_at_index');",
+            "note": "REINDEX without CONCURRENTLY holds SHARE on the table and ACCESS EXCLUSIVE on each index it rebuilds, so writes wait for the whole rebuild and so do reads that would use the index. REINDEX ... CONCURRENTLY builds each replacement beside the old index and blocks neither, outside a transaction.",
+            "false_positives": "Every REINDEX INDEX or REINDEX TABLE without CONCURRENTLY is reported, an index of an empty table included, where the locks last only a moment; the rule does not read the table's size."
+        },
         "PG.L2.SET_NOT_NULL_SCAN": {
             "bad": "DB::statement('ALTER TABLE orders ALTER COLUMN email SET NOT NULL');",
             "good": "// Migration 1 — add the not-null constraint NOT VALID. It holds for every new row at once:\nDB::statement('ALTER TABLE orders ADD CONSTRAINT orders_email_not_null NOT NULL email NOT VALID');\n\n// Migration 2 — validate it. In a transaction of its own the scan takes only SHARE UPDATE EXCLUSIVE:\nDB::statement('ALTER TABLE orders VALIDATE CONSTRAINT orders_email_not_null');",
@@ -349,6 +385,12 @@
             "good": "// Add a widened column, backfill it in batches, then swap in a later migration —\n// never rewrite the table in place under a lock:\nSchema::table('orders', fn (Blueprint $table) => $table->bigInteger('total_cents_new')->nullable());",
             "note": "A type change that rewrites the table holds a lock while every row is rewritten; adding a new column and backfilling it in batches keeps the table available throughout.",
             "false_positives": "The migration names only the TARGET type, never the source, so a target this rule knows rewrites is flagged even when the actual source makes the change free. The honesty is in the third value rather than in silence: a target the matrix does not classify comes back UNDETERMINED with its reason, not as a pass. A USING clause is decided outside the matrix and forces the finding unconditionally, which is correct for the server and can still overstate a USING that only re-labels."
+        },
+        "PG.L2.VACUUM_FULL": {
+            "bad": "DB::statement('VACUUM FULL orders');",
+            "good": "// Marks dead rows for reuse under a lock that blocks no read and no write.\nDB::statement('VACUUM (ANALYZE) orders');",
+            "note": "VACUUM FULL writes the table into a new file and holds an ACCESS EXCLUSIVE lock until the rewrite is done, so every read and every write waits for the whole run. The plain VACUUM marks dead rows for reuse without blocking anyone. To give the space back online, pg_repack or pg_squeeze rewrite the table and hold the exclusive lock only for a moment at the start and at the end.",
+            "false_positives": "Every VACUUM FULL is reported, because the lock does not depend on the table. The rule reads the word FULL and not its value, so VACUUM (FULL false), which switches the rewrite off, is reported as well; write the plain VACUUM instead."
         },
         "PG.L3.CONCURRENTLY_IN_TRANSACTION": {
             "bad": "// This body runs in the migration's default transaction, where CONCURRENTLY is rejected:\nDB::statement('CREATE INDEX CONCURRENTLY idx_orders_customer_id ON orders (customer_id)');",
@@ -379,6 +421,12 @@
             "good": "// Put each locking operation in its own migration so its lock is taken and released alone:\nDB::statement('ALTER TABLE orders ADD COLUMN note_a text');",
             "note": "Several lock-taking operations in one transaction hold every lock until the whole transaction commits, widening the window in which traffic is blocked; one operation per migration keeps each lock short.",
             "false_positives": "It counts DISTINCT pre-existing tables locked in one transaction, so several fast ALTERs across several small tables are reported with the same words as a bundle of expensive ones — the sum being the concern, the rule does not weigh the parts. Tables the migration itself created are not counted, and neither is a migration that runs outside a transaction."
+        },
+        "PG.L3.VACUUM_IN_TRANSACTION": {
+            "bad": "// This body runs in the migration's default transaction, where VACUUM is refused:\nDB::statement('VACUUM ANALYZE orders');",
+            "good": "// Set public $withinTransaction = false; on the migration class so the\n// statement runs outside a transaction, as VACUUM requires:\nDB::statement('VACUUM ANALYZE orders');",
+            "note": "PostgreSQL refuses VACUUM inside a transaction block with error 25001, the plain form as much as VACUUM FULL, and Laravel wraps a migration in one by default; the migration must opt out of the transaction for the statement to run at all.",
+            "false_positives": "Determinate for a captured migration, because the transaction context is read from the migration's own $withinTransaction. The case it cannot see is a transaction opened around the migration by something else, a wrapper command or a deploy script running several migrations inside one BEGIN: the statement fails there and this rule is silent, which is an under-report rather than a false positive."
         },
         "PG.L4.CHECK_ENUM_CHANGE": {
             "bad": "DB::statement('ALTER TABLE orders DROP CONSTRAINT orders_status_check');\nDB::statement(\"ALTER TABLE orders ADD CONSTRAINT orders_status_check CHECK (status IN ('open', 'closed', 'refunded'))\");",
@@ -436,6 +484,12 @@
             "note": "The example is the ORDER, because the order is the whole difficulty. A B-tree index on a text column stores its entries in the collation's sort order; change the collation — a glibc upgrade, a new ICU, an OS image bump — and that order changes underneath the index. Refreshing the recorded version first tells the server everything is current while the indexes are still sorted the old way: it silences PostgreSQL's own startup warning and leaves an equality lookup able to miss a row that is present. Reindex first, refresh second.",
             "false_positives": "A provider that reports no version at all is reported as undetermined rather than as clean — measured on PostgreSQL 18 on macOS, the libc provider reports none, so drift is undetectable there in principle. That is not the same as absent, and calling it a pass would be the silent green this package is built against. One side reporting and the other not is its own undetermined too: a recorded version with no current one means an OS change already happened and the evidence is gone."
         },
+        "PG.L5.FK_NEAR_CEILING": {
+            "bad": "Schema::create('depots', function (Blueprint $table) {\n    $table->id();                            // bigint\n});\n\nSchema::create('deliveries', function (Blueprint $table) {\n    $table->id();\n    $table->integer('depot_id');             // integer: 2,147,483,647 values\n    $table->foreign('depot_id')->references('id')->on('depots');\n});\n\n// depots_id_seq has handed out 2,000,000,000 values: 93.1% of what depot_id can hold.",
+            "good": "Schema::create('deliveries', function (Blueprint $table) {\n    $table->id();\n    $table->foreignId('depot_id')->constrained();   // bigint, derived from the target\n    $table->index('depot_id');\n});",
+            "note": "PG.L6.FK_NARROWER_THAN_KEY reported the type mismatch the day the column was created. This rule reports the same column once the parent's sequence has used the configured share of the column's ceiling, half by default, because from then on the INSERT that fails is a date. The parent's own key still has room, so nothing about the parent looks wrong.",
+            "false_positives": "A parent key filled by the application rather than by a sequence is not judged, and neither is a parent outside the audited schemas. A role without SELECT or USAGE on the parent's sequence cannot read its position, and the finding is then undetermined until GRANT SELECT ON SEQUENCE answers it. The rule serves the audit suite only: a migration carries no sequence position."
+        },
         "PG.L5.FK_NO_INDEX": {
             "bad": "Schema::create('orders', function (Blueprint $table) {\n    $table->id();\n});\n\nSchema::create('order_lines', function (Blueprint $table) {\n    $table->id();\n    $table->foreignId('order_id')->constrained();\n});",
             "good": "Schema::create('orders', function (Blueprint $table) {\n    $table->id();\n});\n\nSchema::create('order_lines', function (Blueprint $table) {\n    $table->id();\n    $table->foreignId('order_id')->constrained();\n    $table->index('order_id');\n});",
@@ -472,6 +526,12 @@
             "note": "A table with no primary key cannot be replicated for UPDATE or DELETE: PostgreSQL answers “cannot update table … because it does not have a replica identity”, on the first write rather than when the publication is created. Row-level auditing and re-run-this-row recovery have nothing to identify a row by either.",
             "false_positives": "A UNIQUE index over columns that are all NOT NULL is a real substitute — it is exactly what REPLICA IDENTITY USING INDEX accepts — and such a table draws no finding. The bad example above is flagged even though it has a unique index, because the column is nullable: two rows holding NULL there are not equal to one another, so the index identifies nothing. Partial, expression and invalid indexes do not qualify either. A deliberately keyless log or staging table is a real case and belongs in the ignore list with its reason."
         },
+        "PG.L5.PK_NEAR_CEILING": {
+            "bad": "Schema::create('events', function (Blueprint $table) {\n    $table->increments('id');   // integer: 2,147,483,647 values\n});\n\n// Years later, events_id_seq has handed out 1,932,735,283 of them: 90.0% of the ceiling.",
+            "good": "Schema::create('events', function (Blueprint $table) {\n    $table->id();               // bigint\n});",
+            "note": "PG.L6.PK_NOT_BIGINT reported the type the day the table was created. This rule reports the same key once its sequence has used the configured share of the ceiling, half by default, because from then on the failing INSERT is a date. A serial key widened to bigint keeps a sequence AS integer, and the finding then names the sequence as the limit: ALTER SEQUENCE ... AS bigint lifts it without rewriting the table.",
+            "false_positives": "A key filled by the application rather than by a sequence is not judged: its fill could only be read from the table's rows. A role without SELECT or USAGE on the sequence cannot read its position, and the finding is then undetermined until GRANT SELECT ON SEQUENCE answers it. The rule serves the audit suite only: a migration carries no sequence position."
+        },
         "PG.L6.DEFAULT_TRANSACTION_ISOLATION_DRIFT": {
             "bad": "ALTER SYSTEM SET default_transaction_isolation = 'serializable';\nSELECT pg_reload_conf();",
             "good": "ALTER SYSTEM SET default_transaction_isolation = 'read committed';\nSELECT pg_reload_conf();",
@@ -485,6 +545,12 @@
             "language": "sql",
             "note": "A transaction that does not say READ WRITE refuses writes outright, and the failure reads like a permissions problem without being one. The reason this is reported rather than merely noted is what it does to the rest of a run: an audit reasons about what a write would cost — which lock it takes, whether it rewrites the table — and on an instance that refuses the write before any of that, those statements stay true about the SQL and stop being true about this server.",
             "false_positives": "A dedicated read replica, or an instance deliberately held read-only during a migration window, is the expected exception rather than a defect. It belongs on the ignore list with the reason recorded there. Only the server's value is judged: a read connection that sets the flag for its own session is doing exactly what it should, and is never reported as a server finding."
+        },
+        "PG.L6.FK_NARROWER_THAN_KEY": {
+            "bad": "Schema::create('accounts', function (Blueprint $table) {\n    $table->id();                        // bigint\n});\n\nSchema::create('invoices', function (Blueprint $table) {\n    $table->id();\n    $table->integer('account_id');       // int -- narrower than what it points at\n    $table->foreign('account_id')->references('id')->on('accounts');\n    $table->index('account_id');\n});",
+            "good": "Schema::create('accounts', function (Blueprint $table) {\n    $table->id();                        // bigint\n});\n\nSchema::create('invoices', function (Blueprint $table) {\n    $table->id();\n    $table->foreignId('account_id')->constrained();   // bigint, derived from the target\n    $table->index('account_id');\n});",
+            "note": "The usual reason given for this — \"the comparison stops using the index\" — was measured against PostgreSQL 18.4 and is FALSE: `EXPLAIN SELECT * FROM invoices WHERE account_id = 42::bigint` answers `Index Scan … Index Cond: (account_id = '42'::bigint)`, because the btree integer operator family carries cross-type operators. What is actually wrong is worse and it is dated: an `int` column can only ever point at the first 2,147,483,647 of a `bigint` key's values. Every test passes, because a test database never gets there — and then the parent sequence crosses that number, years later, and every insert into the child fails.",
+            "false_positives": "A key whose other end could not be read reports undetermined rather than passing, where the end that was read leaves room for a narrower integer. Every other mismatch between the two ends of a key, a wider referencing column or two types that are not two widths of one number, is PG.L9.TYPE_IMPLICIT_CAST's. The rule serves the audit suite only: a migration adding a foreign key carries the type of neither column."
         },
         "PG.L6.JSON_NOT_JSONB": {
             "bad": "Schema::create('webhooks', function (Blueprint $table) {\n    $table->json('payload');\n});",
@@ -536,12 +602,26 @@
             "note": "A scale factor says vacuum this table more eagerly than the rest; enabled = false says never, until the server insists. The first is a decision about this table, the second is a decision about a moment somebody else will pick — and the server does pick one, because an anti-wraparound vacuum runs whatever this parameter says.",
             "false_positives": "A table maintained by hand is a legitimate shape: one bulk-loaded on a schedule is vacuumed better at a chosen moment than at an arbitrary one. This check cannot see that schedule — it is a cron, a job, an Ansible task, none of which are in the database — so the answer is an ignore entry with the reason beside it rather than a heuristic guessing at intent from a table's name or size. A table with no such parameter at all is not reported: it runs under the cluster's setting, and reading nobody said as somebody said no would report every table in the schema."
         },
+        "PG.L7.AUTOVACUUM_OFF": {
+            "bad": "# postgresql.conf\nautovacuum = off",
+            "good": "# postgresql.conf\nautovacuum = on",
+            "language": "ini",
+            "note": "A server-wide off stops the daemon for every table at once. A table that needs other treatment gets its own storage parameter, such as autovacuum_vacuum_scale_factor, which is a decision about that table rather than about a moment the server will pick at the freeze horizon.",
+            "false_positives": "A server whose every table is vacuumed by hand on a schedule has made a defensible, if rare, call. This check cannot see that schedule; the answer is an ignore entry with the reason beside it. A role that cannot read the setting gets undetermined, never a pass."
+        },
         "PG.L7.DATA_CHECKSUMS_DISABLED": {
             "bad": "initdb --no-data-checksums -D /var/lib/postgresql/data",
             "good": "initdb -D /var/lib/postgresql/data",
             "language": "shell",
             "note": "The example is the moment the decision is made, because that is the only moment it can be made cheaply: PostgreSQL 18 initializes with checksums on, and turning them off is now an explicit choice. On an existing cluster there is no in-place edit — pg_checksums --enable needs the cluster shut down cleanly, and the alternative is a new cluster and a dump/restore. That is why the finding describes the real path instead of proposing a setting to change.",
             "false_positives": "A managed database that does not expose the value at all is reported as undetermined, never as a failure — 'we could not read it' and 'it is off' are different sentences, and only one of them justifies planning a migration. The check reads a cluster fact rather than a session value, so it is identical on a primary and its replicas and is not a separate finding on each."
+        },
+        "PG.L7.INDEX_INVALID": {
+            "bad": "// A unique index built concurrently over data that already holds a duplicate, in a migration\n// that sets public bool $withinTransaction = false; as CONCURRENTLY requires. The statement\n// fails and leaves users_email_unique behind, invalid.\nDB::statement('CREATE UNIQUE INDEX CONCURRENTLY users_email_unique ON users (email)');",
+            "good": "// Set public bool $withinTransaction = false; on the migration class, as CONCURRENTLY\n// requires, and remove what an earlier failed build left before building again:\nDB::statement('DROP INDEX CONCURRENTLY IF EXISTS users_email_unique');\nDB::statement('CREATE UNIQUE INDEX CONCURRENTLY users_email_unique ON users (email)');",
+            "language": "php",
+            "note": "The finding is about the catalog, so the bad example is the migration whose failure leaves the index behind, and the good one is a migration that removes the remains of an earlier failed run before it builds again. For a unique index, the duplicate rows have to go first, or the second build fails like the first.",
+            "false_positives": "An index that is still being built is invalid on purpose. A build running on its table makes the answer undetermined instead of a finding, and so does a build this session may not see, which is what a role without pg_read_all_stats meets. A partitioned index created with ON ONLY is reported while its partitions are still being attached."
         },
         "PG.L7.INDEX_REDUNDANT": {
             "bad": "Schema::create('orders', function (Blueprint $table) {\n    $table->id();\n    $table->foreignId('customer_id');\n    $table->timestamp('placed_at');\n    $table->index(['customer_id']);\n    $table->index(['customer_id', 'placed_at']);\n});",
@@ -554,6 +634,13 @@
             "good": "Schema::create('orders', function (Blueprint $table) {\n    $table->id();\n    $table->string('legacy_ref')->nullable();\n});",
             "note": "An index nobody reads is still written on every insert and on every update touching its columns, occupies its own pages in cache, and on PostgreSQL is one more relation for vacuum to walk. The read side gains nothing. The counter says how often it has been scanned; the window says whether that number means anything.",
             "false_positives": "This rule is EXPERIMENTAL and opt-in, and the reason is not immaturity: its verdict depends on WHEN it is asked, which is a direct tension with the package's determinism promise. Three things the counter cannot see. Statistics are per INSTANCE, so an index read only on a replica looks unused on the primary. A query that runs monthly has not run yet if the window is shorter than a month, which is why the minimum window is configurable and defaults to 30 days. And a counter that was reset yesterday says nothing at all — that case is undetermined with a named reason, never a pass and never a finding. A primary key or unique index is never reported: it exists to refuse a write, and it has been doing that silently the whole time."
+        },
+        "PG.L7.TRACK_COUNTS_OFF": {
+            "bad": "# postgresql.conf\ntrack_counts = off",
+            "good": "# postgresql.conf\ntrack_counts = on",
+            "language": "ini",
+            "note": "The judged value is the one a new connection gets: a superuser switching it off for one session is not a finding, while a database default set with ALTER DATABASE is, because every new connection of that database gets it.",
+            "false_positives": "None known on a server where autovacuum is expected to work. A role that cannot read the setting gets undetermined, never a pass."
         },
         "PG.L7.UNBATCHED_MASS_DML": {
             "bad": "DB::table('orders')->where('status', 'old')->update(['status' => 'new']);",
@@ -586,9 +673,9 @@
             "false_positives": "The framework tables are exempt by default — `migrations`, `jobs`, `cache`, `sessions`, `failed_jobs`, `password_reset_tokens` and the rest. None will ever carry a comment and none should; without the exemption this rule reports double digits on a brand-new application. A column is judged by the exemption of the TABLE that owns it, so exempting `migrations` also exempts `migrations.batch`. A project's own list REPLACES the shipped one rather than adding to it, and names are matched WHOLE: a project's `job_applications` is not the framework's `jobs`. Extension-owned objects need no exemption — the catalog reader already filters them out."
         },
         "PG.L9.TYPE_IMPLICIT_CAST": {
-            "bad": "Schema::create('accounts', function (Blueprint $table) {\n    $table->id();                        // bigint\n});\n\nSchema::create('invoices', function (Blueprint $table) {\n    $table->id();\n    $table->integer('account_id');       // int -- narrower than what it points at\n    $table->foreign('account_id')->references('id')->on('accounts');\n    $table->index('account_id');\n});",
+            "bad": "Schema::create('accounts', function (Blueprint $table) {\n    $table->increments('id');            // integer\n});\n\nSchema::create('invoices', function (Blueprint $table) {\n    $table->id();\n    $table->bigInteger('account_id');    // bigint -- wider than what it points at\n    $table->foreign('account_id')->references('id')->on('accounts');\n    $table->index('account_id');\n});",
             "good": "Schema::create('accounts', function (Blueprint $table) {\n    $table->id();                        // bigint\n});\n\nSchema::create('invoices', function (Blueprint $table) {\n    $table->id();\n    $table->foreignId('account_id')->constrained();   // bigint, derived from the target\n    $table->index('account_id');\n});",
-            "note": "The usual reason given for this — \"the comparison stops using the index\" — was measured against PostgreSQL 18.4 and is FALSE: `EXPLAIN SELECT * FROM invoices WHERE account_id = 42::bigint` answers `Index Scan … Index Cond: (account_id = '42'::bigint)`, because the btree integer operator family carries cross-type operators. What is actually wrong is worse and it is dated: an `int` column can only ever point at the first 2,147,483,647 of a `bigint` key's values. Every test passes, because a test database never gets there — and then the parent sequence crosses that number, years later, and every insert into the child fails.",
+            "note": "Both ends of a key should be one type, and the fix for a key wider than what it references is widening the referenced key, as the good example does from the start: a bigint id and a foreignId derived from it. The narrowing direction, an int pointing at a bigint, breaks on a date and is PG.L6.FK_NARROWER_THAN_KEY's.",
             "false_positives": "A declared LENGTH difference is not a mismatch and is never reported: `varchar(50)` referencing `varchar(100)` is created by both engines, costs nothing, and is the most common shape in a real schema — the comparison is the base type. On PostgreSQL, `text` against `varchar` is also silent, because `pg_type` reports identical `typlen`, `typalign` and `typstorage` for them; `bpchar` is NOT in that group, because it pads. A foreign key whose far end could not be read reports undetermined rather than passing. The rule serves the audit suite only: a migration adding a foreign key carries the type of neither column, and the referenced table was created by a migration that is no longer pending."
         },
         "PG.L9.VIEW_SELECT_STAR": {

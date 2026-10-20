@@ -11,7 +11,7 @@ namespace Pushery\SQLens\Tools\Squawk;
  * A project that ignores `SQUAWK.ban-char-field` has written a correct configuration; if the
  * validator asked the binary, that same file would be a misconfiguration on a laptop without
  * the tool, on Windows where it has no build, and on any run with the tool switched off. The
- * configuration says what the project MEANS, and a machine's inventory is not a vote on it.
+ * configuration says what the project means, and a machine's inventory is not a vote on it.
  *
  * The set is narrower than the map on purpose: a rule SQLens deliberately does not report can
  * never produce a finding, so a suppression naming it would suppress nothing — which is exactly

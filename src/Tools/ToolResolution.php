@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Tools;
 
 /**
- * How the locator resolved an external tool — and, crucially, WHY it is absent when
+ * How the locator resolved an external tool — and, crucially, why it is absent when
  * it is. "No silent green" reaches the tool layer: a tool that could not be found is
  * never an anonymous skip; it points at one of these named states.
  *
@@ -28,7 +28,7 @@ enum ToolResolution: string
      * The configuration named a path and that path is not a runnable binary.
      *
      * Its own case rather than a fall-through to `$PATH`, and that distinction is the whole
-     * point of pinning: a project that names a path has said WHICH binary it wants. Quietly
+     * point of pinning: a project that names a path has said which binary it wants. Quietly
      * running a different one because the named one did not answer is the exact shape of
      * "it behaves differently on my machine" — the configuration would look honored while
      * the result came from somewhere else entirely.
@@ -41,7 +41,7 @@ enum ToolResolution: string
     /**
      * The binary was found and could not be made to say which version it is.
      *
-     * Not available, even though something IS there. The output of an external tool is
+     * Not available, even though something is there. The output of an external tool is
      * parsed against a shape that was measured from one version; running a binary whose
      * identity is unknown means parsing an unknown shape, and that does not fail loudly —
      * it maps a finding to the wrong rule, or to the wrong line, and looks fine doing it.
@@ -64,7 +64,7 @@ enum ToolResolution: string
      * The project switched this tool off.
      *
      * Not an absence, and that distinction is the whole reason it is its own state. Every other
-     * state here says something SQLens discovered; this one says something the project DECIDED,
+     * state here says something SQLens discovered; this one says something the project decided,
      * and reporting a decision back as a problem every run is how a tool teaches people to stop
      * reading it. It never fails a strict run either — strict mode asks whether the amplifiers a
      * project WANTS ran, not whether it wants them.

@@ -19,15 +19,12 @@ use Pushery\SQLens\Rules\RuleRegistry;
  * able to, still report a critical security finding. Filtering them out by level
  * would collapse two orthogonal axes into one.
  *
- * "No silent green" is structural here: a rule the level hides does NOT become a
+ * "No silent green" is structural here: a rule the level hides does not become a
  * pass. The hidden rules are their own list, counted and reported, so a reader sees
  * what a lower level chose not to check rather than a green that quietly skipped it.
  */
 final readonly class LevelGate
 {
-    /** Security and privacy run at any level — gated by severity, never by strictness. */
-    private const array SEVERITY_GATED = [Category::Security, Category::Privacy];
-
     public function __construct(private Level $active) {}
 
     /**
@@ -71,6 +68,10 @@ final readonly class LevelGate
     /**
      * The same decision for something that carries a level and a category without being a rule: an
      * external tool's finding, or an id its map describes.
+     *
+     * A severity-gated category runs at any level, asked of {@see Category::usesSeverityGate()} rather
+     * than listed here: a second list is a second place the axis rule lives, and the gate axis reads
+     * the same answer.
      */
     public function admitsAt(Level $level, Category $category): bool
     {
@@ -78,7 +79,7 @@ final readonly class LevelGate
             return true;
         }
 
-        return in_array($category, self::SEVERITY_GATED, true);
+        return $category->usesSeverityGate();
     }
 
     private function admits(Rule $rule): bool

@@ -27,8 +27,9 @@ use Pushery\SQLens\Contracts\DriverCanonicalization;
  *
  * - **Which delimiters open a literal.** MySQL's manual, under String Literals, says a string is
  *   enclosed within either single quote or double quote characters. `"` is only an identifier quote
- *   under `ANSI_QUOTES`, which is not in the default `sql_mode` and which Laravel's MySQL connection
- *   does not set. So `VALUES ("set lock_wait_timeout = 5")` is a literal, and the pattern above sees
+ *   under `ANSI_QUOTES`, which is not in the default `sql_mode`, and a statement captured on a
+ *   connection whose `modes` set it reaches this mask already translated into the default reading.
+ *   So `VALUES ("set lock_wait_timeout = 5")` is a literal, and the pattern above sees
  *   `SET lock_wait_timeout =` as syntax — the false-silence direction, on a rule whose whole job is
  *   to notice that the timeout is missing.
  * - **Whether a backslash escapes the delimiter.** MySQL escapes with a backslash by default;
@@ -275,7 +276,7 @@ final class StringLiteralMask
      * One past the closing identifier quote, or the end of the string when it never closes.
      *
      * A doubled quote is an escaped quote here too — MySQL writes a backtick inside backticks by
-     * doubling it, and PostgreSQL does the same with double quotes. A backslash is NOT an escape
+     * doubling it, and PostgreSQL does the same with double quotes. A backslash is not an escape
      * inside a quoted identifier on either engine, so `usesBackslashStringEscapes()` deliberately
      * does not reach this loop.
      */

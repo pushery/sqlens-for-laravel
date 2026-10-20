@@ -6,7 +6,7 @@ namespace Pushery\SQLens\Security;
 
 use Pushery\SQLens\Catalog\Security\SecurityNotice;
 use Pushery\SQLens\Categories\Category;
-use Pushery\SQLens\Findings\CredentialRedactor;
+use Pushery\SQLens\Findings\CompositeCredentialRedactor;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
 use Pushery\SQLens\Findings\UndeterminedReason;
@@ -38,7 +38,7 @@ final readonly class SecurityRunNotices
      * connection nothing defines.
      *
      * None of them is an ordinary state, so the notice keeps the failure's own message: a
-     * paraphrase would lose exactly the part a reader needs, such as the connection names that ARE
+     * paraphrase would lose exactly the part a reader needs, such as the connection names that are
      * configured.
      *
      * The detail is redacted here rather than at the caller. Producers write
@@ -57,7 +57,7 @@ final readonly class SecurityRunNotices
      */
     public static function subRunCrashed(string $half, string $detail, UndeterminedReason $reason = UndeterminedReason::SubRunFailed): Finding
     {
-        return self::halfDidNotRun($half, sprintf('it failed with: %s', new CredentialRedactor()->redact($detail)), $reason);
+        return self::halfDidNotRun($half, sprintf('it failed with: %s', new CompositeCredentialRedactor()->redact($detail)), $reason);
     }
 
     /**
@@ -85,7 +85,7 @@ final readonly class SecurityRunNotices
      * One half refused before it looked: an ambiguous connection, a scope admitting no rule, a
      * config this package cannot read.
      *
-     * Its own findings travel along rather than being summarized, because they already say WHICH
+     * Its own findings travel along rather than being summarized, because they already say which
      * refusal it was — and a summary here would be a second, worse spelling of a sentence that
      * exists.
      *
@@ -138,7 +138,7 @@ final readonly class SecurityRunNotices
     /**
      * The shared sentence, written once for every factory, with the reason each one knows.
      *
-     * `undetermined` rather than a failure: the OTHER half may have found plenty, and turning an
+     * `undetermined` rather than a failure: the other half may have found plenty, and turning an
      * unreachable sub-run into a failing run is a decision this layer does not get to make —
      * `strict_undetermined` is where a project makes it.
      */

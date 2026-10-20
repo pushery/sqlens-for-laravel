@@ -7,17 +7,22 @@ namespace Pushery\SQLens\Subjects;
 use Pushery\SQLens\Contracts\Subject;
 
 /**
- * The subject for a raw-SQL callsite in PHP — the input of the analyse suite and
- * the injection rules.
+ * The subject for a raw-SQL callsite in PHP, reserved for the rule engine and built by
+ * nothing in this package.
+ *
+ * The analyse suite and its injection rules do not use it. They read PHPStan's own
+ * nodes through the collectors under `Analyse` and carry their signal as the data of
+ * those collectors, so a rule written against this subject is handed none. The type
+ * stays because it is public surface: whether it gains a producer or is withdrawn is
+ * still open.
  *
  * It makes the honesty boundary "syntactic patterns, not taint analysis" visible
  * in the type: the parametrization signal is a three-valued syntactic OBSERVATION
- * (parametrized / interpolated / undetermined), NOT a safe/unsafe verdict. A
+ * (parametrized / interpolated / undetermined), not a safe/unsafe verdict. A
  * fragment of unknown origin is undetermined, never silently parametrized.
  *
  * There are deliberately no data-flow fields — taint analysis is a sealed rabbit
- * hole. The VO knows nothing about PHPStan; that coupling lives in Analyse\PhpStan
- * and is built later.
+ * hole. The VO knows nothing about PHPStan.
  */
 final readonly class RawSql implements Subject
 {

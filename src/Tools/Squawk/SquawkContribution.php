@@ -19,12 +19,17 @@ use Pushery\SQLens\Tools\ToolPositionMapper;
  *
  * One seam rather than six calls scattered through the runner, because the order is load-bearing
  * and the guarantees only hold end to end: the run's own findings must come out unchanged, the
- * tool's must be placed before they are mapped, and de-duplication has to happen BEFORE
+ * tool's must be placed before they are mapped, and de-duplication has to happen before
  * suppression or a baseline gets pinned to findings that were about to be merged.
  *
  * It is invoked per MIGRATION, not per run. One invocation carries one reported path and one
  * transaction assumption, and a run that handed the tool everything at once would have to pick
  * one of each for migrations that disagree.
+ *
+ * Until it times out. The bound limits one invocation, and every later call would wait it out
+ * again, so a run over many pending migrations would wait their number times the bound. After
+ * the first timeout the remaining migrations are not sent, each reported as such, with the
+ * migration the tool timed out on named.
  *
  * Nothing here can end the run. Every failure of the tool becomes a named undetermined finding,
  * because an amplifier that was asked a question must never be able to stop the run that asked.
@@ -88,9 +93,19 @@ final readonly class SquawkContribution
         }
 
         $tool = [];
+        $timedOutOn = null;
 
         foreach ($run->results as $result) {
-            foreach ($this->forMigration($result, $diagnostic, $version, $context) as $finding) {
+            if ($timedOutOn !== null) {
+                $tool[] = $this->degraded(SquawkFailureReason::RunFailed, $result, $context, sprintf('not sent to squawk, which timed out on %s earlier in this run', $timedOutOn));
+
+                continue;
+            }
+
+            [$findings, $timedOut] = $this->forMigration($result, $diagnostic, $version, $context);
+            $timedOutOn = $timedOut ? $result->migrationClass : null;
+
+            foreach ($findings as $finding) {
                 $tool[] = $finding;
             }
         }
@@ -117,7 +132,9 @@ final readonly class SquawkContribution
     }
 
     /**
-     * @return list<Finding> what the tool contributed for ONE migration
+     * What the tool contributed for one migration, and whether it timed out doing so.
+     *
+     * @return array{0: list<Finding>, 1: bool}
      */
     private function forMigration(
         CaptureResult $result,
@@ -128,7 +145,7 @@ final readonly class SquawkContribution
         $statements = SquawkStatements::of($result);
 
         if ($statements === []) {
-            return [];
+            return [[], false];
         }
 
         $payload = ToolPayload::of($statements);
@@ -140,7 +157,7 @@ final readonly class SquawkContribution
         // transaction model, inside a report that says nothing about the substitution.
         foreach ([$assumedVersion, $transaction] as $assumption) {
             if ($assumption instanceof SquawkFailureReason) {
-                return [$this->degraded($assumption, $result, $context)];
+                return [[$this->degraded($assumption, $result, $context)], false];
             }
         }
 
@@ -156,7 +173,7 @@ final readonly class SquawkContribution
         );
 
         if (! $outcome->produced()) {
-            return [$this->degraded($outcome->failure ?? SquawkFailureReason::RunFailed, $result, $context, $outcome->detail)];
+            return [[$this->degraded($outcome->failure ?? SquawkFailureReason::RunFailed, $result, $context, $outcome->detail)], $outcome->timedOut];
         }
 
         $findings = [];
@@ -169,7 +186,7 @@ final readonly class SquawkContribution
             }
         }
 
-        return $findings;
+        return [$findings, false];
     }
 
     /**

@@ -36,8 +36,10 @@ use stdClass;
 /**
  * What this PostgreSQL server will say about its own accounts.
  *
- * Two statements over world-readable catalogs, no lock, inside the session the catalog reader already
- * sealed read-only.
+ * A few statements per reading, no lock, inside the session the catalog reader already sealed
+ * read-only. Most of what it reads answers every role, the roles and the ACLs among it. Two sources
+ * do not: `pg_authid` and `pg_hba_file_rules` refuse an ordinary role, and those readings end in a
+ * named skip rather than an empty answer.
  *
  * ## The split between `pg_roles` and `pg_authid` is the whole design
  *
@@ -346,7 +348,7 @@ final readonly class PgsqlSecurityReader implements SecurityReader
      * arrive the same way, and a hand-kept list would then quietly stop recognizing `GRANT ALL`.
      *
      * A separate statement from the grants query, deliberately. That query is one round trip because
-     * the grants it reads can change between two; this answers a property of the SERVER VERSION,
+     * the grants it reads can change between two; this answers a property of the server version,
      * which cannot change under a session — so there is nothing here for a second read to race.
      *
      * Owner id `0` rather than a real one: `aclexplode` reports the owner's entry with grantee `0`,
@@ -416,7 +418,7 @@ final readonly class PgsqlSecurityReader implements SecurityReader
         // ledger in the schema — a report nobody finishes, from a tool that has learned nothing about
         // the application.
 
-        // `off` is read BEFORE the scope, and that ordering is the fix. Collecting first collapsed it
+        // `off` is read before the scope, and that ordering is the fix. Collecting first collapsed it
         // into the same empty list an unconfigured project produces, and from there nothing
         // downstream could tell the two apart — so a project that had done what the finding asked of
         // it got the finding again, at severity high, on every run.
@@ -430,7 +432,7 @@ final readonly class PgsqlSecurityReader implements SecurityReader
         // the same reason `off` is: collecting first collapses it into the empty list an
         // unconfigured project produces, and from there nothing downstream can tell an answer from
         // a silence. The reason is guaranteed non-empty by the config validator, which refuses this
-        // mode without one -- the sentence IS the answer.
+        // mode without one -- the sentence is the answer.
         if ($mode === 'application') {
             $reason = $this->config->get('sqlens.security.rls.reason');
 
@@ -442,7 +444,12 @@ final readonly class PgsqlSecurityReader implements SecurityReader
         $tables = $this->rlsScope();
 
         if ($tables === []) {
-            return RlsReading::unconfigured();
+            // Under the heuristic an empty scope has two causes, and only one is a project that set
+            // nothing. A tenant column no table carries is an answer that matched nothing, and the
+            // report names the column instead of asking for the setting the project already made.
+            $column = $mode === 'heuristic' ? $this->config->get('sqlens.security.rls.tenant_column') : null;
+
+            return is_string($column) && $column !== '' ? RlsReading::tenantColumnMatchesNothing($column) : RlsReading::unconfigured();
         }
 
         // An unqualified name is resolved the way the SERVER resolves one, and that is the whole of
@@ -450,13 +457,13 @@ final readonly class PgsqlSecurityReader implements SecurityReader
         // who wrote `api_keys` — the name his own migration created the table under — got
         // `not found in the catalog` for every entry: fifteen skips over fifteen tables that exist,
         // with a message pointing at a missing table and a managed-instance hint that fitted the
-        // symptom and not the cause. A security list matching NOTHING also reports nothing, so it
+        // symptom and not the cause. A security list matching nothing also reports nothing, so it
         // looked configured.
         //
         // The application's `current_schema()` is not a guess about naming: it is the first existing
         // entry of its search_path, which is exactly where an unqualified CREATE TABLE puts a table.
         // Recorded before the reading pinned its own path, which leaves `pg_catalog` alone on it.
-        // Both literals are built HERE rather than inside the query closure: that closure is `static`,
+        // Both literals are built here rather than inside the query closure: that closure is `static`,
         // so `$this` does not exist in it and only what an arrow function captures is reachable.
         $qualifiedList = $this->textArray(array_values(array_filter($tables, static fn (string $t): bool => str_contains($t, '.'))));
         $bareList = $this->textArray(array_values(array_filter($tables, static fn (string $t): bool => ! str_contains($t, '.'))));
@@ -523,12 +530,12 @@ final readonly class PgsqlSecurityReader implements SecurityReader
 
             $command = RlsCommand::fromCatalog($this->text($row, 'polcmd'));
             $name = $this->text($row, 'polname');
-            // ONE decision, not two: this row is not a policy this build can judge. It is reached on
+            // One decision, not two: this row is not a policy this build can judge. It is reached on
             // every table that HAS no policy — the LEFT JOIN yields a row with an empty name, which is
             // the fail-closed state and not a row to drop — and it would also catch a `polcmd` a later
             // PostgreSQL adds. Splitting it in two put the second half on a line nothing can execute,
             // which the coverage floor was right to call out.
-            // Kept as a NAMED condition rather than as `if ($a || $b)`: Rector rewrites the second
+            // Kept as a named condition rather than as `if ($a || $b)`: Rector rewrites the second
             // form into two ifs, and the half that a live server never reaches then sits on a line
             // nothing executes — which the coverage floor is right to call out and which no test can
             // honestly close.
@@ -692,7 +699,7 @@ final readonly class PgsqlSecurityReader implements SecurityReader
      * Which tables this reading covers, from the project's own configuration.
      *
      * `listed` takes the names as given; `heuristic` asks the catalog which tables carry the tenant
-     * column, which is a question about THIS database rather than a guess about naming; `off` covers
+     * column, which is a question about this database rather than a guess about naming; `off` covers
      * nothing. An empty answer is what makes the reading unconfigured.
      *
      * @return list<string>
@@ -755,7 +762,7 @@ final readonly class PgsqlSecurityReader implements SecurityReader
      * that ignored it reported exactly that as "can become a SUPERUSER with one SET ROLE".
      *
      * The PATH comes with it, because a finding that says "this role reaches superuser" and stops is not
-     * resolvable: the person fixing it has to know WHICH grant to revoke. Per pair the settable chain
+     * resolvable: the person fixing it has to know which grant to revoke. Per pair the settable chain
      * wins, and the shortest of those, the one a reader acts on first.
      *
      * The walk runs here, breadth first over the memberships read once ({@see self::chainsFrom()}). It
@@ -1091,7 +1098,7 @@ final readonly class PgsqlSecurityReader implements SecurityReader
         // a name is already ambiguous in pg_hba.conf itself, where these are comma-separated tokens,
         // so the file could not express it unsplit either.
         //
-        // `options` is the third `text[]` column and it is deliberately NOT in this list: for `ldap`
+        // `options` is the third `text[]` column and it is deliberately not in this list: for `ldap`
         // and `radius` it holds a bind password or a shared secret, and no rule here needs it. See
         // {@see HbaRule} for why fetching it at all would be the mistake.
         /** @var list<object> $rows */
@@ -1143,7 +1150,8 @@ final readonly class PgsqlSecurityReader implements SecurityReader
     }
 
     /**
-     * The stored routines in the audited schemas, and what they run as.
+     * The stored routines of the database, outside the server's own schemas and the extensions', and what
+     * they run as.
      *
      * ## Why `pg_proc` and not `information_schema.ROUTINES`
      *
@@ -1164,12 +1172,17 @@ final readonly class PgsqlSecurityReader implements SecurityReader
      * `pg_hba_file_rules.options`, and for the same reason: a value in a PHP variable is a value a
      * stack trace can carry.
      *
-     * ## Scoped, unlike the grant reading
+     * ## Not narrowed to the audited schemas, like the grant reading
      *
-     * A routine is a schema OBJECT, so it belongs to the audited scope the way a table does — and an
-     * unscoped read would report every extension's functions on a server with PostGIS installed. The
-     * grant reading is unscoped for the opposite reason: a grant is about who may reach something,
-     * and narrowing that by schema would hide the grant that matters most.
+     * A definer routine runs with its owner's rights for every role that may execute it, and PostgreSQL
+     * grants EXECUTE to PUBLIC by default, so one in a schema outside the audited set is open to every role
+     * that may use that schema, whichever schemas the audit was told about. That is the grant reading's
+     * reason too: a grant is about who may reach something, and narrowing it by schema would hide the one
+     * that matters most. So `sqlens.catalog.schemas` does not apply here. What is left out is the server's
+     * own (`pg_catalog`, `information_schema`, the temporary and TOAST schemas) and every routine an
+     * extension owns, because reporting PostGIS's definer functions would bury the project's own. A database
+     * shared by several applications therefore shows the definer routines of the others as well, and an
+     * object pattern in `sqlens.audit.ignore` is how a project leaves those to their owners.
      */
     #[RawSql(reason: 'reads routine definitions, their SECURITY DEFINER flag and their search_path settings out of pg_proc')]
     public function routines(): RoutineReading
@@ -1181,6 +1194,10 @@ final readonly class PgsqlSecurityReader implements SecurityReader
             /** @return list<object> */
             fn (): array => array_values($this->session->read(fn (Connection $db): array => $db->select(
                 'select n.nspname as routine_schema, p.proname as routine_name,'
+                // The argument list is part of which routine this is: overloads share a name and are
+                // different routines. Written the way the grant reading writes it, so a routine and
+                // the grants on it carry one name.
+                .' pg_catalog.pg_get_function_identity_arguments(p.oid) as routine_arguments,'
                 .' pg_catalog.pg_get_userbyid(p.proowner) as owner, p.prosecdef as definer,'
                 // Joined server-side like the pg_hba array columns, and for the same reason: proconfig
                 // is `text[]` and PDO hands those over as PostgreSQL array literals.
@@ -1196,7 +1213,7 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 .'   select 1 from pg_depend d where d.objid = p.oid'
                 .'   and d.classid = \'pg_proc\'::regclass and d.deptype = \'e\''
                 .' )'
-                .' order by n.nspname, p.proname',
+                .' order by n.nspname, p.proname, pg_catalog.pg_get_function_identity_arguments(p.oid)',
             ))),
             SchemaObjectType::Routine,
             'pg_proc',
@@ -1221,6 +1238,8 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 // a comma — `search_path=app, public` is the ordinary spelling — so splitting on one
                 // would cut a single setting into two.
                 settings: $this->splitOn($row, 'settings', '|'),
+                // Read as written, an empty list included: a routine without arguments is `f()`.
+                arguments: is_string($row->routine_arguments ?? null) ? $row->routine_arguments : null,
             ),
             $rows,
         );

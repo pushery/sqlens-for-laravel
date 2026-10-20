@@ -8,10 +8,13 @@ use Pushery\SQLens\Contracts\Reporter;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\DowntimeUndetermined;
 use Pushery\SQLens\Findings\Finding;
+use Pushery\SQLens\Findings\Location;
+use Pushery\SQLens\Findings\LocationKind;
 use Pushery\SQLens\Findings\Outcome;
 use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Findings\Result;
 use Pushery\SQLens\Levels\Level;
+use Pushery\SQLens\Reporting\ReportedInstance;
 use Pushery\SQLens\Reporting\ReportedServerVersion;
 use Pushery\SQLens\Reporting\ReportText;
 use Pushery\SQLens\Reporting\RuleLimitations;
@@ -22,7 +25,7 @@ use Pushery\SQLens\Severity\SeverityGate;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
- * `--format=agent` — the whole run as ONE markdown report an agent can act on.
+ * `--format=agent` — the whole run as one markdown report an agent can act on.
  *
  * ## Why a document rather than a stream
  *
@@ -32,7 +35,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  * its structure, the second buries the three sentences that matter under a hundred fields.
  *
  * So this is one document, in the order a reader needs it: what the run was, what it found, what to
- * fix first, what it could NOT answer, and what not to do about any of it.
+ * fix first, what it could not answer, and what not to do about any of it.
  *
  * ## It renders; it never decides
  *
@@ -94,7 +97,7 @@ final readonly class AgentReporter implements Reporter
             $result->findings,
         );
 
-        // ONE seam. The whole document is masked here rather than section by section, because a
+        // One seam. The whole document is masked here rather than section by section, because a
         // redactor invoked per section is a redactor the next section can be written without — and
         // the arm that would catch that omission is the one nobody writes.
         //
@@ -114,7 +117,7 @@ final readonly class AgentReporter implements Reporter
     }
 
     /**
-     * The run's own parameters, so a reader can tell WHICH world this is about.
+     * The run's own parameters, so a reader can tell which world this is about.
      *
      * The same set the reproducibility header carries, in prose a reader skims rather than a table
      * they parse. A report about a database nobody named is advice about nothing, and the version
@@ -152,6 +155,8 @@ final readonly class AgentReporter implements Reporter
             '- **Strict tools:** '.($context->strictTools ? 'on' : 'off')
                 .' · **Strict undetermined:** '.($context->strictUndetermined ? 'on' : 'off'),
             '- **Servers:** '.($servers === [] ? 'none addressed' : implode(', ', $servers)),
+            // Which instance answered, the line the console prints, and absent for a run over files.
+            ...($context->instance instanceof ReportedInstance ? ['- **Instance:** '.MarkdownText::inline($context->instance->describe())] : []),
             '- **External tools:** '.($tools === [] ? 'none' : implode(', ', $tools)),
             '- **Suppressed:** '.count($result->suppressed).' finding(s) hidden by configuration or a baseline',
             // Read from the payload's own constant rather than written here. Two places stating a
@@ -160,7 +165,7 @@ final readonly class AgentReporter implements Reporter
             // contract merely distrusts it, while one told `stable` about a preview builds on it.
             '- **Output stability:** '.RemediationPayload::STABILITY->value
                 .' — the shape of this document may change before 1.0',
-            // The contract every fix block below is written against, stated ONCE. Per finding it
+            // The contract every fix block below is written against, stated once. Per finding it
             // would be noise; absent, a consumer parsing those blocks would be parsing a versioned
             // shape whose version it had to guess.
             ...$this->remediation->contractLine(),
@@ -207,8 +212,8 @@ final readonly class AgentReporter implements Reporter
      * The findings, blocking ones first, in a deterministic order.
      *
      * Ordered rather than sorted by cleverness: blocking before advisory, and within each group the
-     * order the run produced. A report whose order changed between two identical runs would make
-     * every diff of it unreadable.
+     * prioritizer's order, which is deterministic. A report whose order changed between two identical
+     * runs would make every diff of it unreadable.
      *
      * @param  list<array{0: Finding, 1: GateDecision}>  $decided
      * @return list<string>
@@ -231,7 +236,7 @@ final readonly class AgentReporter implements Reporter
 
         if ($blocking === [] && $advisory === []) {
             // Two different empties, and saying "no finding was reported" over the second would be a
-            // small lie with a large consequence: a run that could not answer HAS reported
+            // small lie with a large consequence: a run that could not answer has reported
             // something, and the reader who stops at this section is the one it matters to.
             $unresolved = array_filter($decided, static fn (array $pair): bool => $pair[0]->status->outcome === Outcome::Undetermined);
 
@@ -249,11 +254,35 @@ final readonly class AgentReporter implements Reporter
             $lines[] = '';
         }
 
+        // Appended line by line: spreading the whole document into a new array for every finding
+        // made the report quadratic in the number of findings.
         foreach ([...$blocking, ...$advisory] as [$finding, $decision]) {
-            $lines = [...$lines, ...$this->finding($finding, $decision, $limitations)];
+            foreach ($this->finding($finding, $decision, $limitations) as $line) {
+                $lines[] = $line;
+            }
         }
 
         return $lines;
+    }
+
+    /**
+     * Where a finding is: its file and line, or for a finding about the live database the object, and
+     * the migration it came from when one could be read.
+     *
+     * The anchor file alone read as a finding about that migration, which one that was correct on the
+     * day it ran usually is not.
+     */
+    private function where(Location $location): string
+    {
+        $line = $location->line !== null ? ':'.$location->line : '';
+
+        if ($location->kind !== LocationKind::Catalog || $location->objectName === null) {
+            return ($location->file ?? $location->objectName ?? 'the run').$line;
+        }
+
+        $object = $location->objectName.' in the live database';
+
+        return $location->file === null ? $object : $object.', introduced by '.$location->file.$line;
     }
 
     /**
@@ -272,7 +301,7 @@ final readonly class AgentReporter implements Reporter
             ? 'severity '.($finding->severity->value ?? 'unrated')
             : 'level '.$finding->level->value;
 
-        $where = $finding->location->file ?? $finding->location->objectName ?? 'the run';
+        $where = $this->where($finding->location);
 
         // The rule id, the message and the place are text a rule, a catalog or a tool wrote, so
         // each stays on its line: a line break in one of them would start a block of its own.
@@ -280,7 +309,7 @@ final readonly class AgentReporter implements Reporter
             '### '.MarkdownText::inline($finding->ruleId).($decision->blockedBy instanceof GateAxis ? ' — BLOCKING' : ''),
             '',
             '- '.MarkdownText::inline($finding->message),
-            '- **Where:** '.MarkdownText::inline($where).($finding->location->line !== null ? ':'.$finding->location->line : ''),
+            '- **Where:** '.MarkdownText::inline($where),
             '- **Judged by:** '.$axis
                 .($finding->downtimeClass instanceof DowntimeClass ? ' · **Downtime:** '.$finding->downtimeClass->value : '')
                 .($finding->downtimeUndetermined instanceof DowntimeUndetermined ? ' · **Downtime:** undetermined ('.$finding->downtimeUndetermined->reason->value.')' : ''),

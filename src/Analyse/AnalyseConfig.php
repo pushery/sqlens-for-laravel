@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Analyse;
 
+use Pushery\SQLens\Attributes\AttributeReason;
 use Pushery\SQLens\Exceptions\InvalidAnalyseConfiguration;
 
 /**
@@ -91,16 +92,15 @@ final readonly class AnalyseConfig
     /**
      * Does this reason satisfy the duty?
      *
-     * Whitespace never counts, in any mode — that check lives in the collector and is older than
-     * this class. What the mode decides is whether a reason that says something UNHELPFUL counts:
+     * A reason that is empty or only whitespace never counts, in any mode, by the rule every
+     * attribute shares ({@see AttributeReason}). What the mode decides is whether a reason that says
+     * something UNHELPFUL counts:
      * `todo` is a sentence, and under `documented` it is accepted, because a team mid-adoption is
      * better served by an annotation it can grep for than by a rule it switched off.
      */
     public function accepts(string $reason): bool
     {
-        $trimmed = trim($reason);
-
-        if ($trimmed === '') {
+        if (! AttributeReason::states($reason)) {
             return false;
         }
 
@@ -108,7 +108,7 @@ final readonly class AnalyseConfig
             return true;
         }
 
-        return ! in_array(mb_strtolower($trimmed), $this->justificationPlaceholders, true);
+        return ! in_array(mb_strtolower(trim($reason)), $this->justificationPlaceholders, true);
     }
 
     /**

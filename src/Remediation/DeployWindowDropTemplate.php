@@ -21,7 +21,7 @@ use Pushery\SQLens\Rules\RuleEvidenceEntry;
  *
  * That is why three of the four steps are gates rather than statements. A reader looking for the
  * fix will find one line of SQL at position three and a lot of waiting in front of it, and the
- * waiting IS the fix.
+ * waiting is the fix.
  *
  * ## The observation window is a step, not a footnote
  *
@@ -34,8 +34,8 @@ use Pushery\SQLens\Rules\RuleEvidenceEntry;
  *
  * The rules this serves carry a `#[SqlensAllowDestructive]` opt-in, and a fix template is exactly
  * where somebody would look for permission to make the finding go away. It does not do that, and
- * the difference is worth stating precisely: the opt-in does NOT silence the rule. The finding is
- * still produced, and the attribute becomes a NAMED, VISIBLE suppression in the report, with its
+ * the difference is worth stating precisely: the opt-in does not silence the rule. The finding is
+ * still produced, and the attribute becomes a named, visible suppression in the report, with its
  * reason shown. Recording the review is what it is for. A template that presented it as a way past
  * the gate would be a fix template teaching people to disable the check that found the problem.
  *
@@ -128,7 +128,7 @@ final readonly class DeployWindowDropTemplate
                         noteKey: self::LANG.'drop_in_a_later_release',
                         sqlTemplate: $dropStatement,
                     ),
-                    // 4 — record the review. NOT a way past the gate: the finding survives the
+                    // 4 — record the review. Not a way past the gate: the finding survives the
                     // attribute and becomes a named, visible suppression rather than disappearing.
                     new RemediationStep(
                         order: 4,

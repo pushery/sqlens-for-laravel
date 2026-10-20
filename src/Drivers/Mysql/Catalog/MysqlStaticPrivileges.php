@@ -156,7 +156,7 @@ final readonly class MysqlStaticPrivileges
      * Every column this artifact registers for a scope, whether lifted or not.
      *
      * The reconciliation test compares this against the server's own column list, so a lifted column
-     * must appear — it IS registered, just read through another path, and leaving it out here would
+     * must appear — it is registered, just read through another path, and leaving it out here would
      * make the test demand an entry that already exists.
      *
      * @return list<string>

@@ -60,7 +60,7 @@ final readonly class CorpusReport
     {
         return [
             'schema_version' => self::SCHEMA_VERSION,
-            // WHICH rule catalog this rate describes. A false-positive rate is a statement about a
+            // Which rule catalog this rate describes. A false-positive rate is a statement about a
             // set of rules, and a rate published beside a catalog that has since gained six rules
             // is a number about a package that no longer exists — read as current, because nothing
             // in the file says otherwise.
@@ -80,7 +80,7 @@ final readonly class CorpusReport
             ],
             'ground_set' => self::groundSet($collections, $serverVersions),
             'summary' => [
-                // Null when nothing could be measured, and null is NOT zero: zero reads as "no
+                // Null when nothing could be measured, and null is not zero: zero reads as "no
                 // false positives", which is the best possible result rather than the absence of
                 // one.
                 'false_positive_rate' => $metrics->falsePositiveRate(),

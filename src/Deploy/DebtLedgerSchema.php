@@ -41,7 +41,7 @@ namespace Pushery\SQLens\Deploy;
  */
 final readonly class DebtLedgerSchema
 {
-    /** The ledger format this build WRITES. */
+    /** The ledger format this build writes. */
     public const int CURRENT = 2;
 
     /**

@@ -17,7 +17,7 @@ namespace Pushery\SQLens\Contracts;
  * it drives says "detected" with that uncertainty, never a false certainty.
  *
  * The check is a read — it runs a status query and nothing more. When it is
- * unsure, it errs toward reporting NOT pooled, because a false positive would
+ * unsure, it errs toward reporting not pooled, because a false positive would
  * block a perfectly good direct connection; the cost of a false negative (a
  * template operation that then fails) is a clear error the user can act on.
  */

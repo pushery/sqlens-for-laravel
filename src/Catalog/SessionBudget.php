@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Catalog;
 use Pushery\SQLens\Exceptions\InvalidSessionBudget;
 
 /**
- * The bounds a catalog reader puts on its OWN session before it reads anything.
+ * The bounds a catalog reader puts on its own session before it reads anything.
  *
  * Every value is required and every timeout must be positive. Zero is not "no limit" here, it is
  * refused: on PostgreSQL and MySQL alike, zero means *wait forever*, which is precisely the harm
@@ -24,7 +24,7 @@ final readonly class SessionBudget
      * The default whole-reading budget, in milliseconds.
      *
      * Five seconds, and deliberately generous: this is the coarse upper bound, not the regression
-     * brake. The QUERY COUNT is what catches an N+1 catalog read, because it is a property of the
+     * brake. The query count is what catches an N+1 catalog read, because it is a property of the
      * code rather than of the machine — and a wall-clock number tight enough to catch a regression
      * would go red on a loaded laptop and be turned off within a week.
      */
@@ -60,7 +60,7 @@ final readonly class SessionBudget
          *
          * Distinct from the statement timeout, and not a substitute for it: a hundred fast queries
          * can be well inside every per-statement bound and still hold a production connection for
-         * half a minute. Exceeding it is a NAMED undetermined rather than an abort — the objects
+         * half a minute. Exceeding it is a named undetermined rather than an abort — the objects
          * already read are worth having, and killing the run would throw them away to report a
          * problem the run itself caused.
          */
@@ -76,7 +76,7 @@ final readonly class SessionBudget
      * number would make the gate's own promise unenforceable, and it would break QUIETLY: the run
      * would simply take longer than the number written in the documentation.
      *
-     * Only ever tightens. A caller asking for MORE than the audit budget gets the audit budget,
+     * Only ever tightens. A caller asking for more than the audit budget gets the audit budget,
      * because that one is the operator's statement about what this package may cost their server —
      * and a request traveling in from a config file must not be able to widen it.
      *

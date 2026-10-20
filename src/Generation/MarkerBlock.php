@@ -60,7 +60,7 @@ final readonly class MarkerBlock
      *
      * Here rather than only behind {@see AgentContextFormat::markers()} because the format accessor
      * is nullable — two of the three formats own their whole file and have no region — and a caller
-     * that KNOWS it writes a region would otherwise have to defend against a null that cannot
+     * that knows it writes a region would otherwise have to defend against a null that cannot
      * happen. A defense against an impossible state is a branch no test can reach.
      */
     public static function agentRules(string $generatorVersion, string $snapshotHash): self

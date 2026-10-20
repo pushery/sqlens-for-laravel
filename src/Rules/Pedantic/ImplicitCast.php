@@ -26,7 +26,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * Building a rule on the index argument would have shipped advice that is confident, specific and
  * wrong — the failure mode this package treats as worse than no advice.
  *
- * **What IS true on PostgreSQL is worse, and it is dated.** A `bigint` key referenced by an `int`
+ * **What is true on PostgreSQL is worse, and it is dated.** A `bigint` key referenced by an `int`
  * column can only ever be pointed at for the first 2^31 of its 2^63 values. The schema compiles,
  * every test passes, and the day the parent sequence crosses 2,147,483,647 every insert into the
  * child fails — years after the migration, with nothing linking the two.
@@ -87,7 +87,7 @@ final readonly class ImplicitCast
     /**
      * Whether two type names are the same type under a driver's equivalences.
      *
-     * The equivalences are a parameter rather than a constant here, because they are the ONE part of
+     * The equivalences are a parameter rather than a constant here, because they are the one part of
      * this question that is genuinely per engine and cannot be shared: PostgreSQL's `text` and
      * `varchar` are the same storage (`pg_type` reports identical `typlen`, `typalign` and
      * `typstorage`), and MySQL has no such pair at all.
@@ -132,6 +132,21 @@ final readonly class ImplicitCast
             'bigint', 'int8', 'bigserial', 'serial8' => 8,
             default => null,
         };
+    }
+
+    /**
+     * Whether `$local` is an integer narrower than the integer `$far`.
+     *
+     * The referencing side of such a key can only ever point at the first part of what it
+     * references, which is the one mismatch with a date attached: it breaks the day the referenced
+     * sequence passes the narrower ceiling.
+     */
+    public static function narrowerInteger(string $local, string $far): bool
+    {
+        $localWidth = self::integerWidth($local);
+        $farWidth = self::integerWidth($far);
+
+        return $localWidth !== null && $farWidth !== null && $localWidth < $farWidth;
     }
 
     /** Lower-cased and stripped of a declared length or precision, which is not part of the type. */

@@ -62,7 +62,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * because the statement gives no way to tell it from a type change. That is a deliberate
  * asymmetry, not an oversight: a false positive costs a reader one look at the column, a false
  * negative costs an outage. `set_column_default` is therefore not among the candidate operations
- * below — including it would make the candidate set disagree on the class and turn EVERY
+ * below — including it would make the candidate set disagree on the class and turn every
  * redefinition into an undetermined, which is a rule that reports nothing at all.
  *
  * ## VARCHAR is the honest undetermined
@@ -102,7 +102,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
 final class CopyAlterTypeRule extends AbstractMysqlRule implements DeclaresOperationClass, DerivesDowntimeClass, ProvidesRemediation
 {
     /**
-     * The operations a redefinition of a NON-VARCHAR column could be performing, minus the
+     * The operations a redefinition of a non-VARCHAR column could be performing, minus the
      * default-only case (see the class docblock). Every one of them rebuilds the table, which is
      * what lets the matrix answer with a single shared class — but that agreement is the
      * matrix's to state, and it is asked for it on every run rather than assumed here.
@@ -145,7 +145,7 @@ final class CopyAlterTypeRule extends AbstractMysqlRule implements DeclaresOpera
      * The staged column swap — and NOT the pinned `ALGORITHM`/`LOCK` clause, which is the
      * interesting decision here.
      *
-     * The clause template reads its two values out of the matrix entry FOR THE OPERATION, and this
+     * The clause template reads its two values out of the matrix entry for the operation, and this
      * rule's whole finding is that the operation is not knowable from the statement: `MODIFY total
      * BIGINT NOT NULL` is what you write for a type change, for a nullability flip and for a move.
      * Measured on the shipped matrix, those do not share a clause — `change_column_type` is
@@ -153,7 +153,7 @@ final class CopyAlterTypeRule extends AbstractMysqlRule implements DeclaresOpera
      * naming one would be the guessed clause that template exists to refuse: `INPLACE` claims the
      * change is not a retype, `COPY` claims it is.
      *
-     * What IS true whichever operation it turns out to be is the staged swap — add the new column,
+     * What is true whichever operation it turns out to be is the staged swap — add the new column,
      * backfill it in batches, cut over, drop the old one — which is what this rule's own finding
      * prescribes first. It is handed over for the UNDETERMINED verdict too (the VARCHAR case, and
      * an unresolvable server version): staging does not depend on the answer the matrix withheld,
@@ -162,7 +162,7 @@ final class CopyAlterTypeRule extends AbstractMysqlRule implements DeclaresOpera
      * The pinned clause is not lost — the finding names it as the brake it is: `ALGORITHM=INPLACE,
      * LOCK=NONE` makes MySQL REFUSE rather than silently copy. That is a sentence about what to do
      * if the change must run in place, not a sequence, and `MY.L3.ALGORITHM_LOCK_UNEXPRESSIBLE`
-     * carries the sequence for the statements where the operation IS known.
+     * carries the sequence for the statements where the operation is known.
      */
     public function remediationFor(MigrationStatementView $statement): ?RemediationPayload
     {
@@ -214,7 +214,7 @@ final class CopyAlterTypeRule extends AbstractMysqlRule implements DeclaresOpera
     }
 
     /**
-     * The class for THIS statement, from the matrix — or null when the matrix could not settle
+     * The class for this statement, from the matrix — or null when the matrix could not settle
      * it, in which case the verdict below is an undetermined and a class would contradict it.
      */
     public function downtimeClassFor(MigrationStatementView $statement): DowntimeClass|DowntimeUndetermined|null

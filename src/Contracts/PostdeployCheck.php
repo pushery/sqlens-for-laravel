@@ -8,13 +8,13 @@ use Pushery\SQLens\Deploy\CheckResult;
 use Pushery\SQLens\Deploy\PostdeployContext;
 
 /**
- * One question asked of the database immediately AFTER `migrate --force`.
+ * One question asked of the database immediately after `migrate --force`.
  *
  * ## The moment is the whole difference
  *
  * A post-deploy check reads the same catalogs a preflight check reads, and means something else by
  * what it finds. An INVALID index before a deploy is wreckage from a previous attempt; the same
- * index afterwards is THIS deploy having stopped halfway. Same reading, two sentences, and the one
+ * index afterwards is this deploy having stopped halfway. Same reading, two sentences, and the one
  * a reader needs depends only on when it was taken.
  *
  * That is why this is its own contract rather than a flag on {@see PreflightCheck}: a check has to
@@ -41,7 +41,7 @@ interface PostdeployCheck
     /**
      * Whether this check has anything to say about that driver.
      *
-     * False means NOT RUN, not "passed" — the verifier records it as not applicable, so a
+     * False means not run, not "passed" — the verifier records it as not applicable, so a
      * PostgreSQL-only check on MySQL never contributes a result at all.
      */
     public function appliesTo(string $driver): bool;

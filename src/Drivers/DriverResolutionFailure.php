@@ -25,7 +25,7 @@ final readonly class DriverResolutionFailure
 {
     /**
      * @param  array<string, string>  $placeholders  the values this reason's message text
-     *                                               needs, supplied BY the factory that knows them. Never a host, a user or a
+     *                                               needs, supplied by the factory that knows them. Never a host, a user or a
      *                                               password: a finding has to be safe to paste into a public issue.
      */
     private function __construct(
@@ -39,6 +39,7 @@ final readonly class DriverResolutionFailure
         return new self(
             DriverResolutionReason::ReservedDriver,
             sprintf('driver "%s" is a reserved non-goal engine and is not supported', $driver),
+            ['driver' => $driver],
         );
     }
 
@@ -47,6 +48,7 @@ final readonly class DriverResolutionFailure
         return new self(
             DriverResolutionReason::UnknownDriver,
             sprintf('driver "%s" is neither built-in nor registered', $driver),
+            ['driver' => $driver],
         );
     }
 
@@ -55,6 +57,7 @@ final readonly class DriverResolutionFailure
         return new self(
             DriverResolutionReason::MissingDriverKey,
             sprintf('connection "%s" declares no driver key', $connectionName),
+            ['connection' => $connectionName],
         );
     }
 
@@ -74,14 +77,14 @@ final readonly class DriverResolutionFailure
             );
         }
 
-        // Naming what IS configured turns a dead end into a fixable message. Only
-        // the NAMES — never a host, a user or a password.
+        // Naming what is configured turns a dead end into a fixable message. Only
+        // the names — never a host, a user or a password.
         return new self(
             DriverResolutionReason::ConnectionNotFound,
             $configured === []
                 ? sprintf('no connection is configured under the name "%s", and the application configures none at all', $connectionName)
                 : sprintf('no connection is configured under the name "%s"; configured names are: %s', $connectionName, implode(', ', $configured)),
-            ['configured' => self::nameList($configured)],
+            ['connection' => $connectionName, 'configured' => self::nameList($configured)],
         );
     }
 
@@ -148,7 +151,7 @@ final readonly class DriverResolutionFailure
             DriverResolutionReason::VersionBelowFloor => UndeterminedReason::ServerBelowSupportedFloor,
             DriverResolutionReason::UnknownServerVersion => UndeterminedReason::UnknownServerVersion,
             DriverResolutionReason::MariaDbBehindMysqlDriver => UndeterminedReason::UnsupportedEngine,
-            // Not knowing WHICH engine answers is its own gap, distinct from knowing
+            // Not knowing which engine answers is its own gap, distinct from knowing
             // the engine and not its version.
             DriverResolutionReason::UnverifiedEngineIdentity => UndeterminedReason::UnknownServerVersion,
         };

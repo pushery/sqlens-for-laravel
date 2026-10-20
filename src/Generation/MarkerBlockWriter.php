@@ -26,7 +26,7 @@ namespace Pushery\SQLens\Generation;
  * | no file at all | the block, alone |
  * | file, no block | the block appended, one blank line after the existing text |
  * | one block | replaced in place |
- * | two or more blocks | ALL removed, one written back where the first began |
+ * | two or more blocks | all removed, one written back where the first began |
  * | nested blocks | the outer region removed whole; one block written back |
  * | an opening marker with no closing one | the stray line removed; one block written back there |
  * | a closing marker with no opening one | the same |
@@ -46,7 +46,7 @@ final readonly class MarkerBlockWriter
      * The complete new content of the file.
      *
      * @param  string|null  $existing  the current file content, or null when the file does not exist
-     * @param  string  $block  the generated body, WITHOUT the marker lines
+     * @param  string  $block  the generated body, without the marker lines
      */
     public function apply(?string $existing, MarkerBlock $marker, string $block): string
     {

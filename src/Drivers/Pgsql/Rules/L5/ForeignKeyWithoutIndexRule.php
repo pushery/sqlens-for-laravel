@@ -52,14 +52,14 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * That silence is the DEFAULT here and stays the default: everything the lint branch below does not
  * decide is reported as nothing at all, never as a pass and never as an undetermined.
  *
- * The one case it CAN decide is the migration that creates the table itself. Nothing earlier can
+ * The one case it can decide is the migration that creates the table itself. Nothing earlier can
  * have indexed a table that did not exist, so the only statements that could index it are the ones
  * this RUN captured — and if none of them does, the absence is proven, at the point of the mistake,
  * with the fix one line away. It needs the ordered column lists the classifier now reads off an
  * index and off a key, which is why this half could not be built when the rule shipped.
  *
  * **The history is the RUN's, not the file's, and that is not a detail.** The index may perfectly
- * well arrive in a LATER migration of the same run, and in Laravel that is the only correct place
+ * well arrive in a later migration of the same run, and in Laravel that is the only correct place
  * for it: a migration that has run in production is never edited, so a missing foreign-key index —
  * including one this package's own audit suite reported — is back-filled in a new file. Reading
  * only the file being judged made that the everyday false positive: the finding stayed on a file
@@ -95,12 +95,12 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * never do is COUNT one: an operator class swept into the column run would report a scanning table
  * as covered, silently and permanently.
  *
- * An index this branch cannot read is not simply uncounted, it STOPS the finding for that table.
+ * An index this branch cannot read is not simply uncounted, it stops the finding for that table.
  * The claim rests on holding the table's complete index history, and a `CREATE INDEX` whose columns
  * could not be read is a hole in it — the run creates an index and nobody knows what it is over.
  * The alternative (report anyway) would fire on shapes the catalog calls perfectly comparable, such
  * as an explicit `USING btree` or an INCLUDE payload, which is the one direction this branch may
- * not be wrong in: it may say the same thing EARLIER than the audit suite, never something else.
+ * not be wrong in: it may say the same thing earlier than the audit suite, never something else.
  *
  * **What this branch reads as coverage.** A `CREATE INDEX`, and the two constraints PostgreSQL
  * IMPLEMENTS with an index — `UNIQUE` and `PRIMARY KEY` — whose columns the classifier now carries
@@ -115,8 +115,8 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * InnoDB does not merely usually index a foreign key — it forecloses every case this rule could
  * report. Measured against a real MySQL 8.4.10 server: a composite key with no author-declared
- * index gets one created; an index on `(b, a)` does NOT satisfy a key on `(a, b)`, so InnoDB
- * creates its own (it left-prefix-matches exactly as this rule does); an index on `(a, x)` DOES
+ * index gets one created; an index on `(b, a)` does not satisfy a key on `(a, b)`, so InnoDB
+ * creates its own (it left-prefix-matches exactly as this rule does); an index on `(a, x)` does
  * satisfy a key on `(a)`, so nothing is added; a prefix index `s(10)` does not count and a full
  * index is created beside it; the resulting index cannot be dropped afterwards (`ERROR 1553`); and
  * `foreign_key_checks=0` does not change any of it.
@@ -194,7 +194,7 @@ final class ForeignKeyWithoutIndexRule extends AbstractCatalogRule implements De
             $uncovered[$name] = $columns;
         }
 
-        // ONE verdict for the table, naming every key.
+        // One verdict for the table, naming every key.
         //
         // Results are deduplicated by rule id and LOCATION, and a catalog finding is located at the
         // OBJECT — there is no component for a member. A verdict per key therefore arrived as one
@@ -219,7 +219,7 @@ final class ForeignKeyWithoutIndexRule extends AbstractCatalogRule implements De
     }
 
     /**
-     * The verdict about ONE migration statement — a fail only for the case the run itself settles,
+     * The verdict about one migration statement — a fail only for the case the run itself settles,
      * and silence for everything else.
      *
      * Every condition is argued in the class docblock. They are written as early returns in the
@@ -291,7 +291,7 @@ final class ForeignKeyWithoutIndexRule extends AbstractCatalogRule implements De
      * CHECK constraint is column-less by nature and bailing on one would silence the rule for every
      * migration that adds a check to the table it is creating.
      *
-     * Scoped by the statement's OWN table target, not by the run wholesale: `soleTarget` answers
+     * Scoped by the statement's own table target, not by the run wholesale: `soleTarget` answers
      * only when a statement names exactly one table, which is true of every index and every
      * index-backed constraint and false of the foreign key itself (it names two), so a key can
      * never be mistaken for an index over its own columns.
@@ -365,7 +365,7 @@ final class ForeignKeyWithoutIndexRule extends AbstractCatalogRule implements De
     }
 
     /**
-     * ONE message for the table, naming every uncovered key and the index each one needs.
+     * One message for the table, naming every uncovered key and the index each one needs.
      *
      * An enumeration rather than a sentence per key, because the fix is one decision about one
      * table: somebody opens a migration and adds the indexes together. Any key whose columns could
@@ -385,7 +385,7 @@ final class ForeignKeyWithoutIndexRule extends AbstractCatalogRule implements De
             $keys[] = sprintf('%s (%s)', $name, implode(', ', $columns));
         }
 
-        // When the table HAS indexes that simply cannot be compared, say so. "No index covers this"
+        // When the table has indexes that simply cannot be compared, say so. "No index covers this"
         // and "the only index here is one I must not reason about" send a reader to different
         // places, and the second one is where a wrong fix gets made.
         $incomparable = count($all) > count($comparable);

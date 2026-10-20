@@ -11,7 +11,7 @@ use Pushery\SQLens\Contracts\PoolerProbe;
 use Pushery\SQLens\Drivers\Pgsql\Catalog\PgsqlPoolerReader;
 
 /**
- * The shadow captor's view of the pooling question — the SAME heuristic, read with the other bias.
+ * The shadow captor's view of the pooling question — the same heuristic, read with the other bias.
  *
  * Two callers ask "is this connection multiplexed?" and they need different things from a maybe. The
  * audit cannot speak about the instance without knowing, so an unclear answer degrades it. The

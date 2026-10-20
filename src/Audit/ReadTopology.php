@@ -59,7 +59,7 @@ final readonly class ReadTopology
     }
 
     /**
-     * The hosts a `read` block leaves open — in BOTH shapes the framework accepts.
+     * The hosts a `read` block leaves open — in both shapes the framework accepts.
      *
      * `ConnectionFactory::getReadWriteConfig()` branches on `isset($config['read'][0])`:
      *
@@ -69,7 +69,7 @@ final readonly class ReadTopology
      * ```
      *
      * Only the first was understood here, and the second is the one that hurts: a list has no `host`
-     * key of its own, so the lookup fell through to the connection's own `host`, reported ONE host
+     * key of its own, so the lookup fell through to the connection's own `host`, reported one host
      * and answered `isAmbiguous() === false`. The audit then ran and named the primary while Laravel
      * read from a replica it had picked at random — precisely the non-determinism this class
      * documents itself as preventing, arriving through the shape nobody had checked.
@@ -109,7 +109,7 @@ final readonly class ReadTopology
     /**
      * Whether the configuration leaves more than one possibility open.
      *
-     * Zero hosts is NOT ambiguous. A connection configured through a socket or a DSN names no host
+     * Zero hosts is not ambiguous. A connection configured through a socket or a DSN names no host
      * at all, and refusing those would break every project that does not use TCP — the question this
      * class asks is "did somebody configure a CHOICE", and no host is not a choice.
      */

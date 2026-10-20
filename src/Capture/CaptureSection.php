@@ -10,7 +10,7 @@ use Pushery\SQLens\Subjects\MigrationDirection;
  * Which section of a run produced a statement.
  *
  * A roundtrip runs `up`, then `down`, then `up` again — and the second `up` is
- * NOT the first one repeated: it runs against a schema the `down` just touched,
+ * not the first one repeated: it runs against a schema the `down` just touched,
  * so it can legitimately differ. Collapsing both onto `MigrationDirection::Up`
  * would make a roundtrip divergence invisible, which is the one thing the
  * roundtrip exists to surface.

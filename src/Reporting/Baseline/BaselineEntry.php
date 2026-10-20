@@ -23,7 +23,7 @@ use Pushery\SQLens\Severity\Severity;
 final readonly class BaselineEntry
 {
     /**
-     * The serialized fields of an entry, in the ONE order they are written in.
+     * The serialized fields of an entry, in the one order they are written in.
      * The serializer reads the order from here, so the file layout and the value
      * object can never disagree about which fields exist.
      *
@@ -123,7 +123,7 @@ final readonly class BaselineEntry
      * Where this entry misdescribes the finding it matches, as the sentence the finding carries;
      * null when it describes it truly.
      *
-     * The fingerprint decides WHICH finding an entry matches. The rule, category and severity are
+     * The fingerprint decides which finding an entry matches. The rule, category and severity are
      * what a reviewer reads, and `sqlens:baseline` copies all three from the finding, so an entry it
      * wrote agrees with the finding. One that does not was edited by hand, or outlived a release that
      * re-rated its rule. Either way it no longer says what it accepts, and an entry reading

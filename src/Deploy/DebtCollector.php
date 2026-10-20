@@ -14,14 +14,14 @@ use Pushery\SQLens\Deploy\Contracts\ResolvesDebtStanding;
  *
  * ## What it adds over {@see DebtReconciliation}
  *
- * That one compares a ledger against what a RUN FOUND, which is the right question in a repository:
+ * That one compares a ledger against what a run found, which is the right question in a repository:
  * a debt the pending migrations no longer leave is settled. This one compares a ledger against the
  * CATALOG, object by object, and the difference is the third answer. "Not reported" and "not there"
  * look identical from the reconciliation's distance, and they are opposite situations — one is a
  * project that finished the job, the other is a table that was dropped, a schema outside this run's
  * scope, or a role that cannot see it.
  *
- * ## Why an absent account is not an empty one HERE
+ * ## Why an absent account is not an empty one here
  *
  * On the recording side, a missing file means nothing has been recorded yet, and an empty account
  * is the honest reading. On the collecting side the file is the EXPECTED ARTIFACT: it not being

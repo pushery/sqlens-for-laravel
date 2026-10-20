@@ -16,13 +16,13 @@ namespace Pushery\SQLens;
  * either way. The owner's decision, 2026-08-12: shell output stays US English, one spelling,
  * everywhere.
  *
- * ## Why the locale is passed EXPLICITLY at every resolution point
+ * ## Why the locale is passed explicitly at every resolution point
  *
  * This is the part that is not cosmetic, and it was measured rather than assumed.
  *
  * With only `lang/en` present, Laravel's translator resolves a missing locale through
  * `app.fallback_locale`. That works for the common setup and fails for one that is perfectly
- * ordinary: an app that sets BOTH `app.locale` and `app.fallback_locale` to its own language — a
+ * ordinary: an app that sets both `app.locale` and `app.fallback_locale` to its own language — a
  * German shop setting `de`/`de` — has no path to English at all, so `Translator::get()` returns the
  * key it was given. Measured on this tree: `locale=de fallback=en` yields the sentence,
  * `locale=de fallback=de` yields the literal string
@@ -33,7 +33,7 @@ namespace Pushery\SQLens;
  * in their terminal. So the locale is not left to be inferred: every call passes this constant, and
  * `tests/Feature/Localization/ShippedLocaleTest.php` holds the host-locale cases that used to leak.
  *
- * Its sibling `tests/Unit/LocaleParityTest.php` holds the other half — that `en` is the ONLY locale
+ * Its sibling `tests/Unit/LocaleParityTest.php` holds the other half — that `en` is the only locale
  * shipped — so a re-added translation cannot quietly reintroduce the second language this constant
  * exists to rule out.
  */

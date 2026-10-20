@@ -24,11 +24,11 @@ use Pushery\SQLens\Exceptions\InvalidRuleEvidence;
  * Kept as a register instead, the engine truth sits in one reviewable file beside the evidence and
  * example registers, a rule stays neutral, and a new driver adds rows rather than editing rules.
  *
- * ## What a note is NOT
+ * ## What a note is not
  *
  * It never changes the verdict, the level, the class or the reason — only the prose a human reads.
  * A note that decided anything would be a second rule hiding in a data file, unreachable from the
- * rule's own tests. It is also never the ONLY thing that carries a fact: an engine difference that
+ * rule's own tests. It is also never the only thing that carries a fact: an engine difference that
  * changes what the tool concludes belongs in a rule of its own, not in a sentence.
  */
 final readonly class RuleDriverNotes

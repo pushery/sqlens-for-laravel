@@ -57,7 +57,7 @@ interface LintRuns
         bool $roundtrip = false,
         /**
          * What this run may do with the debt account. Null means the caller did not ask, which is
-         * NOT the same as `check`: a caller that never heard of the account gets no debt pass at
+         * not the same as `check`: a caller that never heard of the account gets no debt pass at
          * all, so adding this parameter changed no existing behavior.
          */
         ?DebtMode $debt = null,
@@ -72,7 +72,7 @@ interface LintRuns
          * A caller passes TRUE when its question is a different one. `sqlens:predeploy` does,
          * because a package's migration really does run during a deploy and really can take a lock.
          *
-         * A run whose paths were NAMED — `--path`, `sqlens.migration_paths`, `--file` — is never
+         * A run whose paths were named — `--path`, `sqlens.migration_paths`, `--file` — is never
          * filtered, whatever this says: naming a path is a person saying "these".
          */
         ?bool $includeVendorMigrations = null,
@@ -85,7 +85,7 @@ interface LintRuns
          * passes and neither pass could see both sides of one fact.
          *
          * Empty for every caller that runs the lint suite alone, and that is the honest value rather
-         * than an unset one: a lone lint run HAS no catalog half, so there is nothing a collapse
+         * than an unset one: a lone lint run has no catalog half, so there is nothing a collapse
          * could stand in for.
          *
          * @var list<Finding>

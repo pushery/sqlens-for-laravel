@@ -71,7 +71,7 @@ final class MoneyColumnDictionary
 
     public static function fromFile(string $path): self
     {
-        // Existence is checked BEFORE reading rather than inferred from a false return: a missing
+        // Existence is checked before reading rather than inferred from a false return: a missing
         // file makes file_get_contents raise, and under Laravel's error handler that becomes an
         // ErrorException — which would leave this layer's own named failure unreachable.
         if (! is_file($path)) {
@@ -153,7 +153,7 @@ final class MoneyColumnDictionary
     /**
      * The project's own view: extra terms added as strong, ignored terms removed from both levels.
      *
-     * An ignore removes from BOTH levels on purpose. Removing it from only the level it happens to
+     * An ignore removes from both levels on purpose. Removing it from only the level it happens to
      * sit in today would mean a project's `ignore` silently stops working the day the term is
      * reclassified — which is the kind of failure nobody connects back to a config file.
      *
@@ -213,7 +213,7 @@ final class MoneyColumnDictionary
      * Whether any term matches a whole underscore-separated segment of the name.
      *
      * The segmentation is shared with the privacy dictionary, which reads column names for a
-     * different question and must agree with this one about what a name IS. The predicate is not
+     * different question and must agree with this one about what a name is. The predicate is not
      * shared: this one keeps a multi-word term to a whole-name match on purpose, while the privacy
      * side allows a run of adjacent segments. Both are named at {@see ColumnNameSegments}.
      *

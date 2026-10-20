@@ -24,7 +24,11 @@ use Pushery\SQLens\Reporting\RunProfile;
  * not applied.
  *
  * The environment variable is read here, at the boundary both callers pass through, so the selector
- * stays a pure value operation over the strings it is handed.
+ * stays a pure value operation over the strings it is handed. It is read twice over: from the
+ * process, where an exported value lives, and from `sqlens.environment_profile`, where the
+ * configuration put the value it loaded. After `php artisan config:cache` Laravel reads no `.env`,
+ * so a value written there reaches the process only on a host whose configuration is not cached;
+ * the configuration carries it on both.
  */
 final readonly class ProfileApplication
 {
@@ -49,12 +53,15 @@ final readonly class ProfileApplication
      */
     public function select(?string $requested, ?string $default = null): ProfileSelection
     {
+        // The process first, so a value exported for one run outranks what a cached configuration
+        // froze, and then the value the configuration loaded, which is `.env`'s.
         $env = getenv('SQLENS_PROFILE');
+        $loaded = $this->config->get('sqlens.environment_profile');
         $configured = $this->config->get('sqlens.profile');
 
         return ProfileSelector::forKnownProfiles()->select(
             $requested,
-            $env === false ? null : $env,
+            $env !== false ? $env : (is_string($loaded) ? $loaded : null),
             is_string($configured) ? $configured : null,
             $default,
         );

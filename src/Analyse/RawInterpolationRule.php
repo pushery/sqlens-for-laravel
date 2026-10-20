@@ -82,7 +82,7 @@ final class RawInterpolationRule implements Rule
         // {$value} …")`, `DB::raw("… '{$value}'")`, `Order::fromQuery("… {$value}")`,
         // `Order::whereRaw("… {$value}")` — because no collector saw it.
         //
-        // The expression collector is deliberately NOT read by the policy rule beside this one —
+        // The expression collector is deliberately not read by the policy rule beside this one —
         // see its class docblock. Requiring a written justification for every `DB::raw('count(*)')`
         // is how an analyse suite gets switched off in its first week.
         // The hatch, and it is a SEPARATE channel from the policy rule's — `#[RawSql(interpolation:
@@ -95,7 +95,7 @@ final class RawInterpolationRule implements Rule
         // a schema name or a DDL fragment — measured with a positive control, `SELECT 1 FROM ?` is a
         // syntax error where `SELECT ? FROM migrations` runs. The only answer left was a PHPStan
         // `ignoreErrors` entry, which carries no reason and is scoped by PATH: the next
-        // interpolation in that file, one that DOES have a binding available, is silenced with it.
+        // interpolation in that file, one that does have a binding available, is silenced with it.
         // An annotation is at the call site, carries the sentence, and covers what it sits on.
         $justified = JustificationCoverage::interpolation($node);
 
@@ -119,7 +119,7 @@ final class RawInterpolationRule implements Rule
     }
 
     /**
-     * What to do about it — and NOT the same sentence for every sink.
+     * What to do about it — and not the same sentence for every sink.
      *
      * Nine of the ten fragment sinks take a bindings array, so "pass it as a binding" is advice the
      * reader can act on and the shape is worth showing. `raw()` takes one argument and nothing else,
@@ -140,7 +140,7 @@ final class RawInterpolationRule implements Rule
         // advice would be impossible to follow, which this method's own docblock names as the way a
         // tool loses its reader.
         //
-        // The finding STAYS, and the sentence says why rather than pretending the value is gone:
+        // The finding stays, and the sentence says why rather than pretending the value is gone:
         // `wrap()` prevents the breakout and not the object choice — `wrap('other_schema.secrets')`
         // yields `"other_schema"."secrets"`, measured. So the remaining question is not escaping,
         // it is which objects the value is allowed to name, and that is answerable.
@@ -171,7 +171,7 @@ final class RawInterpolationRule implements Rule
             // hand-kept exception that is missing again at the next argument-less member.
             //
             // A fragment sits inside a builder call that does take bindings, so the value has a
-            // place to go. A statement has no such neighbor in the same expression: it IS the
+            // place to go. A statement has no such neighbor in the same expression: it is the
             // whole statement, and `unprepared()` runs it with no prepared statement at all, which
             // is why naming the prepared sibling matters more here than anywhere else.
             return in_array($method, RawSqlSinks::STATEMENT_SINKS, true)

@@ -16,7 +16,7 @@ use Pushery\SQLens\Contracts\DeclaresReservedWords;
 final readonly class CanonicalFormVersion
 {
     /**
-     * The version this build of the canonicalizer produces. Bumps on ANY change to the canonical
+     * The version this build of the canonicalizer produces. Bumps on any change to the canonical
      * form — including one that only adds a keyword.
      *
      * The "only a keyword" exemption was considered and rejected, and the reason is what the
@@ -56,7 +56,7 @@ final readonly class CanonicalFormVersion
      * nothing in its own tree caused.
      *
      * Went to 4 for the GENERATED-column vocabulary — `ALWAYS`, `GENERATED`, `STORED` and `VIRTUAL`,
-     * in BOTH driver lists. It is the fifth keyword extension and the second to arrive with its bump
+     * in both driver lists. It is the fifth keyword extension and the second to arrive with its bump
      * attached rather than after the fact.
      *
      * Why these four were missing is the same reason the query vocabulary was: the keyword guard's
@@ -160,8 +160,41 @@ final readonly class CanonicalFormVersion
      *
      * The second is MySQL's partition maintenance. A `VACUUM` and MySQL's `OPTIMIZE TABLE` stay out
      * on purpose, for the reason {@see StatementKind} gives.
+     *
+     * Went to 10 for `VACUUM`, `FULL`, `CLUSTER`, `REINDEX`, `REFRESH` and `VERBOSE` in the
+     * PostgreSQL list and `OPTIMIZE` in the MySQL list, so that the signatures can read the
+     * maintenance statements that rewrite a table or rebuild what it carries. Before, each had no
+     * canonical form and made its whole migration undetermined; a `VACUUM FULL`, a `CLUSTER` and an
+     * `OPTIMIZE TABLE` are {@see StatementKind::RebuildTable} now, a `REINDEX` and a `REFRESH
+     * MATERIALIZED VIEW` have kinds of their own, and a plain `VACUUM` is `Unknown`. PostgreSQL
+     * accepts neither `FULL` nor `VERBOSE` as a bare table name, and MySQL reserves `OPTIMIZE`, so a
+     * name spelled with one of them kept its quotes already. What moves is the word where it is
+     * syntax:
+     *
+     *     vacuum full orders
+     *       form 9  -> no canonical form (unrecognized_statement_form)
+     *       form 10 -> VACUUM FULL orders
+     *
+     *     reindex table concurrently orders
+     *       form 9  -> no canonical form (unrecognized_statement_form)
+     *       form 10 -> REINDEX TABLE CONCURRENTLY orders
+     *
+     *     alter table "orders" replica identity full
+     *       form 9  -> ALTER TABLE orders replica IDENTITY full
+     *       form 10 -> ALTER TABLE orders replica IDENTITY FULL
+     *
+     *     alter table `orders` optimize partition p0
+     *       form 9  -> ALTER TABLE orders optimize partition p0
+     *       form 10 -> ALTER TABLE orders OPTIMIZE partition p0
+     *
+     * PostgreSQL reserves none of `VACUUM`, `CLUSTER`, `REINDEX` and `REFRESH`, so a table may carry
+     * one of the names. It is still read as one, and like `schema` in form 3 it keeps its quotes now:
+     *
+     *     create table "vacuum" (id bigint)
+     *       form 9  -> CREATE TABLE vacuum (id BIGINT)
+     *       form 10 -> CREATE TABLE "vacuum" (id BIGINT)
      */
-    public const int CURRENT = 9;
+    public const int CURRENT = 10;
 
     public function __construct(public int $version) {}
 

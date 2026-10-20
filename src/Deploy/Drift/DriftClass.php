@@ -37,14 +37,14 @@ enum DriftClass: string
     case Divergent = 'divergent';
 
     /**
-     * The catalog id a finding of this class reports under — ONE id per class, not one id carrying
+     * The catalog id a finding of this class reports under — one id per class, not one id carrying
      * the class as a field.
      *
      * ## The decision, and what it costs either way
      *
      * A baseline entry is fingerprinted over the rule id together with the location. With one id
      * per class, an object that moves from `missing_in_database` to `divergent` — the migration
-     * finally ran, and now the two definitions disagree — produces a DIFFERENT fingerprint, so a
+     * finally ran, and now the two definitions disagree — produces a different fingerprint, so a
      * baseline that accepted the first does not silently accept the second. That is the behavior
      * worth having: the two are different facts with different remedies, and the second one arriving
      * unannounced under an accepted entry is precisely the silent green this package refuses.

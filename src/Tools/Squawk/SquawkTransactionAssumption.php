@@ -31,7 +31,7 @@ final readonly class SquawkTransactionAssumption
      * transaction opened partway through a migration is a real shape, and choosing either
      * assumption would be choosing one for the statements it does not fit.
      *
-     * @param  list<CanonicalStatement>  $statements  the statements of ONE migration
+     * @param  list<CanonicalStatement>  $statements  the statements of one migration
      */
     public static function forMigration(array $statements): bool|SquawkFailureReason
     {

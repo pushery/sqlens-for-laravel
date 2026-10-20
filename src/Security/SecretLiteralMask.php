@@ -56,7 +56,7 @@ final readonly class SecretLiteralMask
         // engines know, and a backslash escapes the next character in MySQL. A literal read to the
         // first quote instead stopped inside `'it''s-a-secret'` and printed the rest.
         '/(\bPASSWORD\s+)('.self::LITERAL.')/i',
-        // MySQL: IDENTIFIED BY '…' and IDENTIFIED WITH … BY '…'.
+        // MySQL: IDENTIFIED BY '…' and IDENTIFIED WITH … by '…'.
         '/(\bIDENTIFIED\s+(?:WITH\s+\S+\s+)?BY\s+)('.self::LITERAL.')/i',
         // MySQL: IDENTIFIED WITH plugin AS '…' — the stored hash itself, which for
         // `mysql_native_password` is an unsalted SHA1 of the SHA1 and cracks like a password.
@@ -88,7 +88,7 @@ final readonly class SecretLiteralMask
         '/(\bSET\s+PASSWORD\b[^=]*=\s*)('.self::LITERAL.')/i',
         // A DSN or URL carrying `user:password@` — the shape a connection string takes wherever it
         // is written down, including inside a migration that builds one. The user may be empty, as
-        // in `redis://:…@cache`, and the password runs to the LAST `@` before the host, because a
+        // in `redis://:…@cache`, and the password runs to the last `@` before the host, because a
         // password with an unencoded `@` in it is common and a host never contains one.
         '/(\b[a-z][a-z0-9+.-]*:\/\/[^\s:\/@]*:)([^\s\/]*)(@)(?=[^\s@\/]*(?:[\/\s\'"?#]|$))/i',
     ];

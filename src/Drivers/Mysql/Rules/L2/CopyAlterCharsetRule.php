@@ -41,14 +41,18 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * | Statement | MySQL 8.4 runs it | Existing rows |
  * |---|---|---|
  * | `CONVERT TO CHARACTER SET utf8mb4` **from latin1** | COPY | re-encoded |
- * | `CONVERT TO CHARACTER SET utf8mb4` **from utf8mb3** | INPLACE, `LOCK=NONE` accepted | re-encoded |
+ * | `CONVERT TO CHARACTER SET utf8mb4` **from utf8mb3**, no string column indexed | INPLACE, `LOCK=NONE` accepted | re-encoded |
+ * | `CONVERT TO CHARACTER SET utf8mb4` **from utf8mb3**, a string column indexed | COPY | re-encoded |
  * | `DEFAULT CHARACTER SET utf8mb4` | INPLACE | **untouched** — verified: a `latin1` column stays `latin1` |
  * | `DEFAULT COLLATE …` | INPLACE | untouched |
  *
  * **The source charset decides the cost.** A copy is true for the pair anyone runs this on, latin1,
  * and false for utf8mb3, which 8.4 accepts in place with `LOCK=NONE`. Measured on 8.4.10 over four
  * pairs: only utf8mb3 to utf8mb4 is accepted in place; latin1, ascii and the narrowing back to
- * utf8mb3 are all refused with error 1846 and fall back to a copy.
+ * utf8mb3 are all refused with error 1846 and fall back to a copy. And the one pair only while no
+ * string column carries an index: an index on one grows from three to four bytes a character, and the
+ * conversion is then refused with 1846 as well, measured on 8.0.36 and held for the suite's server by
+ * `ConvertCharsetAxesTest`.
  *
  * **This rule cannot tell which case a reader is in**, and that is not a gap to be closed: it lints a
  * migration statement, and the source charset lives in the catalog. So the message names both and gives
@@ -76,7 +80,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * It keeps the family default rather than overriding it, and the reason is worth stating: a column
  * redefinition names a target and hides the source, so "does this change anything" is an inference.
  * `CONVERT TO CHARACTER SET` hides nothing — it re-encodes every row whatever the current character
- * set is, including a conversion to the one already in place. The statement IS the operation.
+ * set is, including a conversion to the one already in place. The statement is the operation.
  */
 final class CopyAlterCharsetRule extends AbstractMysqlRule implements DeclaresOperationClass, DerivesDowntimeClass, ProvidesRemediation
 {
@@ -166,7 +170,7 @@ final class CopyAlterCharsetRule extends AbstractMysqlRule implements DeclaresOp
      * These statements reach a rule unclassified — the classifier has no signature for them yet —
      * so the canonical form is what identifies them. That is safe here in a way a text match
      * usually is not: `CONVERT TO CHARACTER SET` is three folded keywords in a fixed order, which
-     * is a canonical fact rather than a quirk of Laravel's formatting. The table target IS
+     * is a canonical fact rather than a quirk of Laravel's formatting. The table target is
      * classified, and requiring it keeps the match anchored to a real ALTER TABLE.
      *
      * String literals are masked first, so a default or an inserted value that happens to spell
@@ -189,7 +193,8 @@ final class CopyAlterCharsetRule extends AbstractMysqlRule implements DeclaresOp
     {
         return 'CONVERT TO CHARACTER SET re-encodes every value in every string column, so InnoDB copies the whole '
             .'table row by row under a shared lock: writes queue for the entire run, and the run grows with the '
-            .'table. The one exception is a utf8mb3 source, which MySQL 8.4 accepts in place with LOCK=NONE — and '
+            .'table. The one exception is a utf8mb3 source whose string columns carry no index, which MySQL 8.4 accepts '
+            .'in place with LOCK=NONE — and '
             .'this rule reads a migration statement, so it cannot see which of the two you have. The tables people '
             .'run this on are the old ones, which is exactly where it hurts most. Take a '
             .'real maintenance window for it, or convert column by column so each statement covers less data and '

@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Drivers\Pgsql;
 
 use Pushery\SQLens\Contracts\AcceptsRunClock;
+use Pushery\SQLens\Contracts\DeclaresMeasuredServerVersion;
 use Pushery\SQLens\Contracts\Driver;
 use Pushery\SQLens\Contracts\Rule;
+use Pushery\SQLens\Drivers\Pgsql\Canonical\PgsqlCanonicalization;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L3\Support\ExpectedTimeouts;
 use Pushery\SQLens\Drivers\Pgsql\Rules\PgsqlRuleSet;
 use Pushery\SQLens\Rules\Convention\NamingConvention;
@@ -32,7 +34,7 @@ use Pushery\SQLens\Tools\Tool;
  * versa. The two drivers never know about each other — that isolation is the
  * insurance for the later core+driver split, and it must never hold "only almost".
  */
-final class PgsqlDriver implements AcceptsRunClock, Driver
+final class PgsqlDriver implements AcceptsRunClock, DeclaresMeasuredServerVersion, Driver
 {
     /**
      * @param  string  $projectRoot  so a rule's finding location is repo-relative; the
@@ -72,7 +74,7 @@ final class PgsqlDriver implements AcceptsRunClock, Driver
         /**
          * Which environment this run is looking at, for the privacy rules.
          *
-         * Handed down like every other shared collaborator, and deliberately WITHOUT a
+         * Handed down like every other shared collaborator, and deliberately without a
          * fallback: there is no honest default for "is this production", and a rule that
          * guessed would report a pass about a server nobody placed. Absent, the privacy
          * rules answer `undetermined`.
@@ -105,7 +107,12 @@ final class PgsqlDriver implements AcceptsRunClock, Driver
          * itself is not judged by a rule an application cannot act on. Null reads as Laravel's own
          * default, which is what an unconfigured project has anyway.
          */
-        private readonly ?string $migrationsTable = null) {}
+        private readonly ?string $migrationsTable = null,
+        /**
+         * The share of its ceiling a primary key may use before the near-ceiling rule reports it, from
+         * `sqlens.audit.key_ceiling.min_percent_used`. Null is the shipped default.
+         */
+        private readonly ?int $keyCeilingPercent = null) {}
 
     public function key(): string
     {
@@ -113,6 +120,16 @@ final class PgsqlDriver implements AcceptsRunClock, Driver
     }
 
     public function minimumServerVersion(): string
+    {
+        return '18';
+    }
+
+    /**
+     * The release the rules were measured against and the gate's PostgreSQL lane runs, every 18.x
+     * included. It equals the floor today; the two answer different questions and move apart the
+     * day a newer release is measured.
+     */
+    public function newestMeasuredServerVersion(): string
     {
         return '18';
     }
@@ -128,8 +145,8 @@ final class PgsqlDriver implements AcceptsRunClock, Driver
         // appended from their single Core source — the same composition the fixture suite
         // judges against, so production and the tests run the very same objects.
         return [
-            ...PgsqlRuleSet::forProjectRoot($this->projectRoot, $this->expectedTimeouts, $this->maxLocksPerTransaction, $this->uuidGeneratedBy, $this->moneyColumns, $this->unusedIndexMinDays, $this->naming, $this->documentation, $this->migrationsTable)->all(),
-            ...LifecycleRuleSet::forProjectRoot($this->projectRoot)->all(),
+            ...PgsqlRuleSet::forProjectRoot($this->projectRoot, $this->expectedTimeouts, $this->maxLocksPerTransaction, $this->uuidGeneratedBy, $this->moneyColumns, $this->unusedIndexMinDays, $this->naming, $this->documentation, $this->migrationsTable, $this->keyCeilingPercent)->all(),
+            ...LifecycleRuleSet::forProjectRoot($this->projectRoot, new PgsqlCanonicalization)->all(),
             // …and the security family, from the same kind of single Core source. It is appended here
             // rather than folded into the pack above because a security rule is weighed on the
             // SEVERITY axis: inside the pack it would sit in a set whose contract is the level gate.

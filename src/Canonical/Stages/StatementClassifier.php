@@ -28,8 +28,8 @@ use Pushery\SQLens\Contracts\DriverCanonicalization;
 use Pushery\SQLens\Subjects\SubjectContext;
 
 /**
- * The stage that gives rules the alternative to raw-SQL matching: WHAT a statement
- * does (its kind) and WHAT it acts on (its targets). Without it the arch rule
+ * The stage that gives rules the alternative to raw-SQL matching: what a statement
+ * does (its kind) and what it acts on (its targets). Without it the arch rule
  * "rules never regex raw SQL" would be a ban with no alternative — a rule like
  * "CREATE INDEX without CONCURRENTLY" could only match on the provenance text.
  *
@@ -367,7 +367,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
                 $spread[] = new StatementToken(TokenType::Keyword, 'COLUMN', null, 0);
             }
 
-            $spread[] = new StatementToken($token->type, $token->text, $opensAMember ? null : $token->precededBy, $token->depth - 1);
+            $spread[] = new StatementToken($token->type, $token->text, $opensAMember ? null : $token->precededBy, $token->depth - 1, $token->sizeAfter);
         }
 
         return $spread;
@@ -424,7 +424,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
                     break;
 
                 case SignatureElementKind::ColumnList:
-                    // A PLAIN parenthesized list — `(a)` or `(a, b)` — captured here rather than
+                    // A plain parenthesized list — `(a)` or `(a, b)` — captured here rather than
                     // re-read from the string in a rule, which is the whole point: the digest layer
                     // is deliberately free of grammar.
                     //
@@ -463,7 +463,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
                     $read = $this->readColumnDefinitions($tokens, $index, $count, $element->clauseTerminators, $profile->unreservedNames);
 
                     if ($read === null) {
-                        // The body was not readable AS A WHOLE. The statement still classifies and
+                        // The body was not readable as a whole. The statement still classifies and
                         // simply carries no definitions — see the kind's docblock for why a partial
                         // list is the one answer that must never travel.
                         break;
@@ -484,6 +484,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
                     }
 
                     $trailing = [];
+                    $size = null;
 
                     while ($index < $count) {
                         $next = $tokens[$index];
@@ -505,6 +506,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
                         // is inside a parenthesized argument — a length, an enum's values.
                         if ($next->depth === 0) {
                             $trailing[] = $next->text;
+                            $size ??= $next->sizeAfter;
                         }
 
                         $index++;
@@ -514,14 +516,15 @@ final readonly class StatementClassifier implements CanonicalizationStage
                         $definitions = [new ColumnDefinition(
                             $named->qualifiedName(),
                             CanonicalType::fromRaw(implode(' ', $trailing)),
+                            $size,
                         )];
                     }
                     break;
 
                 case SignatureElementKind::BackfillTargets:
-                    // The columns a `SET` clause writes to FROM OTHER COLUMNS — a data move, not
+                    // The columns a `SET` clause writes to from other columns — a data move, not
                     // every assignment. Two properties of each token decide which names are targets,
-                    // and BOTH are needed; see the kind's docblock for the measurement that refuted
+                    // and both are needed; see the kind's docblock for the measurement that refuted
                     // the one-property reading.
                     //
                     //   depth 0            it is in the clause itself, not inside an expression
@@ -558,7 +561,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
                             && $token->depth === 0
                             && $token->precededBy === ($assigned === [] && $pending === null ? null : ',');
 
-                        // The FIRST identifier decides whether this is a clause this element reads
+                        // The first identifier decides whether this is a clause this element reads
                         // at all. PostgreSQL's row-wise form — `SET (a, b) = (1, 2)` — opens with an
                         // identifier at depth 1, and reading on would collect `b` alone, because it
                         // sits behind a comma just as a second assignment would.
@@ -688,7 +691,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
     /**
      * Read a parenthesized table body into name/type pairs, or answer null.
      *
-     * Null means the body could not be read as a whole, and it is the ONLY failure this returns —
+     * Null means the body could not be read as a whole, and it is the only failure this returns —
      * a body read nine members out of ten would look exactly like a complete one to everything
      * downstream, so there is no partial answer to hand back.
      *
@@ -766,6 +769,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
             $name = $identifier->canonical();
             $index++;
             $type = [];
+            $size = null;
 
             while ($index < $count
                 && $tokens[$index]->depth >= 1
@@ -780,6 +784,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
                 // a parenthesized argument — an enum's values, a generated column's expression.
                 if ($next->depth === 1) {
                     $type[] = $next->text;
+                    $size ??= $next->sizeAfter;
                 }
 
                 $index++;
@@ -791,6 +796,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
                 // this is a form this reader did not understand rather than a column without one —
                 // and the value object keeps those two apart for the rule that reads it.
                 $type === [] ? null : CanonicalType::fromRaw(implode(' ', $type)),
+                $type === [] ? null : $size,
             );
 
             // The type stops on a modifier, on the next member, or past the body, and only from a
@@ -818,7 +824,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
      */
     private function skipMember(array $tokens, int $index, int $count): int
     {
-        // ALWAYS past the current token first, and this line is the whole correctness of the outer
+        // Always past the current token first, and this line is the whole correctness of the outer
         // loop. Without it a member that BEGINS at a separator — a table constraint, whose first
         // token is a keyword preceded by the comma — returns the index it was handed, the caller
         // reads the same token again, and the two spin forever. Found by a probe that hung rather
@@ -864,7 +870,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
      */
     private function sortTargets(array $targets): array
     {
-        // The role is the LAST tiebreak, and only a tiebreak.
+        // The role is the last tiebreak, and only a tiebreak.
         //
         // Determinism does not need it — PHP's sort is stable and the two keys above already order
         // every real statement — but two targets that agree on type AND qualified name would then be
@@ -939,7 +945,8 @@ final readonly class StatementClassifier implements CanonicalizationStage
             if ($char === $quote || $this->isBareStart($char)) {
                 $end = $this->chainExtent($sql, $i, $quote);
                 $text = substr($sql, $i, $end - $i);
-                $tokens[] = $this->classifyToken($text, $keywordSet, $separator, $depth);
+                $size = preg_match('/\G\s*\(\s*\d+\s*(?:,\s*\d+\s*)?\)/', $sql, $sizeMatch, 0, $end) === 1 ? (string) preg_replace('/\s+/', '', $sizeMatch[0]) : null;
+                $tokens[] = $this->classifyToken($text, $keywordSet, $separator, $depth, $size);
                 $separator = null;
                 $i = $end;
 
@@ -1001,19 +1008,20 @@ final readonly class StatementClassifier implements CanonicalizationStage
      * @param  array<string, true>  $keywordSet
      * @param  string|null  $precededBy  the last symbol before this token, or null after whitespace
      * @param  int  $depth  how many parentheses are open around it
+     * @param  string|null  $sizeAfter  the size written directly behind it, see {@see StatementToken::$sizeAfter}
      */
-    private function classifyToken(string $text, array $keywordSet, ?string $precededBy, int $depth): StatementToken
+    private function classifyToken(string $text, array $keywordSet, ?string $precededBy, int $depth, ?string $sizeAfter = null): StatementToken
     {
         // A single bare word that is a keyword is a keyword token; a quoted or
         // qualified reference, or a bare non-keyword word, is an identifier.
         if (! str_contains($text, '.')) {
             $upper = mb_strtoupper($text);
             if (isset($keywordSet[$upper])) {
-                return new StatementToken(TokenType::Keyword, $upper, $precededBy, $depth);
+                return new StatementToken(TokenType::Keyword, $upper, $precededBy, $depth, $sizeAfter);
             }
         }
 
-        return new StatementToken(TokenType::Identifier, $text, $precededBy, $depth);
+        return new StatementToken(TokenType::Identifier, $text, $precededBy, $depth, $sizeAfter);
     }
 
     /** The index just past a maximal `part('.'part)*` identifier chain starting at $start. */

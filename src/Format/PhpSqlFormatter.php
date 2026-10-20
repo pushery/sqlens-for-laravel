@@ -66,7 +66,7 @@ final readonly class PhpSqlFormatter implements SqlFormatter
 
     public function supports(Dialect $dialect): bool
     {
-        // BOTH, and the reason is in the class docblock: the layout is the same in either dialect,
+        // Both, and the reason is in the class docblock: the layout is the same in either dialect,
         // and the two differences are the servers', not the style's.
         return true;
     }
@@ -84,7 +84,7 @@ final readonly class PhpSqlFormatter implements SqlFormatter
 
     public function format(string $sql, Dialect $dialect, FormatStyle $style): FormatResult
     {
-        // Taken off the front BEFORE anything looks at the SQL, and put back on the end. The marker
+        // Taken off the front before anything looks at the SQL, and put back on the end. The marker
         // is a fact about the FILE — which encoding it announces — and not a token of the statement,
         // so no rule in this class has any business seeing it. Re-attached rather than re-created:
         // a file that had none must not acquire one, or the first run would add three bytes to every
@@ -95,7 +95,7 @@ final readonly class PhpSqlFormatter implements SqlFormatter
             $sql = substr($sql, strlen(self::BYTE_ORDER_MARK));
         }
 
-        // Checked BEFORE any work, from the same answer `auto` chooses by. See unexpressible().
+        // Checked before any work, from the same answer `auto` chooses by. See unexpressible().
         $unexpressible = $this->unexpressible($style);
 
         if ($unexpressible !== []) {
@@ -198,7 +198,7 @@ final readonly class PhpSqlFormatter implements SqlFormatter
     }
 
     /**
-     * How a token is written out — the ONLY place casing changes.
+     * How a token is written out — the only place casing changes.
      *
      * Guarded twice over: `isKeyword()` is false for anything that is not a bare word, and this
      * checks the verbatim kinds again. Two guards for one rule looks redundant and is not — a
@@ -217,8 +217,8 @@ final readonly class PhpSqlFormatter implements SqlFormatter
     /**
      * Whether this token starts a new line.
      *
-     * Three cases, and the comma is the interesting one: with leading commas the break comes BEFORE
-     * the comma, and with trailing commas AFTER it — which is the same decision seen from either
+     * Three cases, and the comma is the interesting one: with leading commas the break comes before
+     * the comma, and with trailing commas after it — which is the same decision seen from either
      * side, and the reason both are one branch rather than two features.
      *
      * @param  list<SqlToken>  $tokens
@@ -262,7 +262,7 @@ final readonly class PhpSqlFormatter implements SqlFormatter
     /**
      * Whether a space goes before this token.
      *
-     * The list of things a space does NOT go before is short and each entry is a real shape:
+     * The list of things a space does not go before is short and each entry is a real shape:
      * `count(*)` not `count (*)`, `id,` not `id ,`, `);` not `) ;`.
      *
      * `$previous` is non-nullable on purpose: the caller only asks once something has been written,

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Drivers\Capture;
 
+use Closure;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\Connection;
@@ -22,9 +23,11 @@ use Pushery\SQLens\Capture\Shadow\GuardDecision;
 use Pushery\SQLens\Capture\Shadow\ShadowCaptor;
 use Pushery\SQLens\Capture\Shadow\ShadowDatabaseName;
 use Pushery\SQLens\Capture\Shadow\ShadowMigrationRunner;
+use Pushery\SQLens\Capture\Shadow\ShadowNoteRecorder;
 use Pushery\SQLens\Capture\Shadow\ShadowOrphanSweeper;
 use Pushery\SQLens\Capture\Shadow\ShadowProvisioningConnection;
 use Pushery\SQLens\Capture\Shadow\ShadowSessionDefense;
+use Pushery\SQLens\Capture\Shadow\ShadowStatementTap;
 use Pushery\SQLens\Capture\Shadow\ShadowSweepRecorder;
 use Pushery\SQLens\Capture\Shadow\ShadowTargetIdentity;
 use Pushery\SQLens\Catalog\CatalogReaderFactory;
@@ -33,11 +36,13 @@ use Pushery\SQLens\Contracts\BindingFormatter;
 use Pushery\SQLens\Contracts\Captor;
 use Pushery\SQLens\Contracts\DriverCanonicalization;
 use Pushery\SQLens\Contracts\ReplicaProbe;
+use Pushery\SQLens\Contracts\ShadowDatabaseCatalog;
 use Pushery\SQLens\Contracts\ShadowProvisioner;
 use Pushery\SQLens\Deploy\Drift\ShadowReferenceBuilder;
 use Pushery\SQLens\Drivers\DriverManager;
 use Pushery\SQLens\Drivers\DriverResolutionFailure;
 use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
+use Pushery\SQLens\Drivers\Mysql\Canonical\MysqlSqlMode;
 use Pushery\SQLens\Drivers\Mysql\Capture\MysqlBindingFormatter;
 use Pushery\SQLens\Drivers\Mysql\Shadow\ConnectionMysqlMaintenanceGateway;
 use Pushery\SQLens\Drivers\Mysql\Shadow\MysqlReplicaProbe;
@@ -55,7 +60,7 @@ use Pushery\SQLens\Subjects\SubjectContext;
 
 /**
  * The composition root that turns a resolved connection into a fully wired captor —
- * the ONE place capture meets the concrete drivers, kept out of the console and
+ * the one place capture meets the concrete drivers, kept out of the console and
  * capture namespaces so both stay free of a driver import (the split insurance).
  *
  * It lives under `Drivers\` precisely because it must name both engines: it maps a
@@ -63,7 +68,7 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * the standard chain — a `PretendCaptor` wrapped in the canonicalizing decorator so
  * every statement reaches a rule in canonical form, wrapped again in the pre-scan
  * gate so a migration with an unseeable side effect is held out of the run. A driver
- * the factory has no capture wiring for is a NAMED failure, never a silent skip —
+ * the factory has no capture wiring for is a named failure, never a silent skip —
  * `DriverManager` already refused the unsupported engines, so this only guards the
  * gap where a driver is known but its capture pieces are not registered yet.
  *
@@ -108,7 +113,7 @@ final readonly class DriverCaptorFactory
             return DriverResolutionFailure::unknownDriver($key);
         }
 
-        // ONE loader for both the forward capture and the rollback read: a migration file is
+        // One loader for both the forward capture and the rollback read: a migration file is
         // loaded at most once per run, because a second load of a named-class migration is an
         // uncatchable fatal. See MigrationLoader.
         $loader = new MigrationLoader;
@@ -159,6 +164,7 @@ final readonly class DriverCaptorFactory
                 $this->database,
                 new ShadowSessionDefense($this->shadowTimeout()),
                 $this->app->make(CaptureConnectionFence::class),
+                $this->app->make(ShadowStatementTap::class),
             ),
             $connections,
             $readers,
@@ -169,7 +175,7 @@ final readonly class DriverCaptorFactory
     }
 
     /**
-     * The shadow-mode captor for a connection: the migrations run FOR REAL against a
+     * The shadow-mode captor for a connection: the migrations run for real against a
      * throwaway database and the SQL is read off the wire, then flows through exactly
      * the same canonicalization and pre-scan chain as pretend. One data path, two
      * sources — never a second engine.
@@ -180,7 +186,7 @@ final readonly class DriverCaptorFactory
      * provisioner creates nothing until `provision()` runs and the captor never calls
      * it on a blocked decision. Assembling this object touches no database.
      */
-    public function shadow(string $connectionName, GuardDecision $decision, bool $roundtrip = false, ?ShadowSweepRecorder $sweepRecorder = null): Captor|DriverResolutionFailure
+    public function shadow(string $connectionName, GuardDecision $decision, bool $roundtrip = false, ?ShadowSweepRecorder $sweepRecorder = null, ?ShadowNoteRecorder $noteRecorder = null): Captor|DriverResolutionFailure
     {
         $driver = $this->drivers->resolve($connectionName);
 
@@ -200,6 +206,7 @@ final readonly class DriverCaptorFactory
             $this->database,
             new ShadowSessionDefense($this->shadowTimeout()),
             $this->app->make(CaptureConnectionFence::class),
+            $this->app->make(ShadowStatementTap::class),
         );
 
         $inner = new ShadowCaptor(
@@ -219,10 +226,11 @@ final readonly class DriverCaptorFactory
             $roundtrip,
             $this->sweeperFor($key, $connectionName),
             $sweepRecorder,
+            $noteRecorder,
         );
 
         return $this->gateOver(
-            CanonicalizingCaptorDecorator::forDriver($inner, $canonicalization, $formatter, $this->subjectContextFor($key)),
+            CanonicalizingCaptorDecorator::forDriver($inner, $canonicalization, $formatter, $this->subjectContextFor($key), $this->defaultReadingFor($key, $connectionName)),
             $connectionName,
             $canonicalization,
             $formatter,
@@ -252,6 +260,7 @@ final readonly class DriverCaptorFactory
             $canonicalization,
             $formatter,
             $this->subjectContextFor($key),
+            $this->defaultReadingFor($key, $connectionName),
         );
     }
 
@@ -259,7 +268,7 @@ final readonly class DriverCaptorFactory
      * The pre-scan gate over a captor, with the rollback reader attached.
      *
      * The reader is a PRETEND chain whatever mode the run is in — shadow included. What a rule
-     * about `down()` needs is the SQL the rollback WOULD emit, and pretend is the only way to
+     * about `down()` needs is the SQL the rollback would emit, and pretend is the only way to
      * learn that without running the one migration method whose job is to destroy things.
      * Building it here, in the composition root, keeps both modes on one reading of the
      * rollback rather than a fast one and a real one that could disagree.
@@ -278,7 +287,7 @@ final readonly class DriverCaptorFactory
             $this->stringList('sqlens.capture.prescan.indirect_calls.allowlist'),
             $this->pretendChain($connectionName, $canonicalization, $formatter, $key, $loader),
             // The same gate the rule registry goes through, read from the same key. Passed rather
-            // than applied downstream so there is ONE filter: a second one beside the first would
+            // than applied downstream so there is one filter: a second one beside the first would
             // be the same bet taken twice.
             StabilityGate::fromConfig($this->config->get('sqlens.stability')),
         );
@@ -304,14 +313,14 @@ final readonly class DriverCaptorFactory
                 new ConnectionMaintenanceGateway($this->maintenanceConnection($connectionName, ConnectionMaintenanceGateway::MAINTENANCE_DATABASE)),
                 $this->config,
                 $this->database,
-                fn (): string => ShadowDatabaseName::generate($prefix),
+                fn (): string => ShadowDatabaseName::generate($prefix, $this->catalogFor('pgsql', $connectionName)->serverTime()),
                 $connectionConfig,
                 new PgsqlVirginTemplateBuilder(
                     // Told which database the shadow stands in for, so the template takes its encoding and locale.
                     new ConnectionMaintenanceGateway($this->maintenanceConnection($connectionName, ConnectionMaintenanceGateway::MAINTENANCE_DATABASE), $this->database->connection($connectionName)),
                     $this->config,
                     $this->database,
-                    fn (): string => ShadowDatabaseName::generate(ShadowDatabaseName::templatePrefix($prefix)),
+                    fn (): string => ShadowDatabaseName::generate(ShadowDatabaseName::templatePrefix($prefix), $this->catalogFor('pgsql', $connectionName)->serverTime()),
                     $connectionConfig,
                     $this->schemaDumpPath($connectionName),
                 ),
@@ -323,7 +332,7 @@ final readonly class DriverCaptorFactory
                 new MysqlSchemaDumpReader(new StatementSplitter),
                 $this->config,
                 $this->database,
-                fn (): string => ShadowDatabaseName::generate($prefix),
+                fn (): string => ShadowDatabaseName::generate($prefix, $this->catalogFor('mysql', $connectionName)->serverTime()),
                 $connectionConfig,
                 $this->databaseName($connectionName),
                 $this->schemaDumpPath($connectionName),
@@ -398,31 +407,45 @@ final readonly class DriverCaptorFactory
      */
     private function sweeperFor(string $key, string $connectionName): ShadowOrphanSweeper
     {
-        // TWO engines, on one line, and both halves of it run — the shape is the point.
+        return new ShadowOrphanSweeper($this->catalogFor($key, $connectionName), $this->shadowPrefix(), $this->orphanThresholdSeconds());
+    }
+
+    /**
+     * The engine's catalog on its maintenance connection: what the orphan sweep lists and drops
+     * through, and the server clock both the sweep and every new shadow database name read.
+     *
+     * One clock for both ends is what keeps the sweep safe across machines. A name stamped from the
+     * local clock of a machine that runs behind would look old to a sweep on another machine, and
+     * the sweep drops what looks old. The provisioners call it when they name a database, which is
+     * inside `provision()`, after the guard has allowed the run.
+     */
+    private function catalogFor(string $key, string $connectionName): ShadowDatabaseCatalog
+    {
+        // Two engines, on one line, and both halves of it run — the shape is the point.
         //
         // This was a three-arm `match` with `default => null`, and that third arm was a line NO RUN
-        // COULD ENTER: the only caller is `shadow()`, which returns `unknownDriver` unless
-        // `formatterFor($key)` answered, and that answers for `pgsql` and `mysql` and nothing else.
-        // An unreachable line is not a gap a test can close — it is a claim the code makes about a
-        // state it has already excluded — and it cost the 100% floor on `develop` until it was
-        // removed rather than tested around.
+        // COULD ENTER: every caller passes one of the two keys. `sweeperFor()` is reached only through
+        // `shadow()`, which returns `unknownDriver` unless `formatterFor($key)` answered, and that
+        // answers for `pgsql` and `mysql` and nothing else; the name factories in `provisionerFor()`
+        // sit inside the arm of their own engine. An unreachable line is not a gap a test can close —
+        // it is a claim the code makes about a state it has already excluded — and it cost the 100%
+        // floor on `develop` until it was removed rather than tested around.
         //
         // Returning `null` there was also the wrong answer in the direction that matters: it means
         // "this run sweeps nothing", and a leak nobody sweeps is invisible.
-        $catalog = $key === 'pgsql'
+        return $key === 'pgsql'
             ? new ConnectionMaintenanceGateway($this->maintenanceConnection($connectionName, ConnectionMaintenanceGateway::MAINTENANCE_DATABASE))
             : new ConnectionMysqlMaintenanceGateway($this->maintenanceConnection($connectionName, ConnectionMysqlMaintenanceGateway::MAINTENANCE_DATABASE));
-
-        return new ShadowOrphanSweeper($catalog, $this->shadowPrefix(), $this->orphanThresholdSeconds());
     }
 
     /**
      * How old a shadow database has to be before the sweep will remove it.
      *
      * The floor is what makes a sweep safe under `--parallel`: a worker must never drop the
-     * throwaway database another worker is migrating into right now. An hour is far beyond any real
-     * run — the shadow timeout is measured in seconds — while still removing yesterday's leak on the
-     * first run of the day.
+     * throwaway database another worker is migrating into right now. The age is read on the server's
+     * clock at both ends, so a worker whose own clock runs behind does not shorten it. What an hour
+     * still assumes is that no run lasts longer: `capture.shadow.timeout` bounds each statement, not a
+     * run. It removes yesterday's leak on the first run of the day.
      *
      * A configured value below the floor is RAISED to it rather than honored. Someone lowering it to
      * clean up faster would be trading a disk-space annoyance for the one mistake this whole class
@@ -436,10 +459,10 @@ final readonly class DriverCaptorFactory
     }
 
     /**
-     * Whether the configured direct connection reaches a DIFFERENT server than the run's own.
+     * Whether the configured direct connection reaches a different server than the run's own.
      *
      * `connectionConfig()` above resolves the direct connection and hands it to the provisioner
-     * WITHOUT comparing it to anything, so a project that pointed it at the wrong entry would have
+     * without comparing it to anything, so a project that pointed it at the wrong entry would have
      * every `CREATE DATABASE` and every `DROP DATABASE` land on a server nobody named — and the run
      * would look ordinary while it happened. The setting exists to reach the same server around a
      * transaction pooler, which makes "same instance" its actual contract.
@@ -584,6 +607,27 @@ final readonly class DriverCaptorFactory
     }
 
     /**
+     * The translation of a connection's captured SQL into the reading its canonicalization lexes by,
+     * or null where the session reads text the default way.
+     *
+     * Only MySQL has session settings that change the reading, and Laravel sends a connection's
+     * `modes` as that session's `sql_mode`. The connection read is the one under examination: its raw
+     * SQL is written for its own session, whatever server the throwaway database lives on.
+     *
+     * @return (Closure(string): string)|null
+     */
+    private function defaultReadingFor(string $key, string $connectionName): ?Closure
+    {
+        if ($key !== 'mysql') {
+            return null;
+        }
+
+        $mode = MysqlSqlMode::ofConnection($this->effectiveConnectionConfig($connectionName));
+
+        return $mode->readsLikeTheDefault() ? null : $mode->toDefaultReading(...);
+    }
+
+    /**
      * The context every canonical statement carries — the driver whose grammar it
      * describes, the run profile, and the strict-tools flag. It carries NO server version, and the
      * runner attaches the resolved one immediately (`LintRunner` calls
@@ -605,9 +649,9 @@ final readonly class DriverCaptorFactory
             driver: $key,
             profile: is_string($profile) ? $profile : 'local',
             strictTools: $strictTools,
-            // The path binding, built from the SAME resolver the lint layer uses. It rides on the
+            // The path binding, built from the same resolver the lint layer uses. It rides on the
             // context rather than reaching a rule some other way, because this method is documented
-            // as the ONE source of a run's subject context — and a second, separately-built binding
+            // as the one source of a run's subject context — and a second, separately-built binding
             // would be exactly the drift that documentation exists to prevent.
             pathBinding: new PathBinding(
                 new MigrationPaths($this->app, $this->app->make(Migrator::class), $this->config)->all(),

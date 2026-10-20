@@ -17,7 +17,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
 /**
- * Several strong-lock operations bundled in ONE transaction hold every lock they take
+ * Several strong-lock operations bundled in one transaction hold every lock they take
  * until the single commit — the total lock time is the sum, not the max, and everything
  * queued behind any of those tables waits for the whole bundle. Laravel wraps a
  * migration's `up()` in one transaction by default, so a migration that alters three
@@ -35,7 +35,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * commit on their own — no accumulation, so it is judged differently and stays silent.
  *
  * "DML + DDL on the same table in one transaction" is a different concern owned by a
- * separate lifecycle rule, and is deliberately NOT covered here.
+ * separate lifecycle rule, and is deliberately not covered here.
  *
  * The transaction context comes from the migration's own `$withinTransaction`, carried on
  * the canonical view — never from a `BEGIN` string in the raw text. It is always
@@ -71,7 +71,7 @@ final class RiskyOpsSingleTransactionRule extends AbstractPgsqlSafetyRule implem
      */
     public function remediationFor(MigrationStatementView $statement): ?RemediationPayload
     {
-        // Splitting a transaction describes a migration that HAS strong locks to split. The
+        // Splitting a transaction describes a migration that has strong locks to split. The
         // threshold below is not repeated here on purpose: how many locked tables are too many is
         // the judgment's business, while a migration with none at all is simply not what this
         // sequence is about.

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Generation;
 
 /**
- * WHICH world a rule catalog describes.
+ * Which world a rule catalog describes.
  *
  * A list of rules is not preventive knowledge on its own — the same package answers with a
  * different set at level 0 and level 4, on PostgreSQL and on MySQL, with and without a version
@@ -66,7 +66,7 @@ final readonly class RuleCatalogContext
      * The sentence a renderer puts above the rules when no version is pinned.
      *
      * Null when one is, because a note that is always present is one nobody reads. It says what
-     * was NOT established rather than apologizing: a version-dependent rule below is in the list
+     * was not established rather than apologizing: a version-dependent rule below is in the list
      * because it could not be placed, and the reader is the only one who can place it.
      */
     public function versionNote(): ?string

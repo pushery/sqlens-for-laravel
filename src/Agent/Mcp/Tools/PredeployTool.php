@@ -162,7 +162,7 @@ final class PredeployTool extends SqlensTool
             ]);
         }
 
-        // Word for word the command's join: blocked, blocked by nothing BUT unanswered checks, and
+        // Word for word the command's join: blocked, blocked by nothing but unanswered checks, and
         // every one of them covered. Partial coverage is the one result that must not read as
         // permission.
         $verdict = $outcome->verdict($waiver);
@@ -223,7 +223,7 @@ final class PredeployTool extends SqlensTool
         $config = Container::getInstance()->make('config');
 
         return [
-            // A NAME from the application's own connections, never a DSN. On the one tool that
+            // A name from the application's own connections, never a DSN. On the one tool that
             // reaches a production database, a free connection string would be the whole game.
             'connection' => ['sometimes', 'string', 'in:'.implode(',', new McpConnection($config)->allowed())],
             'allow_undetermined' => ['sometimes', 'boolean'],

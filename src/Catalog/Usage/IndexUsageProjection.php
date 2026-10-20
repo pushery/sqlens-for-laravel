@@ -13,7 +13,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ## Why this is a separate step and not part of TableMembers
  *
- * {@see TableMembers} runs INSIDE the catalog reading, over facts that came
+ * {@see TableMembers} runs inside the catalog reading, over facts that came
  * from the same query battery. Usage counters come from a different reading entirely — a second
  * accessor on the reader contract, deliberately kept out of the snapshot because they move while
  * the schema stands still. Attaching them there would mean the snapshot could no longer promise
@@ -82,10 +82,13 @@ final readonly class IndexUsageProjection
                 // recorded — measured as the ordinary state of a fresh PostgreSQL cluster, and the
                 // permanent state on MySQL, which has no reset point at all.
                 'index_stats_reset_at' => $usage->statsResetAt ?? '',
-                // WHOLE days, computed by the server. Whole rather than an instant so two audits on
+                // Whole days, computed by the server. Whole rather than an instant so two audits on
                 // the same day still produce byte-identical output; the server's clock rather than
                 // PHP's because it is the one that stamped the reset the count is measured from.
                 'index_stats_window_days' => $usage->windowDays ?? -1,
+                // False where the server counts no scan of a new connection, so a zero above is no
+                // evidence of anything.
+                'index_stats_counting' => $usage->counting,
             ]);
         }
 

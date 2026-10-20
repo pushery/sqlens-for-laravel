@@ -23,13 +23,13 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * ## Why this one is EXPERIMENTAL rather than stable
  *
  * Not maturity. This rule answers from usage counters, which move with every query the database
- * serves and can be reset by anybody with the privilege, so its verdict depends on WHEN it is asked
+ * serves and can be reset by anybody with the privilege, so its verdict depends on when it is asked
  * and on what the application did in between — a direct tension with the package's third governing
  * principle, that the same state produces the same result.
  *
  * The tier is what keeps that tension out of everybody else's run. `experimental` is not admitted by
  * default, so a project that has not asked for this rule gets an audit whose determinism is intact.
- * A project that HAS asked for it has accepted a time-bounded question, knowingly.
+ * A project that has asked for it has accepted a time-bounded question, knowingly.
  *
  * That is a deliberate, named exception to the pre-1.0 default that a shipped rule is `stable`, and
  * the guard holding that rule carries this id with the reason beside it rather than being loosened.
@@ -141,7 +141,7 @@ final class UnusedIndexRule extends AbstractCatalogRule implements DeclaresJudge
 
         // There is deliberately no "the window is too short" arm here, and its absence is a
         // statement about the engine rather than an omission. MySQL records no reset point at all,
-        // so `windowDays` is ALWAYS null on this driver — the arm above has already returned for
+        // so `windowDays` is always null on this driver — the arm above has already returned for
         // every case where a window was required. A length comparison would be code that cannot
         // execute, which is worse than absent: it reads as coverage.
 

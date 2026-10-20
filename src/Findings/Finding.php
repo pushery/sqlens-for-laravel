@@ -75,7 +75,7 @@ final readonly class Finding
         /**
          * Why this finding carries NO remediation, when something was there to carry.
          *
-         * Set only by the collector, and only when a payload was produced and then REFUSED by
+         * Set only by the collector, and only when a payload was produced and then refused by
          * {@see RemediationValidator} — never when a rule
          * simply had nothing to say. Those are different facts: "no template for this rule" is an
          * absence a reader can act on by writing one, and "the template this rule produced could not
@@ -86,12 +86,12 @@ final readonly class Finding
          * so a parameter inserted mid-list is eleven silent breakages — the projection's key order is
          * chosen separately, and puts this one where a reader will look for it.
          *
-         * A catalog key, so the reason is readable in all seven shipped locales — and machine-
-         * findable, which is what lets a consumer count them.
+         * A catalog key, so the reason resolves to the shipped sentence — and is machine-findable,
+         * which is what lets a consumer count them.
          */
         public ?string $remediationRefusal = null,
         /**
-         * The ledger's account of this debt, when the finding IS one.
+         * The ledger's account of this debt, when the finding is one.
          *
          * Null for every finding that is not a debt notice, which is nearly all of them — absent
          * rather than an empty record, for the same reason {@see $escalation} is: a `debt_kind` on
@@ -228,14 +228,14 @@ final readonly class Finding
     }
 
     /**
-     * The same finding, DECIDED — the one place an outcome changes after a finding is built.
+     * The same finding, decided — the one place an outcome changes after a finding is built.
      *
      * ## What it is for
      *
      * Some checks answer honestly with `undetermined` because the reading they own cannot settle the
      * question. `DEPLOY.LEGACY.ORPHAN_TRANSITION_OBJECT` is the case this was written for: a name
      * that looks like an abandoned rename is exactly what a table somebody queries every quarter
-     * also looks like, and the catalog holds nothing that separates them. A SECOND, independent
+     * also looks like, and the catalog holds nothing that separates them. A second, independent
      * reading can — the object appearing in no migration state at all — and when the two agree from
      * different directions, the answer is no longer a guess.
      *
@@ -510,14 +510,14 @@ final readonly class Finding
             'downtime_undetermined' => $this->downtimeUndetermined?->toArray(),
             // Additive and optional: absent for an `online` finding, and omitted rather than
             // serialized as null by the filter below. It never weakens the downtime_class
-            // contract because it is derived FROM it.
+            // contract because it is derived from it.
             'maintenance_window' => $this->maintenanceWindow()?->advice(),
             'confidence' => $this->confidence->value,
             'stability' => $this->stability->value,
             'documentation_url' => $this->documentationUrl,
             'location' => $this->location->toArray(),
             'context' => $this->context->toArray(),
-            // Additive and optional, and it sits BEFORE the slot it explains: a reader who finds
+            // Additive and optional, and it sits before the slot it explains: a reader who finds
             // no `remediation` looks up, not down. Present only when a payload existed and was
             // refused — never for a rule that produced none.
             'remediation_refusal' => $this->remediationRefusal,

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Subjects;
 
 /**
- * What the WHOLE migration does, made available to a rule judging ONE of its
+ * What the whole migration does, made available to a rule judging one of its
  * statements. A single canonical statement cannot answer "was this table created
  * earlier in the same migration?" — that is a fact about the statements around it —
  * so it is computed once, from every statement's classification, and handed to each
@@ -31,8 +31,8 @@ final readonly class MigrationContext
      * @param  list<MigrationStatementDigest>  $statements  the migration's statements in capture order —
      *                                                      the ORDER-sensitive material a rule needs when a
      *                                                      single booleaned fact cannot answer its question
-     *                                                      ("is a lock timeout set BEFORE the first strong
-     *                                                      lock?", "is a not-null check on THIS table valid
+     *                                                      ("is a lock timeout set before the first strong
+     *                                                      lock?", "is a not-null check on this table valid
      *                                                      before this SET NOT NULL?"). Empty on a context
      *                                                      built outside a capture; the distilled facts above
      *                                                      cover the rules that need neither order nor table.
@@ -70,7 +70,7 @@ final readonly class MigrationContext
          * index this table?" A migration that creates a table carries that table's whole index
          * history so far — nothing earlier can have indexed a table that did not exist — but the
          * history does not stop at the end of the file. The everyday remedy for a missing index in
-         * Laravel is a NEW migration, because a migration that has run in production is never
+         * Laravel is a new migration, because a migration that has run in production is never
          * edited. Reading only the one file therefore reports a foreign key that the very next file
          * indexes, forever, on a file the reader is not allowed to change — and the advice would be
          * to add what has already been added.
@@ -78,7 +78,7 @@ final readonly class MigrationContext
          * The run is the honest unit for that question: a table created inside the run cannot have
          * been touched before it, and every migration that will run after this one is in it.
          *
-         * ## What it is NOT
+         * ## What it is not
          *
          * Not an invitation to judge one migration by another's statements. A finding is located at
          * the statement that carries the mistake, and the surrounding file is what a reader can act
@@ -96,12 +96,45 @@ final readonly class MigrationContext
          * @var list<MigrationStatementDigest>
          */
         public array $runStatements = [],
+        /**
+         * Where this migration's own statements begin in {@see self::$runStatements}, or null where
+         * that list cannot say what ran before them.
+         *
+         * A question about what a column IS when a statement runs is a question about order: an
+         * earlier migration that created or retyped it answers it, a later one must not. The run's
+         * list carries no position of its own, so the position is handed over with it.
+         *
+         * Null in two cases, and both are a list out of step with what executed. A roundtrip's down
+         * legs run in reverse while the run lists them in file order, and the run carries no
+         * statements of a migration it could not read, so after one such migration the list has a
+         * gap that nothing marks.
+         */
+        public ?int $runOffset = 0,
     ) {}
 
     /** The context of a migration whose statements were never classified — creates nothing known. */
     public static function empty(): self
     {
         return new self([]);
+    }
+
+    /**
+     * The statements that ran before the given statement of this migration, in the order they ran:
+     * every earlier migration's in this run, then this migration's own up to it. Null where the run
+     * cannot say (see {@see self::$runOffset}).
+     *
+     * @return list<MigrationStatementDigest>|null
+     */
+    public function statementsBefore(int $statementIndex): ?array
+    {
+        if ($this->runOffset === null) {
+            return null;
+        }
+
+        return [
+            ...array_slice($this->runStatements, 0, $this->runOffset),
+            ...array_filter($this->statements, static fn (MigrationStatementDigest $statement): bool => $statement->index < $statementIndex),
+        ];
     }
 
     /**

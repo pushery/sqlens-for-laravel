@@ -15,6 +15,7 @@ use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\LocationKind;
 use Pushery\SQLens\Findings\Outcome;
 use Pushery\SQLens\Findings\Result;
+use Pushery\SQLens\Format\SafeFileWriter;
 use Pushery\SQLens\Lint\LintOutcome;
 use Pushery\SQLens\Lint\LintRunner;
 use Pushery\SQLens\Reporting\Baseline\BaselineEntry;
@@ -29,7 +30,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 /**
  * `sqlens:baseline` — freeze the current findings into a repo file so an existing
  * project can adopt SQLens without drowning in its first run: from then on the
- * linter reports only what is NEW.
+ * linter reports only what is new.
  *
  * The baseline is a REPO ARTIFACT, never a database write — primum non nocere holds
  * here as everywhere. The file the command writes is deterministic by construction
@@ -69,7 +70,7 @@ final class BaselineCommand extends Command
 
     public function handle(LintRunner $runner, Translator $translator, Repository $config, BaselineSerializer $serializer): int
     {
-        // FIRST, before the reporter, before the profile, before anything opens a connection. A
+        // First, before the reporter, before the profile, before anything opens a connection. A
         // misconfiguration that surfaces after twenty seconds of catalog reading is one people
         // check for less often — and a key this package does not know is one it IGNORES, silently.
         if ($this->refusesInvalidConfig()) {
@@ -88,7 +89,7 @@ final class BaselineCommand extends Command
             return ExitCode::Misconfiguration->value;
         }
 
-        // The write target is resolved BEFORE the run: a baseline with nowhere to go
+        // The write target is resolved before the run: a baseline with nowhere to go
         // is a misconfiguration named up front, not after a wasted capture.
         $path = $this->resolvePath($config);
 
@@ -99,7 +100,7 @@ final class BaselineCommand extends Command
         }
 
         $connection = $this->option('connection');
-        // applyBaseline: false — this command WRITES the baseline, so it must see every
+        // applyBaseline: false — this command writes the baseline, so it must see every
         // finding, not the ones the previous baseline already accepted (which would make
         // a second run freeze an empty file). Config and annotation suppression still
         // apply: a finding handled by those needs no baselining.
@@ -146,7 +147,7 @@ final class BaselineCommand extends Command
         // never silently replaced (that would discard a project's accepted findings).
         if ($this->option('update') === true && is_file($path)) {
             try {
-                $existing = $serializer->deserialize((string) file_get_contents($path), $path);
+                $existing = $serializer->readFile($path, $path);
             } catch (UnreadableBaseline $failure) {
                 $this->stderr()->writeln($failure->getMessage());
 
@@ -172,7 +173,9 @@ final class BaselineCommand extends Command
             return ExitCode::Clean->value;
         }
 
-        if (@file_put_contents($path, $bytes) === false) {
+        // Written beside the file and renamed over it, so a run killed halfway or a full disk leaves
+        // the accepted entries that were there rather than half of them.
+        if (! SafeFileWriter::ensure($path, $bytes)) {
             $this->stderr()->writeln($this->translate('sqlens::messages.commands.baseline_unwritable', ['path' => $path]));
 
             return ExitCode::Misconfiguration->value;
@@ -200,7 +203,7 @@ final class BaselineCommand extends Command
     private function entriesItCannotJudge(string $path, BaselineSerializer $serializer, array $unread): array
     {
         try {
-            $existing = $serializer->deserialize((string) file_get_contents($path), $path);
+            $existing = $serializer->readFile($path, $path);
         } catch (UnreadableBaseline $failure) {
             $this->stderr()->writeln($this->translate('sqlens::messages.commands.baseline_replaced_unreadable', ['path' => $path, 'reason' => $failure->getMessage()]));
 

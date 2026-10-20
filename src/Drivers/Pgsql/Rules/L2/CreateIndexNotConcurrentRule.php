@@ -29,7 +29,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * leave an INVALID index behind if it is interrupted, which a deploy has to clean up.
  * Naming it here keeps the rule from trading one silent problem for another.
  *
- * **The exception that keeps this rule usable.** An index on a table the SAME
+ * **The exception that keeps this rule usable.** An index on a table the same
  * migration just created is building against an empty table: there are no writers to
  * block and no rows to scan, so it is not the incident this rule warns about. Without
  * that carve-out the rule would fire on the commonest migration shape there is —
@@ -91,8 +91,8 @@ final class CreateIndexNotConcurrentRule extends AbstractPgsqlSafetyRule impleme
      */
     public function remediationFor(MigrationStatementView $statement): ?RemediationPayload
     {
-        // The SAME reading the judgment opens with, through one method rather than two copies of
-        // one expression. The template fills the index, table and column names out of THIS
+        // The same reading the judgment opens with, through one method rather than two copies of
+        // one expression. The template fills the index, table and column names out of this
         // statement, so handed anything else it produces a CREATE INDEX CONCURRENTLY for an object
         // the migration never mentions.
         if (! $this->describesCreateIndex($statement)) {

@@ -30,7 +30,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * ## `pg_temp` is the second way, and it needs no grant at all
  *
- * The caller's own temporary schema is searched for tables, views and types FIRST unless the path
+ * The caller's own temporary schema is searched for tables, views and types first unless the path
  * names it later, and a path that leaves it out does not name it. So only a path that ends in
  * `pg_temp` is closed: anywhere else, or missing, a caller creates a temporary table with a name the
  * routine uses unqualified, and the routine reads and writes the caller's table as its owner. Measured

@@ -29,7 +29,7 @@ use Pushery\SQLens\Rules\AbstractCatalogRule;
  * by `security.min_severity`, and an ungated security rule is either always on or always off — both
  * of which take the choice away from the project it is supposed to serve.
  *
- * It is NOT re-declared here, and the obvious version of this class gets that wrong twice. Narrowing
+ * It is not re-declared here, and the obvious version of this class gets that wrong twice. Narrowing
  * the contract to a non-nullable `Severity` makes the `?Severity` every rule inherits from
  * `RuleMetadataDefaults` incompatible; re-declaring it `abstract` is refused outright, because PHP
  * will not make an inherited CONCRETE method abstract — and that default is concrete, returning null,
@@ -43,7 +43,7 @@ use Pushery\SQLens\Rules\AbstractCatalogRule;
  * which is how a mechanical migration turns into 28 pieces of invented prose. Empty means "nothing
  * this rule claims to cover escapes it", and naming the real ones is its own piece of work.
  *
- * ## The subject kinds this does NOT cover
+ * ## The subject kinds this does not cover
  *
  * {@see AbstractMigrationSecurityRule} now sits beside this one and is served, which is what that
  * class was waiting for — a base with no real user is scaffolding claiming to be a seam, so it

@@ -28,7 +28,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * A migration that MEANT the drop declares it with `#[SqlensAllowDestructive]`. That no
  * longer silences the rule: the finding is still produced, and the opt-in is applied at
- * the reporting layer as a NAMED, VISIBLE suppression with its reason shown — so a run
+ * the reporting layer as a named, visible suppression with its reason shown — so a run
  * always shows the destruction happened. The opt-in changes the presentation, not the
  * fact.
  *
@@ -69,7 +69,7 @@ final class DropTableRule extends AbstractPgsqlSafetyRule implements ProvidesRem
      * sequence is right — and a second copy of it here would be two versions of one plan on one
      * statement.
      *
-     * The sequence names the destructive opt-in as its LAST step, which is what keeps this from
+     * The sequence names the destructive opt-in as its last step, which is what keeps this from
      * becoming a way past the level-1 gate: the attribute records a review, it does not silence the
      * finding.
      */

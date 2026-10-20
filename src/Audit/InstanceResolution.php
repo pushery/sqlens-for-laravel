@@ -51,7 +51,7 @@ final readonly class InstanceResolution
     /**
      * More than one supported connection and nothing said which — a refusal, on purpose.
      *
-     * Laravel's default connection is NOT taken as an answer here. It is a sensible default for an
+     * Laravel's default connection is not taken as an answer here. It is a sensible default for an
      * application's own queries and a terrible one for an audit: which instance was read is part of
      * what the report ASSERTS, and a replica carries different settings, a different lag and
      * sometimes a different schema. Picking one silently would put a claim in the report that

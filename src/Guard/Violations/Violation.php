@@ -40,7 +40,7 @@ final readonly class Violation
     /**
      * @param  string  $type  a stable machine key: `lazy_loading`, `slow_query`, `runtime_ddl`, …
      * @param  string|null  $reason  MANDATORY when the outcome is undetermined, absent otherwise
-     * @param  array<array-key, mixed>  $bindings  Laravel's own shape — NAMED bindings are keyed by
+     * @param  array<array-key, mixed>  $bindings  Laravel's own shape — named bindings are keyed by
      *                                             name, so a `list` would refuse the statements
      *                                             this suite most wants to report
      * @param  array<string, mixed>  $context  everything else, sorted by key before it is logged

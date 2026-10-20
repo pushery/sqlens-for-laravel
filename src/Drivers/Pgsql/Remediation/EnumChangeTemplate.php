@@ -13,14 +13,14 @@ use Pushery\SQLens\Rules\RuleEvidence;
 use Pushery\SQLens\Rules\RuleEvidenceEntry;
 
 /**
- * Appending a value to a PostgreSQL enum — the ONE enum change the engine performs cheaply, and the
+ * Appending a value to a PostgreSQL enum — the one enum change the engine performs cheaply, and the
  * only one this template describes.
  *
  * ## Why there is nothing here for removing a value
  *
  * PostgreSQL has no `ALTER TYPE … DROP VALUE`. Not "it is expensive" — it does not exist. Removing
  * a value means building a new type and moving the column onto it, which is a staged column swap
- * and already has a template. So the rules for a removal or a rename hand over THAT sequence
+ * and already has a template. So the rules for a removal or a rename hand over that sequence
  * instead, and this file stays silent about them rather than inventing a shorter-looking path to
  * the same place.
  *

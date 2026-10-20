@@ -24,7 +24,7 @@ final class ShutdownRequest
     /**
      * Ask the loop to stop, and say why.
      *
-     * The FIRST reason wins. A supervisor that sends SIGTERM and then SIGINT a moment later has not
+     * The first reason wins. A supervisor that sends SIGTERM and then SIGINT a moment later has not
      * changed its mind about why it is stopping the server, and reporting the second signal would
      * describe the impatience rather than the decision.
      */

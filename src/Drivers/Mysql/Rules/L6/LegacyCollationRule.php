@@ -30,6 +30,15 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * object still on a pre-8.0 collation is almost always carrying a decision nobody made — it was
  * created before 8.0, or by a tool that spelled out the old default.
  *
+ * ## Laravel's own default is one of them, and the finding says so
+ *
+ * Laravel's `config/database.php` ships `utf8mb4_unicode_ci` for MySQL, so an application that
+ * never chose a collation has it on every table. It is reported all the same, at the idiom level a
+ * project opts into, and the finding names the framework as the source so nobody goes looking for
+ * a decision in their own code. Pinning it can be the right call, on a database whose sort order has
+ * to survive an upgrade unchanged; then the rule belongs on the project's ignore list with that
+ * reason. {@see CharacterSetServerNotUtf8mb4Rule} leaves the collation to this rule for that reason.
+ *
  * ## Why it is a separate rule from the character set
  *
  * {@see CharsetNotUtf8mb4Rule} asks what the object can STORE; this asks how it ORDERS and
@@ -39,12 +48,12 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * had decided about. Rule ids are public API from 1.0 on, so this is a shape worth getting right
  * before there are users.
  *
- * ## What is deliberately NOT reported
+ * ## What is deliberately not reported
  *
  * - **`_bin` and `_cs` collations.** A binary or case-sensitive collation on a hash, a token or a
  *   technical key is a decision, and usually the right one. Reporting it would be the rule telling
  *   somebody to break their own uniqueness.
- * - **Language-specific 0900 collations** such as `utf8mb4_de_pb_0900_ai_ci`. They ARE the modern
+ * - **Language-specific 0900 collations** such as `utf8mb4_de_pb_0900_ai_ci`. They are the modern
  *   family; picking one is a considered act, not a leftover.
  * - **Anything not `utf8mb4`.** A `latin1_swedish_ci` column has a character-set problem, and that
  *   is the other rule's finding. Reporting it here too would make two rules shout about one object,
@@ -61,7 +70,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
 final class LegacyCollationRule extends AbstractCatalogRule implements DeclaresJudgedObjectTypes
 {
     /**
-     * BOTH, and the second was missed on the first pass: the rule judges a database-default COLLATION
+     * Both, and the second was missed on the first pass: the rule judges a database-default collation
      * subject as well as a table, and the branch that decides which lives behind
      * {@see TextEncoding::isDatabaseDefault()} — invisible to a guard reading only this file's own
      * type checks. Declaring `Table` alone was the mirror of the over-claim: the run would have said
@@ -88,6 +97,15 @@ final class LegacyCollationRule extends AbstractCatalogRule implements DeclaresJ
         'utf8mb4_unicode_ci' => 'utf8mb4_0900_ai_ci',
         'utf8mb4_unicode_520_ci' => 'utf8mb4_0900_ai_ci',
     ];
+
+    /** The collation Laravel's `config/database.php` ships for MySQL. */
+    private const string LARAVEL_DEFAULT = 'utf8mb4_unicode_ci';
+
+    /** What a finding about {@see self::LARAVEL_DEFAULT} adds, so nobody looks for the decision in their own code. */
+    private const string LARAVEL_DEFAULT_NOTE = ' It is the collation Laravel\'s own config/database.php ships for MySQL, '
+        .'so an application that never chose one has it everywhere. Pinning it is a real choice on a database '
+        .'whose sort order has to survive an upgrade unchanged; if that is the reason here, put this rule on '
+        .'the project\'s ignore list with it.';
 
     public function id(): string
     {
@@ -190,7 +208,7 @@ final class LegacyCollationRule extends AbstractCatalogRule implements DeclaresJ
     }
 
     /**
-     * ONE message for the table and every column on it.
+     * One message for the table and every column on it.
      *
      * A catalog finding is located at the object and results are deduplicated by rule id and
      * location, so a verdict per column would arrive as one with the rest dropped silently — and a
@@ -241,8 +259,9 @@ final class LegacyCollationRule extends AbstractCatalogRule implements DeclaresJ
         return sprintf(
             '%s is pinned to a Unicode version from before MySQL 8.0. utf8mb4_0900_ai_ci implements UCA 9.0.0 '
             .'and has been the server default since 8.0; an object still on the older one is usually carrying a '
-            .'decision nobody made rather than one somebody defended.',
+            .'decision nobody made rather than one somebody defended.%s',
             $collation,
+            strtolower($collation) === self::LARAVEL_DEFAULT ? self::LARAVEL_DEFAULT_NOTE : '',
         );
     }
 }

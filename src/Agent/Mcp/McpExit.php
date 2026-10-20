@@ -23,7 +23,7 @@ namespace Pushery\SQLens\Agent\Mcp;
  * script could not tell them apart.
  *
  * The numbers follow the conventions a shell already knows: 128 + signal for a signaled end, and
- * `EX_SOFTWARE` for a run that broke. The NAMES are the contract; the numbers are what makes the
+ * `EX_SOFTWARE` for a run that broke. The names are the contract; the numbers are what makes the
  * contract legible to something that never read this file.
  */
 enum McpExit: string

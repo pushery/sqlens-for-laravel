@@ -21,6 +21,7 @@ use Pushery\SQLens\Findings\RemediationPayload;
 use Pushery\SQLens\Reporting\Baseline\BaselineSchema;
 use Pushery\SQLens\Reporting\Json\JsonEnvelope;
 use ReflectionClass;
+use ReflectionMethod;
 use ReflectionParameter;
 
 /**
@@ -28,7 +29,7 @@ use ReflectionParameter;
  *
  * ## Why this is a PROJECTION and not a second derivation
  *
- * `resources/data/rule-registry.json` already carries, for all 196 entries, every per-rule field
+ * `resources/data/rule-registry.json` already carries, for every entry, every per-rule field
  * this snapshot needs: category, level, severity, stability, message prefix, documentation url,
  * `deprecated_since`, `replaced_by`. Deriving them a second time from the rule objects would create
  * two answers to "what is this rule's severity" — and they would agree until the day one generator
@@ -42,7 +43,7 @@ use ReflectionParameter;
  * `confidence`, `source` — all useful, none of them promised. A page can be rewritten, a rule can
  * join a second suite, a slug can change: none of that costs a major release.
  *
- * This file holds what a major release IS. The difference between the two lists is the contract,
+ * This file holds what a major release is. The difference between the two lists is the contract,
  * and a snapshot that simply copied the registry would make every documentation edit look like a
  * breaking change — which is how a breaking-change gate gets switched off in its first month.
  *
@@ -66,7 +67,7 @@ final readonly class ApiSurface
     /**
      * The per-rule fields that are contract, in the order they are written.
      *
-     * Named as a list rather than filtered inline, because this list IS the promise: adding an entry
+     * Named as a list rather than filtered inline, because this list is the promise: adding an entry
      * makes something breaking that was not, and removing one silently un-promises it. It should be
      * read as a decision every time it changes.
      *
@@ -85,15 +86,15 @@ final readonly class ApiSurface
     ];
 
     /**
-     * The interfaces a third-party rule package implements — the extension API, by name.
+     * The interfaces every rule implements, a driver package's included — the extension API, by name.
      *
      * ## Why a declared list AND a derived check
      *
-     * The public-API page has always called this "the rule contract — the interfaces a third-party
-     * rule package implements", and nobody had ever enumerated them. A prose set cannot be diffed,
-     * so a signature change on any of them reached a consumer with nothing red in between.
+     * The public-API page has always called this "the rule contract", and nobody had ever
+     * enumerated it. A prose set cannot be diffed, so a signature change on any of these interfaces
+     * reached a driver package with nothing red in between.
      *
-     * Declared here, because this list IS the promise and it should be read as a decision every
+     * Declared here, because this list is the promise and it should be read as a decision every
      * time it changes — the same reasoning as {@see self::RULE_FIELDS} above. And held honest by a
      * DERIVED arm: `ExtensionContractsTest` reads which interfaces under `src/Contracts/` a rule
      * class actually implements and requires the two sets to agree. A hand list alone would rot the
@@ -158,7 +159,7 @@ final readonly class ApiSurface
             $rules[$id] = $projected;
         }
 
-        // Sorted by id, and sorted HERE rather than trusting the registry's order. The registry is
+        // Sorted by id, and sorted here rather than trusting the registry's order. The registry is
         // generated too, and a snapshot whose order depended on another generator's would produce a
         // diff the day that one changed its sort — a breaking-change gate firing on nothing.
         ksort($rules);
@@ -176,9 +177,9 @@ final readonly class ApiSurface
             'remediation_schema_version' => RemediationPayload::SCHEMA_VERSION,
             'remediation_schema_stability' => RemediationPayload::STABILITY->value,
             // The extension API's own shape, so a signature change on it is a diff rather than a
-            // surprise. It was absent entirely: the page promised "the interfaces a third-party rule
-            // package implements" and the gate compared rules, exit codes and schema versions —
-            // never a method signature. A consumer's rule package could stop compiling on a minor.
+            // surprise. It was absent entirely: the page promised a stable rule contract, and the
+            // gate compared rules, exit codes and schema versions, never a method signature. A
+            // driver package's rules could stop compiling on a minor.
             'extension_contracts' => self::extensionContracts(),
         ];
     }
@@ -205,16 +206,7 @@ final readonly class ApiSurface
             $methods = [];
 
             foreach (new ReflectionClass($contract)->getMethods() as $method) {
-                $parameters = array_map(
-                    static fn (ReflectionParameter $parameter): string => ($parameter->getType() ?? 'mixed').' $'.$parameter->getName(),
-                    $method->getParameters(),
-                );
-
-                $methods[$method->getName()] = sprintf(
-                    '(%s): %s',
-                    implode(', ', $parameters),
-                    (string) ($method->getReturnType() ?? 'mixed'),
-                );
+                $methods[$method->getName()] = self::methodSignature($method);
             }
 
             ksort($methods);
@@ -224,6 +216,53 @@ final readonly class ApiSurface
         ksort($contracts);
 
         return $contracts;
+    }
+
+    /**
+     * One contract method as a line of the snapshot: what an implementation has to declare to load.
+     *
+     * Beside each parameter's type and name, its `&`, its `...` and its default are part of the line,
+     * and so is the method's `static`. An implementation that differs from its interface in any of
+     * them is refused when its class loads, so a line without them would stay byte-identical across
+     * exactly the change that breaks every implementer.
+     */
+    private static function methodSignature(ReflectionMethod $method): string
+    {
+        $parameters = array_map(
+            static fn (ReflectionParameter $parameter): string => sprintf(
+                '%s %s%s$%s%s',
+                (string) ($parameter->getType() ?? 'mixed'),
+                $parameter->isPassedByReference() ? '&' : '',
+                $parameter->isVariadic() ? '...' : '',
+                $parameter->getName(),
+                $parameter->isDefaultValueAvailable() ? ' = '.self::defaultOf($parameter) : '',
+            ),
+            $method->getParameters(),
+        );
+
+        return sprintf(
+            '%s(%s): %s',
+            $method->isStatic() ? 'static ' : '',
+            implode(', ', $parameters),
+            (string) ($method->getReturnType() ?? 'mixed'),
+        );
+    }
+
+    /**
+     * A parameter's default as the line shows it: a constant by its name, an object by its class,
+     * and any other value in its JSON form.
+     */
+    private static function defaultOf(ReflectionParameter $parameter): string
+    {
+        if ($parameter->isDefaultValueConstant()) {
+            return (string) $parameter->getDefaultValueConstantName();
+        }
+
+        $value = $parameter->getDefaultValue();
+
+        return is_object($value)
+            ? 'new '.$value::class
+            : json_encode($value, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
     /**

@@ -19,9 +19,10 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * sentences, and the deduplication key is rule id AND location, so both survive into one report —
  * which is only right if a reader learns something from the second.
  *
- * They do. `local_infile` alone says the server would ask a CLIENT for a file, which needs a hostile
- * or hijacked server to matter and touches nothing on the database host. `FILE` alone says an account
- * can read and write files as the SERVER's operating-system user, bounded by `secure_file_priv`.
+ * They do. `local_infile` alone says the server accepts a statement that reads a file off the
+ * CLIENT, which needs an injected statement to matter and touches nothing on the database host.
+ * `FILE` alone says an account can read and write files as the SERVER's operating-system user,
+ * bounded by `secure_file_priv`.
  * Together they are a route: a connection that can be induced to upload a file, and an account that
  * can place one where the host will read it.
  *
@@ -98,8 +99,8 @@ final class LocalInfileFileGrantRule extends AbstractSettingSecurityRule
         return sprintf(
             'local_infile is %s AND this instance carries an account holding FILE (%s), which are the '
             .'two halves of one route rather than two separate settings. On its own the capability '
-            .'needs a hostile or hijacked server to matter and touches nothing on the database host; '
-            .'on its own FILE is bounded by secure_file_priv and needs somebody holding that account. '
+            .'needs an injected LOAD DATA LOCAL statement to matter and touches nothing on the database '
+            .'host; on its own FILE is bounded by secure_file_priv and needs somebody holding that account. '
             .'Together a connection that can be induced to upload a file meets an account that can '
             .'place one where the host will read it. Reported beside SEC.CFG.LOCAL_INFILE rather than '
             .'instead of it: that one is about the server\'s capability, this one about what exists '
@@ -117,7 +118,7 @@ final class LocalInfileFileGrantRule extends AbstractSettingSecurityRule
     public function limitations(): array
     {
         return [
-            'reads the RUNNING value, not the file: a setting changed on disk and not yet reloaded is invisible here, and one changed only for this session would be read as the server\'s',
+            'reads the GLOBAL value, not the file: a setting changed on disk and not yet reloaded is invisible here, and a value set for one session is never read',
             'reads the setting and the grant, and cannot tell whether the account holding the grant is one anything actually connects as — a provisioning account that exists and is never used carries the same catalog rows as one in daily use',
         ];
     }

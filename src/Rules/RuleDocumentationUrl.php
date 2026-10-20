@@ -64,7 +64,7 @@ final readonly class RuleDocumentationUrl
     }
 
     /**
-     * The slug of a rule id: lowercased, with BOTH separators — the dots between segments and the
+     * The slug of a rule id: lowercased, with both separators — the dots between segments and the
      * underscores inside one — folded to dashes.
      *
      * The underscore is the part that is easy to get wrong, and it was: a slug that keeps it

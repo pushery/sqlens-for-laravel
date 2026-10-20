@@ -18,7 +18,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * A MySQL account whose user name is EMPTY.
  *
  * `''@'host'` is a real account, and it is not a name nobody uses — it is a name that matches
- * ANYONE. A client connecting from a matching host under a user name the server does not otherwise
+ * anyone. A client connecting from a matching host under a user name the server does not otherwise
  * know is authenticated as this account. So an anonymous account does not merely exist beside the
  * real ones; it silently catches every typo, every stale credential, every probe.
  *
@@ -31,8 +31,8 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ## The pair, and the double report it exists to avoid
  *
- * An anonymous account with no password is the worst version of both problems and ONE fact, so it
- * must produce ONE finding. Three rules could speak about it — this pair plus
+ * An anonymous account with no password is the worst version of both problems and one fact, so it
+ * must produce one finding. Three rules could speak about it — this pair plus
  * {@see AbstractNoPasswordRule} — and the split is arranged so exactly one does:
  *
  *   - anonymous AND no password → the `critical` rule here, and {@see AbstractNoPasswordRule} stands
@@ -70,7 +70,7 @@ abstract class AbstractAnonymousAccountRule extends AbstractSchemaObjectSecurity
         return [Suite::Audit];
     }
 
-    /** Whether this rule judges the anonymous accounts that ALSO have no password. */
+    /** Whether this rule judges the anonymous accounts that also have no password. */
     abstract protected function judgesPasswordlessAccounts(): bool;
 
     /** The finding, once this rule has established the account is one of its own. */

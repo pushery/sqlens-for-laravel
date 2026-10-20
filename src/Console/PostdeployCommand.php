@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Filesystem\Filesystem;
+use Pushery\SQLens\Audit\InstanceTarget;
 use Pushery\SQLens\Audit\ProjectManifest;
 use Pushery\SQLens\Capture\PendingSkipReason;
 use Pushery\SQLens\Catalog\CatalogReaderFactory;
@@ -40,6 +41,7 @@ use Pushery\SQLens\Deploy\TimeBudgetNotice;
 use Pushery\SQLens\Drivers\Capture\DriverCaptorFactory;
 use Pushery\SQLens\Drivers\DriverRegistry;
 use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
+use Pushery\SQLens\Drivers\MeasuredServerVersion;
 use Pushery\SQLens\Exceptions\UnknownReporterFormat;
 use Pushery\SQLens\Exceptions\UnreadableDriftExcludes;
 use Pushery\SQLens\Findings\Finding;
@@ -48,12 +50,15 @@ use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Lint\ShadowClearance;
 use Pushery\SQLens\Reporting\CaptureMode as ReportingCaptureMode;
 use Pushery\SQLens\Reporting\ConfigRunContextCollector;
+use Pushery\SQLens\Reporting\ReportedServerVersion;
 use Pushery\SQLens\Reporting\ReporterManager;
+use Pushery\SQLens\Reporting\ReportText;
 use Pushery\SQLens\Rules\ServerVersion;
 use Pushery\SQLens\Severity\Severity;
 use Pushery\SQLens\Subjects\SubjectContext;
 use Pushery\SQLens\Today;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
 use Throwable;
 
 /**
@@ -68,7 +73,7 @@ use Throwable;
  * not fail the migration; a constraint added `NOT VALID` whose `VALIDATE` never followed is a
  * promise the database is not keeping. Both are silent, and both survive indefinitely.
  *
- * ## It runs ONCE, and that is structural
+ * ## It runs once, and that is structural
  *
  * No `--watch`, no daemon, no scheduler entry, no history. {@see PostdeployVerifier} has no loop and
  * keeps nothing between calls, so "postdeploy is not monitoring" is a property of the code rather
@@ -114,7 +119,7 @@ final class PostdeployCommand extends Command
         ShadowClearance $clearance,
         Application $app,
     ): int {
-        // FIRST, before the reporter, before the profile, before anything opens a connection. A
+        // First, before the reporter, before the profile, before anything opens a connection. A
         // misconfiguration that surfaces after twenty seconds of catalog reading is one people
         // check for less often — and a key this package does not know is one it IGNORES, silently.
         if ($this->refusesInvalidConfig()) {
@@ -220,7 +225,7 @@ final class PostdeployCommand extends Command
 
         $report = $verifier->verify($postdeployContext);
 
-        // What the CHECKS cost, from the START rather than from what is left of the budget — and
+        // What the checks cost, from the start rather than from what is left of the budget — and
         // measured here, deliberately before the expectation comparison below.
         //
         // `$budgetMs - $remaining` is the obvious spelling and it cannot see an overrun.
@@ -236,7 +241,7 @@ final class PostdeployCommand extends Command
         $consumedMs = (int) round((hrtime(true) - $startedAt) / 1_000_000);
 
         try {
-            // The header says what bounds this run was actually under. A run that IS bounded and
+            // The header says what bounds this run was actually under. A run that is bounded and
             // does not say so is indistinguishable, in the artifact somebody keeps after a deploy,
             // from one that is not — and this command's whole output is that artifact.
             $timeouts = $sessionBounds->inForce($preflight->driver, $preflight->session);
@@ -246,7 +251,7 @@ final class PostdeployCommand extends Command
             $timeouts = null;
         }
 
-        // The expectation comparison, if this run asked for it — and its findings travel in the SAME
+        // The expectation comparison, if this run asked for it — and its findings travel in the same
         // list as everything else, carrying the same `DEPLOY.DRIFT.*` ids `sqlens:drift` reports.
         //
         // Off by default and that is structural rather than cautious: proving the match means
@@ -264,7 +269,7 @@ final class PostdeployCommand extends Command
         $escalation = ExpectationEscalation::apply($report->findings(), $expectation);
         $findings = $escalation['findings'];
 
-        // What the run itself cost, as a finding when it broke the promise — and as NOTHING when it
+        // What the run itself cost, as a finding when it broke the promise — and as nothing when it
         // did not. Emitted only on an overrun, and that is what keeps the output deterministic: a
         // wall-clock number in a finding that was always present would make two runs over one
         // unchanged database produce two different documents. The duration still reaches a reader
@@ -288,7 +293,7 @@ final class PostdeployCommand extends Command
         // the same axes and the same ordering as every other one.
         $debt = $this->debtPass($config, $postdeployContext, $findings, $manifest, $drivers, $today);
 
-        // Whether the escape hatch actually waived a block, decided BEFORE the report is written so
+        // Whether the escape hatch actually waived a block, decided before the report is written so
         // the report can carry it. A waived run and an earned one otherwise share an exit code, a
         // green tick and a document — and "postdeploy passed" then means two different things
         // nobody can separate afterwards. The exit code below reuses this value rather than asking
@@ -298,9 +303,10 @@ final class PostdeployCommand extends Command
             static fn (CheckResult $result): bool => $result->isBlocking(),
         ));
 
-        $waived = $report->blocks()
-            && $onlyUndetermined
-            && $this->option('allow-undetermined') === true;
+        // A debt threshold over an account the run could not read waives the same way: the run was
+        // asked whether a debt is old enough to stop it, and it could not answer.
+        $waived = $this->option('allow-undetermined') === true
+            && (($report->blocks() && $onlyUndetermined) || ($debt['unanswered'] && ! $report->blocks()));
 
         // The same reporters everything else uses, carrying findings as findings. A post-deploy
         // verdict is not a new kind of thing — it is the same three-valued statement about a
@@ -310,9 +316,17 @@ final class PostdeployCommand extends Command
             // A check that could not answer stands in the result as an undetermined finding of its
             // own. Added here and not before the debt pass, which reads every object name as owed.
             Result::of([...$findings, ...$report->undeterminedGaps($postdeployContext->driver, $name, $profileName), ...$expectation->findings, ...$overrun, ...$debt['findings']]),
-            $runContext->collect(ReportingCaptureMode::Pretend, $timeouts, $report->describeTimings() ?: null, $consumedMs, $today)
+            $runContext->collect(ReportingCaptureMode::Pretend, $timeouts, $report->describeTimings() ?: null, $consumedMs, $today, $postdeployContext->session->sealedBy())
+                // The server this run read, as the session reported it, with the pin beside it.
+                ->withServerVersions(ReportedServerVersion::detectedAndPinned(
+                    $name,
+                    $preflight->serverVersion instanceof ServerVersion ? new MeasuredServerVersion()->headerVersion($drivers->resolve($preflight->driver), $preflight->serverVersion, $preflight->serverVersion->toString()) : null,
+                    $config->get('sqlens.assume_server_version'),
+                ))
+                // The instance the session opened on, read with that version, as predeploy names it.
+                ->withInstance(InstanceTarget::observed($name, $preflight->driver, $preflight->identity)->reported())
                 ->withUndeterminedWaiver($waived)
-                // The comparison as its OWN block rather than mixed into the findings — and present
+                // The comparison as its own block rather than mixed into the findings — and present
                 // on every run, including the ones that did not compare. A document holding no
                 // drift findings says "they agree" and "nobody looked" with the same silence, and
                 // the document is what a pipeline archives.
@@ -332,7 +346,7 @@ final class PostdeployCommand extends Command
             $this->outputErrorLine($result->checkId.': '.$result->reason);
         }
 
-        // Said out loud on every run, whichever way it went. A green post-deploy that did NOT
+        // Said out loud on every run, whichever way it went. A green post-deploy that did not
         // compare against the migrations has proved less than a reader assumes, and the difference
         // between "your schema matches" and "I did not look" is the whole reason this option exists.
         $this->outputErrorLine($expectation->note);
@@ -344,7 +358,7 @@ final class PostdeployCommand extends Command
             return ExitCode::FindingsAboveGate->value;
         }
 
-        // Decided BEFORE `blocks()` is consulted, because the comparison is a second source of
+        // Decided before `blocks()` is consulted, because the comparison is a second source of
         // verdicts and the verifier's report has never heard of it. A `fail` in the document riding
         // on a clean exit code is exactly the silent green this package refuses — and it would be
         // the quietest kind, because the document says the right thing and only the pipeline is
@@ -364,8 +378,13 @@ final class PostdeployCommand extends Command
             return ExitCode::UndeterminedInStrictMode->value;
         }
 
+        // `deploy.debt.fail_at` over an account that does not parse or is not on this machine: the
+        // run cannot say whether a debt is past the threshold, so it decides like any check that
+        // could not answer. A real finding still decides first, in the line at the end.
         if (! $report->blocks()) {
-            return ExitCode::Clean->value;
+            return $debt['unanswered'] && $this->option('allow-undetermined') !== true
+                ? ExitCode::UndeterminedInStrictMode->value
+                : ExitCode::Clean->value;
         }
 
         if ($waived) {
@@ -388,7 +407,7 @@ final class PostdeployCommand extends Command
      * the migration set into it and drops it again. Making that the default would put the whole
      * command behind the production guard for the sake of one of its answers.
      *
-     * ## Every refusal is NAMED, and none of them is a pass
+     * ## Every refusal is named, and none of them is a pass
      *
      * A driver with no shadow support, a production connection the guard declined, a migration set
      * that could not be enumerated: each returns an {@see ExpectationReport::unavailable()} carrying
@@ -460,15 +479,24 @@ final class PostdeployCommand extends Command
         $drift = $comparison->report;
 
         if (! $drift instanceof DriftReport) {
+            // The report names the reason. What a refused provisioning said beyond it can differ
+            // from run to run, so it goes to the person reading STDERR and not into the report, raw,
+            // because it quotes what the server said.
+            ReportText::lines($this->errorOutput(), array_filter([$comparison->reference?->refusal]));
+
             return ExpectationReport::unavailable((string) $comparison->reference?->describe());
         }
 
+        // What setting up the expectation left out that a person should know, such as a dump
+        // directive the replay did not run. On STDERR like the refusal above, and never in the report.
+        ReportText::lines($this->errorOutput(), $comparison->reference->notes ?? []);
+
         try {
-            // The SAME exclude file `sqlens:drift` reads, and the reason is the equivalence this
+            // The same exclude file `sqlens:drift` reads, and the reason is the equivalence this
             // whole path exists for: a difference a project has accepted must not come back as a
             // failure because it arrived through the other command.
             //
-            // Staleness is deliberately NOT judged here. `sqlens:drift` ends the run over an entry
+            // Staleness is deliberately not judged here. `sqlens:drift` ends the run over an entry
             // that covers nothing, because the exclude file is its subject; this command's subject
             // is the deploy that just finished, and refusing to report on it over a rotten line in
             // a config file would withhold the answer somebody is waiting for.
@@ -488,7 +516,7 @@ final class PostdeployCommand extends Command
      * makes, called rather than restated.
      *
      * There is no `--exclude-file` flag here on purpose: the flag is a one-run override for the
-     * command whose subject IS the file, and a deploy recipe pointing this command at a different
+     * command whose subject is the file, and a deploy recipe pointing this command at a different
      * accepted-differences list would be accepting differences somewhere nobody reviews.
      */
     private function excludePath(Repository $config, Application $app): string
@@ -536,15 +564,21 @@ final class PostdeployCommand extends Command
      * refuses everywhere else: it works until the wording changes, and then it fails silently in
      * the direction of letting a deploy through.
      *
+     * `unanswered` says the run was given `deploy.debt.fail_at` and could not consult the account it
+     * would be measured against: the file does not parse, or it is not on this machine. Without the
+     * threshold, either one is a note; with it, the question the project asked has no answer.
+     *
      * @param  list<Finding>  $reported  this run's own findings, which name the debts still owed
-     * @return array{findings: list<Finding>, breaches: bool}
+     * @return array{findings: list<Finding>, breaches: bool, unanswered: bool}
      */
     private function debtPass(Repository $config, PostdeployContext $context, array $reported, ProjectManifest $manifest, DriverRegistry $drivers, Today $today): array
     {
         if ($config->get('sqlens.deploy.debt.enabled') !== true) {
-            return ['findings' => [], 'breaches' => false];
+            return ['findings' => [], 'breaches' => false, 'unanswered' => false];
         }
 
+        $failAt = $config->get('sqlens.deploy.debt.fail_at');
+        $asked = is_int($failAt) && $failAt >= 1;
         $subject = new SubjectContext(driver: $context->driver, profile: $context->profile, strictTools: false);
         $configured = $config->get('sqlens.deploy.debt.path');
         $path = is_string($configured) && $configured !== '' ? $configured : DebtLedger::DEFAULT_PATH;
@@ -557,7 +591,7 @@ final class PostdeployCommand extends Command
                 $context->driver,
                 $context->connection,
                 $subject,
-            )], 'breaches' => false];
+            )], 'breaches' => false, 'unanswered' => $asked];
         }
 
         $stillOwed = [];
@@ -575,11 +609,10 @@ final class PostdeployCommand extends Command
         );
 
         if ($collected->ledgerMissing) {
-            return ['findings' => [DebtNotices::ledgerMissing($path, $context->driver, $context->connection, $subject)], 'breaches' => false];
+            return ['findings' => [DebtNotices::ledgerMissing($path, $context->driver, $context->connection, $subject)], 'breaches' => false, 'unanswered' => $asked];
         }
 
         $thresholds = DebtThresholds::fromConfig($config->get('sqlens.deploy.debt.thresholds'));
-        $failAt = $config->get('sqlens.deploy.debt.fail_at');
         $findings = [];
         $breaches = false;
 
@@ -607,7 +640,7 @@ final class PostdeployCommand extends Command
             $findings[] = DebtNotices::standingUnknown($debt, $context->driver, $context->connection, $subject);
         }
 
-        return ['findings' => $findings, 'breaches' => $breaches];
+        return ['findings' => $findings, 'breaches' => $breaches, 'unanswered' => false];
     }
 
     /**
@@ -641,9 +674,15 @@ final class PostdeployCommand extends Command
     /** Everything that is not the report goes to STDERR, so `--format=json` leaves STDOUT parseable. */
     private function outputErrorLine(string $line): void
     {
+        $this->errorOutput()->writeln($line);
+    }
+
+    /** STDERR when the output offers one, so `--format=json` leaves STDOUT with nothing but the report. */
+    private function errorOutput(): OutputInterface
+    {
         $output = $this->getOutput()->getOutput();
 
-        ($output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output)->writeln($line);
+        return $output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output;
     }
 
     /**

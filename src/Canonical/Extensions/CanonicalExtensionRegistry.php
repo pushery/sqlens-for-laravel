@@ -37,7 +37,7 @@ final class CanonicalExtensionRegistry
     }
 
     /**
-     * Register a NEW driver's canonicalization. A duplicate key throws rather than
+     * Register a new driver's canonicalization. A duplicate key throws rather than
      * silently overwriting.
      *
      * @param  Closure(): DriverCanonicalization  $creator

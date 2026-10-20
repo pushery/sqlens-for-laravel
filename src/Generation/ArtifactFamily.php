@@ -12,7 +12,7 @@ namespace Pushery\SQLens\Generation;
  * the same catalog on purpose, because preventive guidance that drifts from the rules actually
  * enforced is worse than none.
  *
- * But they do NOT go to the same place, and that is what this enum protects. Without a family, the
+ * But they do not go to the same place, and that is what this enum protects. Without a family, the
  * day the documentation and SARIF renderers are registered, `sqlens:agent-rules --target=all` in a
  * consuming application would start writing documentation pages and SARIF metadata into somebody
  * else's repository — and their `--check` would go red over artifacts nobody there ordered. The

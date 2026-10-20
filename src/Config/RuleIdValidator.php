@@ -32,7 +32,7 @@ use Pushery\SQLens\Rules\RuleRegistry;
  * `pg.l2.concurrently` would make the id set unknowable, and the next release
  * that changed the folding would silently un-suppress findings.
  *
- * A DEPRECATED id is a notice, not an error. Governance says rules are deprecated
+ * A deprecated id is a notice, not an error. Governance says rules are deprecated
  * and never deleted, so a suppression naming one is still meaningful — it just
  * points at something on its way out, and the notice says what replaced it.
  */
@@ -94,7 +94,7 @@ final readonly class RuleIdValidator
     }
 
     /**
-     * The references naming a tool rule this build does not describe — accepted, and SAID.
+     * The references naming a tool rule this build does not describe — accepted, and said.
      *
      * ## Why accepting silently would have been the wrong fix
      *

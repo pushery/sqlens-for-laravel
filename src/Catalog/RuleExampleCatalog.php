@@ -9,14 +9,14 @@ use Pushery\SQLens\Rules\RuleExampleEntry;
 use Pushery\SQLens\Rules\RuleExamples;
 
 /**
- * Every bad/good example this package ships, from BOTH places they live.
+ * Every bad/good example this package ships, from both places they live.
  *
  * ## Why there are two places, and why joining them was overdue
  *
- * `resources/data/rule-examples.json` holds 147 of them — every `rule` and every `analyse` id. The
- * ten `capture` ids carry theirs as constructor arguments on {@see CaptureRuleMetadata}, next to the
- * producer that emits the finding, and they are REQUIRED there: a capture producer cannot be
- * declared without a pair.
+ * `resources/data/rule-examples.json` holds those of every `rule` and every `analyse` id, and of
+ * the `deploy` ids that have a pair. The ten `capture` ids carry theirs as constructor arguments on
+ * {@see CaptureRuleMetadata}, next to the producer that emits the finding, and they are REQUIRED
+ * there: a capture producer cannot be declared without a pair.
  *
  * **This class is the second set's reader.** Without it `badExample` and `goodExample` would have
  * no reader anywhere in `src/`, and `ExplainRuleTool` — the tool whose whole job is turning a rule
@@ -88,7 +88,7 @@ final readonly class RuleExampleCatalog
         }
 
         return [
-            // Always a migration body: a capture producer judges what a migration DID, so there is
+            // Always a migration body: a capture producer judges what a migration did, so there is
             // no configuration line or shell invocation among them.
             'language' => RuleExampleEntry::LANGUAGE_PHP,
             'bad' => $captured['bad'],

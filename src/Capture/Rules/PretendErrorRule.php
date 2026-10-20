@@ -6,7 +6,7 @@ namespace Pushery\SQLens\Capture\Rules;
 
 use Pushery\SQLens\Capture\CaptureResult;
 use Pushery\SQLens\Capture\CaptureRuleMetadata;
-use Pushery\SQLens\Findings\CredentialRedactor;
+use Pushery\SQLens\Findings\CompositeCredentialRedactor;
 use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Findings\Location;
 use Pushery\SQLens\Rules\RuleDocumentationUrl;
@@ -33,7 +33,7 @@ use Pushery\SQLens\Subjects\CaptureMode;
  *
  * The exception message rides on the capture result (the captor stored it,
  * because the exception is gone by the time a rule runs), so the finding can
- * report WHY the pretend run failed without re-deriving anything.
+ * report why the pretend run failed without re-deriving anything.
  */
 use Pushery\SQLens\Subjects\SubjectContext;
 
@@ -110,21 +110,28 @@ final readonly class PretendErrorRule implements CaptureRule
      * Second, determinism: the same error produces the same output on every machine.
      * The captor stores `getMessage()`, never the trace, so there is no stack to
      * strip — but an exception message can still embed the absolute path a file lived
-     * at, which differs per checkout, so the project root is relativized out (AFTER
-     * redaction, so a credential inside such a path is caught first). Third, the
-     * fallback keeps the message honest (never an empty "…: .") on the rare failure
-     * the captor recorded without a detail.
+     * at, which differs per checkout, so the project root is relativized out (before
+     * redaction, so a configured name that is also a directory of the root cannot cut
+     * it apart). Third, the fallback keeps the message honest (never an empty "…: .")
+     * on the rare failure the captor recorded without a detail.
      */
     private function detail(CaptureResult $result, string $projectRoot): string
     {
         $detail = $result->failureDetail ?? 'the capture recorded no further detail';
 
-        $detail = (new CredentialRedactor)->redact($detail);
+        // The project root comes out first. The configured values are taken out wherever a host, a
+        // user or a database name stands as a word of its own, and a project often lives in a
+        // directory named like its database: redacted first, that name would cut the root apart and
+        // leave the rest of the absolute path in the message.
+        $detail = str_replace(rtrim($projectRoot, '/').'/', '', $detail);
 
-        // Two passes, and they catch different things. `CredentialRedactor` knows the values
-        // this application configured — it takes the connection's own host, user and password out
-        // of the text. It cannot know a password somebody typed straight into a migration, because
-        // that value appears in no configuration.
+        $detail = new CompositeCredentialRedactor()->redact($detail);
+
+        // Two passes, and they catch different things. `CompositeCredentialRedactor` takes out the
+        // values this application's connections are configured with, and then the coordinates a
+        // driver prints by their form: the host, user and database of the connection block Laravel
+        // appends to an error. Neither half could know a password somebody typed straight into a
+        // migration, because that value appears in no configuration and in no shape a driver prints.
         //
         // `SecretLiteralMask` is the other half: it finds a secret by the shape of the statement
         // (`PASSWORD '…'`, `IDENTIFIED BY '…'`) rather than by knowing its value. A database error
@@ -141,9 +148,7 @@ final readonly class PretendErrorRule implements CaptureRule
         // and does not belong in a finding. Masked by the shape of the message, like the secret.
         $detail = RowValueMask::in($detail);
 
-        $root = rtrim($projectRoot, '/').'/';
-
         // The sentence around the detail ends it with a period of its own.
-        return rtrim(str_replace($root, '', $detail), '.');
+        return rtrim($detail, '.');
     }
 }

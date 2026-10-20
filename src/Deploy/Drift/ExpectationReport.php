@@ -21,7 +21,7 @@ use Pushery\SQLens\Subjects\SubjectContext;
  *
  * That distinction is the same three-valued discipline the rest of the package runs on, applied one
  * level up — to a whole comparison rather than to a single check. Every state therefore carries a
- * {@see $note} that is printed on EVERY run, whichever way it went.
+ * {@see $note} that is printed on every run, whichever way it went.
  *
  * ## The findings are the drift command's findings, not a second set
  *

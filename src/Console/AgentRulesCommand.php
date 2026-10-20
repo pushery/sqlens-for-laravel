@@ -14,6 +14,7 @@ use Pushery\SQLens\Generation\ActiveRuleResolver;
 use Pushery\SQLens\Generation\AgentContextFormat;
 use Pushery\SQLens\Generation\ArtifactFamily;
 use Pushery\SQLens\Generation\ArtifactWriting;
+use Pushery\SQLens\Generation\ClaudeRulesFile;
 use Pushery\SQLens\Generation\GeneratedArtifact;
 use Pushery\SQLens\Generation\MarkerBlock;
 use Pushery\SQLens\Generation\MarkerBlockWriter;
@@ -24,6 +25,7 @@ use Pushery\SQLens\Generation\Renderers\CursorRulesRenderer;
 use Pushery\SQLens\Generation\RuleCatalogSnapshot;
 use Pushery\SQLens\Generation\UnregisterableRenderer;
 use Pushery\SQLens\Generation\UnresolvableRuleCatalog;
+use Pushery\SQLens\ProjectPath;
 use Pushery\SQLens\Reporting\Agent\Redactor;
 use Pushery\SQLens\ShippedLocale;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -67,7 +69,7 @@ final class AgentRulesCommand extends Command
     /**
      * The generator's own version, carried into every marker line and generated-file notice.
      *
-     * Bumped when the ARTIFACT SHAPE changes, not when the rules do — the catalog hash beside it
+     * Bumped when the artifact shape changes, not when the rules do — the catalog hash beside it
      * already answers "did the rules move", and two fields answering one question is how they end
      * up disagreeing.
      */
@@ -77,7 +79,7 @@ final class AgentRulesCommand extends Command
     protected $signature = 'sqlens:agent-rules
         {--connection= : The connection whose engine to describe; defaults to the resolved sqlens/default connection}
         {--target=all : Which agent context to write — claude, cursor, copilot, or all}
-        {--output= : Write the artifact to this path instead of the target’s default; only with a single --target}
+        {--output= : Write the artifact to this path, relative to the project root, instead of the target’s default; only with a single --target}
         {--check : Report whether every artifact is current, write nothing, and exit non-zero on a deviation}
         {--dry-run : Print what would be written without touching a file}
         {--profile= : The environment profile — local, ci or predeploy — whose settings the artifacts describe. Overrides SQLENS_PROFILE and the configured profile}';
@@ -94,7 +96,7 @@ final class AgentRulesCommand extends Command
         Redactor $redactor,
         Repository $config,
     ): int {
-        // FIRST, before the reporter, before the profile, before anything opens a connection. A
+        // First, before the reporter, before the profile, before anything opens a connection. A
         // misconfiguration that surfaces after twenty seconds of catalog reading is one people
         // check for less often — and a key this package does not know is one it IGNORES, silently.
         if ($this->refusesInvalidConfig()) {
@@ -124,6 +126,15 @@ final class AgentRulesCommand extends Command
         }
 
         $override = $this->overridePath();
+
+        if ($override !== null && ProjectPath::isAbsolute($override)) {
+            // The artifacts are the project's, so a path is joined to the project root. An absolute one
+            // was joined the same way after its leading slash was dropped: the run wrote under the
+            // project and reported the path it was given, where nothing was.
+            $this->stderr()->writeln($this->sentence($translator, 'agent_rules_output_absolute', ['path' => $override]));
+
+            return ExitCode::Misconfiguration->value;
+        }
 
         if ($override !== null && count($targets) > 1) {
             // One path cannot hold three artifacts, and picking one silently would write two of
@@ -197,7 +208,7 @@ final class AgentRulesCommand extends Command
             $relative = $override ?? $artifact->path;
             $absolute = $root.'/'.ltrim($relative, '/');
             $existing = $files->exists($absolute) ? (string) $files->get($absolute) : null;
-            $desired = $this->desiredContent($artifact, $snapshot, $existing, $markers);
+            $desired = $this->desiredContent($artifact, $snapshot, $existing, $markers, $relative);
 
             if ($dryRun) {
                 $this->line($desired);
@@ -216,7 +227,12 @@ final class AgentRulesCommand extends Command
                 continue;
             }
 
-            ArtifactWriting::write($files, $absolute, $desired);
+            if (! ArtifactWriting::write($files, $absolute, $desired)) {
+                $this->stderr()->writeln($this->sentence($translator, 'agent_rules_unwritable', ['path' => $relative]));
+
+                return ExitCode::Misconfiguration->value;
+            }
+
             $this->line($this->sentence($translator, 'agent_rules_written', ['path' => $relative]));
         }
 
@@ -244,16 +260,21 @@ final class AgentRulesCommand extends Command
         RuleCatalogSnapshot $snapshot,
         ?string $existing,
         MarkerBlockWriter $markers,
+        string $relative,
     ): string {
         if (! $artifact->isMarkedRegion()) {
             return $artifact->content;
         }
 
-        return $markers->apply(
+        $content = $markers->apply(
             $existing,
             MarkerBlock::agentRules(self::GENERATOR_VERSION, $snapshot->hash()),
             $artifact->content,
         );
+
+        // In the agent's rules directory the section is a rule of its own, and it needs the scope the other formats
+        // carry as their glob, or it is loaded into every session.
+        return ClaudeRulesFile::covers($relative) ? ClaudeRulesFile::withHeader($existing, $content) : $content;
     }
 
     /** The clean `--check` result, said out loud rather than left as an empty success. */

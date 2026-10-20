@@ -17,7 +17,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * Row-level security is on and the table has no policy at all — the fail-closed accident.
  *
  * Almost never malicious and almost always an operational mistake: somebody switched RLS on, meant to
- * write the policy next, and the deploy went out. What makes it worth its own rule is WHEN it
+ * write the policy next, and the deploy went out. What makes it worth its own rule is when it
  * surfaces, which is decided by which role happens to run the query.
  *
  * ## The role-dependence, measured against PostgreSQL 18.4

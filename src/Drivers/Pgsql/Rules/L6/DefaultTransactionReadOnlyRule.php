@@ -21,7 +21,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * ## The part that makes this worth its own rule
  *
- * It changes what OTHER findings in the same run mean. A migration audit reasons about what a write
+ * It changes what other findings in the same run mean. A migration audit reasons about what a write
  * would do — which lock it takes, how long it holds it, whether it rewrites a table. On a server
  * where writes are refused before any of that, those statements are still true about the SQL and no
  * longer true about this instance. The finding therefore says so explicitly rather than reporting a

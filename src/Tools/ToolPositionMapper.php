@@ -18,7 +18,7 @@ use Pushery\SQLens\Canonical\Fingerprint;
  * plpgsql_check report positions the same way, and each of them growing its own copy of this
  * arithmetic is three more chances to be off by one.
  *
- * A position that cannot be placed degrades THAT FINDING, with a named cause, and never guesses.
+ * A position that cannot be placed degrades that finding, with a named cause, and never guesses.
  * The guess available here is a very tempting one — attribute it to statement 0 — and it does not
  * look like an error afterwards. It looks like a finding on the first statement.
  */

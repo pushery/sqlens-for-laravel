@@ -96,7 +96,14 @@ final readonly class BatchedBackfillTemplate
      */
     private RuleEvidence $evidence;
 
-    public function __construct(?RuleEvidence $evidence = null)
+    /**
+     * @param  bool  $sessionBoundsAWrite  whether a session setting on the job connection bounds how
+     *                                     long one UPDATE or DELETE runs. PostgreSQL's
+     *                                     `statement_timeout` does; MySQL's `max_execution_time`
+     *                                     covers read-only SELECT alone, so there the batch size
+     *                                     is the bound and the first step says so.
+     */
+    public function __construct(?RuleEvidence $evidence = null, private bool $sessionBoundsAWrite = true)
     {
         $this->evidence = $evidence ?? RuleEvidence::bundled();
     }
@@ -108,8 +115,8 @@ final readonly class BatchedBackfillTemplate
      *
      * A first draft listed it last. It leads here for the same reason it leads in the concurrent-index
      * sequence: a session setting that arrives after the work it is supposed to bound has bounded
-     * nothing. The difference worth stating is what the setting should BE — a job's statement
-     * timeout is sized to ONE BATCH, not to a whole migration, and a value carried over from a
+     * nothing. The difference worth stating is what the setting should be — a job's statement
+     * timeout is sized to one batch, not to a whole migration, and a value carried over from a
      * migration preamble will abort a backfill that was working perfectly.
      *
      * @param  array<string, string>  $context  placeholder values the caller measured — the table,
@@ -176,7 +183,7 @@ final readonly class BatchedBackfillTemplate
             new RemediationStep(
                 order: 1,
                 kind: RemediationStepKind::SessionSetting,
-                noteKey: self::LANG.'timeout_per_batch',
+                noteKey: self::LANG.($this->sessionBoundsAWrite ? 'timeout_per_batch' : 'batch_size_bounds_the_batch'),
             ),
             new RemediationStep(
                 order: 2,

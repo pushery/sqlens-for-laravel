@@ -74,7 +74,7 @@ final readonly class Estimate
          * and InnoDB keeps no counterpart figure at all. Null is therefore "not counted", never
          * "nothing changed" — and it is why {@see self::drift()} is three-valued.
          *
-         * It is deliberately NOT in {@see self::toArray()} or {@see self::describe()}. Those two are
+         * It is deliberately not in {@see self::toArray()} or {@see self::describe()}. Those two are
          * the wire format and the stable rendering a digest is taken over; a new key in either is a
          * schema change and a new digest for every unchanged database. This is advisory prose for a
          * reader, and it travels through the narrator.
@@ -171,7 +171,7 @@ final readonly class Estimate
     /**
      * Whether this number rests on statistics that were never collected.
      *
-     * Deliberately NOT "is it old". Age needs a reference point, and a value object that supplied
+     * Deliberately not "is it old". Age needs a reference point, and a value object that supplied
      * one from the wall clock would answer differently every time it was asked — see
      * {@see self::isOlderThan()}, which takes its reference as an argument. `Measured` therefore
      * answers `false` however long ago that moment was: what is reported here is whether there are

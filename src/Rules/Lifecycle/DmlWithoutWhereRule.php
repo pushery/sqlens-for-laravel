@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Rules\Lifecycle;
 
 use Pushery\SQLens\Canonical\StatementKind;
+use Pushery\SQLens\Canonical\StringLiteralMask;
+use Pushery\SQLens\Contracts\DriverCanonicalization;
 use Pushery\SQLens\Contracts\ProvidesRemediation;
 use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\RemediationPayload;
@@ -33,15 +35,25 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  * no longer silences the rule: the finding is produced and the opt-in becomes a named,
  * visible suppression at the reporting layer, its reason shown, so the sweep is never
  * hidden. Detection is on the canonical form and the classified kind, never on Laravel's
- * raw grammar.
+ * raw grammar, and the search for the `WHERE` reads the statement with its string literals
+ * blanked by the engine's own grammar: a value that contains the word is data and scopes
+ * nothing.
  */
 final class DmlWithoutWhereRule extends AbstractLifecycleRule implements ProvidesRemediation
 {
     /** The considered `none` — this rule has looked, and the missing predicate is not ours to write. */
     private readonly NoSafeSequenceTemplate $template;
 
-    public function __construct(string $projectRoot, ?RuleDriverNotes $driverNotes = null)
-    {
+    public function __construct(
+        string $projectRoot,
+        ?RuleDriverNotes $driverNotes = null,
+        /**
+         * The grammar of the engine the statements were written for, which decides where a string
+         * literal starts and ends. Each shipped driver passes its own. Without one the statement is
+         * searched as written, and a literal that contains the word `WHERE` reads as a predicate.
+         */
+        private readonly ?DriverCanonicalization $syntax = null,
+    ) {
         parent::__construct($projectRoot, $driverNotes);
 
         $this->template = new NoSafeSequenceTemplate;
@@ -110,10 +122,15 @@ final class DmlWithoutWhereRule extends AbstractLifecycleRule implements Provide
 
         // A WHERE anywhere in the statement — even a filtering sub-select — shows the
         // intent to scope. The rule fires on the total absence of one, and on the one
-        // shape that is a WHERE only typographically (see below).
+        // shape that is a WHERE only typographically (see below). The search runs over the
+        // statement with its string literals blanked, so `SET note = 'WHERE to find it'`
+        // is read as the value it is.
         $alwaysTrue = false;
+        $searched = $this->syntax instanceof DriverCanonicalization
+            ? StringLiteralMask::forDriver($this->syntax)->apply($statement->canonical)
+            : $statement->canonical;
 
-        if (preg_match('/\bWHERE\b(.*)$/s', $statement->canonical, $where) === 1) {
+        if (preg_match('/\bWHERE\b(.*)$/s', $searched, $where) === 1) {
             if (! $this->scopesNothing($where[1])) {
                 return null;
             }

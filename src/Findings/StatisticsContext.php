@@ -61,7 +61,7 @@ final readonly class StatisticsContext
      *
      * Replaces the scaffold's `isEstimate()`, which answered `true` for everything and so answered
      * nothing. A context can now be mixed — an exact size beside an estimated row count is the
-     * ordinary case on one engine — so the honest question is whether ALL of it is exact, and the
+     * ordinary case on one engine — so the honest question is whether all of it is exact, and the
      * answer for a mixed context is `false`.
      */
     public function isFullyExact(): bool

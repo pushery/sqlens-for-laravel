@@ -43,7 +43,7 @@ enum DebtOrigin: string
     /**
      * Observed in the database, with no captured migration behind it.
      *
-     * `first_seen` is the day a run first looked — NOT the day the debt was taken on, which nothing
+     * `first_seen` is the day a run first looked — not the day the debt was taken on, which nothing
      * available to this package knows. The oldest debt a project carries is usually one of these,
      * and before it could be recorded it was the only kind with no date at all.
      */

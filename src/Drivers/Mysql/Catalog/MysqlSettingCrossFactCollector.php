@@ -62,6 +62,12 @@ final readonly class MysqlSettingCrossFactCollector implements SettingCrossFactC
      */
     public const string FILE_PRIVILEGE_ACCOUNTS = SettingCrossFacts::FILE_PRIVILEGE_ACCOUNTS;
 
+    /**
+     * How many examples a listed fact carries. Each list query asks for one row more, which only
+     * says that the server holds more than a finding names.
+     */
+    private const int LISTED = 25;
+
     public function __construct(private ReaderSession $session, private string $schema) {}
 
     public function collect(): SettingCrossFacts
@@ -126,7 +132,7 @@ final readonly class MysqlSettingCrossFactCollector implements SettingCrossFactC
      *
      * Read from the grant table rather than from `information_schema.USER_PRIVILEGES`, and that is
      * the whole reason this is a real read rather than a convenience: the information_schema view
-     * NARROWS SILENTLY to what the caller may see. Reading it would answer "no account holds FILE"
+     * narrows silently to what the caller may see. Reading it would answer "no account holds FILE"
      * on exactly the restricted connection where the question matters, with nothing raised. The
      * grant table refuses instead — and a refusal is a fact the consumer can act on.
      */
@@ -135,7 +141,7 @@ final readonly class MysqlSettingCrossFactCollector implements SettingCrossFactC
     {
         try {
             $rows = $this->session->read(fn (Connection $db): array => $db->select(
-                "select User as u, Host as h from mysql.user where File_priv = 'Y' order by User, Host limit 25",
+                "select User as u, Host as h from mysql.user where File_priv = 'Y' order by User, Host limit 26",
             ));
         } catch (Throwable $exception) {
             // The arm this fact exists for. On a managed MySQL a refused grant read is the ordinary
@@ -164,7 +170,7 @@ final readonly class MysqlSettingCrossFactCollector implements SettingCrossFactC
         // nobody else, so a server where the audit sees none is a server that narrowed the account
         // list or genuinely has none. Which of the two it is has already been decided above: a read
         // that failed never reaches this line.
-        return $facts->withMeasured('local_infile', self::FILE_PRIVILEGE_ACCOUNTS, implode(', ', $accounts));
+        return $facts->withMeasured('local_infile', self::FILE_PRIVILEGE_ACCOUNTS, $this->listed($accounts));
     }
 
     /**
@@ -182,7 +188,7 @@ final readonly class MysqlSettingCrossFactCollector implements SettingCrossFactC
             $rows = $this->session->read(fn (Connection $db): array => $db->select(
                 'select TABLE_NAME as t from information_schema.tables '
                 .'where TABLE_SCHEMA = ? and cast(TABLE_NAME as binary) != cast(lower(TABLE_NAME) as binary) '
-                .'order by TABLE_NAME limit 25',
+                .'order by TABLE_NAME limit 26',
                 [$this->schema],
             ));
         } catch (Throwable $exception) {
@@ -204,7 +210,7 @@ final readonly class MysqlSettingCrossFactCollector implements SettingCrossFactC
             }
         }
 
-        return $facts->withMeasured('lower_case_table_names', self::MIXED_CASE_TABLES, implode(', ', $tables));
+        return $facts->withMeasured('lower_case_table_names', self::MIXED_CASE_TABLES, $this->listed($tables));
     }
 
     /**
@@ -286,7 +292,7 @@ final readonly class MysqlSettingCrossFactCollector implements SettingCrossFactC
             $value = is_scalar($candidate) ? (string) $candidate : null;
         }
 
-        // A variable the server did not name at all is NOT an empty answer — it is an unread one.
+        // A variable the server did not name at all is not an empty answer — it is an unread one.
         // Collapsing the two would let a rule state "nothing is disabled" about a server it could
         // not ask.
         return $rows === []
@@ -302,7 +308,7 @@ final readonly class MysqlSettingCrossFactCollector implements SettingCrossFactC
     /**
      * Tables still carrying a pre-DYNAMIC row format.
      *
-     * Read for the row-format rule, and NOT as a substitute for its judgment: a server handing out
+     * Read for the row-format rule, and not as a substitute for its judgment: a server handing out
      * the right default while old tables carry `Compact` is a different problem with a different
      * fix, and conflating the two would send a reader to a config file that is already correct.
      */
@@ -313,7 +319,7 @@ final readonly class MysqlSettingCrossFactCollector implements SettingCrossFactC
             $rows = $this->session->read(fn (Connection $db): array => $db->select(
                 'select TABLE_NAME as t, ROW_FORMAT as f from information_schema.tables '
                 .'where TABLE_SCHEMA = ? and ENGINE = ? and ROW_FORMAT in (?, ?) '
-                .'order by TABLE_NAME limit 25',
+                .'order by TABLE_NAME limit 26',
                 [$this->schema, 'InnoDB', 'Compact', 'Redundant'],
             ));
         } catch (Throwable $exception) {
@@ -336,20 +342,23 @@ final readonly class MysqlSettingCrossFactCollector implements SettingCrossFactC
             }
         }
 
-        return $facts->withMeasured('innodb_default_row_format', self::LEGACY_ROW_FORMAT_TABLES, implode(', ', $tables));
+        return $facts->withMeasured('innodb_default_row_format', self::LEGACY_ROW_FORMAT_TABLES, $this->listed($tables));
     }
 
     #[RawSql(reason: 'reads column defaults out of information_schema; the explicit_defaults_for_timestamp question only means something against real columns')]
     private function withTimestampColumns(SettingCrossFacts $facts): SettingCrossFacts
     {
+        // TIMESTAMP columns alone. The legacy behavior hands the clause to a TIMESTAMP column, while a
+        // DATETIME column carries it only because a migration declared it, so a DATETIME column listed
+        // here would send a reader to a column this setting never touches.
         try {
             $rows = $this->session->read(fn (Connection $db): array => $db->select(
                 'select TABLE_NAME as t, COLUMN_NAME as c from information_schema.columns '
-                .'where TABLE_SCHEMA = ? and EXTRA like ? order by TABLE_NAME, COLUMN_NAME limit 25',
-                [$this->schema, '%on update CURRENT_TIMESTAMP%'],
+                .'where TABLE_SCHEMA = ? and DATA_TYPE = ? and EXTRA like ? order by TABLE_NAME, COLUMN_NAME limit 26',
+                [$this->schema, 'timestamp', '%on update CURRENT_TIMESTAMP%'],
             ));
         } catch (Throwable $exception) {
-            // The distinction the whole collaborator exists for: this is NOT an empty result. A rule
+            // The distinction the whole collaborator exists for: this is not an empty result. A rule
             // told "none" here would state that nothing is affected about a catalog nobody read.
             return $facts->withUnavailable(
                 'explicit_defaults_for_timestamp',
@@ -370,13 +379,31 @@ final readonly class MysqlSettingCrossFactCollector implements SettingCrossFactC
             }
         }
 
-        // Capped at 25 by the query rather than trimmed here, so the round trip stays bounded on a
-        // schema with thousands of columns. A finding listing 25 examples makes the point; one
-        // listing 4000 is a wall of text nobody reads.
+        // Capped by the query rather than trimmed here, so the round trip stays bounded on a schema
+        // with thousands of columns. A finding listing 25 examples makes the point; one listing 4000
+        // is a wall of text nobody reads.
         return $facts->withMeasured(
             'explicit_defaults_for_timestamp',
             self::TIMESTAMP_AUTO_UPDATE_COLUMNS,
-            implode(', ', $columns),
+            $this->listed($columns),
         );
+    }
+
+    /**
+     * The items as a fact value: the first {@see self::LISTED}, and the words that say more exist.
+     *
+     * A list cut at the cap and printed as it stands reads as the whole of the problem, and the next
+     * run shows the next items under the same sentence. So a cut list says that it was cut, in the
+     * value every rule prints.
+     *
+     * @param  list<string>  $items
+     */
+    private function listed(array $items): string
+    {
+        if (count($items) <= self::LISTED) {
+            return implode(', ', $items);
+        }
+
+        return implode(', ', array_slice($items, 0, self::LISTED)).', and more than these '.self::LISTED;
     }
 }

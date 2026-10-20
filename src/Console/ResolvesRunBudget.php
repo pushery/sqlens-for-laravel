@@ -14,7 +14,7 @@ use Illuminate\Contracts\Config\Repository;
  * signal for *"not given, take the configured value"*, and run with the configured default without a
  * word — leaving an operator believing they had bounded the run they were about to gate a deploy on.
  *
- * The principle is written down in {@see AuditCommand}: *"an unknown value is a named
+ * The principle is written down in {@see ResolvesMinSeverity}: *"an unknown value is a named
  * misconfiguration"*. `--level=12` and `--debt=recrod` are refused by name, and so is `--budget=abc`.
  *
  * ## Why a trait rather than a method on each command

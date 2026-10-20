@@ -10,7 +10,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
 
 /**
  * The column a not-null validation names — read once, for the rule that flags it and the sequence
- * that fixes it. PostgreSQL spells this TWO ways, and the second one arrived with 18.
+ * that fixes it. PostgreSQL spells this two ways, and the second one arrived with 18.
  *
  * The rule already had to find the column to ask whether the migration prepares it with a CHECK.
  * The remediation needs the same name to write the sequence, and a second `preg_match` for it would

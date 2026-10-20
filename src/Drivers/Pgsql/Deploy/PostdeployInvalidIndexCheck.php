@@ -79,7 +79,7 @@ final readonly class PostdeployInvalidIndexCheck implements PostdeployCheck, Pro
      * Only the plain finding reaches here at all: the registrar matches a finding to its claimant by
      * ID, and this class answers for `DEPLOY.LEGACY.INVALID_INDEX`. The name-collision finding
      * carries a different id and is therefore never claimed — which is the right answer rather than
-     * an accident. That one reports a deploy that will STOP at a named statement; making it
+     * an accident. That one reports a deploy that will stop at a named statement; making it
      * acknowledgeable would let a team silence a blocker instead of clearing it.
      */
     public function debtReference(Finding $finding): ?string

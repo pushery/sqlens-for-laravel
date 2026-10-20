@@ -25,7 +25,7 @@ use Throwable;
  * that returned only "the value" would report the framework's own choice back to the project as its
  * server configuration.
  *
- * The map is therefore keyed by name and carries BOTH, in the two fields that mean the same thing on
+ * The map is therefore keyed by name and carries both, in the two fields that mean the same thing on
  * both engines: {@see Setting::$value} is what this connection is running with, and
  * {@see Setting::$serverValue} is what the server is configured to. A server-baseline rule reads the
  * second and never the first.
@@ -70,9 +70,9 @@ final class MysqlServerSettingsReader implements ServerSettingsReader
         foreach ($global as $name => $value) {
             $settings[$name] = Setting::of(
                 $name,
-                // What THIS connection is running with — the same meaning the field carries on
+                // What this connection is running with — the same meaning the field carries on
                 // PostgreSQL. A GLOBAL-only variable has no session view, and there the value in
-                // effect for the session simply IS the global one, so the fallback states a fact
+                // effect for the session simply is the global one, so the fallback states a fact
                 // rather than papering over a gap.
                 $session[$name] ?? $value,
                 SettingScope::Global,
@@ -170,6 +170,9 @@ final class MysqlServerSettingsReader implements ServerSettingsReader
         return $sources;
     }
 
+    /**
+     * @param  mixed  $row  one row of the result as the connection returned it, read without trusting its shape
+     */
     private function text(mixed $row, string $key): string
     {
         $value = is_object($row) ? ($row->{$key} ?? null) : null;

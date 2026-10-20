@@ -14,7 +14,7 @@ use Pushery\SQLens\Severity\Severity;
  * Writes and reads the baseline file.
  *
  * The layout is chosen for merges, not for looks: the version sits alone on the
- * first field, and every entry is exactly ONE line with a fixed key order. That
+ * first field, and every entry is exactly one line with a fixed key order. That
  * way adding or removing an accepted finding is a one-line diff instead of a
  * six-line reflow, and two people accepting different findings in the same week
  * do not collide. Pretty-printing the whole document would spread one entry over
@@ -56,6 +56,24 @@ final readonly class BaselineSerializer
         $lines[] = '}';
 
         return implode("\n", $lines)."\n";
+    }
+
+    /**
+     * The baseline file at `$absolute`, parsed, and named `$path` in every message.
+     *
+     * Read with the warning suppressed, because a file the user may not read reached a run in one of
+     * two wrong shapes: under Laravel's error handler, which every `php artisan` installs, as an
+     * ErrorException out of the command, and without it as an empty string this class called "not
+     * valid JSON". It is the named refusal now, which every command turns into the misconfiguration
+     * exit.
+     *
+     * @throws UnreadableBaseline
+     */
+    public function readFile(string $absolute, string $path): BaselineFile
+    {
+        $contents = @file_get_contents($absolute);
+
+        return $this->deserialize($contents === false ? throw UnreadableBaseline::notReadable($path) : $contents, $path);
     }
 
     /**

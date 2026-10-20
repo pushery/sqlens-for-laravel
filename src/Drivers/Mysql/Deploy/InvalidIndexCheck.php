@@ -10,7 +10,7 @@ use Pushery\SQLens\Deploy\PostdeployContext;
 use Pushery\SQLens\Findings\UndeterminedReason;
 
 /**
- * A check that answers NOT APPLICABLE, out loud, and that is its entire job.
+ * A check that answers not applicable, out loud, and that is its entire job.
  *
  * ## Why a class exists for something MySQL cannot have
  *
@@ -21,13 +21,13 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  * The tempting shape is therefore no class at all. That is exactly the silent green this package
  * refuses. A user who read the PostgreSQL documentation, ran the same command against MySQL and saw
  * nothing has been told two things at once — "there is no wreckage" and "this question was never
- * asked" — and the report gives no way to tell which. On the engine where somebody is MOST likely to
+ * asked" — and the report gives no way to tell which. On the engine where somebody is most likely to
  * be comparing two databases, that is the worst place to leave the distinction unmade.
  *
  * So the check runs, answers `undetermined`, and names the reason. It costs one line in the report
  * and removes a question the reader would otherwise have to answer by reading source.
  *
- * ## It points at the nearest thing that IS real
+ * ## It points at the nearest thing that is real
  *
  * "Not applicable" on its own is a shrug. What corresponds functionally on this engine is the
  * temporary table an `ALGORITHM=COPY` rebuild leaves behind when it dies — `#sql-1234_a` — and that
@@ -37,7 +37,7 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  * ## It reads nothing
  *
  * No query, no session, no privilege. The answer is a property of the engine rather than of the
- * instance, so asking the server would be theatre — and a check that queried to prove a constant
+ * instance, so asking the server would be theater — and a check that queried to prove a constant
  * would be one more thing to fail on a managed database for no benefit.
  */
 final readonly class InvalidIndexCheck implements PostdeployCheck

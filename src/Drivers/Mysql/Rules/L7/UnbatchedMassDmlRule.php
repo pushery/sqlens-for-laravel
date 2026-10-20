@@ -47,6 +47,19 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * it is the reason this rule is MySQL's rather than a driver-neutral one: the SIGNAL is
  * engine-specific even though the hazard is not.
  *
+ * ## What a `LIMIT` bounds, and what it does not
+ *
+ * A `LIMIT` bounds the rows a write CHANGES, not the rows it LOCKS. Under REPEATABLE READ, InnoDB's
+ * default, an `UPDATE` or a `DELETE` sets a lock on every row its scan reads, whether the row matches
+ * or not; the manual's "Locks Set by Different SQL Statements in InnoDB" says so, and it holds in a
+ * measurement on MySQL 8.0. Over 10,000 rows with `status` unindexed and the first match at id 9001,
+ * `UPDATE … WHERE status = 'old' LIMIT 10` locked row 5 until a second session gave up waiting, while
+ * row 9500, past the tenth match, stayed free. Under READ COMMITTED row 5 was free as well.
+ *
+ * So a `LIMIT` batch keeps its locks small only when an index serves the predicate, and every later
+ * batch scans the rows the earlier ones changed again. The advice leads with the key range for that
+ * reason. A `LIMIT` still silences the rule, because the write it bounds is what this rule measures.
+ *
  * ## Where the boundary with the other write rules runs
  *
  * Three rules can look at one data statement, and they ask three different questions. Keeping them
@@ -79,14 +92,16 @@ final class UnbatchedMassDmlRule extends AbstractMysqlRule implements DeclaresOp
         parent::__construct($projectRoot);
 
         $this->downtimeClasses = $downtimeClasses ?? new MysqlDowntimeClassSource;
-        $this->template = new BatchedBackfillTemplate;
+        // MySQL bounds no UPDATE or DELETE by a session setting, so the recipe's first step names the
+        // batch size as the bound rather than a statement timeout this engine does not apply.
+        $this->template = new BatchedBackfillTemplate(sessionBoundsAWrite: false);
     }
 
     /**
      * The batching recipe, with the one fact this statement carries filled in.
      *
      * The table is fillable when the statement names exactly one; the batch size and the pause are
-     * NOT, and never will be. They decide whether the backfill is invisible or is itself the
+     * not, and never will be. They decide whether the backfill is invisible or is itself the
      * incident, and the values depend on row width, replica lag budget and traffic — none of which
      * is in the statement. This rule is a heuristic about SIZE precisely because size is what it
      * cannot see, so a payload that filled in a batch size would contradict the finding beside it.
@@ -180,7 +195,7 @@ final class UnbatchedMassDmlRule extends AbstractMysqlRule implements DeclaresOp
     /**
      * The bulk write this statement is, or null when it is not one — one reading, shared.
      *
-     * The kind check lives HERE rather than being repeated by each caller: `BulkWrite::parse()`
+     * The kind check lives here rather than being repeated by each caller: `BulkWrite::parse()`
      * reads a canonical string and would happily be handed a DDL statement, so the two questions
      * belong together or they drift apart.
      */
@@ -216,13 +231,14 @@ final class UnbatchedMassDmlRule extends AbstractMysqlRule implements DeclaresOp
     private function updateMessage(): string
     {
         return 'This write has a predicate but nothing that bounds it, so it runs as ONE statement over every row '
-            .'the predicate matches — holding row locks and growing the undo log for as long as that takes, while '
-            .'the migration blocks the deploy. This is a HEURISTIC: SQLens can see that the statement is unbounded, '
-            .'not how many rows that means, and it never asks the server for a row count. On a small table this is '
-            .'a non-event. Bound it: MySQL accepts LIMIT on UPDATE and DELETE, so add ->limit(1000) and repeat, or '
-            .'walk a key range with ->whereBetween(\'id\', [$from, $to]) — either one silences this. Better still '
-            .'for a large table, move the backfill out of the migration into a queued job, so a deploy is not '
-            .'waiting on it.';
+            .'the predicate matches — locking every row its scan reads and growing the undo log for as long as that '
+            .'takes, while the migration blocks the deploy. This is a HEURISTIC: SQLens can see that the statement '
+            .'is unbounded, not how many rows that means, and it never asks the server for a row count. On a small '
+            .'table this is a non-event. Bound it: walk a key range with ->whereBetween(\'id\', [$from, $to]), or '
+            .'add ->limit(1000) and repeat, which keeps the locks small only when an index serves the predicate: '
+            .'under REPEATABLE READ, InnoDB locks every row the scan reads, matching or not. Either one silences '
+            .'this. Better still for a large table, move the backfill out of the migration into a queued job, so '
+            .'a deploy is not waiting on it.';
     }
 
     private function insertMessage(): string

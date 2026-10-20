@@ -12,7 +12,7 @@ use Pushery\SQLens\Deploy\DebtStanding;
  * Which catalog question a recorded debt gets, for the engine it lives on.
  *
  * The same shape and the same reason as {@see SessionDefenses}: the mapping is the one piece that
- * HAS to know both engines, and the core must not. `src/Audit` is scanned for engine vocabulary and
+ * has to know both engines, and the core must not. `src/Audit` is scanned for engine vocabulary and
  * would fail with a concrete resolver imported, so the choice lives behind this interface and the
  * knowledge stays in `src/Drivers` — in the registry that already carries the other driver mappings,
  * because exactly three files in this package may know both engines and a fourth would grow the set

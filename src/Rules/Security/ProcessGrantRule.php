@@ -25,7 +25,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * ## The exclusion that matters most here
  *
- * A monitoring account NEEDS `PROCESS`, and so does the read-only audit account this package's own
+ * A monitoring account needs `PROCESS`, and so does the read-only audit account this package's own
  * documentation asks you to create. The connecting account is therefore never reported — the gate
  * lives in the shared base class, because a tool that flags the setup it recommends is a tool
  * nobody trusts twice.

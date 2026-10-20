@@ -36,7 +36,7 @@ use Throwable;
  * ## The request is handed IN, never built here
  *
  * A drift report compares two catalogs, and a difference between them is only meaningful if both
- * were asked the SAME question — the same schemas, the same object types, the same table prefix and
+ * were asked the same question — the same schemas, the same object types, the same table prefix and
  * prefix scope. A builder that assembled its own {@see CatalogRequest} would be a second place where
  * that question is decided, and the day the two drift apart the comparison starts inventing findings
  * out of its own configuration. So the caller reads both sides with one request, and this signature
@@ -85,7 +85,7 @@ final readonly class ShadowReferenceBuilder
             return ShadowReferenceOutcome::undetermined(UndeterminedReason::UnsupportedEngine);
         }
 
-        // Provisioning refuses with a NAMED reason, and that reason is the answer — not a crash.
+        // Provisioning refuses with a named reason, and that reason is the answer — not a crash.
         //
         // It sat outside this catch and escaped the command as an uncaught exception, so a project
         // with no committed schema dump — the commonest case there is, and the one every first run
@@ -96,7 +96,7 @@ final readonly class ShadowReferenceBuilder
         try {
             $session = $this->provisioner->provision();
         } catch (ShadowProvisioningUndetermined $refusal) {
-            return ShadowReferenceOutcome::undetermined($refusal->reason);
+            return ShadowReferenceOutcome::undetermined($refusal->reason, refusal: $refusal->forAPerson());
         }
 
         $failed = false;
@@ -106,7 +106,7 @@ final readonly class ShadowReferenceBuilder
 
             // A replay that did not come through clean produces a schema nobody can reason about:
             // some migrations applied, some not, and no way to tell which half the reader is
-            // looking at. Comparing the live database against THAT would report differences the
+            // looking at. Comparing the live database against that would report differences the
             // migrations never asked for. Named as a failed replay rather than returned as a
             // partial expectation.
             foreach ($run->results as $result) {
@@ -149,6 +149,7 @@ final readonly class ShadowReferenceBuilder
             return ShadowReferenceOutcome::of(
                 ShadowSchemaRewrite::apply($snapshot, $session->shadowDatabase, $this->sourceDatabase),
                 $session->shadowDatabase,
+                $session->notes,
             );
         } catch (Throwable $failure) {
             $failed = true;
@@ -158,7 +159,7 @@ final readonly class ShadowReferenceBuilder
             throw $this->keepOnFailure ? ShadowDatabaseKept::after($failure, $session->databases()) : $failure;
         } finally {
             // `keep_on_failure` is the one case where a failed run's database is deliberately left
-            // standing, for a person to look inside. A SUCCESSFUL run is always torn down: keeping
+            // standing, for a person to look inside. A successful run is always torn down: keeping
             // it would leave the project's whole schema on the server with nobody watching.
             if (! $failed || ! $this->keepOnFailure) {
                 $this->provisioner->destroy($session);

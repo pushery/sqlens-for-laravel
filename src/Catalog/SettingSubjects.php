@@ -37,10 +37,12 @@ final readonly class SettingSubjects
     /**
      * Every readable setting in the reading, as a subject.
      *
-     * A setting the server withheld is still emitted, with a null `server_value`, rather than
-     * dropped. Dropping it would leave a rule with no subject at all, and "no subject" is
-     * indistinguishable from "no problem" — the silent green this package is built to refuse. Emitted
-     * with a null value, the rule reports `undetermined` with a reason, which is the honest answer.
+     * A setting whose server value could not be established is still emitted, with a null
+     * `server_value`, rather than dropped, and its rule reports `undetermined` with a reason.
+     *
+     * A setting the reading never saw has no row to emit. PostgreSQL drops the whole row for a role
+     * without `pg_read_all_settings`, silently, so its rules find no subject; the run says so once,
+     * for the whole reading, from {@see SettingsReading::$sawEverything}, rather than per rule.
      *
      * @return list<SchemaObject>
      */

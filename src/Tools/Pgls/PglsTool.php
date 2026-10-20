@@ -90,7 +90,7 @@ final readonly class PglsTool implements Tool
     }
 
     /**
-     * The binary is `postgrestools`, which is NOT what the project is called.
+     * The binary is `postgrestools`, which is not what the project is called.
      *
      * Worth stating because the mismatch is the kind of thing a later reader corrects: the product
      * is the Postgres Language Server, the package is `@postgrestools/postgrestools`, and the

@@ -28,7 +28,7 @@ use Pushery\SQLens\Rules\RuleEvidenceEntry;
  * ## Why it is driver-neutral, and what that costs
  *
  * `ADD COLUMN` and `DROP COLUMN` are the same statement on PostgreSQL and MySQL, so this class
- * imports no driver and an architecture test holds it to that. It does NOT mean expand/contract is
+ * imports no driver and an architecture test holds it to that. It does not mean expand/contract is
  * engine-independent in general — a sequence that needed an engine-specific statement would take it
  * from that engine's own namespace rather than growing a `match` here. This one does not need one,
  * which is a measurement rather than an assumption.
@@ -57,8 +57,8 @@ final readonly class ExpandContractTemplate
     /**
      * The word an unfinished expand/contract is filed under in the ledger.
      *
-     * It lives HERE, on the engine-neutral sequence, and not on the rule that reports it — because
-     * both engines' rules file under the same word, and the ledger has to see ONE account for one
+     * It lives here, on the engine-neutral sequence, and not on the rule that reports it — because
+     * both engines' rules file under the same word, and the ledger has to see one account for one
      * open end. Put on either rule, the other would have to reach across the driver boundary to
      * read it, or spell it a second time and quietly open a second account.
      *
@@ -131,7 +131,7 @@ final readonly class ExpandContractTemplate
                         kind: RemediationStepKind::ManualGate,
                         noteKey: self::LANG.'dual_write',
                     ),
-                    // 4 — CONTRACT. A separate migration in a LATER release, never this one.
+                    // 4 — CONTRACT. A separate migration in a later release, never this one.
                     new RemediationStep(
                         order: 4,
                         kind: RemediationStepKind::SeparateMigration,

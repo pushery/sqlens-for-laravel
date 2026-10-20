@@ -16,7 +16,7 @@ use Pushery\SQLens\Generation\RuleCatalogSnapshot;
  * branch, so `--check` and writing are one code path with one branch at the very end rather than
  * two paths that agree until they do not.
  *
- * That is structural, not a convention: a renderer CANNOT write, because it is never handed
+ * That is structural, not a convention: a renderer cannot write, because it is never handed
  * anything to write with.
  */
 interface MetadataRenderer

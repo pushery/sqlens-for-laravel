@@ -85,7 +85,7 @@ enum AnalysePolicy: string
         return $this !== self::Off;
     }
 
-    /** Does this mode also weigh WHAT the reason says? */
+    /** Does this mode also weigh what the reason says? */
     public function weighsTheReason(): bool
     {
         return $this === self::Strict;

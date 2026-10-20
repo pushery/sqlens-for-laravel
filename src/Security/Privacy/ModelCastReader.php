@@ -26,7 +26,7 @@ use Throwable;
  * defines, and answered; a second arm proved that connection really was unusable, so the silence is
  * a result rather than a coincidence.
  *
- * ## `ModelInspector` is NOT the way, although it looks purpose-built
+ * ## `ModelInspector` is not the way, although it looks purpose-built
  *
  * `php artisan model:show` reports casts, so the first instinct of a later reader is
  * `Illuminate\Database\Eloquent\ModelInspector`. It is disqualified twice, both measured: it
@@ -93,7 +93,7 @@ final class ModelCastReader
                 continue;
             }
 
-            // Checked BEFORE the family, because a custom castable is the one answer no amount of
+            // Checked before the family, because a custom castable is the one answer no amount of
             // agreement between models could make safe.
             if (EncryptedCasts::isCustomCastable($cast)) {
                 return ColumnProtection::undetermined(UndeterminedReason::CustomCastOpaque, $cast);

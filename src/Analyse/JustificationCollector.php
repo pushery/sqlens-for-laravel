@@ -21,7 +21,7 @@ use Pushery\SQLens\Attributes\SqlensIgnore;
  * annotation and a second would be a duplicate. The reasoning was sound; the conclusion was not.
  * The two are not two spellings of one idea, they are two different statements:
  *
- * - `#[SqlensIgnore]` says *"I know, do not tell me."* The finding IS produced and then hidden, and
+ * - `#[SqlensIgnore]` says *"I know, do not tell me."* The finding is produced and then hidden, and
  *   it appears in the report as `suppressed_by` — visible, counted, attributable.
  * - `#[RawSql]` says *"the rule's question is answered."* No finding exists, because the reason it
  *   asks for is present.
@@ -96,7 +96,7 @@ final readonly class JustificationCollector implements Collector
      */
     public function processNode(Node $node, Scope $scope): ?array
     {
-        // `namespacedName` FIRST, and the order is load-bearing: on a declared class `name` is the
+        // `namespacedName` first, and the order is load-bearing: on a declared class `name` is the
         // SHORT name while only `namespacedName` carries the fully-qualified one a call site
         // reports. `name` is the fallback, and the case it exists for is the anonymous class.
         //
@@ -106,7 +106,7 @@ final readonly class JustificationCollector implements Collector
         // step writes a synthetic identifier onto the node while explicitly nulling
         // `namespacedName` (`BetterReflectionProvider::getAnonymousClassReflection()`). The
         // identifier it writes — `AnonymousClass<hash>` — is exactly the string
-        // `ClassReflection::getName()` answers for code INSIDE that class, which is what every
+        // `ClassReflection::getName()` answers for code inside that class, which is what every
         // call-site collector records as its scope. So the two sides do join; this collector simply
         // returned before it looked.
         //
@@ -116,7 +116,7 @@ final readonly class JustificationCollector implements Collector
         // `policy: off` or an `exclude_paths` entry as the only answers. Both silence more than the
         // finding, which is the outcome this package's own documentation warns about.
         //
-        // It is NOT the display name. `class@anonymous/path/to/file.php:12` is what PHPStan builds
+        // It is not the display name. `class@anonymous/path/to/file.php:12` is what PHPStan builds
         // for messages; joining on that would match a string neither side ever produces.
         $class = $node->namespacedName?->toString() ?? $node->name?->toString();
         $names = [];

@@ -33,7 +33,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * report one finding per table listing every column on it. It is also the better report: converting
  * a table's columns is one decision about one table, not forty.
  *
- * TEST-VISIBLE NOTE: a column absent from these lists holds no characters at all — an `int`, a
+ * Test-visible note: a column absent from these lists holds no characters at all — an `int`, a
  * `date`, a `blob`. That is not the same as a column whose encoding went unread, and no caller may
  * treat it as one.
  */

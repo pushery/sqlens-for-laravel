@@ -47,7 +47,7 @@ final readonly class PreflightContext
         public string $connection,
         /** The driver key, so a check can answer `appliesTo()` without opening anything. */
         public string $driver,
-        /** What the server actually IS, read from it rather than assumed from configuration. */
+        /** What the server actually is, read from it rather than assumed from configuration. */
         public ServerVersion $serverVersion,
         /** The sealed read-only session every check reads through. */
         public ReaderSession $session,

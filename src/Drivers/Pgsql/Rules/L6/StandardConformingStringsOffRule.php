@@ -27,7 +27,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * ## Why `safety` and not `security`
  *
  * The setting has a well-known security dimension — it is the historical backdrop to a family of
- * escaping mistakes — and it is deliberately NOT filed under `security` here. That category carries
+ * escaping mistakes — and it is deliberately not filed under `security` here. That category carries
  * its own severity axis and its own gate, which belongs to the security suite; a level rule quietly
  * landing in it would bypass the level gate entirely. What this rule reports is a correctness
  * hazard on the level axis, and it says so.

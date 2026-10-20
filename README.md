@@ -434,7 +434,7 @@ a decade of schema changes — with the verdict each rule should reach annotated
 the reasoning written down beside it.
 
 The current number is **no false positive in 13 measured cases** on MySQL 8.4. The second half of
-that sentence matters more than the first: 231 of the 244 rules this build ships have no case in
+that sentence matters more than the first: 245 of the 258 rules this build ships have no case in
 the corpus yet, and PostgreSQL has no collection at all, so its rate is unknown rather than good.
 
 [False positives, measured](https://docs.pushery.com/sqlens-for-laravel/false-positive-rate/)

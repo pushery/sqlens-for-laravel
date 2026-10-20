@@ -88,7 +88,7 @@ final class TlsMinVersionRule extends AbstractSettingSecurityRule
      * this package has never measured is neither. Reporting it as fine would be the silent green;
      * reporting it as a violation would be a claim about an ordering nobody established.
      *
-     * The TLS-is-off case is deliberately NOT here. It is a reasoned pass rather than a
+     * The TLS-is-off case is deliberately not here. It is a reasoned pass rather than a
      * precondition, because the value was read and judged and found unable to cause harm — see
      * {@see self::reasonedPass()}.
      */
@@ -131,7 +131,7 @@ final class TlsMinVersionRule extends AbstractSettingSecurityRule
     #[Override]
     protected function reasonedPass(string $serverValue, ServerSettingExpectation $expectation, SchemaObject $object): ?string
     {
-        // Only ever a replacement for a finding that would otherwise be MADE. Without this rung the
+        // Only ever a replacement for a finding that would otherwise be made. Without this rung the
         // hook fires on every value the moment TLS is off, and the sentence below then asserts the
         // value is under the floor about a server sitting exactly on it — a pass with a false
         // sentence, which is worse than the double finding it was written to prevent.
@@ -195,9 +195,9 @@ final class TlsMinVersionRule extends AbstractSettingSecurityRule
     public function limitations(): array
     {
         return [
-            'reads the RUNNING value, not the file: a setting changed on disk and not yet reloaded is invisible here, and one changed only for this session would be read as the server\'s',
+            'reads the reset value, not the file: a setting changed on disk and not yet reloaded is invisible here, and defaults set with ALTER ROLE or ALTER DATABASE for the connecting role and its database are part of that value, while those set for other roles are not read',
             'says what the server will ACCEPT, not what anybody negotiates. A deployment whose clients all insist on TLS 1.3 is never exposed to the older version this reports, and nothing about the clients is visible from the catalog',
-            // Sharpened rather than dropped: the run CAN establish that something sits in front of
+            // Sharpened rather than dropped: the run can establish that something sits in front of
             // the server — the pooler reading is a measured three-state verdict, and it is a fact on
             // the very subject this rule judges. What no reading reaches is that proxy\'s own TLS
             // policy. Saying "the topology is invisible" claimed a blindness the package does not

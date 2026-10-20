@@ -9,7 +9,7 @@ namespace Pushery\SQLens\Categories;
  * --category filter and decides which rules are gated by severity instead of by
  * the level gate.
  *
- * A category is NOT a suite: a `safety` rule runs in both lint and deploy. The
+ * A category is not a suite: a `safety` rule runs in both lint and deploy. The
  * core never maps a category to a suite.
  *
  * The backed string values are public API from 1.0 on — they appear in the JSON
@@ -28,6 +28,10 @@ enum Category: string
      * The machine form of "levels model strictness appetite, security models
      * risk": security and privacy rules ignore the level gate and are gated by
      * their own severity instead.
+     *
+     * The one place the answer lives. The level gate admits by it and the gate
+     * axis measures by it, so a category moved onto the risk axis moves in all
+     * three at once.
      */
     public function usesSeverityGate(): bool
     {

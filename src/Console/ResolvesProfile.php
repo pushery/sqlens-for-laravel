@@ -20,7 +20,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  * result, writes the chosen name back onto the single `sqlens.profile` config key
  * so everything downstream (the run header, the profile overrides) sees exactly the
  * profile the user selected. There is no second selection path: the commands differ
- * in what they DO with a run, not in how they pick a profile, and the MCP tools choose
+ * in what they do with a run, not in how they pick a profile, and the MCP tools choose
  * through the same {@see ProfileApplication}.
  *
  * Those writes last as long as the run. The keys are read before the first one and put back
@@ -89,7 +89,7 @@ trait ResolvesProfile
      * Translate a message key through the Translator CONTRACT, resolved from the
      * command's container, rather than the global `trans()` helper. `trans()` is
      * defined only in the framework's Foundation, which this package deliberately does
-     * NOT require (illuminate/* only) — so a lean host would fatal on it. The contract
+     * not require (illuminate/* only) — so a lean host would fatal on it. The contract
      * lives in illuminate/contracts, which the package does require. Shared here so
      * every suite command routes translation the one lean-safe way.
      *

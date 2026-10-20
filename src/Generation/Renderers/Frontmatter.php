@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Generation\Renderers;
 /**
  * A YAML frontmatter block, written once for the two formats that carry one.
  *
- * Deliberately NOT a YAML library. What goes in here is a fixed, tiny set of keys with string and
+ * Deliberately not a YAML library. What goes in here is a fixed, tiny set of keys with string and
  * boolean values, decided by {@see AgentContextFormat} from three vendors' documented field lists —
  * so the failure a serializer would protect against (arbitrary nested data, unquoted specials)
  * cannot arise, and a dependency that could reorder keys or reflow values would be a determinism
@@ -25,7 +25,9 @@ final readonly class Frontmatter
      * header that says nothing, and the one format with no frontmatter is a SECTION inside somebody
      * else's file, where a header would be text in the middle of their document.
      *
-     * @param  array<string, string|bool>  $fields  in the order they should appear
+     * A list renders as a YAML sequence, one quoted item per line, as the `paths:` key of a rules file wants it.
+     *
+     * @param  array<string, string|bool|list<string>>  $fields  in the order they should appear
      */
     public static function render(array $fields): string
     {
@@ -36,9 +38,24 @@ final readonly class Frontmatter
         $lines = ['---'];
 
         foreach ($fields as $key => $value) {
-            $lines[] = $key.': '.(is_bool($value) ? ($value ? 'true' : 'false') : '"'.str_replace('"', '\"', $value).'"');
+            if (is_array($value)) {
+                $lines[] = $key.':';
+
+                foreach ($value as $item) {
+                    $lines[] = '  - '.self::quoted($item);
+                }
+
+                continue;
+            }
+
+            $lines[] = $key.': '.(is_bool($value) ? ($value ? 'true' : 'false') : self::quoted($value));
         }
 
         return implode("\n", [...$lines, '---', '']);
+    }
+
+    private static function quoted(string $value): string
+    {
+        return '"'.str_replace('"', '\"', $value).'"';
     }
 }

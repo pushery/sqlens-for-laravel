@@ -12,8 +12,13 @@ namespace Pushery\SQLens\Drivers\Mysql\Shadow;
  * Order is the whole point on the executable side: a dump's statements have
  * dependencies (a table before its foreign key, a routine before a trigger that
  * calls it), so the plan preserves the dump's order exactly. The skipped directives
- * are kept so a run can show what it did not replay and why, rather than leaving a
- * silent gap between the dump and the rebuilt database.
+ * are kept beside them, each with the reason it was skipped, so the splitter's
+ * decisions can be read and held one by one.
+ *
+ * A directive whose omission changes how the dump's statements ran, one that sets
+ * `SQL_MODE` or `TIME_ZONE` to a value, becomes a note on the shadow session
+ * ({@see SkippedDumpDirective::note()}), and the command that ran the capture writes
+ * it on STDERR. No report carries it, because a report holds one result per migration.
  */
 final readonly class SchemaDumpPlan
 {

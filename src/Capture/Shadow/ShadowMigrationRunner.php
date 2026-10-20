@@ -8,7 +8,6 @@ use Closure;
 use Illuminate\Container\Container;
 use Illuminate\Database\Connection;
 use Illuminate\Database\DatabaseManager;
-use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Grammars\Grammar;
 use Pushery\SQLens\Capture\CaptureConnectionFence;
@@ -34,13 +33,13 @@ use Throwable;
  * shape, the same `CapturedStatement` (raw SQL and bindings kept separate), and the
  * same substitution and canonicalization layer applied afterwards — there is one
  * data path into the rules, never a second "fast" and "correct" engine. The only
- * difference is HOW the SQL is obtained: a query listener on the shadow connection
+ * difference is how the SQL is obtained: a query listener on the shadow connection
  * while each migration's method runs for real, instead of Laravel's pretend log.
  *
  * Attribution is exact by construction, not by counting: each migration's method is
  * run inside its own window, the collector is reset before it and taken after, so a
  * statement belongs to exactly the migration whose window produced it. The runner's own
- * statements never enter one: the session limits are set before the listener exists, and
+ * statements never enter one: the session limits are set before the run records, and
  * the migration method is called directly rather than through the Migrator, so no row is
  * written to the migrations table while a window is open. Everything the window records
  * is the migration's, and it reaches the rules whole, exactly as the pretend log does.
@@ -49,9 +48,9 @@ use Throwable;
  * migration's `Schema`/`DB` calls land on it, and restored afterwards. So is the NAME of the
  * linted connection: a migration that names it, as Telescope's does through `getConnection()`,
  * means the database this run stands in for, and reaches the shadow too. The listener
- * is registered per run on the (throwaway) shadow connection; because each run reads
- * only its OWN collector, a listener left on a reused connection cannot corrupt a
- * later run's capture.
+ * belongs to {@see ShadowStatementTap}: one for each event dispatcher, for the life of
+ * the process, recording only while a run is in progress and only into that run's
+ * collector, so a finished run leaves nothing behind that records.
  */
 final readonly class ShadowMigrationRunner implements ShadowRunner
 {
@@ -59,12 +58,16 @@ final readonly class ShadowMigrationRunner implements ShadowRunner
 
     private MigrationLoader $loader;
 
+    private ShadowStatementTap $tap;
+
     public function __construct(
         private DatabaseManager $db,
         private ?ShadowSessionDefense $defense = null,
         ?CaptureConnectionFence $fence = null,
+        ?ShadowStatementTap $tap = null,
     ) {
         $this->fence = $fence ?? Container::getInstance()->make(CaptureConnectionFence::class);
+        $this->tap = $tap ?? Container::getInstance()->make(ShadowStatementTap::class);
         $this->loader = new MigrationLoader;
     }
 
@@ -72,7 +75,7 @@ final readonly class ShadowMigrationRunner implements ShadowRunner
     {
         $connection = $this->db->connection($session->connectionName);
 
-        // Bound this session's own budgets BEFORE the listener is attached, so the
+        // Bound this session's own budgets before the run records, so the
         // defensive SET statements never appear as captured SQL — a shadow run must
         // not itself sit on the source instance holding a statement or a lock.
         $this->defense?->apply($connection);
@@ -82,10 +85,6 @@ final readonly class ShadowMigrationRunner implements ShadowRunner
             $connection->getDriverName(),
         );
 
-        $connection->listen(static function (QueryExecuted $query) use ($collector): void {
-            $collector->record($query->sql, $query->bindings);
-        });
-
         // A migration's Schema/DB calls target the default connection; point it at
         // the shadow for the run and restore it afterwards, whatever happens.
         $previousDefault = $this->db->getDefaultConnection();
@@ -93,39 +92,52 @@ final readonly class ShadowMigrationRunner implements ShadowRunner
         $restoreSource = $this->resolveSourceToShadow($session->sourceConnection, $connection);
 
         try {
-            $results = [];
-            $failed = false;
-
-            foreach ($migrations as $pending) {
-                // Once a migration has failed the real migrate, the database is in a
-                // partial state: running the rest on top of it would fail or lint
-                // against a schema that never really formed. So every migration after
-                // the failure is undetermined (shadow_migrate_failed) — not a pass, not
-                // silently empty — while the one that failed carries its own finding.
-                if ($failed) {
-                    $results[] = CaptureResult::undetermined(
-                        $pending->file,
-                        $pending->migrationClass,
-                        $section,
-                        CaptureMode::Shadow,
-                        UndeterminedReason::ShadowMigrateFailed,
-                    );
-
-                    continue;
-                }
-
-                $result = $this->captureOne($pending, $section, $collector, $connection);
-                $results[] = $result;
-                // A failure OR a session timeout halts the run: in both cases the
-                // database is in a state the rest of the migrations cannot trust.
-                $failed = $result->isFail() || $result->isUndetermined();
-            }
+            $results = $this->tap->recording($connection, $collector, fn (): array => $this->captureEach($migrations, $section, $collector, $connection));
         } finally {
             $restoreSource();
             $this->db->setDefaultConnection($previousDefault);
         }
 
         return CaptureRun::of($results, CaptureMode::Shadow);
+    }
+
+    /**
+     * Each migration in turn, while the run records into its collector.
+     *
+     * @param  iterable<PendingMigration>  $migrations
+     * @return list<CaptureResult>
+     */
+    private function captureEach(iterable $migrations, CaptureSection $section, ShadowStatementCollector $collector, Connection $connection): array
+    {
+        $results = [];
+        $failed = false;
+
+        foreach ($migrations as $pending) {
+            // Once a migration has failed the real migrate, the database is in a
+            // partial state: running the rest on top of it would fail or lint
+            // against a schema that never really formed. So every migration after
+            // the failure is undetermined (shadow_migrate_failed) — not a pass, not
+            // silently empty — while the one that failed carries its own finding.
+            if ($failed) {
+                $results[] = CaptureResult::undetermined(
+                    $pending->file,
+                    $pending->migrationClass,
+                    $section,
+                    CaptureMode::Shadow,
+                    UndeterminedReason::ShadowMigrateFailed,
+                );
+
+                continue;
+            }
+
+            $result = $this->captureOne($pending, $section, $collector, $connection);
+            $results[] = $result;
+            // A failure OR a session timeout halts the run: in both cases the
+            // database is in a state the rest of the migrations cannot trust.
+            $failed = $result->isFail() || $result->isUndetermined();
+        }
+
+        return $results;
     }
 
     /**
@@ -251,7 +263,7 @@ final readonly class ShadowMigrationRunner implements ShadowRunner
         } catch (ForeignConnectionRefused $refused) {
             return $this->onAnotherConnection($pending, $section, $refused, $annotationClass);
         } catch (Throwable $throwable) {
-            // A session timeout is the tool's OWN budget firing, not a fault in the
+            // A session timeout is the tool's own budget firing, not a fault in the
             // migration, so it is undetermined (shadow_session_timeout) — never a
             // CAP.L0.MIGRATE_ERROR and never a passed-through exception.
             if (SessionTimeoutDetector::isSessionTimeout($throwable)) {
@@ -272,7 +284,7 @@ final readonly class ShadowMigrationRunner implements ShadowRunner
             }
 
             // A migration that fails mid-run is a failure carrying the driver's own
-            // message (CAP.L0.MIGRATE_ERROR judges it). The statements captured BEFORE
+            // message (CAP.L0.MIGRATE_ERROR judges it). The statements captured before
             // the failure are kept — they are evidence — while everything after this
             // migration is undetermined. The shadow database is thrown away by the
             // captor's teardown regardless.

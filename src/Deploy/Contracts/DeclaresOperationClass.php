@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Deploy\Contracts;
 use Pushery\SQLens\Deploy\SeverityEscalator;
 
 /**
- * A rule declaring WHICH KIND of operation its findings are about.
+ * A rule declaring which kind of operation its findings are about.
  *
  * The severity escalator weighs a finding against the size of the object it names, and the same size
  * means different things for different operations: a gigabyte is a long rewrite and nothing at all
@@ -22,7 +22,7 @@ use Pushery\SQLens\Deploy\SeverityEscalator;
  * deliberately not a second convention: the registrar builds `ruleId => rule` from the rules that
  * ran and asks each finding's claimant.
  *
- * ## Why it is opt-in, and why silence must mean NOTHING
+ * ## Why it is opt-in, and why silence must mean nothing
  *
  * Most rules do not judge an operation at all. A catalog rule reports a STATE — an unused index, a
  * database on the wrong charset — and there is no operation whose size could matter. A drop is not a
@@ -34,7 +34,7 @@ use Pushery\SQLens\Deploy\SeverityEscalator;
  * rule a class, the numbers would look plausible, and the threshold would sit on the wrong axis
  * silently.
  *
- * ## `downtime_class` is NOT this
+ * ## `downtime_class` is not this
  *
  * The temptation is real, because both look like "what kind of operation is this". They are
  * different axes: `downtime_class` says what an operation COSTS, this says what KIND it is, and two

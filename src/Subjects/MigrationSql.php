@@ -40,7 +40,7 @@ final readonly class MigrationSql implements Subject
          * The real class of the migration instance the captor loaded, when it loaded
          * one — the carrier of the class-level `#[SqlensIgnore]` attribute.
          *
-         * It is NOT `migrationClass`: that is the migration NAME (the file basename the
+         * It is not `migrationClass`: that is the migration name (the file basename the
          * repository records and a report prints), and Laravel's anonymous migrations
          * have no class of that name, so reflecting it would find nothing and the
          * annotation would be a silent no-op. Null when no instance was loaded — a
@@ -72,7 +72,7 @@ final readonly class MigrationSql implements Subject
         /**
          * The ordered column list the classifier read off this statement, empty when it
          * names none. Carried on the subject purely to reach {@see canonicalView()}: the
-         * migration's OTHER statements already offer theirs through the digest stream, and a
+         * migration's other statements already offer theirs through the digest stream, and a
          * rule comparing its own key against them would otherwise have to re-read the
          * canonical SQL to get one of the two sides.
          *
@@ -83,7 +83,7 @@ final readonly class MigrationSql implements Subject
          * The columns the classifier read off this statement, with their canonical types, or null.
          *
          * Carried on the subject for the same reason `keyColumns` is: to reach
-         * {@see canonicalView()}. The migration's OTHER statements offer theirs through the digest
+         * {@see canonicalView()}. The migration's other statements offer theirs through the digest
          * stream, and a rule comparing what it defines against what the migration already defined
          * would otherwise have to re-read the canonical SQL for one of the two sides.
          *
@@ -170,7 +170,7 @@ final readonly class MigrationSql implements Subject
             $this->context->resolvedServerVersion,
             $this->keyColumns,
             $this->columnDefinitions,
-            // Decided HERE, once, from the run's own resolved paths — so every rule reads the same
+            // Decided here, once, from the run's own resolved paths — so every rule reads the same
             // answer and none of them has to know what a migration path looks like. A run that
             // never established them (a catalog subject, a synthetic one) yields Unknown, which is
             // what a path-bound rule reports as undetermined rather than passing over.
@@ -200,9 +200,10 @@ final readonly class MigrationSql implements Subject
     }
 
     /**
-     * Whether this statement actually runs inside a transaction. Derived from
-     * Laravel's migration property — the basis for the later Squawk transaction
-     * assumption mapping.
+     * Whether this statement actually runs inside a transaction, as the capture
+     * recorded it from Laravel's migration property. A rule may ask it. The Squawk
+     * mapping does not: it reads the transaction context of the captured statements
+     * through `SquawkTransactionAssumption`.
      */
     public function runsInTransaction(): bool
     {

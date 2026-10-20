@@ -9,7 +9,7 @@ use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Rules\Suite;
 
 /**
- * The second suppression layer: the project's own `sqlens.ignore` list — chosen
+ * The first suppression layer: the project's own `sqlens.ignore` list — chosen
  * deliberately, documented with a reason, and never silently inert.
  *
  * "Never silently inert" is the load-bearing half. An ignore entry that matches

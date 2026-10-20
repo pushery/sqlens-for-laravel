@@ -82,6 +82,8 @@ final readonly class MetadataLockCheck implements PreflightCheck
         StatementKind::CreateIndex,
         StatementKind::DropIndex,
         StatementKind::Rename,
+        // `OPTIMIZE TABLE`, a rebuild like `ALTER TABLE … FORCE`, with the same exclusive ends.
+        StatementKind::RebuildTable,
     ];
 
     public function id(): string

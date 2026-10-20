@@ -12,7 +12,7 @@ namespace Pushery\SQLens\Catalog\Objects;
  *
  * - **RLS off** — every row is visible to anyone with `SELECT`. Correct for most tables, and a finding
  *   only for the ones a project says hold tenant data.
- * - **RLS on with no policy** — the FAIL-CLOSED accident: PostgreSQL denies every row, to everybody
+ * - **RLS on with no policy** — the fail-closed accident: PostgreSQL denies every row, to everybody
  *   except the owner. The table looks fine in the catalog and returns nothing at runtime.
  * - **RLS on with policies** — the intended state, and the one where a policy that admits everything
  *   makes the protection ceremonial.
@@ -82,7 +82,7 @@ final readonly class RlsState
         return new self(trim($table), $enabled, $forced, $policies, $readability, trim($owner), $statementName, $exposedPartitions);
     }
 
-    /** RLS is on and NOTHING may pass — the fail-closed accident, which reads as a working setup. */
+    /** RLS is on and nothing may pass — the fail-closed accident, which reads as a working setup. */
     public function isLockedOut(): bool
     {
         return $this->enabled && $this->policies === [];
@@ -91,13 +91,13 @@ final readonly class RlsState
     /**
      * Whether any policy admits every row it is asked about.
      *
-     * Permissive policies are OR-ed, so ONE that admits everything makes the rest ceremonial — which
+     * Permissive policies are OR-ed, so one that admits everything makes the rest ceremonial — which
      * is why this asks "any" rather than "all". A restrictive policy can only narrow, so it cannot
      * produce this state and is not counted.
      */
     public function hasAlwaysTruePolicy(): bool
     {
-        // Derived from the NAMES rather than from a second walk of the same list. Two derivations of
+        // Derived from the names rather than from a second walk of the same list. Two derivations of
         // one fact drift, and only one of them would be the one a test covers.
         return $this->alwaysTruePolicyNames() !== [];
     }

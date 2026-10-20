@@ -9,7 +9,7 @@ use Pushery\SQLens\Console\ApiSnapshotCommand;
 use Pushery\SQLens\Console\CorpusMeasureCommand;
 
 /**
- * The commands that exist for developing SQLens itself, and are NOT part of its public surface.
+ * The commands that exist for developing SQLens itself, and are not part of its public surface.
  *
  * ## Why a second provider rather than a flag
  *

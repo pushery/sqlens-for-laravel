@@ -8,7 +8,7 @@ use Pushery\SQLens\Findings\DowntimeClass;
 use Pushery\SQLens\Findings\RemediationPayload;
 
 /**
- * A considered `none` — the payload a rule produces when it has looked and there IS no safe
+ * A considered `none` — the payload a rule produces when it has looked and there is no safe
  * standard sequence.
  *
  * ## Why this is a type rather than a shrug
@@ -40,7 +40,7 @@ final readonly class NoSafeSequenceTemplate
     /**
      * The considered `none`.
      *
-     * @param  string  $reasonKey  the translation key naming WHY there is no standard sequence.
+     * @param  string  $reasonKey  the translation key naming why there is no standard sequence.
      *                             Required, and required as an argument rather than defaulted:
      *                             a default would make the reason forgettable, which is the only
      *                             failure this class exists to prevent.

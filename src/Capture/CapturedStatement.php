@@ -18,7 +18,7 @@ use Pushery\SQLens\Subjects\MigrationDirection;
  *
  * A statement is captured raw (grammar output plus bindings), then substituted
  * (bindings inlined, so a rule reads one complete string), then canonicalized.
- * The later two forms are filled by their own stages, so they are nullable HERE
+ * The later two forms are filled by their own stages, so they are nullable here
  * and only here — an accessor that silently returned the raw text when the
  * canonical form is missing would hand a rule exactly the grammar quirks the
  * canonicalization layer exists to remove.

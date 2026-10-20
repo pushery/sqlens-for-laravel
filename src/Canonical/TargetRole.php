@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Canonical;
 
 /**
- * What a statement target IS TO the statement — the part its object type cannot say.
+ * What a statement target is to the statement — the part its object type cannot say.
  *
  * ## The measurement that made this necessary
  *
  * `ALTER TABLE public.orders ADD CONSTRAINT … FOREIGN KEY (user_id) REFERENCES public.users (id)`
- * produces TWO table targets. They are not interchangeable: one is the table being altered, the
+ * produces two table targets. They are not interchangeable: one is the table being altered, the
  * other is only mentioned. Nothing in `type` distinguishes them, and nothing else could — both
  * really are tables in the catalog's sense.
  *
@@ -28,12 +28,12 @@ namespace Pushery\SQLens\Canonical;
  * ## Why this is not a second object-type
  *
  * A `SchemaObjectType::ReferencedTable` was the obvious alternative and is the wrong axis. That enum
- * says WHAT a thing is in the catalog, and it is the primary sort key and the fingerprint's payload;
+ * says what a thing is in the catalog, and it is the primary sort key and the fingerprint's payload;
  * a referenced table is a table. Worse, it would silently change readers that are correct today —
  * `TouchedTables::of()` filters on `type === Table` and would simply stop seeing the referenced side
  * rather than start distinguishing it.
  *
- * ## What it deliberately does NOT do
+ * ## What it deliberately does not do
  *
  * It does not enter `Fingerprint::targetPayload()`. The role is derived from the same canonical SQL
  * the fingerprint already covers, so including it would change every stored fingerprint and force a
@@ -51,7 +51,7 @@ enum TargetRole: string
     case Subject = 'subject';
 
     /**
-     * The statement only POINTS AT this object; it is not being changed.
+     * The statement only points at this object; it is not being changed.
      *
      * Today: the `REFERENCES` side of a foreign key, on both engines. A reader asking "what does
      * this statement alter" must exclude it, and a reader asking "what does this statement touch"

@@ -23,7 +23,7 @@ namespace Pushery\SQLens\Deploy;
  * is genuinely unsettled, and settling it depends on a decision this package has not made — whether
  * finding messages are localized at all. Both readings are live, and they pull in opposite
  * directions: a
- * namespace must NOT vary per command, or one message needs translating twice and the two
+ * namespace must not vary per command, or one message needs translating twice and the two
  * commands stop reporting the same finding; a provenance statement must vary, or it lies.
  *
  * A name that names the SUBJECT rather than the command is correct under both. `sqlens.deploy` is

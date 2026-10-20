@@ -14,7 +14,7 @@ use ReflectionClass;
  * The connection config the FRAMEWORK would use — never the raw array.
  *
  * Laravel does not read `database.connections.<name>` verbatim. It runs the entry through
- * {@see ConfigurationUrlParser}, so a `url`-only connection HAS a driver, a host and a database
+ * {@see ConfigurationUrlParser}, so a `url`-only connection has a driver, a host and a database
  * name — extracted from the URL — none of which appear as keys in the config file. And for a
  * read/write split it merges the `write` block over the base.
  *
@@ -178,7 +178,7 @@ final readonly class EffectiveConnectionConfig
      *
      * The URL first, because the framework lays a `url`'s components over the keys, `host` among
      * them, so a host pinned beside a `url` would be replaced by the URL's. The split is dropped
-     * because a catalog audit is a statement about ONE instance: a connection that sent reads to a
+     * because a catalog audit is a statement about one instance: a connection that sent reads to a
      * replica would produce a snapshot of a database nobody asked about. The pin replaces whatever
      * host remains, because a connection configured only through read/write blocks has no base host
      * at all, and without the pin it would reach whatever the driver defaults to.

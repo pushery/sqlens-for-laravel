@@ -36,6 +36,7 @@ use Pushery\SQLens\Capture\PretendStatementTap;
 use Pushery\SQLens\Capture\SessionGuard;
 use Pushery\SQLens\Capture\Shadow\ApplicationShadowClearance;
 use Pushery\SQLens\Capture\Shadow\ProductionConnectionDetector;
+use Pushery\SQLens\Capture\Shadow\ShadowStatementTap;
 use Pushery\SQLens\Catalog\CatalogReaderFactory;
 use Pushery\SQLens\Catalog\CatalogReaders;
 use Pushery\SQLens\Catalog\ReaderConnectionFactory;
@@ -165,13 +166,13 @@ final class SQLensServiceProvider extends ServiceProvider
     public function register(): void
     {
         // The agent redactor, bound once so every surface that writes for an agent — the reporter's
-        // render seam and the exporter's artifact seam — masks against the SAME configuration. Two
+        // render seam and the exporter's artifact seam — masks against the same configuration. Two
         // constructions would be two places a connection's values are read.
         $this->app->bind(Redactor::class, fn (Application $app): Redactor => new Redactor(new CredentialRedaction($app->make('config'))));
 
-        // Deep, and NOT through either of Laravel's two helpers — see PublishedConfigMerge for what
+        // Deep, and not through either of Laravel's two helpers — see PublishedConfigMerge for what
         // each of them does to a 99 KB reference configuration. The short version: `mergeConfigFrom`
-        // asks one question per TOP-LEVEL key, so answering `security.rls.mode` freezes the whole
+        // asks one question per top-level key, so answering `security.rls.mode` freezes the whole
         // `security` block against every key this package ships later; `replaceConfigRecursivelyFrom`
         // fixes that and silently ignores an EMPTIED list, which this package's own config comments
         // tell a project to write.
@@ -201,7 +202,7 @@ final class SQLensServiceProvider extends ServiceProvider
         // the one package migration paths are registered on.
         $this->app->bindIf(Migrator::class, static fn (Application $app): Migrator => $app->make('migrator'));
 
-        // The registry is bound in its OWN right, and that is the whole point of
+        // The registry is bound in its own right, and that is the whole point of
         // the extension seam: a consuming application registers a third-party driver
         // by resolving DriverRegistry from the container and calling extend() on it.
         // Built inline inside the manager closure instead, the seam would exist in
@@ -235,7 +236,7 @@ final class SQLensServiceProvider extends ServiceProvider
                 // declares focused illuminate components rather than the framework, and the helper
                 // belongs to the framework.
                 $app->make(Repository::class)->get('sqlens.audit.documentation'),
-                // The advisory reader, built ONCE here because it is the only place that knows both
+                // The advisory reader, built once here because it is the only place that knows both
                 // the configuration and the application's base path — the two things its resolution
                 // order needs. Handed down rather than reached for, like every other collaborator
                 // above: a rule that read configuration would have a verdict its own tests cannot
@@ -256,7 +257,7 @@ final class SQLensServiceProvider extends ServiceProvider
                 // the container where the application keeps its classes, and neither the rule
                 // namespace nor the driver namespace may do that. Handed down, never reached for.
                 self::privacyColumnEvaluator($app),
-                // WHICH environment this run is looking at, built here for the same reason as the
+                // Which environment this run is looking at, built here for the same reason as the
                 // advisory reader: it needs the application's configuration, and a rule reaching for
                 // that would have a verdict its own tests cannot see.
                 //
@@ -275,6 +276,9 @@ final class SQLensServiceProvider extends ServiceProvider
                 // one of ours -- the table it names is created by the framework whatever the
                 // application would prefer, which is exactly why a rule has to know it.
                 $app->make(Repository::class)->get('database.migrations'),
+                // How much of its ceiling a primary key may use before it is reported, forwarded raw
+                // like every value above: the registry is the one place allowed to narrow it.
+                $app->make(Repository::class)->get('sqlens.audit.key_ceiling'),
             ),
         );
 
@@ -283,7 +287,7 @@ final class SQLensServiceProvider extends ServiceProvider
         // resolved wherever a runner is, which is not only from a command.
         $this->app->bind(SessionDefenses::class, DriverRegistry::class);
 
-        // Bound rather than autowired: the refresher needs the SAME advisory reader the rules judge
+        // Bound rather than autowired: the refresher needs the same advisory reader the rules judge
         // from, plus the base path, and letting the container guess would hand it a second reader
         // with its own cache — a refresh could then write a file the run had already read past.
         $this->app->bind(
@@ -345,7 +349,7 @@ final class SQLensServiceProvider extends ServiceProvider
                     // on the ROLE it connects as, so a reading over a second connection could report a
                     // different server than the one the rest of the audit describes.
                     security: new PgsqlSecurityReader($session, Container::getInstance()->make('config')),
-                    // The deploy suite's reader, over the SAME session for the same reason as the
+                    // The deploy suite's reader, over the same session for the same reason as the
                     // rest: one connection per run is a promise this package makes, and a sizes
                     // reading on a second one could describe a database nothing else looked at.
                     statistics: new PgsqlStatisticsReader($session),
@@ -379,7 +383,7 @@ final class SQLensServiceProvider extends ServiceProvider
 
         // The project's own composer.json, for the packages it declares — the most direct statement
         // a project can make that it is multi-tenant. It is bound in its own right rather than
-        // built inside the runner closure below, because BOTH resolution paths have to get it: the
+        // built inside the runner closure below, because both resolution paths have to get it: the
         // command resolves the `AuditRuns` seam, and several tests resolve the concrete
         // `AuditRunner`. A scalar constructor argument would break the second path's reflection
         // auto-resolution, so the path this package injects is the object that carries it.
@@ -392,7 +396,7 @@ final class SQLensServiceProvider extends ServiceProvider
             static fn (Application $app): ProjectManifest => new ProjectManifest($app->basePath()),
         );
 
-        // Credential redaction, assembled ONCE. The two halves are blind in different places —
+        // Credential redaction, assembled once. The two halves are blind in different places —
         // one knows the configured values, the other knows the drivers' message shapes — and the
         // order between them is a correctness property rather than a preference, stated in the
         // class. Bound rather than auto-wired so that the composition is a declaration somebody
@@ -417,7 +421,10 @@ final class SQLensServiceProvider extends ServiceProvider
         $this->app->singleton(CaptureConnectionFence::class);
         // One tap per application, for the same reason: it hooks each connection once.
         $this->app->singleton(PretendStatementTap::class);
-        // The injection half, and it is bound EXPLICITLY rather than left to autowiring — which is
+        // And its shadow counterpart, which hooks each event dispatcher once: a tap per run
+        // would add a listener that no run can take off again.
+        $this->app->singleton(ShadowStatementTap::class);
+        // The injection half, and it is bound explicitly rather than left to autowiring — which is
         // the whole reason this binding exists. `SecurityRunner` takes it as `?AnalyseBridge = null`,
         // and the container answers an unresolvable optional dependency with the default instead of
         // an error: without this line the bridge would never be built, the half would report "nothing
@@ -478,7 +485,7 @@ final class SQLensServiceProvider extends ServiceProvider
             // driver it answers for — the verifier asks, so a run against PostgreSQL never sees
             // these and a run against MySQL never sees the PostgreSQL ones.
             new MysqlOrphanTransitionObjectCheck,
-            // …and the one that exists to answer NOT APPLICABLE out loud. A missing check and a
+            // …and the one that exists to answer not applicable out loud. A missing check and a
             // clean result print the same on this engine, and a reader comparing two databases
             // is exactly who would be misled by that.
             new MysqlInvalidIndexCheck,
@@ -499,7 +506,7 @@ final class SQLensServiceProvider extends ServiceProvider
             // every `.sql` file — measured at 25 of each for 25 files. Neither answer can change
             // between two files of one run. See MemoizingProcessRunner.
             //
-            // One wrapper for BOTH backends on purpose: they are different binaries, the cache
+            // One wrapper for both backends on purpose: they are different binaries, the cache
             // is keyed by name, and sharing it means a run that falls back from one to the other
             // does not re-ask about the first.
             $processes = new MemoizingProcessRunner($app->make(ProcessRunner::class));
@@ -507,7 +514,7 @@ final class SQLensServiceProvider extends ServiceProvider
             // A backend this project switched off is not REGISTERED, rather than registered
             // and skipped later. That keeps `auto` honest for free: an absent candidate never
             // reaches the passed-over list, so a decision is never reported as a loss and strict
-            // tool mode never fails over it. The names travel separately so a NAMED disabled
+            // tool mode never fails over it. The names travel separately so a named disabled
             // backend can still be refused with the true reason.
             $backends = [];
 
@@ -567,7 +574,7 @@ final class SQLensServiceProvider extends ServiceProvider
                     'pgsql' => new PgsqlWriteAcceptance,
                     'mysql' => new MysqlWriteAcceptance,
                 ]),
-                // Third, and last among the context checks. It answers a question about THIS
+                // Third, and last among the context checks. It answers a question about this
                 // RUN rather than about the database, so it belongs after the two that decide
                 // whether the run means anything at all — but before any check that reasons
                 // about load, because those are the ones a missing timeout would let hang.
@@ -575,7 +582,7 @@ final class SQLensServiceProvider extends ServiceProvider
                     'pgsql' => new PgsqlSessionDefenseState,
                     'mysql' => new MysqlSessionDefenseState,
                 ]),
-                // Fourth, and deliberately AFTER the session defense rather than beside the
+                // Fourth, and deliberately after the session defense rather than beside the
                 // other context checks: this one reads ~400 rows from `pg_settings`, which is
                 // the first thing in the run that could hang, and the check before it is the
                 // one that establishes there is a bound on hanging.
@@ -602,7 +609,7 @@ final class SQLensServiceProvider extends ServiceProvider
                 // measured before the slower questions would be a lag from a moment that has
                 // already passed by the time the report is written.
                 new ReplicationLagCheck,
-                // Last of all, and the only one that needs BOTH halves of the run: the pending
+                // Last of all, and the only one that needs both halves of the run: the pending
                 // migrations to know which locks are coming, and the live activity to know what
                 // holds them. It runs after everything that could refuse the run outright.
                 new LockBlockerCheck,
@@ -621,7 +628,7 @@ final class SQLensServiceProvider extends ServiceProvider
                 // different way of going quiet: `performance_schema` can be off, and an empty
                 // reading then means nothing rather than nothing-found.
                 new MetadataLockCheck,
-                // Immediately BEFORE the headroom question, because it answers the half of it
+                // Immediately before the headroom question, because it answers the half of it
                 // a managed database cannot: free capacity is not exposed there, so
                 // `DiskHeadroomCheck` reports undetermined on most instances — and a retained
                 // slot is the commonest reason the answer would have been no, visible from
@@ -644,7 +651,7 @@ final class SQLensServiceProvider extends ServiceProvider
                 new MysqlGrantCheck,
             ]));
 
-        // The escalation table, built ONCE per run from the shipped artifact plus whatever the
+        // The escalation table, built once per run from the shipped artifact plus whatever the
         // project overrode. A singleton because `load()` reads a file and parses it, and because two
         // instances would be two answers to "when is a rewrite critical" — free to differ the moment
         // somebody passes a path in one place and not the other.
@@ -670,7 +677,7 @@ final class SQLensServiceProvider extends ServiceProvider
         // one — only differ in a window that a test has to be able to create.
         $this->app->singleton(ToolRegistry::class, static fn (): ToolRegistry => ToolRegistry::declared());
 
-        // Who may start a database-creating run. Bound as a seam because TWO callers ask — the lint
+        // Who may start a database-creating run. Bound as a seam because two callers ask — the lint
         // command and the MCP shadow tool — and a second gathering of the guard's inputs would be a
         // second answer to "which environments are allowed", free to drift toward permissive.
         //
@@ -692,7 +699,7 @@ final class SQLensServiceProvider extends ServiceProvider
             // which is what lets the core-purity guard prove that a command reads through the sealed
             // reader and nowhere else.
             //
-            // The paths come from the ONE shared resolver rather than from a second reading: the
+            // The paths come from the one shared resolver rather than from a second reading: the
             // lint layer and this one having different ideas of what a migration path is would make
             // a drift comparison's expectation side a different migration state than the one lint
             // reports on.
@@ -726,7 +733,7 @@ final class SQLensServiceProvider extends ServiceProvider
         // a run on a machine without it report a missing tool — naming, in whatItEnables(), the
         // rules it would add. Until the chain below existed, that report named rules that did not
         // exist: a promise with nothing behind it.
-        // Both amplifiers are KNOWN from here on, which is what makes every PostgreSQL run report
+        // Both amplifiers are known from here on, which is what makes every PostgreSQL run report
         // one that is missing.
         //
         // Asked of the DRIVERS rather than listed here, and the difference is a package boundary.
@@ -819,7 +826,7 @@ final class SQLensServiceProvider extends ServiceProvider
 
             // The SDK's own provider, registered explicitly when the package is installed.
             //
-            // It is NOT decoration: that provider installs a container `resolving` callback which
+            // It is not decoration: that provider installs a container `resolving` callback which
             // is the only thing that fills a tool's Request with the arguments a client sent.
             // Without it every `tools/call` reaches its tool with an EMPTY request — measured, and
             // the shape of the failure is the worst kind: a perfectly good call comes back
@@ -846,8 +853,8 @@ final class SQLensServiceProvider extends ServiceProvider
     private function registerPublishing(): void
     {
         // Resolve publish targets through the Application contract's path methods
-        // (available via illuminate/contracts), NOT the config_path()/lang_path()
-        // global helpers. Those are Foundation helpers, shipped ONLY with
+        // (available via illuminate/contracts), not the config_path()/lang_path()
+        // global helpers. Those are Foundation helpers, shipped only with
         // laravel/framework — which this lean package does not require — so the
         // helper form would freeze a wrong dependency contract and fatal in a
         // non-Foundation host. The method form is behavior-identical.
@@ -891,7 +898,7 @@ final class SQLensServiceProvider extends ServiceProvider
     /**
      * The application's Eloquent models, discovered the way `model:prune` discovers them.
      *
-     * Resolved HERE rather than inside the discovery, because this is the one place that has the
+     * Resolved here rather than inside the discovery, because this is the one place that has the
      * application: `getNamespace()` is on the Foundation contract, and the app directory is the
      * container's own `path` binding. Handing both down keeps the discovery a plain value object
      * that a test can point at any directory.
@@ -913,8 +920,14 @@ final class SQLensServiceProvider extends ServiceProvider
      * paying for a filesystem walk and a dictionary read on every container boot to feed a rule
      * nothing will ask is the kind of cost nobody notices and everybody carries.
      *
-     * A dictionary this project cannot read is deliberately NOT swallowed — {@see PrivacyDictionary}
+     * A dictionary this project cannot read is deliberately not swallowed — {@see PrivacyDictionary}
      * throws, and a pack whose dictionary is broken must fail loudly rather than match nothing.
+     *
+     * It is read on first use, though, and remembered once read. This runs while the container
+     * builds a command's collaborators, before the command can refuse anything, so a dictionary that
+     * threw here would end every command, `sqlens:doctor` included, as an exception rather than as
+     * the misconfiguration exit. Every command reads the same file first, in its configuration
+     * check, and refuses it there by name; doctor reports it.
      */
     private static function privacyColumnEvaluator(Application $app): ?UnencryptedColumnEvaluator
     {
@@ -924,15 +937,12 @@ final class SQLensServiceProvider extends ServiceProvider
             return null;
         }
 
-        $path = $pack->dictionaryPath();
+        $dictionary = null;
 
         return new UnencryptedColumnEvaluator(
-            $path === null
-                ? PrivacyDictionary::bundled($pack->extraTerms())
-                : PrivacyDictionary::fromFile(
-                    $app->basePath(ltrim($path, DIRECTORY_SEPARATOR)),
-                    $pack->extraTerms(),
-                ),
+            static function () use ($pack, $app, &$dictionary): PrivacyDictionary {
+                return $dictionary ??= $pack->dictionary($app->basePath());
+            },
             new ModelCastReader(self::discoveredModels($app)),
             $pack->ignoredColumns(),
         );
@@ -955,7 +965,7 @@ final class SQLensServiceProvider extends ServiceProvider
      * project's, because the published config has not been merged yet. The failure is silent and
      * looks like a profile that does not work.
      *
-     * ## An unknown profile name is an exception, and it happens HERE
+     * ## An unknown profile name is an exception, and it happens here
      *
      * Deliberately at boot rather than at the first query: a name nothing defines would otherwise
      * disable every guardrail in the application while the configuration still reads as though they
@@ -972,7 +982,7 @@ final class SQLensServiceProvider extends ServiceProvider
         /** @var array<string, mixed> $guard */
         $guard = is_array($declared = $config->get('sqlens.guard')) ? $declared : [];
 
-        // ONE null gate, and it is the resolver's. An earlier `if (($guard['profile'] ?? null) ===
+        // One null gate, and it is the resolver's. An earlier `if (($guard['profile'] ?? null) ===
         // null) return;` stood here as well, which read as defensive and was the opposite: it made
         // the resolver's own null unreachable from this method, so the branch below could never run
         // and the 100% floor reported it — correctly — as a line no test can reach. Two gates on one
@@ -1002,7 +1012,7 @@ final class SQLensServiceProvider extends ServiceProvider
             return;
         }
 
-        // The channel is resolved ONCE, here, where its existence has just been validated. Handing
+        // The channel is resolved once, here, where its existence has just been validated. Handing
         // the logger a PSR-3 instance rather than a channel name is what keeps `ViolationLogger`
         // free of Laravel's logging package entirely.
         $grammars = $this->app->make(CanonicalExtensionRegistry::class);
@@ -1012,7 +1022,7 @@ final class SQLensServiceProvider extends ServiceProvider
             // The application's own providers boot after this one, so what they do to Eloquent's
             // switches is judged once they all have.
             new StrictModeGuard($logger, fn (Closure $check) => $this->app->booted($check)),
-            // ONE listener for all three query-based guardrails. A listener each would be three
+            // One listener for all three query-based guardrails. A listener each would be three
             // closures on the hot path of every query an application runs.
             new QueryWatcher($this->app->make(Dispatcher::class), [
                 new SlowQueryGuard($logger),
@@ -1021,7 +1031,7 @@ final class SQLensServiceProvider extends ServiceProvider
             ]),
         ])->arm($profile);
 
-        // Bound AFTER arming and only when something was armed, so a test can ask what happened
+        // Bound after arming and only when something was armed, so a test can ask what happened
         // without the answer being "an empty manager exists".
         $this->app->instance('sqlens.guard.armed', $armed);
     }

@@ -10,7 +10,7 @@ namespace Pushery\SQLens\Format;
  * ## Why a loss is reported at all when the run succeeded
  *
  * Falling back to the built-in core is correct — it is why the core exists, and a formatter that
- * refused to run without an optional binary would be useless on a fresh checkout. What is NOT
+ * refused to run without an optional binary would be useless on a fresh checkout. What is not
  * correct is doing it quietly: a machine without pgFormatter formats with something else than the
  * machine that has it, the output is COMMITTED, and the next run on the other machine rewrites
  * every file. Until this existed, nothing in a run said which of the two you were on.

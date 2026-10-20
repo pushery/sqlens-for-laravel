@@ -124,7 +124,7 @@ final class ForeignKeyIdSuffixRule extends AbstractCatalogRule implements Declar
 
     public function judgeStatement(MigrationStatementView $statement): ?RuleVerdict
     {
-        // A REFERENCED target is what makes this a foreign key, and the statement KIND is not.
+        // A referenced target is what makes this a foreign key, and the statement kind is not.
         //
         // Measured, because the obvious predicate is wrong on one of the two engines: MySQL's
         // canonicalization classifies `ALTER TABLE … ADD CONSTRAINT … REFERENCES …` as

@@ -11,7 +11,7 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  * captured but never executed, or a named reason why they could not be read.
  *
  * {@see DownMethodState} answers whether there is a rollback path at all; this answers what
- * that path DOES. Two questions, two types, on purpose: a migration can have a perfectly
+ * that path does. Two questions, two types, on purpose: a migration can have a perfectly
  * present `down()` whose statements destroy far more than `up()` ever built, and a state
  * enum has no room to say so.
  *
@@ -30,7 +30,7 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  * The leg is captured under Laravel's pretend mode — always, in every capture mode,
  * including shadow. A rollback that is merely being linted must not run: `down()` is the
  * one migration method whose whole job is to destroy things. The statements are what it
- * WOULD emit, which is exactly what a rule about `down()` needs and the only thing primum
+ * would emit, which is exactly what a rule about `down()` needs and the only thing primum
  * non nocere permits it to take.
  *
  * ## The unreadable case is a first-class value, not an empty list
@@ -65,7 +65,7 @@ final readonly class DownLegDigest
     /**
      * A leg that could not be read, with the reason a finding will carry.
      *
-     * The reason is the value, not a boolean beside it: a rule that learned only THAT the leg
+     * The reason is the value, not a boolean beside it: a rule that learned only that the leg
      * was unreadable would have to invent a reason at the point of use, and an invented reason
      * points a reader at the wrong file.
      */

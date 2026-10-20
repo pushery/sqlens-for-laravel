@@ -11,7 +11,7 @@ use Pushery\SQLens\Exceptions\InvalidRuleExample;
  * that does the same job safely, and one line saying what separates them.
  *
  * The examples are what a user and an agent read to understand a finding — the fixture
- * proves the rule, the example explains it. They are OUR wording: the facts (what an
+ * proves the rule, the example explains it. They are our wording: the facts (what an
  * operation does, which lock it takes) are free, but the phrasing and the snippets are
  * written here, never lifted from another tool's or the database's documentation. A
  * paraphrase close enough to be a copy is a copy, and the register would then ship
@@ -42,11 +42,11 @@ use Pushery\SQLens\Exceptions\InvalidRuleExample;
  * statement. Filed as `sql` it was held to the SQL checks and passed them only because somebody had
  * appended a semicolon, which means nothing on a command line and reads in the documentation like a
  * terminator. So the shell check is the SQL one inverted at exactly that point: a trailing semicolon
- * is REFUSED rather than required.
+ * is refused rather than required.
  *
  * ## The false-positive consideration
  *
- * A rule may also record where it is knowingly WRONG — the shapes it reports that a careful reader
+ * A rule may also record where it is knowingly wrong — the shapes it reports that a careful reader
  * would not. That is governance, not decoration: a rule whose author never wrote down when it cries
  * wolf has not finished thinking about it, and the first person to meet the false positive is a
  * user who then stops trusting the whole tool.

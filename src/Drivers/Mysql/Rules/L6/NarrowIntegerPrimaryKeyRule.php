@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Drivers\Mysql\Rules\L6;
 
 use Pushery\SQLens\Categories\Category;
 use Pushery\SQLens\Contracts\DeclaresJudgedObjectTypes;
+use Pushery\SQLens\Drivers\Mysql\Rules\L5\PrimaryKeyNearCeilingRule;
 use Pushery\SQLens\Levels\Level;
 use Pushery\SQLens\Rules\AbstractCatalogRule;
 use Pushery\SQLens\Rules\Keys\NarrowIntegerPrimaryKey;
@@ -37,10 +38,14 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * differently on Tuesday than on Monday over an unchanged schema, and determinism is not a
  * property to trade for a sharper heading.
  *
+ * How far the key's counter has got is a different question with a rule of its own:
+ * {@see PrimaryKeyNearCeilingRule} reads it beside the catalog and reports the same key one level
+ * earlier once it has used the configured share of its ceiling. This rule stays on the type.
+ *
  * ## What the finding cannot list
  *
  * Widening the key alone is half a fix: every referencing foreign-key column has to widen with it,
- * or the constraint stops matching. Those columns live on OTHER tables, and a rule judges one
+ * or the constraint stops matching. Those columns live on other tables, and a rule judges one
  * object at a time — so the message says they must be widened without naming them. Claiming to
  * enumerate them from here would be a promise this rule cannot keep.
  */

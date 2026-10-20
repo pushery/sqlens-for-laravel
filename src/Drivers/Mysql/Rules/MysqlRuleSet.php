@@ -11,6 +11,7 @@ use Pushery\SQLens\Drivers\Mysql\Rules\L1\TruncateRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L2\CopyAlterCharsetRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L2\CopyAlterTypeRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L2\ForeignKeyOnNonStandardKeyRule;
+use Pushery\SQLens\Drivers\Mysql\Rules\L2\OptimizeTableRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L2\TableWithoutPrimaryKeyRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L3\AlgorithmLockNotExpressibleRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L3\ExchangePartitionClauseIgnoredRule;
@@ -24,12 +25,14 @@ use Pushery\SQLens\Drivers\Mysql\Rules\L5\FloatForMoneyRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L5\MixedCollationRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L5\NullableForeignKeyInUniqueRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L5\PolymorphicPairWithoutIndexRule;
+use Pushery\SQLens\Drivers\Mysql\Rules\L5\PrimaryKeyNearCeilingRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L5\SqlModeMissingErrorForDivisionByZeroRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L5\SqlModeMissingStrictTransTablesRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L6\CharacterSetServerNotUtf8mb4Rule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L6\CharsetNotUtf8mb4Rule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L6\DefaultStorageEngineNotInnodbRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L6\ExplicitDefaultsForTimestampOffRule;
+use Pushery\SQLens\Drivers\Mysql\Rules\L6\FutureInstantInTimestampRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L6\InnodbRowFormatNotDynamicRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L6\LegacyCollationRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\L6\LowerCaseTableNamesRiskRule;
@@ -67,7 +70,7 @@ use Pushery\SQLens\Rules\Pedantic\DocumentationPolicy;
  * question eventually disagree. The registry therefore starts at level 1, and a test holds
  * that gap so a later reader repairs nothing.
  *
- * **A rule is added HERE, once**, so the driver and the fixture suite see each new rule
+ * **A rule is added here, once**, so the driver and the fixture suite see each new rule
  * without a second edit.
  */
 final readonly class MysqlRuleSet
@@ -95,7 +98,7 @@ final readonly class MysqlRuleSet
      *
      * This is the single source of the production rules: the driver returns it, and the
      * fixture-pair suite judges against it, so what a user runs and what the tests prove are
-     * the very same objects. A rule added to the family is added HERE, once.
+     * the very same objects. A rule added to the family is added here, once.
      *
      * `$projectRoot` is the one construction dependency a safety rule has — it renders a
      * finding's location repo-relative, because an absolute path in a report destroys
@@ -103,17 +106,19 @@ final readonly class MysqlRuleSet
      *
      * @param  array<string, mixed>  $expect  what the project stated it wants, from `sqlens.audit.expect`
      */
-    public static function shipped(string $projectRoot, array $expect = [], ?MoneyColumnDictionary $moneyColumns = null, ?int $unusedIndexMinDays = null, ?NamingConvention $naming = null, ?DocumentationPolicy $documentation = null, ?string $migrationsTable = null): self
+    public static function shipped(string $projectRoot, array $expect = [], ?MoneyColumnDictionary $moneyColumns = null, ?int $unusedIndexMinDays = null, ?NamingConvention $naming = null, ?DocumentationPolicy $documentation = null, ?string $migrationsTable = null, ?int $keyCeilingPercent = null): self
     {
         $lowerCaseTableNames = $expect['lower_case_table_names'] ?? null;
 
         return new self([
             new NarrowIntegerPrimaryKeyRule($projectRoot, $migrationsTable ?? 'migrations'),
+            new FutureInstantInTimestampRule($projectRoot),
             new CharsetNotUtf8mb4Rule($projectRoot),
             new MixedCollationRule($projectRoot),
             new FloatForMoneyRule($projectRoot, $moneyColumns),
             new NullableForeignKeyInUniqueRule($projectRoot),
             new PolymorphicPairWithoutIndexRule($projectRoot),
+            new PrimaryKeyNearCeilingRule($projectRoot, $keyCeilingPercent),
             new LegacyCollationRule($projectRoot),
             new DropColumnRule($projectRoot),
             new DropTableRule($projectRoot),
@@ -122,6 +127,7 @@ final readonly class MysqlRuleSet
             new ExpandWithoutContractRule($projectRoot),
             new CopyAlterCharsetRule($projectRoot),
             new CopyAlterTypeRule($projectRoot),
+            new OptimizeTableRule($projectRoot),
             new ForeignKeyOnNonStandardKeyRule($projectRoot),
             new TableWithoutPrimaryKeyRule($projectRoot),
             new AlgorithmLockNotExpressibleRule($projectRoot),
@@ -136,7 +142,7 @@ final readonly class MysqlRuleSet
             new ExplicitDefaultsForTimestampOffRule($projectRoot),
             new TimeZoneNotUtcRule($projectRoot),
             new TimeZoneTablesEmptyRule($projectRoot),
-            // ONE argument carrying the whole expect structure rather than one per key: the next
+            // One argument carrying the whole expect structure rather than one per key: the next
             // setting SQLens declines to have an opinion about would otherwise widen this signature
             // again, and a factory that grows a parameter per rule stops being a factory.
             new LowerCaseTableNamesRiskRule($projectRoot)

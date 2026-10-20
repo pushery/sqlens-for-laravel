@@ -24,14 +24,14 @@ use Pushery\SQLens\Reporting\CredentialRedaction;
  * — into the JSON report, the SARIF file and the CI annotation, none of which has a redactor. The
  * password rule's care was real and reached one rule out of seven.
  *
- * ## Masking happens BEFORE truncation, and the order is the whole point
+ * ## Masking happens before truncation, and the order is the whole point
  *
  * Truncating first makes disclosure depend on statement length: the same account, created with two
  * more options in front of it, keeps its password or loses it depending on where character 160
  * lands. Worse, a cut through the middle of a literal leaves a partial secret that no pattern will
  * ever match again. So the value goes first, and what gets truncated is already safe.
  *
- * ## What it does NOT do
+ * ## What it does not do
  *
  * It does not mask the connection's configured values — that is
  * {@see CredentialRedaction}, which compares against what this

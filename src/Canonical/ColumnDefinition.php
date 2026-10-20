@@ -11,15 +11,15 @@ use Pushery\SQLens\Catalog\Canonical\CanonicalType;
  *
  * ## Why this is not the same thing as `keyColumns`
  *
- * {@see MigrationStatementDigest::$keyColumns} is an ordered list of NAMES — an index's key
+ * {@see MigrationStatementDigest::$keyColumns} is an ordered list of names — an index's key
  * columns, a foreign key's referencing columns — and it exists for the left-prefix question.
- * This says what a column IS, which is the question every type rule asks and which no lint run
+ * This says what a column is, which is the question every type rule asks and which no lint run
  * could ask before: the column list a `CREATE TABLE` writes never reached the digest at all, so
  * a rule needing a column type was structurally audit-only. Not because that was the right
  * answer — the migration that introduces a wrong type is the cheapest moment to fix it — but
  * because the question could not be put.
  *
- * ## The type goes through the SAME normalizer the catalog uses
+ * ## The type goes through the same normalizer the catalog uses
  *
  * {@see CanonicalType::fromRaw()}, the one the catalog reader calls on `format_type()`'s answer.
  * That is not tidiness: a lint verdict and an audit verdict about the same column must not be
@@ -42,6 +42,15 @@ final readonly class ColumnDefinition
         public string $name,
         /** What it is, or null where the type could not be read. */
         public ?CanonicalType $type = null,
+        /**
+         * The size the type was written with, `(255)` or `(8,2)` without its spaces, or null when it
+         * was written without one.
+         *
+         * Kept beside the type rather than in it, so the canonical name a rule compares on stays the
+         * one the catalog reader gives the same column. A rule that asks whether two columns of one
+         * sized type are the same, `varchar(255)` against `varchar(50)`, reads both.
+         */
+        public ?string $size = null,
     ) {}
 
     /** Whether the type could be read at all. */

@@ -40,7 +40,7 @@ final class TimeZoneNotUtcRule extends AbstractServerSettingRule
      * The two spellings that mean UTC and are worth accepting.
      *
      * PostgreSQL resolves plenty of other names to a zero offset — `Etc/GMT`, `Zulu`, `Universal`,
-     * `GMT` — and they are deliberately NOT here. They are the same instant but a different
+     * `GMT` — and they are deliberately not here. They are the same instant but a different
      * statement: a server set to `GMT` was configured by somebody who did not mean UTC, and the next
      * person to touch it may well "correct" it to a local zone. The rule is about the configuration
      * being unambiguous, not merely about the offset being zero today.

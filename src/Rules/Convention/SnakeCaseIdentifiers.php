@@ -31,7 +31,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * mattering. That is also why the rule is exactly this narrow — it asks whether an identifier can
  * survive both engines unquoted, and nothing else.
  *
- * ## What it deliberately does NOT do
+ * ## What it deliberately does not do
  *
  * No filtering of extension objects, partitions or prefixed tables. That work is the catalog
  * reader's, done once for every rule, and a second copy here would drift from it — the negative
@@ -62,7 +62,7 @@ final readonly class SnakeCaseIdentifiers
      * The object kinds this rule judges — and the list is SHORTER than it looks like it should be.
      *
      * A column, an index and a constraint are missing on purpose. They are members of a table, and
-     * this repository's catalog rules speak ONCE per object, naming every offending member in that
+     * this repository's catalog rules speak once per object, naming every offending member in that
      * one finding — a convention held by an architecture test rather than by prose, because it was
      * got wrong five times before anyone noticed. Judging a column as its own subject would report
      * one finding per bad name and, worse, report the same name twice on a reading that carries the
@@ -267,7 +267,7 @@ final readonly class SnakeCaseIdentifiers
      * The bare identifier out of a qualified name — unqualified AND unquoted.
      *
      * A column arrives as `schema.table.column` and a table as `schema.table`, so the last segment
-     * is the name this rule is about. Splitting on the LAST dot rather than the first is what keeps
+     * is the name this rule is about. Splitting on the last dot rather than the first is what keeps
      * a schema called `My_Schema` from being reported once per column it contains — the schema is
      * its own object and gets judged once, on its own.
      *
@@ -284,7 +284,7 @@ final readonly class SnakeCaseIdentifiers
      * backticks. Measured on the real corpus, where 2 of 65 findings over 14 upstream migrations
      * were this and nothing else.
      *
-     * ## And the dot is found OUTSIDE the quoting
+     * ## And the dot is found outside the quoting
      *
      * A quoted identifier may contain a dot, and that dot does not qualify: `` shop.`a.b` `` is one
      * object in one schema. Scanning for the separator with the quote state in hand is what keeps
@@ -313,7 +313,7 @@ final readonly class SnakeCaseIdentifiers
             $character = mb_substr($rendering, $index, 1);
 
             if ($quote !== null) {
-                // A doubled quote is an escaped one and stays INSIDE the run: stepping over both
+                // A doubled quote is an escaped one and stays inside the run: stepping over both
                 // characters is what keeps `` `od``d` `` from reading as two adjacent quoted runs.
                 if ($character === $quote) {
                     $quote = mb_substr($rendering, $index + 1, 1) === $quote ? $quote : null;
@@ -360,7 +360,7 @@ final readonly class SnakeCaseIdentifiers
      *
      * Naming the specific deviation rather than restating the pattern: "contains an upper-case
      * letter" tells somebody what to change, `/^[a-z][a-z0-9_]*$/` makes them work it out. Ordered
-     * so the FIRST reason is the one that bites on both engines.
+     * so the first reason is the one that bites on both engines.
      */
     public static function reason(string $identifier): string
     {

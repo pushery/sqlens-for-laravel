@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Exceptions;
 
+use Pushery\SQLens\Findings\CompositeCredentialRedactor;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use RuntimeException;
 
 /**
- * A shadow provisioner met a precondition that stops the run BEFORE any database
+ * A shadow provisioner met a precondition that stops the run before any database
  * is created — the role cannot create a database, the template is in use, or the
  * generated name already exists.
  *
@@ -17,7 +18,7 @@ use RuntimeException;
  * provisioning cannot even begin. The `ShadowCaptor` catches exactly this type
  * around the provision step and turns it into an all-undetermined run carrying the
  * named `reason`, so the precondition becomes a clear result the user can act on —
- * never a passed-through permission error and never a silent pass. Any OTHER
+ * never a passed-through permission error and never a silent pass. Any other
  * throwable from provisioning stays a genuine failure.
  *
  * This is distinct from the guard and probe checks the captor makes itself: those
@@ -34,9 +35,12 @@ use RuntimeException;
  *
  * It is not a collision, and the reason is one line of the catch site: `ShadowCaptor` maps this
  * exception with `allUndetermined($pending, $section, $undetermined->reason)` — the REASON ENUM
- * and nothing else. The message is discarded there by construction, so no result, no reporter
- * and no artifact can ever observe it. What can observe it is a reader: a failing test, a log,
- * a caller that lets it propagate.
+ * and nothing else — so no result, no reporter and no artifact can ever observe the detail.
+ *
+ * The detail goes to a person instead, through {@see forAPerson()}. The captor leaves it with the
+ * recorder the command handed in, and `sqlens:lint` writes it on STDERR; the drift reference keeps
+ * it beside its reason, and `sqlens:drift` and `sqlens:postdeploy` write it on STDERR too. Those
+ * streams are read by a person and compared by nothing.
  *
  * That is the whole design. The deterministic channel carries the enum; the human channel
  * carries the enum PLUS who was in the way. Neither can leak into the other, so neither has to
@@ -61,5 +65,17 @@ final class ShadowProvisioningUndetermined extends RuntimeException
     public function __construct(public readonly UndeterminedReason $reason, public readonly ?string $detail = null)
     {
         parent::__construct($detail === null ? $reason->description() : $reason->description().' '.$detail);
+    }
+
+    /**
+     * The refusal as a person reads it, the reason and the detail in one sentence, or null when the
+     * provisioner said nothing beyond the reason every result of the run carries.
+     *
+     * The configured connection values are taken out first, as everywhere this package quotes what a
+     * server said: a detail can carry a server's own error text.
+     */
+    public function forAPerson(): ?string
+    {
+        return $this->detail === null ? null : new CompositeCredentialRedactor()->redact($this->getMessage());
     }
 }

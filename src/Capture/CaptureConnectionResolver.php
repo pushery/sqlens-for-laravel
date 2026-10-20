@@ -10,14 +10,14 @@ use Pushery\SQLens\Drivers\DriverManager;
 use Pushery\SQLens\Drivers\DriverResolutionFailure;
 
 /**
- * Decides WHICH connection a capture runs against, and refuses to guess.
+ * Decides which connection a capture runs against, and refuses to guess.
  *
  * Precedence is fixed and explicit: an explicit `--database` beats the package's
  * own `sqlens.connection`, which beats the application's default. Anything else —
  * inferring a connection from the migration, or falling back to a driver name —
  * would let two runs of the same repository target different databases.
  *
- * The driver itself is NOT resolved here. `DriverManager` already owns that,
+ * The driver itself is not resolved here. `DriverManager` already owns that,
  * including the read/write split (a capture always addresses the WRITE side; a
  * replica has different grammar preconditions and is the wrong target for a
  * migration anyway) and the named failure for an unsupported engine. Re-deriving

@@ -86,7 +86,7 @@ enum AuditNotice: string implements RunNotice
     /**
      * A rule that is still registered and no longer runs, because it was deprecated.
      *
-     * Its sibling above reports a rule the SERVER cannot support. This one reports a rule THIS
+     * Its sibling above reports a rule the server cannot support. This one reports a rule this
      * PACKAGE retired — and the two are worth telling apart, because the reader's next move differs:
      * one waits for a server upgrade, the other adopts the successor.
      *

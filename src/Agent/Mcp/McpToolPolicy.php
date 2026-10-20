@@ -36,7 +36,7 @@ use Pushery\SQLens\Config\ConfigSchema;
  */
 final readonly class McpToolPolicy
 {
-    /** @param array<string, bool> $switches every KNOWN tool name that the configuration mentions */
+    /** @param array<string, bool> $switches every known tool name that the configuration mentions */
     private function __construct(private array $switches) {}
 
     /**
@@ -67,7 +67,7 @@ final readonly class McpToolPolicy
      *
      * The second of the two sanctioned ways to enable a tool, and the reason it exists beside the
      * configuration is that they answer different questions. The config says what a PROJECT has
-     * adopted; this says what an operator is doing in THIS session, which is how somebody tries a
+     * adopted; this says what an operator is doing in this session, which is how somebody tries a
      * mutating tool once without leaving it on in a file everybody shares.
      *
      * There is no version of this that takes "all". Every enable names its tool, here and in the

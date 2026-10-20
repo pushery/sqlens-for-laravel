@@ -11,7 +11,7 @@ use Pushery\SQLens\Catalog\SkipReason;
  * A partial reading was built without naming a single withheld field.
  *
  * A wiring error, not a user error, so it throws rather than degrading to an `undetermined`: an
- * undetermined says "we looked and could not tell", and here the reader KNOWS which field it did not
+ * undetermined says "we looked and could not tell", and here the reader knows which field it did not
  * get and simply did not say. A partial reading that names nothing is indistinguishable from a
  * complete one at every point downstream — the exact silent green the readability field exists to
  * prevent, arriving through the field itself.

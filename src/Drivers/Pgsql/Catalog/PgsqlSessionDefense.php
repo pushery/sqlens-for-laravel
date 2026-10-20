@@ -28,7 +28,7 @@ use Pushery\SQLens\Contracts\SessionDefense;
  *
  * `SET LOCAL` ends with the transaction, which is the one scope a transaction pooler guarantees. A
  * plain session `SET` does not: behind PgBouncer in transaction pooling it lands on whichever
- * backend carried that statement and STAYS there. `server_reset_query` runs only in session pooling
+ * backend carried that statement and stays there. `server_reset_query` runs only in session pooling
  * by default, and `track_extra_parameters` can only reset parameters the server announces through
  * `ParameterStatus` — which none of the three timeouts are. The next session of the HOST
  * APPLICATION that is handed that backend inherits them and starts losing queries over the budget
@@ -45,7 +45,7 @@ use Pushery\SQLens\Contracts\SessionDefense;
  * from reclaiming anything on the whole database. A reader that hung would not merely be slow, it
  * would be actively harmful.
  *
- * ## Why the reader's connection prepares no NAMED statements
+ * ## Why the reader's connection prepares no named statements
  *
  * PDO prepares each query as a named server-side statement and, when the statement object goes
  * away, may remove it again with a plain `DEALLOCATE pdo_stmt_…`. Behind PgBouncer in transaction
@@ -102,13 +102,25 @@ final readonly class PgsqlSessionDefense implements SessionDefense
             // `name ~~ name` has no exact catalog match, so a user's wins. With nothing but
             // `pg_catalog` searched, no name this reading uses can resolve outside it. `pg_temp`
             // last, because unlisted it is searched first.
-            'SET LOCAL search_path = pg_catalog, pg_temp',
-            sprintf("SET LOCAL statement_timeout = '%dms'", $budget->statementTimeoutMs),
-            sprintf("SET LOCAL lock_timeout = '%dms'", $budget->lockTimeoutMs),
-            sprintf("SET LOCAL idle_in_transaction_session_timeout = '%dms'", $budget->idleInTransactionTimeoutMs),
-            // Quoted by doubling, the way PostgreSQL takes a literal apostrophe. An unescaped name
-            // would not merely mislabel the session — it would end the statement early.
-            sprintf("SET LOCAL application_name = '%s'", str_replace("'", "''", $budget->applicationName)),
+            //
+            // The pin and the four bounds go in one statement. `set_config(…, true)` is the function
+            // form of `SET LOCAL`, ending with the transaction just the same, and one statement is one
+            // round trip where five were five: every reading of an audit pays them, so against a
+            // server 20 ms away the five cost 18 readings 3.6 seconds. Its own names are qualified
+            // and its arguments literals, so it resolves nothing on the path it replaces.
+            sprintf(
+                "select pg_catalog.set_config('search_path', 'pg_catalog, pg_temp', true),"
+                ." pg_catalog.set_config('statement_timeout', '%dms', true),"
+                ." pg_catalog.set_config('lock_timeout', '%dms', true),"
+                ." pg_catalog.set_config('idle_in_transaction_session_timeout', '%dms', true),"
+                // Quoted by doubling, the way PostgreSQL takes a literal apostrophe. An unescaped
+                // name would not merely mislabel the session — it would end the statement early.
+                ." pg_catalog.set_config('application_name', '%s', true)",
+                $budget->statementTimeoutMs,
+                $budget->lockTimeoutMs,
+                $budget->idleInTransactionTimeoutMs,
+                str_replace("'", "''", $budget->applicationName),
+            ),
         ];
     }
 
@@ -169,7 +181,7 @@ final readonly class PgsqlSessionDefense implements SessionDefense
 
     public function isTimeout(string $sqlState, ?int $driverCode): bool
     {
-        // Through the ONE classifier. Both engines' answers used to live here, and both were
+        // Through the one classifier. Both engines' answers used to live here, and both were
         // wrong in opposite directions — see SessionDefense::isTimeout().
         return SessionTimeoutDetector::matchesTimeout($sqlState, $driverCode);
     }

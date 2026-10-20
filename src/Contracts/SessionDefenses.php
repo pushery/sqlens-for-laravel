@@ -7,13 +7,13 @@ namespace Pushery\SQLens\Contracts;
 /**
  * Which seal a connection gets, for the engine it speaks.
  *
- * A contract rather than a function, because the mapping is the one piece of this that HAS to know
+ * A contract rather than a function, because the mapping is the one piece of this that has to know
  * both engines — and the core must not. `src/Catalog` and `src/Console` are scanned for engine
  * vocabulary and would fail with the concrete classes imported; putting the choice behind this
  * interface keeps the knowledge where it belongs (`src/Drivers`) and lets everything else ask.
  *
  * It exists at all because the alternative is worse: a caller that picked its own defense is a
- * caller that can pick the WRONG one, and the failure that produces is a session which believes it
+ * caller that can pick the wrong one, and the failure that produces is a session which believes it
  * is sealed and is not.
  */
 interface SessionDefenses

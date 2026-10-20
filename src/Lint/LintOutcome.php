@@ -13,7 +13,7 @@ use Pushery\SQLens\Reporting\RunContext;
 
 /**
  * Everything one lint run produced — the aggregate result, the reproducibility
- * header, and the exit code the gate reads — plus the one thing that is NOT a
+ * header, and the exit code the gate reads — plus the one thing that is not a
  * finding: an unsupported engine.
  *
  * An unsupported connection (SQLite, MariaDB) is carried as its own named failure
@@ -32,7 +32,7 @@ final readonly class LintOutcome
         public ?DriverResolutionFailure $unsupported = null,
         public ?SingleFileFailure $fileFailure = null,
         /**
-         * WHICH `--file` failed to resolve.
+         * Which `--file` failed to resolve.
          *
          * It became necessary the moment the option accepted several: the failure is an enum and
          * cannot carry the path, so a run over four files that refused one of them could name the
@@ -43,7 +43,7 @@ final readonly class LintOutcome
         /**
          * The migration FILES this run resolved as pending, in the order they will be applied.
          *
-         * Carried out of the runner so a caller that needs to know WHICH migrations are about to
+         * Carried out of the runner so a caller that needs to know which migrations are about to
          * run does not resolve them a second time. Two resolutions are two answers to one question,
          * and the one that drifted would win silently in whichever half read it.
          *
@@ -100,6 +100,24 @@ final readonly class LintOutcome
          * @var list<string>
          */
         public array $unreadMigrations = [],
+        /**
+         * Why the configured baseline could not be read, naming the file, when that stopped the run.
+         *
+         * Carried as the reason rather than as a finding, as {@see $unsupported} is: nothing was
+         * linted, and a run that could not read its own suppression list prints nothing a reader
+         * could mistake for a verdict.
+         */
+        public ?string $unreadableBaseline = null,
+        /**
+         * What the shadow setup said for a person, one sentence each: what a refused provisioning
+         * said beyond its reason, and a dump directive the replay did not run.
+         *
+         * The results carry the reason alone, because a detail such as the sessions holding a
+         * template differs from one run to the next. The command writes these on STDERR.
+         *
+         * @var list<string>
+         */
+        public array $shadowNotes = [],
     ) {}
 
     /**

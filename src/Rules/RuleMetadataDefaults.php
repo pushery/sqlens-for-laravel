@@ -17,7 +17,7 @@ use Pushery\SQLens\Severity\Severity;
  * there was one base — and the moment a second family needs them, copying them is how the two
  * families start disagreeing about what "the default" is.
  *
- * What is deliberately NOT here: `id()`, `level()`, `category()` and anything about EVALUATION. An
+ * What is deliberately not here: `id()`, `level()`, `category()` and anything about evaluation. An
  * id and a level have no sensible default, a category is a claim each family makes for itself, and
  * how a rule reaches a verdict is the thing the families genuinely differ about — which is the whole
  * reason there is more than one of them.
@@ -32,7 +32,7 @@ trait RuleMetadataDefaults
      * exists so a rule added in a release cannot break somebody's pipeline by starting to fire.
      * Before 1.0 a new rule arrives in a minor, which is where 0.x makes its breaking changes and
      * which a `^0.N` constraint does not install on its own. This flips to `preview` for rules added
-     * after 1.0 — HERE, once, so the change is one line rather than a sweep.
+     * after 1.0 — here, once, so the change is one line rather than a sweep.
      */
     public const StabilityTier DEFAULT_STABILITY = StabilityTier::Stable;
 

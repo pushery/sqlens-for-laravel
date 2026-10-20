@@ -16,9 +16,9 @@ use Pushery\SQLens\Rules\Suite;
 use Pushery\SQLens\Subjects\MigrationSql;
 
 /**
- * Joins the five suppression layers into one traceable chain.
+ * Joins the suppression layers into one traceable chain.
  *
- * The order is FIXED IN CODE — see {@see self::ORDER}, which is the one place it is
+ * The order is fixed in code — see {@see self::ORDER}, which is the one place it is
  * written down — and never derived from how the sources were registered or injected.
  * A precedence that depended on registration order would be a determinism break: the
  * same project, wired slightly differently, would report a different reason for the
@@ -37,7 +37,10 @@ use Pushery\SQLens\Subjects\MigrationSql;
  * An annotation sits between them: it is a note a person wrote on one migration, so it
  * is narrower than a project-wide rule and more deliberate than a bulk acceptance.
  *
- * An `undetermined` is NOT suppressible. A check that could not run is not a
+ * After them come the de-duplication layers, which hide a finding only where another of
+ * our own reports already states it; {@see self::ORDER} says why each sits where it does.
+ *
+ * An `undetermined` is not suppressible. A check that could not run is not a
  * finding anyone accepted, so hiding it would hide the fact that it never ran.
  * The single exception is explicit and per reason: `sqlens.suppression.allow_undetermined`
  * lists the reasons a project has decided it can live with, and every suppression
@@ -123,7 +126,7 @@ final readonly class SuppressionResolver
             ConfigSuppressionSource::fromConfig($ignore),
             // Empty for a lint run, which addresses no database objects and has nothing this list
             // could name. Passing an empty one rather than making the source optional keeps the
-            // resolution ORDER a fixed list of five rather than a shape that varies by suite.
+            // resolution ORDER a fixed list rather than a shape that varies by suite.
             new AuditIgnoreSuppressionSource($auditIgnore ?? IgnoreList::empty()),
             new AnnotationSuppressionSource,
             new DestructiveOptInSuppressionSource($allowDestructive),
@@ -157,7 +160,7 @@ final readonly class SuppressionResolver
      * @param  list<string>  $unverifiablePrefixes  rule-id prefixes whose SOURCE did not answer
      *                                              this run, so a baseline entry naming one was
      *                                              not checked rather than fixed
-     * @param  list<Finding>  $crossSuiteFindings  what the OTHER half of this same run reported and
+     * @param  list<Finding>  $crossSuiteFindings  what the other half of this same run reported and
      *                                             this pass will not resolve. Exactly one layer
      *                                             reads them, and only their catalog side.
      * @param  BaselineScope|null  $scope  which baseline entries this run can judge; the rest belong
@@ -329,7 +332,7 @@ final readonly class SuppressionResolver
             return null;
         }
 
-        // The baseline is asked FIRST and answers LAST. It has to be asked here, before anything
+        // The baseline is asked first and answers last. It has to be asked here, before anything
         // else can win, because a config ignore that shadows a baseline entry must not make that
         // entry look stale — a report telling somebody to delete a line that is legitimately
         // covering a finding is worse advice than saying nothing. So a shadowed entry is recorded
@@ -405,8 +408,9 @@ final readonly class SuppressionResolver
             return $consent;
         }
 
-        // The de-duplication layer, and the only one that can be absent: no external adapter is
-        // wired yet, so a resolver built without it behaves exactly as it did before this existed.
+        // The de-duplication layer, and the only one that can be absent: no adapter suppresses through
+        // it yet (the PGLS adapter confirms our findings at merge time instead), so a resolver built
+        // without it behaves exactly as it did before this existed.
         // Nullable rather than always-on for that reason — a layer that loaded a file on every run
         // to hide nothing would be cost with no reader.
         $foreign = $this->rlsDedupe?->supersessionFor($candidate->finding);
@@ -432,7 +436,7 @@ final readonly class SuppressionResolver
         return $this->crossSourceDedupe->supersessionFor($candidate->finding, $catalogIdentities);
     }
 
-    /** Whether the project has explicitly accepted living without THIS check. */
+    /** Whether the project has explicitly accepted living without this check. */
     private function undeterminedIsAllowed(SuppressionCandidate $candidate): bool
     {
         $reason = $candidate->finding->status->reason;

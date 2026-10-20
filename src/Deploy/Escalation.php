@@ -11,7 +11,7 @@ use Pushery\SQLens\Severity\Severity;
  *
  * ## Why the raise is recorded rather than just applied
  *
- * A finding that arrives as `critical` looks exactly like a finding that was WRITTEN as critical.
+ * A finding that arrives as `critical` looks exactly like a finding that was written as critical.
  * Without this record a reader has no way to tell a rule's own verdict from one a row estimate
  * raised — and the two deserve different responses. A rule's verdict is about the migration; a raise
  * is about this database on this day, and it moves when somebody runs `ANALYZE`.

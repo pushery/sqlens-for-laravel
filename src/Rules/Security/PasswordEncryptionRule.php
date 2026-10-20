@@ -11,7 +11,7 @@ use Pushery\SQLens\Severity\Severity;
 use Pushery\SQLens\Subjects\SchemaObject;
 
 /**
- * The server stores every NEW password with a hash PostgreSQL has deprecated.
+ * The server stores every new password with a hash PostgreSQL has deprecated.
  *
  * The only finding in the md5 family that reports a server which is CLEAN today. Its two neighbors
  * both need something to already be wrong: {@see DeprecatedPasswordHashRule} needs an account whose
@@ -20,8 +20,8 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * and produces a new md5 verifier for every `ALTER ROLE … PASSWORD` and every `\password` from now
  * on, silently, with nothing failing.
  *
- * So the three say three different sentences about three different times: what the accounts ARE,
- * what the wire NEGOTIATES, and what the next password WILL BE. Only the last one is preventable
+ * So the three say three different sentences about three different times: what the accounts are,
+ * what the wire NEGOTIATES, and what the next password will be. Only the last one is preventable
  * before the fact, which is the whole reason this rule earns its place beside them.
  *
  * ## Why md5 in particular
@@ -111,7 +111,7 @@ final class PasswordEncryptionRule extends AbstractSettingSecurityRule
     public function limitations(): array
     {
         return [
-            'reads the RUNNING value, not the file: a setting changed on disk and not yet reloaded is invisible here, and one changed only for this session would be read as the server\'s',
+            'reads the reset value, not the file: a setting changed on disk and not yet reloaded is invisible here, and defaults set with ALTER ROLE or ALTER DATABASE for the connecting role and its database are part of that value, while those set for other roles are not read',
             'governs only passwords set FROM NOW ON. Every verifier already stored keeps the algorithm it was written with, so changing this setting fixes nothing retroactively — which is exactly why the finding matters before the next password is set rather than after',
             'cannot see which verifiers are already stored: that is the role-attribute rules\' question, and answering it here would report the same fact twice',
         ];

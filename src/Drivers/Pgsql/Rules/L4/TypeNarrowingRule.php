@@ -22,7 +22,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * Narrowing a column's type — `bigint → integer`, `double precision → real` — can
  * truncate values that no longer fit and breaks any running old application version that
  * still writes the wider range. Level 2 asks whether the change LOCKS the table (a
- * rewrite); this level asks whether it is BACKWARD-INCOMPATIBLE, a separate axis, and the
+ * rewrite); this level asks whether it is backward-incompatible, a separate axis, and the
  * two may both fire on the one statement without repeating each other.
  *
  * The honest hard part is the same as the rewrite rule's: the migration names only the
@@ -31,7 +31,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * dominant real case is a narrowing (`integer`, `smallint`, `real`, whose one common
  * source is a wider sibling) and names the source-check as the thing to confirm.
  *
- * What it deliberately does NOT do: guess at a PARAMETRIZED narrowing. `varchar(255) →
+ * What it deliberately does not do: guess at a PARAMETRIZED narrowing. `varchar(255) →
  * varchar(50)` and `varchar(50) → varchar(255)` are the same target to a static reader —
  * the length that settles it is not in the SQL — so this rule stays silent on
  * `varchar`/`numeric` rather than fire on half the widenings too. That is not a silent
@@ -61,7 +61,7 @@ final class TypeNarrowingRule extends AbstractPgsqlSafetyRule implements Provide
     /**
      * The four-phase sequence, filled with the one fact a narrowing statement actually carries.
      *
-     * The table is fillable; the NEW column's name and type are not, because they do not exist yet
+     * The table is fillable; the new column's name and type are not, because they do not exist yet
      * — they are decisions somebody makes, and inventing them would be inventing a schema. The old
      * column comes from {@see ColumnTypeChange}, the same reading {@see judge()} uses, so the
      * material can never name a different column than the finding does.
@@ -69,13 +69,13 @@ final class TypeNarrowingRule extends AbstractPgsqlSafetyRule implements Provide
      * The template itself is driver-neutral: expand/contract is `ADD COLUMN` and `DROP COLUMN` on
      * both engines, and an architecture test holds it to importing no driver.
      *
-     * It asks the same matrix {@see judge()} asks, and that is not belt-and-braces. A WIDENING is a
+     * It asks the same matrix {@see judge()} asks, and that is not belt-and-braces. A widening is a
      * different operation, not a milder one: nothing that read the narrower type stops working, so
      * there is nothing to stage. A four-phase plan handed over for `integer → bigint` would be a
      * work order attached to a change that costs nothing — more expensive than saying nothing, which
      * is what this level's guardrail against cargo-cult advice means.
      *
-     * What it does NOT re-ask is whether the finding MATTERS — the table born in this migration is
+     * What it does not re-ask is whether the finding matters — the table born in this migration is
      * {@see judge()}'s business. That gate decides whether anybody needs the plan; this one decides
      * whether the plan describes the statement at all, and only the second is a property of the
      * material.
@@ -96,7 +96,7 @@ final class TypeNarrowingRule extends AbstractPgsqlSafetyRule implements Provide
             $context['table'] = $table->qualifiedName();
         }
 
-        // The citation is resolved INSIDE the template, from this rule's id. It cannot be resolved
+        // The citation is resolved inside the template, from this rule's id. It cannot be resolved
         // here: a rule class must not name the evidence register at all, because a verdict that
         // consulted a citation would be deciding safety from a link.
         return $this->template->payload($context, $this->id(), $this->downtimeClass());

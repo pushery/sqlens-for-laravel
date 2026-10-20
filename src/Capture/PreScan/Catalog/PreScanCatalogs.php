@@ -16,7 +16,7 @@ use Pushery\SQLens\Exceptions\InvalidPreScanCatalog;
  * 1. A maintained list of dangerous surfaces has to be reviewable as a list. A
  *    diff of `resources/data/prescan-catalogs.json` shows exactly which target
  *    was added or dropped; a diff across four detector classes does not.
- * 2. The side-effect catalog NAMES the surfaces it warns about — `curl_exec`,
+ * 2. The side-effect catalog names the surfaces it warns about — `curl_exec`,
  *    `file_put_contents`, `Http::get`. Inside `src/` a scanner cannot tell the
  *    name of a dangerous call from a dangerous call, so the package's own
  *    no-network guard would have to be weakened to hold the list. Keeping the
@@ -164,6 +164,9 @@ final class PreScanCatalogs
         return array_keys($this->catalogs);
     }
 
+    /**
+     * @param  mixed  $catalog  the catalog's value as decoded from the JSON file, before it is known to be an object
+     */
     private static function parseCatalog(string $name, mixed $catalog, string $origin): PreScanCatalog
     {
         if (! is_array($catalog)) {
@@ -198,6 +201,9 @@ final class PreScanCatalogs
         return new PreScanCatalog($name, $description, $parsed);
     }
 
+    /**
+     * @param  mixed  $entry  one element of the catalog's `entries`, as decoded, before its shape is checked
+     */
     private static function parseEntry(string $catalog, int $index, mixed $entry, string $origin): CatalogEntry
     {
         $path = "catalogs.{$catalog}.entries.{$index}";

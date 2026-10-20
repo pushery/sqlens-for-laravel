@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Agent\Mcp;
 
 /**
- * What an agent should DO about each way the production guard can hold a shadow run.
+ * What an agent should do about each way the production guard can hold a shadow run.
  *
  * ## Why the sentences differ, and why that is the whole point
  *
@@ -37,10 +37,10 @@ final readonly class ShadowRefusalAdvice
     /**
      * The sentence per named check, in English.
      *
-     * Machine surface, like the tool names: an agent reads it to decide what to do next. The
-     * seven-locale rule covers human-facing reporter text; protocol payloads are not that, and
-     * translating them would make one server answer differently depending on a setting the client
-     * cannot see.
+     * Machine surface, like the tool names: an agent reads it to decide what to do next. It would
+     * stay English even if the package spoke more than its one language: translating a protocol
+     * payload would make one server answer differently depending on a setting the client cannot
+     * see.
      *
      * @var array<string, string>
      */

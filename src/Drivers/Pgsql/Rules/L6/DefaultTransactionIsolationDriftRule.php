@@ -34,7 +34,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * would be wrong, and a rule that brands a considered decision as an error is a rule people switch
  * off — taking the rest of the suite with it.
  *
- * So the finding says what the consequence IS and names the decision it might be, rather than
+ * So the finding says what the consequence is and names the decision it might be, rather than
  * asserting a mistake. It is also the reason this rule reports {@see Confidence::Heuristic}: what it
  * can see is the setting, and what it cannot see is whether the application was built for it.
  *

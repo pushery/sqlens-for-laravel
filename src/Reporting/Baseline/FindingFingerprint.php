@@ -16,7 +16,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * baseline would rot on every reformat and the whole feature would be worthless.
  *
  * The identity is deliberately free of positional noise: NO line number and NO
- * statement index, so a change ABOVE a finding never shifts its fingerprint. It is
+ * statement index, so a change above a finding never shifts its fingerprint. It is
  * built from the rule id, the normalized location (repo-relative, forward-slashed
  * path plus the migration class or the catalog object name — never an absolute path
  * or a hostname), and the CANONICAL excerpt hash from the canonicalization layer —
@@ -76,7 +76,7 @@ final readonly class FindingFingerprint
 
     /**
      * The identity-bearing location fields, in a fixed order. Line and statement
-     * index are DELIBERATELY absent (positional noise); the path is forced to
+     * index are deliberately absent (positional noise); the path is forced to
      * forward slashes so macOS, Linux, and Windows agree on one fingerprint.
      *
      * A catalog finding's path is absent too, and for a stronger reason than noise. It is the

@@ -32,7 +32,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * constantly. A parent lookup that scans the child table is the same shape of damage as an
  * unindexed foreign key, arrived at from a different direction.
  *
- * ## Measured on 8.4.10: the server REFUSES to create this, and there is exactly one way in
+ * ## Measured on 8.4.10: the server refuses to create this, and there is exactly one way in
  *
  * That measurement is why the rule is worth more than it looks, not less. MySQL rejects a foreign
  * key whose two ends collate differently — error 3780, "incompatible":
@@ -45,7 +45,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * So the state cannot be typed into existence by somebody writing a migration. It arrives the other
  * way: a restore script, a character-set sweep, or a migration tool that turns the checks off around
  * a batch. Afterwards the constraint is there, the columns disagree, every join across it converts,
- * and NOTHING says so — the server will not even let you recreate what it is already holding.
+ * and nothing says so — the server will not even let you recreate what it is already holding.
  *
  * A rule for a state the engine refuses to create is exactly the rule nobody thinks to look for.
  *
@@ -55,7 +55,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * disappear along with a set of recommendations about taste. What this describes is not a
  * preference: the query gets slower by a factor that grows with the table.
  *
- * ## Two triggers, ONE finding — because a location can only carry one
+ * ## Two triggers, one finding — because a location can only carry one
  *
  * A catalog finding is located at the object, and results are deduplicated by rule id and location.
  * So a verdict per column and a verdict per foreign-key edge would arrive as one, arbitrarily
@@ -64,7 +64,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * can still tell the two apart.
  *
  * The same constraint decides what an unfollowable edge does. A `fail` and an `undetermined` cannot
- * both survive at one location, so a table that has a real mismatch reports it and NAMES the edges
+ * both survive at one location, so a table that has a real mismatch reports it and names the edges
  * that could not be checked in the same message; a table with nothing but unfollowable edges is
  * `undetermined`. Neither case ever comes back as a pass.
  *

@@ -31,7 +31,7 @@ use Symfony\Component\Console\Output\ConsoleOutputInterface;
  * The SDK is optional and deliberately not required — it pulls `illuminate/routing` and a Symfony HTTP stack
  * along for a server that speaks stdio only, and an application running `sqlens:lint` in a deploy
  * pipeline should not pay for that. So the dependency can genuinely be absent, and its absence is
- * reported as a NAMED reason with the command that fixes it, never as a class-not-found trace. It
+ * reported as a named reason with the command that fixes it, never as a class-not-found trace. It
  * is the same three-valued discipline the rest of the package applies to a missing external tool:
  * "this could not run, and here is why" is a different sentence from "this failed".
  *
@@ -64,7 +64,7 @@ final class McpCommand extends Command
 
     public function handle(Repository $config, ServesMcp $server, McpSdkVersion $sdk): int
     {
-        // FIRST, before the reporter, before the profile, before anything opens a connection. A
+        // First, before the reporter, before the profile, before anything opens a connection. A
         // misconfiguration that surfaces after twenty seconds of catalog reading is one people
         // check for less often — and a key this package does not know is one it IGNORES, silently.
         if ($this->refusesInvalidConfig()) {
@@ -125,12 +125,12 @@ final class McpCommand extends Command
 
         $policy = McpToolPolicy::fromConfig($config->get('sqlens.agent.mcp.tools'))->alsoEnabling($enables);
 
-        // Bound HERE, where the container is already in hand, so the listing, the banner and the
+        // Bound here, where the container is already in hand, so the listing, the banner and the
         // `tools/call` handler all read one object. The loop reads it back rather than rebuilding
         // it: a second policy would be a second answer about which tools this session exposes.
         $this->laravel->instance(McpToolPolicy::class, $policy);
 
-        $exposed = ToolRegistry::declared()->exposedTo($policy);
+        $exposed = ToolRegistry::bound($this->laravel)->exposedTo($policy);
 
         $this->outputErrorLine(sprintf(
             'SQLens MCP server on stdio, protocol %s. Tools exposed: %s.',
@@ -155,7 +155,7 @@ final class McpCommand extends Command
         // its own run had failed would be inventing a verdict about something that already ended.
         $ending = $server->serve();
 
-        // Every way out of a run is NAMED, on the diagnostic channel, before the process reports
+        // Every way out of a run is named, on the diagnostic channel, before the process reports
         // its code. A silent exit 0 reads to every log reader as a clean end — and it is exactly
         // the signature a read timeout mistaken for a hangup produced.
         $this->outputErrorLine('[sqlens:mcp] '.$ending->reason().'.');
@@ -166,7 +166,7 @@ final class McpCommand extends Command
     /**
      * The tools this run was asked to enable, or false when one of them is not a tool.
      *
-     * Refused LOUDLY rather than ignored. Somebody typing `--enable-tool=predploy` believes they
+     * Refused loudly rather than ignored. Somebody typing `--enable-tool=predploy` believes they
      * enabled a deploy gate; a run that started anyway with the tool still off would be the most
      * expensive kind of quiet — they would act on an answer no tool ever produced.
      *
