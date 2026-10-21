@@ -59,7 +59,7 @@ use Throwable;
  *
  * ## Which account, and on which object
  *
- * A MySQL account is a user AND a host, and the configuration names only the user. `'deploy'@'%'` and
+ * A MySQL account is a user and a host, and the configuration names only the user. `'deploy'@'%'` and
  * `'deploy'@'localhost'` are two accounts with separate grants, and which one `migrate` becomes
  * depends on the host it connects from, which nothing here can see. So the grants are read per
  * account and never pooled: a requirement every account meets is met, one no account meets is
@@ -615,9 +615,9 @@ final readonly class GrantCheck implements PreflightCheck
     }
 
     /**
-     * Why this run cannot establish that the user holds NO roles, or null when it can.
+     * Why this run cannot establish that the user holds no roles, or null when it can.
      *
-     * Null only when `@@mandatory_roles` names no role and `mysql.role_edges` is readable AND empty
+     * Null only when `@@mandatory_roles` names no role and `mysql.role_edges` is readable and empty
      * for this user. Anything else is "cannot tell", which is why the caller treats it as a reason to
      * withhold a finding rather than as a reason to emit one, and names the reason it is given here —
      * the two states must not collapse into each other.

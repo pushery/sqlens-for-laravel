@@ -96,7 +96,7 @@ final readonly class InvalidIndexCheck implements PreflightCheck
     {
         // PostgreSQL only, and it has no MySQL counterpart to write: InnoDB's online index build is
         // not a separate catalog state, so there is nothing left behind to find. The runner asks
-        // this before running anything, so on MySQL the check produces NO result rather than a
+        // this before running anything, so on MySQL the check produces no result rather than a
         // fourth outcome value.
         return $driver === 'pgsql';
     }
@@ -193,7 +193,7 @@ final readonly class InvalidIndexCheck implements PreflightCheck
      * Every index name the pending migrations will try to create, canonical.
      *
      * Both spellings are kept for each one, and the reason is a real asymmetry rather than caution.
-     * `CREATE INDEX idx ON public.orders (...)` names the index WITHOUT a schema — PostgreSQL puts
+     * `CREATE INDEX idx ON public.orders (...)` names the index without a schema — PostgreSQL puts
      * it in the table's — while the catalog reports it back as `public.idx`. Comparing only the
      * qualified form would miss every unqualified statement, which is most of them; comparing only
      * the bare name would call a collision on `other_schema.idx`, which is a different index.

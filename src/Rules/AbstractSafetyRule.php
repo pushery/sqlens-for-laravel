@@ -26,7 +26,7 @@ use Pushery\SQLens\Contracts\Rule;
  *
  * **Identity is derived once, from the id.** The message prefix and the documentation
  * URL both come from `<AREA>.L<level>.<SLUG>`, so an id and its URL cannot drift apart and
- * nobody hand-maintains a link table. The slug is the id lowercased with dots AND
+ * nobody hand-maintains a link table. The slug is the id lowercased with dots and
  * underscores turned into dashes — the same slug the fixture directories use and the
  * same one every already-shipped rule declares, so one id has one slug everywhere: from
  * an id a reader reaches both the page and the fixture without knowing which family the

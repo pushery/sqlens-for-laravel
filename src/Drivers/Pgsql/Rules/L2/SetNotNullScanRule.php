@@ -32,7 +32,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  *  - **The column is on a table this migration created.** A fresh table holds no rows,
  *    so the scan is free — this is the version trap the rule must not fall into (it is
- *    NOT the same as `ADD COLUMN … NOT NULL DEFAULT`, which is a different statement the
+ *    not the same as `ADD COLUMN … NOT NULL DEFAULT`, which is a different statement the
  *    rule never matches).
  *  - **A valid `CHECK (col IS NOT NULL)` on the same column of the same table precedes the
  *    statement.** A user who wrote that check is applying the safe pattern deliberately;
@@ -105,7 +105,7 @@ final class SetNotNullScanRule extends AbstractPgsqlSafetyRule implements Provid
 
     protected function judge(MigrationStatementView $statement): ?string
     {
-        // ALTER COLUMN <col> set NOT NULL, read by the ONE reader of that clause — the same one the
+        // ALTER COLUMN <col> set NOT NULL, read by the one reader of that clause — the same one the
         // remediation uses, so the material can never name a different column than the finding.
         $change = SetNotNullChange::of($statement);
 

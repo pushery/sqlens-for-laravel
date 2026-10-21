@@ -131,7 +131,7 @@ final readonly class PolymorphicPair
     /**
      * Sort every pair on this table into the three findings and the silence.
      *
-     * Three lists rather than one, because they send a reader to different edits: a pair with NO
+     * Three lists rather than one, because they send a reader to different edits: a pair with no
      * index needs one written, a pair whose index leads with the ID needs that index REPLACED, and a
      * pair whose only index is invisible needs that index made visible again. Told merely that no
      * index exists, somebody adds a second index over the same two columns and `L7` then reports

@@ -20,7 +20,7 @@ use Pushery\SQLens\Severity\Severity;
  * do not collide. Pretty-printing the whole document would spread one entry over
  * six lines and turn every change into a conflict magnet.
  *
- * The file carries NO timestamp and NO aggregate counts. Either would mutate on
+ * The file carries no timestamp and no aggregate counts. Either would mutate on
  * every write and make the second run of an unchanged project produce a diff,
  * which is the fastest way to teach people to stop reading the diff.
  */

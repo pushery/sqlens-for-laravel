@@ -120,9 +120,9 @@ final class IdentifierLengthRule extends AbstractPgsqlSafetyRule implements Prov
      * names an index or a constraint.
      *
      * Static and shared, so the judgment and the fix material can never disagree about whether
-     * there is a problem. It reads the statement's targets, the columns a key names AND the columns
+     * there is a problem. It reads the statement's targets, the columns a key names and the columns
      * a `CREATE TABLE` defines. Reading only the table would miss the case that actually bites,
-     * because Laravel derives an index or constraint name from the table AND its columns, and the
+     * because Laravel derives an index or constraint name from the table and its columns, and the
      * derived name goes over while every name a person typed is comfortably under. And the columns
      * of `Schema::create()`, where most columns are made, are in no target: they travel as the
      * statement's column definitions.

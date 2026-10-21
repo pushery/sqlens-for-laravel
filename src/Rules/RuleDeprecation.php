@@ -10,7 +10,7 @@ use Pushery\SQLens\Audit\AuditNotices;
  * The governance contract "rules are deprecated (no-op + notice), never
  * deleted", cast into a type before the first rule exists.
  *
- * Orthogonal to StabilityTier: a rule can be stable AND deprecated, so this is
+ * Orthogonal to StabilityTier: a rule can be stable and deprecated, so this is
  * its own field, not a fourth tier value. Rule::deprecation() returns null for
  * a non-deprecated rule — a deliberate statement, not a default to forget.
  *

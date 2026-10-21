@@ -100,7 +100,7 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 // is a property of the role, and a second round trip would make the pairing a
                 // coincidence of timing.
                 //
-                // It is here at all because ownership is a DDL right for which NO GRANT EXISTS. An
+                // It is here at all because ownership is a DDL right for which no grant exists. An
                 // owner may ALTER and DROP its tables outright; the privilege lives in
                 // pg_class.relowner and appears in no grant row. A check that reads only grants sees
                 // nothing and reports silence — indistinguishable from a role that holds nothing.
@@ -497,7 +497,7 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 .'  where r.oid = any(p.polroles) and r.oid <> 0) as roles'
                 .' from pg_class c join pg_namespace n on n.oid = c.relnamespace'
                 .' left join pg_policy p on p.polrelid = c.oid'
-                // Both kinds of table, and NO partitions. `relkind` is `r` for an ordinary table and
+                // Both kinds of table, and no partitions. `relkind` is `r` for an ordinary table and
                 // `p` for a PARTITIONED one — a filter on `r` alone silently drops every partitioned
                 // table, which is exactly the kind of table a tenant schema uses. Measured: the
                 // partition arm of the lane found nothing until `p` was added.
@@ -1221,7 +1221,7 @@ final readonly class PgsqlSecurityReader implements SecurityReader
         );
 
         // No early `refused()` arm here, unlike `hbaRules()` — and the reason is that it would be a
-        // line no test on any machine can reach AND a no-op if it did. `attempt()` answers with an
+        // line no test on any machine can reach and a no-op if it did. `attempt()` answers with an
         // empty list and a recorded skip when the read fails, so the fall-through below already
         // constructs `partial([], $skips)`, which is the same object `refused()` builds. `pg_hba` keeps
         // its arm because that view genuinely refuses `42501` and a real test drives it; this catalog

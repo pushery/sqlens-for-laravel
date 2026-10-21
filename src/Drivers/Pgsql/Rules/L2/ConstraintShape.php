@@ -141,7 +141,7 @@ enum ConstraintShape
             return str_contains($canonical, 'NOT VALID') ? null : self::NotValidCapable;
         }
 
-        // `ADD CONSTRAINT … USING INDEX` promotes an already-built index WITHOUT the validating
+        // `ADD CONSTRAINT … USING INDEX` promotes an already-built index without the validating
         // scan — the exact safe form recommended below, so it draws no finding either.
         if (str_contains($canonical, 'USING INDEX')) {
             return null;

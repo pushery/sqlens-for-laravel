@@ -64,7 +64,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *   expression to recognize. Those are silent here, and a reader should not take this rule's silence
  *   for "nothing in this schema folds case".
  * - **A fold wrapped in anything else.** `lower(btrim(email))` is unique over a value that is folded
- *   AND trimmed, so the sentence this rule would print about it would be false; {@see CaseFoldedKey}
+ *   and trimmed, so the sentence this rule would print about it would be false; {@see CaseFoldedKey}
  *   refuses it rather than approximate it.
  * - **MySQL**, which has no sister rule by absence rather than by oversight: its default collations
  *   are already case-insensitive, so the guarantee is usually the column's own and a functional

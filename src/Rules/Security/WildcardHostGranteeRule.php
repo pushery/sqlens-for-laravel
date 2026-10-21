@@ -66,7 +66,7 @@ final class WildcardHostGranteeRule extends AbstractMigrationSecurityRule
      * and a rule that only watched creation would miss the migration that widens one later.
      *
      * Matched with `preg_match_all` rather than a single match, and that is not thoroughness for
-     * its own sake: `RENAME USER 'a'@'localhost' TO 'a'@'%'` names TWO accounts, and a first-match
+     * its own sake: `RENAME USER 'a'@'localhost' TO 'a'@'%'` names two accounts, and a first-match
      * read lands on the one it is moving AWAY from. The rule would then stay silent on precisely
      * the statement that creates the wildcard — the failure being reported as the fix.
      */

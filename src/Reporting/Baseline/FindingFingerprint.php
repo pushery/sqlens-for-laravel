@@ -15,7 +15,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * The stable identity a baseline entry recognizes a finding by. Without it, a
  * baseline would rot on every reformat and the whole feature would be worthless.
  *
- * The identity is deliberately free of positional noise: NO line number and NO
+ * The identity is deliberately free of positional noise: no line number and no
  * statement index, so a change above a finding never shifts its fingerprint. It is
  * built from the rule id, the normalized location (repo-relative, forward-slashed
  * path plus the migration class or the catalog object name — never an absolute path

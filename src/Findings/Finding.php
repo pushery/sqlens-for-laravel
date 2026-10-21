@@ -73,7 +73,7 @@ final readonly class Finding
          */
         public ?Escalation $escalation = null,
         /**
-         * Why this finding carries NO remediation, when something was there to carry.
+         * Why this finding carries no remediation, when something was there to carry.
          *
          * Set only by the collector, and only when a payload was produced and then refused by
          * {@see RemediationValidator} — never when a rule
@@ -458,7 +458,7 @@ final readonly class Finding
      * The same finding, carrying the REASON its material was refused instead of the material.
      *
      * Deliberately not a second argument on {@see withRemediation()}: the two are mutually
-     * exclusive, and a method that took both would let a caller ship a payload AND the note saying
+     * exclusive, and a method that took both would let a caller ship a payload and the note saying
      * it could not be shipped. Two methods make that unrepresentable.
      */
     public function withRemediationRefusal(string $reason): self

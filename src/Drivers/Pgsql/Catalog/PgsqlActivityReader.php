@@ -581,7 +581,7 @@ final readonly class PgsqlActivityReader implements ActivityReader
         // consumer asking "is a replica lagging?" reads as "no, they are fine", and the two are not
         // the same sentence: one means the replicas are caught up, the other that there are none.
         //
-        // Only when the read produced nothing AND nothing was recorded about it. A refusal above
+        // Only when the read produced nothing and nothing was recorded about it. A refusal above
         // already carries its own reason, and a second one would say the same absence twice.
         if ($states === [] && count($skips) === $before) {
             $skips[] = CatalogSkip::for(

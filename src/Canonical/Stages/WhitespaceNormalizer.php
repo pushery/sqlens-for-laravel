@@ -65,7 +65,7 @@ final readonly class WhitespaceNormalizer implements CanonicalizationStage
                     continue;
                 }
 
-                // Keep the comment verbatim AND its terminating newline — a line
+                // Keep the comment verbatim and its terminating newline — a line
                 // comment runs to end of line, so collapsing that newline to a space
                 // would swallow the following statement into the comment. Following
                 // whitespace then collapses into the preserved newline.

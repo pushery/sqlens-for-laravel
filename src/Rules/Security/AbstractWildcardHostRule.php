@@ -17,7 +17,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
 /**
  * An account that may connect from any host.
  *
- * A MySQL account is a name AND a host pattern, and the host half is a real access control: `%`
+ * A MySQL account is a name and a host pattern, and the host half is a real access control: `%`
  * matches every address there is. On its own that is a `medium` finding rather than an alarm —
  * plenty of deployments have a legitimate reason for it, and a rule that shouted would be switched
  * off by exactly the people who have the most accounts.

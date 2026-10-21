@@ -225,7 +225,7 @@ final class ReaderSession
         $state = self::sqlStateOf($error);
 
         // The DRIVER CODE travels with the SQLSTATE, because on MySQL the SQLSTATE alone says
-        // nothing: every timeout AND every lost connection arrives as the general `HY000`. Read
+        // nothing: every timeout and every lost connection arrives as the general `HY000`. Read
         // here rather than inside the defense so the extraction stays beside `sqlStateOf()`, which
         // already knows how a driver error is wrapped on the way up.
         return $state !== null && $this->defense->isTimeout($state, self::driverCodeOf($error));

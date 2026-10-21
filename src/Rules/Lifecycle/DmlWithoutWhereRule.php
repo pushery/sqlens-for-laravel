@@ -16,7 +16,7 @@ use Pushery\SQLens\Rules\RuleDriverNotes;
 use Pushery\SQLens\Subjects\MigrationStatementView;
 
 /**
- * An `UPDATE` or `DELETE` with no `WHERE` clause changes or removes EVERY row in the
+ * An `UPDATE` or `DELETE` with no `WHERE` clause changes or removes every row in the
  * table. In a migration that is almost never what was meant — a forgotten predicate
  * turns a targeted fix into a whole-table sweep, and a `DELETE` sweep is data loss with
  * no way back once the deploy is past. This is a lifecycle rule, not a PostgreSQL one:
@@ -162,7 +162,7 @@ final class DmlWithoutWhereRule extends AbstractLifecycleRule implements Provide
      * placeholder alone sweeps the whole table while LOOKING scoped — the more dangerous
      * shape of the two, because a reviewer's eye stops at the keyword.
      *
-     * Deliberately narrow: the WHOLE predicate must be the constant. `WHERE 1=1 AND
+     * Deliberately narrow: the whole predicate must be the constant. `WHERE 1=1 AND
      * tenant_id = 5` really is scoped, and flagging it would be the cry-wolf that gets a
      * linter switched off. Anything more ambitious would mean evaluating SQL expressions,
      * which is a database's job and not a static reader's.

@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Attributes;
 use Attribute;
 
 /**
- * "This migration emits nothing on THAT driver, and here is why."
+ * "This migration emits nothing on that driver, and here is why."
  *
  * ## The two states `CAP.L0.NOT_CAPTURABLE` could not tell apart
  *
@@ -36,7 +36,7 @@ use Attribute;
  * The attribute has none of those properties: it sits on the decision, moves with the file, and
  * stops applying the moment its condition stops holding.
  *
- * ## The driver is named here AND checked against the run — both, and that is the design
+ * ## The driver is named here and checked against the run — both, and that is the design
  *
  * Naming it here alone would let a typo excuse everything silently. Taking it from the run alone
  * would let a bare attribute excuse any emptiness anywhere. Together, neither happens:

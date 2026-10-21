@@ -15,7 +15,7 @@ use Pushery\SQLens\Severity\Severity;
  *
  * ## What went wrong without it
  *
- * `SEC.INJ.RAW_SQL_WITHOUT_REASON` shipped as a working PHPStan rule that appeared in NO catalog.
+ * `SEC.INJ.RAW_SQL_WITHOUT_REASON` shipped as a working PHPStan rule that appeared in no catalog.
  * Measured: the id occurred exactly once in the whole tree, as the constant inside the rule itself.
  * So `sqlens:rules` did not list it, the MCP `explain-rule` tool could not explain it, no agent
  * artifact carried it, and a reader who saw the id in their PHPStan output and went looking for it

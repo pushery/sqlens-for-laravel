@@ -60,7 +60,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *    migration, which scans the table under a weaker lock that does not block reads
  *    and writes. A constraint already added `NOT VALID` is the safe form and draws
  *    no finding.
- *  - PRIMARY KEY and UNIQUE do NOT support `NOT VALID` — recommending it would be
+ *  - PRIMARY KEY and UNIQUE do not support `NOT VALID` — recommending it would be
  *    wrong. The safe path is a `CREATE UNIQUE INDEX CONCURRENTLY` followed by
  *    `ADD CONSTRAINT … USING INDEX`, which promotes the ready-built index without
  *    the validating scan — and that `USING INDEX` form draws no finding, just as an

@@ -49,7 +49,7 @@ use PHPStan\Type\Type;
  * fragment of a statement the builder assembles, on the same three receivers.
  *
  * The closure and the builder are the ordinary way to call them, and their values travel as
- * bindings. So the argument's type is asked FIRST: a subquery that cannot be a string produces no
+ * bindings. So the argument's type is asked first: a subquery that cannot be a string produces no
  * row at all — not even for a receiver nobody can resolve — because there is no raw text at that
  * call site to be undetermined about.
  *

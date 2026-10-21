@@ -202,7 +202,7 @@ final class DmlOnSchemaChangedTableRule extends AbstractLifecycleRule implements
      * Whether this statement is the one the finding lands on — the first data write in the stream
      * that hits a table some schema-changing statement acts on in the same transaction.
      *
-     * Read once, for the flag, the undetermined verdict AND the fix material. The three used to
+     * Read once, for the flag, the undetermined verdict and the fix material. The three used to
      * carry their own copies of the same four steps, and a copy is where a report ends up naming a
      * statement its own plan does not describe.
      */

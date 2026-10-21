@@ -859,7 +859,7 @@ final readonly class LintRunner implements LintRuns
 
         $budget = new CaptureConnectionResolver($this->drivers, $this->config)->sessionBudget();
 
-        // Through the one seam, which owns the order (snapshot before apply) AND the engine rule: on
+        // Through the one seam, which owns the order (snapshot before apply) and the engine rule: on
         // PostgreSQL it writes nothing here, because a session `SET` on a borrowed connection lands,
         // behind a transaction pooler, on a backend this run will never see again. The reads that
         // need the bound there are the pending resolution's, and it bounds them in a transaction of
@@ -1916,7 +1916,7 @@ final readonly class LintRunner implements LintRuns
         }
 
         return sprintf(
-            '%s — BELOW THE SUPPORTED FLOOR of %s: every finding in this report may be wrong in both directions',
+            '%s — below the supported floor of %s: every finding in this report may be wrong in both directions',
             $version,
             $floorFailure->placeholders['required'] ?? 'a supported version',
         );
@@ -2133,7 +2133,7 @@ final readonly class LintRunner implements LintRuns
      *
      * Both directions are named on purpose. "Your server is old" invites the reader to
      * discount the report as over-cautious, when the real exposure is symmetric: a rule may
-     * flag behavior this server does not have, AND may stay silent about behavior it does.
+     * flag behavior this server does not have, and may stay silent about behavior it does.
      * Which of the two happened cannot be known from here, so both are stated.
      *
      * There is only one arm, and that is the caller's doing rather than a simplification: it

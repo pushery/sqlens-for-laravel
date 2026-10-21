@@ -779,7 +779,7 @@ enum UndeterminedReason: string
 
     /**
      * The role provisioning would connect as lacks the privilege to create a
-     * database (PostgreSQL `CREATEDB`). Checked BEFORE any `CREATE DATABASE` is
+     * database (PostgreSQL `CREATEDB`). Checked before any `CREATE DATABASE` is
      * attempted, so a role that cannot provision is a named result, never a raw
      * permission error mid-run — and never a silent pass.
      */
@@ -1241,7 +1241,7 @@ enum UndeterminedReason: string
      * The session would not say which statement timeouts are in force.
      *
      * Found by the arm that looked for this group's tokens and reported `bound` — ordinary English
-     * from the middle of this reason's own sentence. The call site carried NO token at all, and the
+     * from the middle of this reason's own sentence. The call site carried no token at all, and the
      * false positive is what pointed at it: a reason with no name cannot be named in a waiver, so
      * it was invisible to the very list this group exists to make possible.
      */

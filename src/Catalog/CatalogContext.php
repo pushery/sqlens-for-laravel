@@ -22,7 +22,7 @@ use Pushery\SQLens\Rules\ServerVersion;
  *   database taken through different schema scopes or different table prefixes are not comparable,
  *   and a diff between them is noise presented as change.
  *
- * ## The raw banner AND the parsed version, both
+ * ## The raw banner and the parsed version, both
  *
  * `18.2 (Debian 18.2-1.pgdg120+1)` and `8.4.10` are what a server actually reports, and the parsed
  * form throws away everything but the numbers. Keeping only the parse would lose the build a report

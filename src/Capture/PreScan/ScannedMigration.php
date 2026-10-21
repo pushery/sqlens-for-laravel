@@ -201,7 +201,7 @@ final readonly class ScannedMigration
     }
 
     /**
-     * One argument of an attribute, by position OR by name, when it is a plain string literal.
+     * One argument of an attribute, by position or by name, when it is a plain string literal.
      *
      * Both forms are read because both are written: `#[NoSqlOnDriver('sqlite', reason: '…')]` mixes
      * them in the very example the attribute's own docblock gives. A named argument may also appear

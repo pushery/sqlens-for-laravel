@@ -16,7 +16,7 @@ namespace Pushery\SQLens\Rules\Security;
  *
  * ## Why the list is short, and why it is still a list
  *
- * PostgreSQL declares this parameter as an ENUM, and the enum's declared order IS this order.
+ * PostgreSQL declares this parameter as an ENUM, and the enum's declared order is this order.
  * Measured on 18.4 rather than remembered:
  *
  *     name                      vartype  enumvals

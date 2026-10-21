@@ -88,7 +88,7 @@ final readonly class ApiSurface
     /**
      * The interfaces every rule implements, a driver package's included — the extension API, by name.
      *
-     * ## Why a declared list AND a derived check
+     * ## Why a declared list and a derived check
      *
      * The public-API page has always called this "the rule contract", and nobody had ever
      * enumerated it. A prose set cannot be diffed, so a signature change on any of these interfaces

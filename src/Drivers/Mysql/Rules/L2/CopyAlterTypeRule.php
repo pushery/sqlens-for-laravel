@@ -34,7 +34,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ## What the statement settles, and what it cannot
  *
- * MySQL's `MODIFY` takes the column's WHOLE definition, never a delta. `MODIFY total BIGINT NOT
+ * MySQL's `MODIFY` takes the column's whole definition, never a delta. `MODIFY total BIGINT NOT
  * NULL` is what you write to change the type — and also what you write to flip the nullability,
  * to move the column, or to change nothing at all. Which it turns out to be depends on the
  * column's CURRENT definition, which no migration contains. That is why this rule is
@@ -92,7 +92,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * returns undetermined on its own rather than continuing to report a class they no longer share
  * — which is why this implements {@see DerivesDowntimeClass} instead of stamping a constant.
  *
- * It therefore declares NO {@see Rule::downtimeClass()} of its own, and that absence is
+ * It therefore declares no {@see Rule::downtimeClass()} of its own, and that absence is
  * deliberate. A constant beside the derivation would be a second statement of the same fact, in
  * the one file that must not make it: a class named here could disagree with the matrix and
  * nothing would notice, because the collector reads the derived value. The catalog says
@@ -142,7 +142,7 @@ final class CopyAlterTypeRule extends AbstractMysqlRule implements DeclaresOpera
     }
 
     /**
-     * The staged column swap — and NOT the pinned `ALGORITHM`/`LOCK` clause, which is the
+     * The staged column swap — and not the pinned `ALGORITHM`/`LOCK` clause, which is the
      * interesting decision here.
      *
      * The clause template reads its two values out of the matrix entry for the operation, and this

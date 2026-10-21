@@ -122,7 +122,7 @@ final readonly class CatalogCanonicalizer
         // Collapse whitespace, including the newlines a multi-line expression carries.
         $fragment = preg_replace('/\s+/', ' ', $fragment) ?? $fragment;
 
-        // `now()` and `CURRENT_TIMESTAMP` are ONE default written two ways, and MySQL says so
+        // `now()` and `CURRENT_TIMESTAMP` are one default written two ways, and MySQL says so
         // itself: handed `default now()` it stores `CURRENT_TIMESTAMP`. PostgreSQL keeps whichever
         // was typed, so without this fold the same schema deployed twice — or once per engine —
         // produces two fingerprints and a drift finding nobody can act on.
@@ -136,7 +136,7 @@ final readonly class CatalogCanonicalizer
         ) ?? $fragment;
 
         // The remaining keyword spellings, folded in case only. CURRENT_DATE and CURRENT_TIME are
-        // deliberately NOT folded into CURRENT_TIMESTAMP: they carry different types, and a layer
+        // deliberately not folded into CURRENT_TIMESTAMP: they carry different types, and a layer
         // that equated them would report a date column and a timestamp column as the same default.
         return preg_replace_callback(
             '/\b(current_timestamp|current_date|current_time)\b/i',
@@ -176,7 +176,7 @@ final readonly class CatalogCanonicalizer
     }
 
     /**
-     * A routine body reduced to what a comparison may treat as identical — and NO further.
+     * A routine body reduced to what a comparison may treat as identical — and no further.
      *
      * ## The server does not do this for you
      *

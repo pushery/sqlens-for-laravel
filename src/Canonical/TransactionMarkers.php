@@ -9,7 +9,7 @@ namespace Pushery\SQLens\Canonical;
  * transaction (BEGIN, START) and those that CLOSE one (COMMIT, ROLLBACK, END),
  * upper case. The resolver reads these instead of hard-coding a marker set, so a
  * driver that spells its transaction control differently is honored — and a
- * driver that declares NO markers (both lists empty) is a named missing artifact,
+ * driver that declares no markers (both lists empty) is a named missing artifact,
  * not a silent "no transaction here".
  */
 final readonly class TransactionMarkers

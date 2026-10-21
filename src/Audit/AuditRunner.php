@@ -536,7 +536,7 @@ final readonly class AuditRunner implements AuditRuns
             ...$this->securitySkipFindings($securitySkips, $target, $context),
             ...$this->versionSkewFindings($target, $context),
             ...$this->belowFloorFindings($target, $context),
-            // Only when the flag was given AND there was genuinely nothing to bypass. Before the
+            // Only when the flag was given and there was genuinely nothing to bypass. Before the
             // audit could read a baseline at all this fired on every such run, which was honest
             // then and would be a lie now: a project with a real baseline would be told its
             // emergency exit had nothing to open while the exit was doing exactly its job.
@@ -664,7 +664,7 @@ final readonly class AuditRunner implements AuditRuns
             // `public.fee`.
             //
             // With only the parenthesized spelling in this list, that suppression silenced the
-            // finding correctly AND was reported as orphaned debt in the same run — the run
+            // finding correctly and was reported as orphaned debt in the same run — the run
             // contradicting itself about the same pattern. Measured on
             // `sqlens_fixture.sensitive_total`, whose finding is located at the bare name while the
             // catalog holds `sqlens_fixture.sensitive_total()`.
@@ -685,7 +685,7 @@ final readonly class AuditRunner implements AuditRuns
      *
      * Reported as well as read, because an external tool names objects no reader holds: PGLS
      * reports an extension the catalog leaves out. A pattern that hides that finding matches no
-     * subject, and judged on subjects alone the same line would hide the finding AND be called
+     * subject, and judged on subjects alone the same line would hide the finding and be called
      * orphaned in one run, with the second statement telling somebody to delete the first.
      *
      * The object a finding names is the path suppression matches it on, so a pattern that hid a
@@ -831,7 +831,7 @@ final readonly class AuditRunner implements AuditRuns
      */
     private function auditRuleCount(InstanceTarget $target): int
     {
-        // The driver's WHOLE audit set, deliberately BEFORE the privacy pack's switch — because this
+        // The driver's whole audit set, deliberately before the privacy pack's switch — because this
         // number is the base the header's `hidden-rules` is subtracted from, and a rule the switch
         // withheld is the definition of a rule that did not apply.
         //

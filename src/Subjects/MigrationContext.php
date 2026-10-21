@@ -100,7 +100,7 @@ final readonly class MigrationContext
          * Where this migration's own statements begin in {@see self::$runStatements}, or null where
          * that list cannot say what ran before them.
          *
-         * A question about what a column IS when a statement runs is a question about order: an
+         * A question about what a column is when a statement runs is a question about order: an
          * earlier migration that created or retyped it answers it, a later one must not. The run's
          * list carries no position of its own, so the position is handed over with it.
          *

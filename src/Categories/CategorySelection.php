@@ -8,7 +8,7 @@ use Pushery\SQLens\Exceptions\UnknownCategory;
 
 /**
  * Parses the `--category` option into a validated set of categories. The option is
- * repeatable AND comma-separable — `--category=safety --category=idiom` and
+ * repeatable and comma-separable — `--category=safety --category=idiom` and
  * `--category=safety,idiom` mean the same thing — so each raw token is split on
  * commas, trimmed, and matched against the Category enum.
  *

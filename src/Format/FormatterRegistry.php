@@ -58,7 +58,7 @@ final readonly class FormatterRegistry
         if ($requested !== 'auto') {
             $named = $this->byName($requested);
 
-            // Named AND switched off by this project — a contradiction, and it gets its own sentence
+            // Named and switched off by this project — a contradiction, and it gets its own sentence
             // rather than the "no such backend" one below. Those are different mistakes: one is a
             // typo, the other is a project asking for the thing it decided to do without, and a
             // reader told the wrong one goes looking in the wrong file.

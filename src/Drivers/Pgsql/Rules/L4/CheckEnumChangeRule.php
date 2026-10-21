@@ -73,7 +73,7 @@ final class CheckEnumChangeRule extends AbstractPgsqlSafetyRule implements Provi
      *
      * A CHECK is `NOT VALID`-capable, which is the shape this passes — and the only reason it can
      * name the shape without asking {@see ConstraintShape} is that the statement has already been
-     * established to be an `ADD CONSTRAINT … CHECK`. That establishing happens HERE, in
+     * established to be an `ADD CONSTRAINT … CHECK`. That establishing happens here, in
      * {@see addsAnEnumCheck()}, not only in {@see judge()}: the sentence used to be true of the rule
      * and false of this method, which is the shape of a precondition that holds until the day a
      * second caller arrives. Passing `NotValidCapable` for a statement that carries no constraint at
@@ -159,7 +159,7 @@ final class CheckEnumChangeRule extends AbstractPgsqlSafetyRule implements Provi
     /**
      * The `ADD CONSTRAINT … CHECK (col in (…))` shape — Laravel's `enum()` in PostgreSQL's spelling.
      *
-     * Read once, for the verdict AND for the material, so the two can never disagree about whether
+     * Read once, for the verdict and for the material, so the two can never disagree about whether
      * there is a constraint here at all. `IN` is lowercase in the canonical form; the match is on
      * that normalized form, never on Laravel's raw grammar — the temptation to reach for the grammar
      * is greatest exactly here, where the pattern comes from it.

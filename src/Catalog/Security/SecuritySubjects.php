@@ -135,7 +135,7 @@ final readonly class SecuritySubjects
     /**
      * The accounts row-level security does not apply to, as a sorted, comma-joined string.
      *
-     * Held OR reachable: PostgreSQL does not inherit attributes through membership, but an account one
+     * Held or reachable: PostgreSQL does not inherit attributes through membership, but an account one
      * `SET ROLE` from `BYPASSRLS` reads every row the moment it takes that step, and an RLS finding
      * that ignored the second shape would tell a project its tables are covered when they are not.
      * Superusers are included without carrying the attribute — a superuser bypasses RLS by definition,
@@ -513,7 +513,7 @@ final readonly class SecuritySubjects
                 // setting the project already made.
                 'rls_unmatched_tenant_column' => $rls->unmatchedTenantColumn,
                 // The HBA reading's two states, on the same subject and for the same reason. A refused
-                // reading produces NO hba subjects, so a rule that had to say "this server's
+                // reading produces no hba subjects, so a rule that had to say "this server's
                 // authentication rules could not be read" would have nothing to attach it to — and an
                 // empty rule list reads exactly like a server with no dangerous lines, which is the
                 // silent green in its purest form. `hba_supported` is false only on an engine that has

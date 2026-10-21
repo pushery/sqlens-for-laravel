@@ -15,7 +15,7 @@ use Pushery\SQLens\Contracts\Rule;
  * evaluation three-valued, exactly as the {@see Rule} contract requires:
  *
  *   - a known version (detected on a live server, or pinned via assume_server_version):
- *     a rule whose window matches runs; a rule whose window does not match produces NO
+ *     a rule whose window matches runs; a rule whose window does not match produces no
  *     finding — "not written for this version" is silence, correctly.
  *   - An UNKNOWN version (the fast path with no pin, an unreachable server): a
  *     version-INDEPENDENT rule still runs unrestricted, while a version-DEPENDENT rule

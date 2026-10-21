@@ -15,7 +15,7 @@ use Pushery\SQLens\Config\ConfigSchema;
  * opposite meanings: one is a decision somebody made, the other is a typo that turned every
  * guardrail in the application into a no-op while the config still reads as though they are on.
  *
- * The message always names the thing that was not found AND what was available, because the fix is
+ * The message always names the thing that was not found and what was available, because the fix is
  * almost always visible in that comparison.
  */
 final class InvalidGuardProfile extends InvalidArgumentException

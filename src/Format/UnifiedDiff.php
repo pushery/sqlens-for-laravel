@@ -60,7 +60,7 @@ final class UnifiedDiff
      */
     public static function between(string $old, string $new, string $path): string
     {
-        // NO `if ($old === $new) return ''` short-circuit, deliberately. Identical input already
+        // No `if ($old === $new) return ''` short-circuit, deliberately. Identical input already
         // flows to "no hunks" through the ordinary path — the common prefix consumes everything,
         // the middle is empty, and there is nothing to render. Special-casing it would buy no
         // speed worth having and would cost the thing that matters here: it would make the empty
@@ -210,7 +210,7 @@ final class UnifiedDiff
     /**
      * Typed `array<int, array<int, int>>` rather than `list<list<int>>`: assigning into an
      * existing key keeps a list a list, and static analysis cannot see that. The narrower type is
-     * unprovable AND unnecessary — {@see self::walk()} only ever looks a cell up by index.
+     * unprovable and unnecessary — {@see self::walk()} only ever looks a cell up by index.
      *
      * @param  list<string>  $a
      * @param  list<string>  $b

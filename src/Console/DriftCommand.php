@@ -77,7 +77,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  * database, whose catalog is then read with the same request. That half creates and drops a
  * database, so it runs behind the production guard and nowhere else.
  *
- * ## It carries NO time budget, unlike both deploy commands
+ * ## It carries no time budget, unlike both deploy commands
  *
  * `sqlens:predeploy` and `sqlens:postdeploy` hold themselves to a configured number of milliseconds
  * and report a finding when they break it. This command has no such number, and the omission is a

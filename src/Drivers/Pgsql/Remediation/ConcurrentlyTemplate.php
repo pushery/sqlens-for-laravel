@@ -24,7 +24,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * "Add CONCURRENTLY" is the advice everybody already knows, and it is the advice that fails. The
  * keyword changes how the statement must be RUN, and a migration that only gains the keyword dies
  * on its first deploy with `CREATE INDEX CONCURRENTLY cannot run inside a transaction block` —
- * Laravel wraps `up()` in one by default. So the sequence carries the statement AND its habitat:
+ * Laravel wraps `up()` in one by default. So the sequence carries the statement and its habitat:
  * the migration it needs (`$withinTransaction = false`), and the cleanup for the state a failed
  * attempt leaves behind.
  *

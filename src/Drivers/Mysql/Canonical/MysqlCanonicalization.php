@@ -172,7 +172,7 @@ final class MysqlCanonicalization implements DeclaresReservedWords, DriverCanoni
             'IDENTIFIED', 'PASSWORD', 'USER', 'WITH',
 
             // TYPE names, and they belong here for the same reason the rest do: without them
-            // `varchar(100)` and `VARCHAR(100)` canonicalize differently, so ONE statement gets TWO
+            // `varchar(100)` and `VARCHAR(100)` canonicalize differently, so one statement gets two
             // fingerprints — and a baseline entry stops matching the moment someone reformats a
             // migration. The list is measured from what Laravel's MySQL grammar actually emits —
             // captured and pinned by a characterization test — rather than recalled from memory.
@@ -373,7 +373,7 @@ final class MysqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                     SignatureElement::keyword('TRUNCATE'), SignatureElement::target($table),
                 ]),
                 // ---------------------------------------------------------------------------
-                // The ALTER TABLE shapes. ORDER IS BEHAVIOR here, not style: the two BARE forms at
+                // The ALTER TABLE shapes. Order is behavior here, not style: the two bare forms at
                 // the end (`ADD <c>` and `DROP <c>`) match any word after the keyword, so every
                 // specific shape must be declared before them or its keyword is read as a column
                 // name. Within that constraint the shapes are grouped ADD-then-DROP, except that
@@ -382,7 +382,7 @@ final class MysqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                 // them is safe only while the two bare forms stay last; measure, do not assume.
                 //
                 // A second ordering holds inside the groups: a spelling that is the longer form of
-                // another comes BEFORE it — `ADD UNIQUE KEY` before `ADD UNIQUE`, `MODIFY COLUMN`
+                // another comes before it — `ADD UNIQUE KEY` before `ADD UNIQUE`, `MODIFY COLUMN`
                 // before `MODIFY`. The shorter form would read the extra keyword as a name, and a
                 // name slot holding a keyword fails the whole statement instead of passing it on to
                 // the next signature.
@@ -749,7 +749,7 @@ final class MysqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                     SignatureElement::keyword('DROP'), SignatureElement::keyword('FOREIGN'),
                     SignatureElement::keyword('KEY'), SignatureElement::target($constraint),
                 ]),
-                // ALTER TABLE <t> DROP INDEX <i>  (Laravel's dropIndex AND dropUnique)
+                // ALTER TABLE <t> DROP INDEX <i>  (Laravel's dropIndex and dropUnique)
                 new StatementSignature(StatementKind::DropIndex, [
                     SignatureElement::keyword('ALTER'), SignatureElement::keyword('TABLE'),
                     SignatureElement::optionalModifiers(), SignatureElement::target($table),
@@ -783,7 +783,7 @@ final class MysqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                     SignatureElement::trailingColumnType(self::COLUMN_TYPE_TERMINATORS),
                 ]),
                 // ALTER TABLE <t> DROP <c>  — the BARE form, and the one Laravel actually emits for
-                // dropColumn(). It must stay LAST of the DROP shapes: every specific one above
+                // dropColumn(). It must stay last of the DROP shapes: every specific one above
                 // (PRIMARY KEY, FOREIGN KEY, INDEX, KEY, CONSTRAINT, CHECK, COLUMN) would otherwise be
                 // read as a column named after its own keyword.
                 new StatementSignature(StatementKind::DropColumn, [
@@ -814,7 +814,7 @@ final class MysqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                 ]),
                 // UPDATE <t> SET <c> = <another column>, … — the targets of a data MOVE.
                 //
-                // BEFORE the plain `UPDATE <t>` below, because signatures are tried in order and the
+                // Before the plain `UPDATE <t>` below, because signatures are tried in order and the
                 // plain one matches everything this does. It captures the columns a back-fill
                 // writes, which is what the expand/contract debt rule needs; the columns it reads
                 // sit inside expressions and stay there.

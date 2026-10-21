@@ -25,7 +25,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ## One always-true policy is enough, and that is the finding
  *
- * Permissive policies are OR-ed. A table with a careful tenant policy AND one `USING (true)` policy is
+ * Permissive policies are OR-ed. A table with a careful tenant policy and one `USING (true)` policy is
  * exactly as exposed as a table with only the second — the careful one contributes nothing to the
  * outcome. So the finding is about the offending policy rather than about the set, and it says which
  * one, because the remediation is to open that policy and no other.

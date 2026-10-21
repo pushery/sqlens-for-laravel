@@ -20,7 +20,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * With it off, MySQL applies a set of legacy behaviors to `TIMESTAMP` columns that nothing in the
  * migration asked for:
  *
- * - the FIRST `TIMESTAMP` column in a table silently acquires `DEFAULT CURRENT_TIMESTAMP ON UPDATE
+ * - the first `TIMESTAMP` column in a table silently acquires `DEFAULT CURRENT_TIMESTAMP ON UPDATE
  *   CURRENT_TIMESTAMP`, so a column declared as a plain timestamp rewrites itself on every UPDATE;
  * - a `TIMESTAMP` column is `NOT NULL` unless declared nullable, and assigning `NULL` to it stores
  *   the current time rather than raising.

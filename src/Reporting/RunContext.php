@@ -177,7 +177,7 @@ final readonly class RunContext
          */
         public ?int $timeBudgetMsConsumed = null,
         /**
-         * The production guard's verdict for a database-creating run — its inputs AND its outcome.
+         * The production guard's verdict for a database-creating run — its inputs and its outcome.
          *
          * Null for every run that never asked one, which is almost all of them: a pretend lint reads
          * files and creates nothing, so a guard block there would invent a decision nobody made.
@@ -723,7 +723,7 @@ final readonly class RunContext
             //
             // Every payload already carries these two beside itself, and that is the right place to
             // answer "what am I holding" for a payload in hand. It is the wrong place to answer the
-            // question a consumer asks FIRST: should I touch this field at all? That decision is
+            // question a consumer asks first: should I touch this field at all? That decision is
             // made before parsing four hundred findings, by whoever wires the integration — and
             // until now the only way to reach the answer was to find a finding that happened to
             // carry a payload. A run whose findings all lack one said nothing about the tier, which

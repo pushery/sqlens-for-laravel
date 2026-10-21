@@ -186,7 +186,7 @@ final readonly class IndexPredicate
             return self::fromSet($m[1], stripos($m[2], 'ALL') !== false, $m[3]);
         }
 
-        // A comparison with one literal LAST: nothing above can reach it, and putting it first would
+        // A comparison with one literal last: nothing above can reach it, and putting it first would
         // cost a reader a second of wondering whether `=` could shadow `= ANY` or `= true`.
         // Either kind of literal. A quoted one was always read; a number was not, and nothing about the
         // reading differs -- `(tenant_id = 1)` is as unambiguous as `((status)::text = 'live'::text)`.

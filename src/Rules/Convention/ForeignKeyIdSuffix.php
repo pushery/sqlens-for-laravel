@@ -38,7 +38,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * Stated as a limitation on the rule rather than left as a silence: a reader who sees a composite
  * key go unreported should be able to find out that it was skipped on purpose.
  *
- * ## Two cases that need NO special handling, measured rather than assumed
+ * ## Two cases that need no special handling, measured rather than assumed
  *
  * - **Self-referential.** `parent_id` referencing the same table ends in `_id` and passes on its
  *   own merits. A special case might be expected here; there is nothing to

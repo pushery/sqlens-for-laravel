@@ -85,7 +85,7 @@ final readonly class RlsPolicy
      * A comparison rather than a pattern, because the server has already reduced the spelling — see
      * {@see self::ALWAYS_TRUE} for what it reduces to and what it does not.
      *
-     * ## A policy with no `USING` admits NOTHING, and this used to say the opposite
+     * ## A policy with no `USING` admits nothing, and this used to say the opposite
      *
      * The first version of this method answered yes for a null filter, on the reasoning that a missing
      * `USING` means "no restriction". Measured on PostgreSQL 18.4, that is exactly backwards: a table
@@ -132,7 +132,7 @@ final readonly class RlsPolicy
      * Whether this policy applies to every command and every role `$other` applies to.
      *
      * Asked of a RESTRICTIVE policy about a permissive one: a row is visible only if some permissive
-     * policy passes AND every restrictive one does, so a restrictive policy that covers a permissive
+     * policy passes and every restrictive one does, so a restrictive policy that covers a permissive
      * `USING (true)` is what gives it a filter. A restrictive policy for another role, or for only
      * one of the commands, leaves the rest as open as before; measured on PostgreSQL 18.4, one for
      * SELECT alone narrowed the reads and let a write of another tenant's row through.

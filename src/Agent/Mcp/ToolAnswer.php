@@ -63,7 +63,7 @@ final readonly class ToolAnswer
      *
      * @param  array<string, mixed>  $payload  anything the caller can still act on — a path, a name
      * @param  string  $also  a sentence the tool would have said anyway, kept beside the reason.
-     *                        A run can be undetermined AND have something else worth saying — that
+     *                        A run can be undetermined and have something else worth saying — that
      *                        its list was cut, for instance — and dropping the second sentence
      *                        because the first exists would lose it for every text client.
      *

@@ -207,8 +207,8 @@ final class EolRepository
             return EolLookup::unavailable(sprintf(
                 '%s declares schema_version %s; this build understands %d',
                 $subject,
-                // SUBSTITUTE and deliberately NOT throw: this renders a value INTO AN ERROR
-                // MESSAGE about a malformed file, so a serialization failure here would replace a
+                // SUBSTITUTE and deliberately not throw: this renders a value into an error
+                // message about a malformed file, so a serialization failure here would replace a
                 // useful complaint with an exception raised while explaining the first one. The
                 // substitute flag removes the only failure a scalar can actually cause, and
                 // `(string)` then has nothing to flatten.

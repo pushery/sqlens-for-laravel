@@ -65,7 +65,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ## The honesty boundary, same as its sibling on column types
  *
- * MySQL's `MODIFY` names the column's WHOLE definition, so the statement carries the target member
+ * MySQL's `MODIFY` names the column's whole definition, so the statement carries the target member
  * list and not the current one. Which of the six rows above a given statement is cannot be read
  * from it — only from a comparison with the live column. The rule is therefore
  * {@see Confidence::Heuristic}, it reports the append-only case too, and it says so in its own

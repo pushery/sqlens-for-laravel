@@ -23,7 +23,7 @@ use Pushery\SQLens\Severity\Severity;
  * example pair that layer's docs generator needs. Reusing either would have been a name that lies.
  *
  * So this holds exactly the fields the export row needs and nothing else. If a fifth family appears
- * wanting the same shape, the three near-identical records are worth unifying THEN — one shared
+ * wanting the same shape, the three near-identical records are worth unifying then — one shared
  * record invented for two callers usually acquires a field for each of them.
  *
  * ## `limitations` is not optional, and that is the point of this record existing

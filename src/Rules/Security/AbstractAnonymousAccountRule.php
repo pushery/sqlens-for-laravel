@@ -35,14 +35,14 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * must produce one finding. Three rules could speak about it — this pair plus
  * {@see AbstractNoPasswordRule} — and the split is arranged so exactly one does:
  *
- *   - anonymous AND no password → the `critical` rule here, and {@see AbstractNoPasswordRule} stands
+ *   - anonymous and no password → the `critical` rule here, and {@see AbstractNoPasswordRule} stands
  *     down (it checks the same `anonymous` flag);
  *   - anonymous WITH a password → the `high` rule here;
  *   - named account with no password → the no-password family, as before.
  *
  * The alternative — letting both families speak and deduplicating later — was rejected for the
  * reason the reporting layer already taught this package once: results are deduplicated by rule id
- * AND location, so two different ids about one account are two findings, and the reader has to work
+ * and location, so two different ids about one account are two findings, and the reader has to work
  * out that they are the same account. Deciding it at the rule is the only place it can be decided
  * once.
  */

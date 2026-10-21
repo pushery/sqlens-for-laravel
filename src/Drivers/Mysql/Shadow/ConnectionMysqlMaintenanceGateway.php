@@ -100,7 +100,7 @@ final readonly class ConnectionMysqlMaintenanceGateway implements MysqlMaintenan
     }
 
     /**
-     * Whether a set of `SHOW GRANTS` lines lets the account create AND drop the
+     * Whether a set of `SHOW GRANTS` lines lets the account create and drop the
      * database $name.
      *
      * MySQL grants both per database: held globally (`ON *.*`) they reach every

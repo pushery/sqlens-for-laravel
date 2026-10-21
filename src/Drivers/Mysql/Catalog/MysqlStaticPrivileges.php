@@ -136,7 +136,7 @@ final readonly class MysqlStaticPrivileges
     }
 
     /**
-     * The entries that carry a privilege at this scope AND are read as ordinary privileges.
+     * The entries that carry a privilege at this scope and are read as ordinary privileges.
      *
      * An entry with `lifted_to` set is deliberately excluded: `Grant_priv` becomes the grant's own
      * `grantable` flag, and emitting it here as well would report one fact twice — once as a flag

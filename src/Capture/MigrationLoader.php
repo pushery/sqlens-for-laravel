@@ -29,7 +29,7 @@ use ReflectionClass;
  * ## Two defenses, because neither covers the other's case
  *
  * - **The class-exists shortcut** mirrors {@see Migrator::resolvePath()}:
- *   if the class this file would declare already exists AND was declared from this very file, it is
+ *   if the class this file would declare already exists and was declared from this very file, it is
  *   instantiated instead of being required again. This is what protects a real application, whose
  *   migrations carry Laravel's `Y_m_d_His_name` file names the class name is derived from.
  * - **The per-run memo** catches everything the derivation cannot name — a file whose basename does

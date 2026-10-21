@@ -132,7 +132,7 @@ final readonly class ShadowMigrationRunner implements ShadowRunner
 
             $result = $this->captureOne($pending, $section, $collector, $connection);
             $results[] = $result;
-            // A failure OR a session timeout halts the run: in both cases the
+            // A failure or a session timeout halts the run: in both cases the
             // database is in a state the rest of the migrations cannot trust.
             $failed = $result->isFail() || $result->isUndetermined();
         }
@@ -353,7 +353,7 @@ final readonly class ShadowMigrationRunner implements ShadowRunner
 
     /**
      * The driver message to record for a failed migration. For a query failure the
-     * PDOException's OWN message is preferred over Laravel's `QueryException`
+     * PDOException's own message is preferred over Laravel's `QueryException`
      * wrapper: the wrapper appends "(Connection: …, SQL: …)", carrying the connection
      * name and the statement, while the PDOException is the bare SQLSTATE and driver
      * text. Credentials are stripped again by the rule before the message is shown;

@@ -27,7 +27,7 @@ namespace Pushery\SQLens\Capture;
  * ## What it deliberately does not claim
  *
  * {@see self::AllValuesBound} does not mean every value is bound. A statement can carry a binding
- * AND a hard-coded literal — `… PASSWORD 'x' … WHERE id = ?` — and this marker reports the binding.
+ * and a hard-coded literal — `… PASSWORD 'x' … WHERE id = ?` — and this marker reports the binding.
  * A rule reading it then stays quiet about a real literal.
  *
  * That is the chosen direction to be wrong in, and the asymmetry is the whole argument: a false

@@ -30,7 +30,7 @@ use Pushery\SQLens\Rules\VersionWindow;
  *   1. `Schema::hasColumn()` returns FALSE under pretend for a column that
  *      really exists, so the guard runs its else branch — or nothing at all.
  *      The `alter table` is never emitted.
- *   2. The introspection SELECT itself IS written to the pretend log. So the
+ *   2. The introspection SELECT itself is written to the pretend log. So the
  *      statement list is non-empty yet contains none of the migration's real
  *      DDL.
  *

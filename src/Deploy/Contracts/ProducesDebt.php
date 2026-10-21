@@ -29,7 +29,7 @@ use Pushery\SQLens\Findings\Finding;
  * state the database will keep until somebody acts, whatever happens to the code. Only the rule
  * knows which of the two it produces, and a rule that says nothing produces no ledger entry at all.
  *
- * The negative case is the one worth stating: silence means NO debt. A registrar that guessed from
+ * The negative case is the one worth stating: silence means no debt. A registrar that guessed from
  * the finding's shape would record entries no rule ever claimed, and a debt account nobody
  * recognizes is one nobody prunes.
  *

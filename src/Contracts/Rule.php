@@ -30,7 +30,7 @@ use Pushery\SQLens\Severity\Severity;
  *
  * Version awareness is mandatory, not per-rule bolt-on: versionWindow() has no
  * default. The engine evaluates the window before appliesTo(); a real version
- * outside the window produces NO finding, an unknown version produces an
+ * outside the window produces no finding, an unknown version produces an
  * undetermined finding with a named reason — never a silent skip. The fallback
  * chain (real version → assume_server_version pin → unknown) is wired in a later
  * layer.
@@ -114,7 +114,7 @@ interface Rule
      * The suites this rule runs in — one of the four filter axes. Must be
      * non-empty: a rule belonging to no suite is a configuration error, enforced
      * by SuiteMembership, never a silent no-op. The same instance may run in
-     * several suites (lint AND audit), so this is metadata, not an inheritance
+     * several suites (lint and audit), so this is metadata, not an inheritance
      * tree.
      *
      * @return list<Suite>
@@ -137,7 +137,7 @@ interface Rule
 
     /**
      * Whether this rule applies to the given subject. Side-effect free, never
-     * throws, touches no database. A subject it does not apply to produces NO
+     * throws, touches no database. A subject it does not apply to produces no
      * finding — "not applicable" is silence, not a pass.
      */
     public function appliesTo(Subject $subject): bool;

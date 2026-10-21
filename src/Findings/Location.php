@@ -48,7 +48,7 @@ final readonly class Location
         string $projectRoot,
         ?int $line = null,
         // The schema object the finding is about, when the rule named one. A migration location
-        // says WHERE the statement is; these say WHAT it is about, and the two are different
+        // says where the statement is; these say what it is about, and the two are different
         // questions — the file tells a reader which line to open, the object tells a later run
         // whether it is looking at the same thing. Optional because almost no rule names one.
         ?string $objectName = null,

@@ -151,7 +151,7 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
      * False by default, so the matrix's abstention is the last word for every rule that reads its
      * verdict from there — which is all of them but the privacy family.
      *
-     * An abstention says "this value cannot be judged FROM THE VALUE". `log_statement = all` is a
+     * An abstention says "this value cannot be judged from the value". `log_statement = all` is a
      * privacy problem on a production server and how people debug on a laptop, and no entry in a
      * shipped file can know which one it is looking at. A rule that supplies the missing fact — the
      * environment, in that case — is not what the abstention was protecting against, and overriding

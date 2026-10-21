@@ -25,7 +25,7 @@ interface BulkWriteBounds
      * Whether this statement carries something that bounds the rows it touches.
      *
      * `$isRowSource` is here because the same keyword means different things on the two shapes. A
-     * top-level `LIMIT` on an `INSERT … SELECT` bounds the write on BOTH engines — that is ordinary
+     * top-level `LIMIT` on an `INSERT … SELECT` bounds the write on both engines — that is ordinary
      * SQL, and it is what a chunked copy looks like. On an `UPDATE`/`DELETE` it is MySQL-only, and
      * on PostgreSQL a `LIMIT` can only ever appear inside a subquery, where it bounds the subquery
      * and says nothing about the rows written.

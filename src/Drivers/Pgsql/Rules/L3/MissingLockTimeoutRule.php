@@ -85,7 +85,7 @@ final class MissingLockTimeoutRule extends AbstractPgsqlSafetyRule implements Pr
             return null;
         }
 
-        // The gate's OWN transaction context, not the view's. Which SET form bounds anything depends
+        // The gate's own transaction context, not the view's. Which SET form bounds anything depends
         // on whether the statement being bounded runs inside a transaction, and that is a property of
         // the statement -- a `CONCURRENTLY` build is exactly the case where the two differ.
         return $this->template->forTimeout(

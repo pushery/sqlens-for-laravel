@@ -42,7 +42,7 @@ final readonly class RuleVerdict
          * Set exactly when the verdict is not-applicable.
          *
          * A field rather than a second boolean beside `$isPass`: two flags admit the state
-         * "pass AND not-applicable", which means nothing, and the type would then need a
+         * "pass and not-applicable", which means nothing, and the type would then need a
          * rule about itself that nothing enforces. A reason that is present or absent
          * cannot express a contradiction.
          */

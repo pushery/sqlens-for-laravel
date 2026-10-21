@@ -22,7 +22,7 @@ final readonly class RlsForceScope
     /**
      * Whether this subject is a scoped table whose policies are being bypassed by its owner.
      *
-     * The policy count is part of it rather than an afterthought: a table with RLS on and NO policy is
+     * The policy count is part of it rather than an afterthought: a table with RLS on and no policy is
      * a different finding ({@see RlsNoPolicyRule}), and "your policies are being bypassed" is not a
      * true sentence about a table that has none.
      */

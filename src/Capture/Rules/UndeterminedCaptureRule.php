@@ -28,7 +28,7 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * counted as clean.
  *
  * **The boundary this rule must not cross.** It fires only on an undetermined result
- * with NO pre-scan hits. A migration the static pre-scan flagged is already
+ * with no pre-scan hits. A migration the static pre-scan flagged is already
  * undetermined, but its answer is the specific `CAP.PRESCAN.*` hits it was flagged
  * for — each individually addressable in a report and a baseline — so those are
  * reported as their own findings and this rule steps aside, or the same migration

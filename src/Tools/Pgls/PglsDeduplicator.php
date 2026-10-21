@@ -21,7 +21,7 @@ use Pushery\SQLens\Findings\Finding;
  * already cover is dropped — not because it is wrong, but because a reader handed the same advice
  * twice starts skimming, and the next thing they skim is the finding they had not seen.
  *
- * ## Matching is by rule AND object, never by rule alone
+ * ## Matching is by rule and object, never by rule alone
  *
  * A `dblint` diagnostic names a schema object, not a file position, so that object is what makes
  * two findings the same finding. Matching on the rule pair alone would collapse every table with

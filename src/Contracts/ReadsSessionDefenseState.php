@@ -31,7 +31,7 @@ use Throwable;
  * asked. It looks a name up only to learn which of the run's bounds holds it, and a name it does not
  * know is held to being bounded at all, which works whatever an engine calls its settings.
  *
- * **Zero is a value, not an absence.** Zero means NO TIMEOUT on both engines — exactly the state
+ * **Zero is a value, not an absence.** Zero means no timeout on both engines — exactly the state
  * the check exists to catch — so an implementation reports it as `0` and never folds it into null.
  */
 interface ReadsSessionDefenseState

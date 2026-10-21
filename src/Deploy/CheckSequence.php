@@ -33,7 +33,7 @@ final readonly class CheckSequence
      * The handle is the check's POSITION, never its id.
      *
      * Measured, on the version that keyed by id: `DEPLOY.PREFLIGHT.MISSING_PRIVILEGE` is carried by
-     * the PostgreSQL grant check AND its MySQL twin — deliberately, because it is one question. A
+     * the PostgreSQL grant check and its MySQL twin — deliberately, because it is one question. A
      * map keyed by id collapsed them to whichever was registered last, so on PostgreSQL the
      * surviving entry answered `appliesTo('pgsql') === false` and the grant check simply never ran.
      * It was then listed as not applicable, which reads like a decision rather than a loss.

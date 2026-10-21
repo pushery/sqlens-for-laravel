@@ -19,7 +19,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * moment somebody is deciding whether to run a migration against production.
  *
  * **Empty is not calm.** That is the property everything here is arranged around. A snapshot with no
- * lock waits and no long-running sessions is the shape of a healthy server AND the shape of a
+ * lock waits and no long-running sessions is the shape of a healthy server and the shape of a
  * reading whose views were all withheld, so the two are told apart by the skips rather than by the
  * contents. Completeness is derived from those skips and never asserted, so an optimistic reader
  * cannot report `complete` while its own skip list disagrees.

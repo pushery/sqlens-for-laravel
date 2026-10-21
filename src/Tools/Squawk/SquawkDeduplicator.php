@@ -139,7 +139,7 @@ final readonly class SquawkDeduplicator
     }
 
     /**
-     * Group AND position, never the group alone.
+     * Group and position, never the group alone.
      *
      * Two `DROP TABLE`s in one migration are two problems, and merging them because they share a
      * rule would silence the second one — which is a finding disappearing, the failure this whole

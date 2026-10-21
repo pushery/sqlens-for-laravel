@@ -2,6 +2,12 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.1] - 2026-10-21
+
+### 🔧 Changed
+
+- **The report header writes "below the supported floor" in plain case.** A lint report against a server under the version floor printed that warning in capitals in its header. It prints `below the supported floor of <version>` now, and the rest of the sentence is unchanged. A filter that matched the capitals has to match the lowercase words.
+
 ## [0.31.0] - 2026-10-20
 
 ### ⚠️ Breaking
@@ -1638,7 +1644,8 @@ The package connects to production databases and shells out to external binaries
 
 Everything above is the first release, so there is nothing for it to be a change *from*. The development history that produced it — several hundred entries, each arguing a decision through — lives in the git log, where it belongs. From 0.2.0 on, this file records changes.
 
-[Unreleased]: https://github.com/pushery/sqlens-for-laravel/compare/v0.31.0...HEAD
+[Unreleased]: https://github.com/pushery/sqlens-for-laravel/compare/v0.31.1...HEAD
+[0.31.1]: https://github.com/pushery/sqlens-for-laravel/compare/v0.31.0...v0.31.1
 [0.31.0]: https://github.com/pushery/sqlens-for-laravel/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/pushery/sqlens-for-laravel/compare/v0.29.1...v0.30.0
 [0.29.1]: https://github.com/pushery/sqlens-for-laravel/compare/v0.29.0...v0.29.1

@@ -29,7 +29,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * transaction context, the same-migration carve-out — and counts the DISTINCT
  * pre-existing tables locked within the transaction. More than {@see $maxLocks} of them
  * fires (the default of 1 flags a transaction that locks more than one table). Two
- * deliberate non-findings: several `ALTER` clauses in ONE statement are one lock on one
+ * deliberate non-findings: several `ALTER` clauses in one statement are one lock on one
  * table (the desired batching, not a bundle), and a migration with
  * `public $withinTransaction = false;` takes its locks in separate transactions that each
  * commit on their own — no accumulation, so it is judged differently and stays silent.

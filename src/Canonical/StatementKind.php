@@ -11,7 +11,7 @@ namespace Pushery\SQLens\Canonical;
  * patterns from the driver; this enum is only the vocabulary.
  *
  * `Unknown` is a DELIBERATE outcome — a statement recognized as valid SQL but of no
- * kind we model, such as a `SELECT 1`. It is NOT the same as an undetermined
+ * kind we model, such as a `SELECT 1`. It is not the same as an undetermined
  * classification, which is a named CanonicalizationFailure meaning "could not be
  * decided". A convenient `DdlOther`/`Unknown` must never stand in for a real
  * undetermined — that is the "no silent green" line of this stage.
@@ -58,7 +58,7 @@ enum StatementKind: string
      * - `ALTER SCHEMA` has no Laravel builder API — it can only arrive as a raw statement, in one of
      *   two rare forms (`RENAME TO`, `OWNER TO`). The destructive sibling is the one that is
      *   captured, which is the right half to have if only one is: a `DROP SCHEMA` the role does not
-     *   own fails the deploy AND would have been irreversible had it succeeded.
+     *   own fails the deploy and would have been irreversible had it succeeded.
      *
      * An `ALTER SCHEMA` therefore reaches the ownership check as an UNDERIVABLE requirement with its
      * reason named, never as silence.

@@ -10,7 +10,7 @@ use Pushery\SQLens\Catalog\Objects\RoleObject;
 use Pushery\SQLens\Severity\Severity;
 
 /**
- * An account that may connect from any host AND can do anything once it does.
+ * An account that may connect from any host and can do anything once it does.
  *
  * `high`. Neither half is remarkable alone: plenty of accounts are reachable from anywhere for good
  * reasons, and every server has privileged accounts. Together they are the shape an intrusion takes

@@ -558,7 +558,7 @@ return [
         // developer does not believe they have. Both names therefore travel: the catalog's
         // own name stays the identity, and the prefix-free logical name rides beside it.
         //
-        // A configured prefix that matches NO object is reported as a named skip, never as
+        // A configured prefix that matches no object is reported as a named skip, never as
         // an empty reading: the likeliest cause is a prefix copied from another project,
         // and an audit of nothing must not read like an audit of a clean schema.
         'table_prefix' => null,

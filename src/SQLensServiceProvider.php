@@ -502,7 +502,7 @@ final class SQLensServiceProvider extends ServiceProvider
 
             // WRAPPED, and the wrapper is the whole reason a repository-wide run is affordable.
             // Both external backends resolve their binary and probe its version inside
-            // `format()`, so an unwrapped runner paid a `$PATH` walk AND a process spawn for
+            // `format()`, so an unwrapped runner paid a `$PATH` walk and a process spawn for
             // every `.sql` file — measured at 25 of each for 25 files. Neither answer can change
             // between two files of one run. See MemoizingProcessRunner.
             //

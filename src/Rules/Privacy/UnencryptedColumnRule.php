@@ -131,7 +131,7 @@ final class UnencryptedColumnRule extends AbstractCatalogRule implements Declare
      * The package's default is `stable`, which is right for a rule that reads a server variable and
      * compares it to a documented value. This one GUESSES from a name, and the shipped dictionary
      * has never met anybody's column names. Preview says exactly that: it is opt-in twice over — the
-     * pack has to be switched on AND preview rules admitted — so nobody meets it by upgrading.
+     * pack has to be switched on and preview rules admitted — so nobody meets it by upgrading.
      */
     #[Override]
     public function stability(): StabilityTier

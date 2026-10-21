@@ -64,7 +64,7 @@ final readonly class MysqlSessionDefenseState implements ReadsSessionDefenseStat
      *
      * Converted here rather than compared raw: a lock wait of 50 is fifty SECONDS, and read as
      * milliseconds it would look like the tightest bound in the run. A value that could not be read
-     * stays null through the conversion, because zero means NO TIMEOUT on this engine.
+     * stays null through the conversion, because zero means no timeout on this engine.
      *
      * Written as an `if` rather than a ternary, like the version parse in the connection factory: a
      * bare `? null` arm is EXECUTED and still counted uncovered by the driver, so it shows up as a gap

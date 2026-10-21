@@ -120,7 +120,7 @@ final readonly class RawSqlSinks
      * `DB::raw()` simply has none. That makes it more exposed than its siblings, not less, which is
      * the opposite of how a reader skimming for "takes bindings" would rank it.
      *
-     * It is a fragment rather than a statement sink because it EXECUTES NOTHING: it wraps text in an
+     * It is a fragment rather than a statement sink because it executes nothing: it wraps text in an
      * `Expression` that the grammar renders later. Putting it among the statement sinks would hand
      * it to the policy rule, and every `DB::raw('count(*)')` in an application would then need a
      * written justification — the fastest way to get the whole suite switched off.
@@ -146,7 +146,7 @@ final readonly class RawSqlSinks
     ];
 
     /**
-     * The fragment sinks that have NO bindings parameter, so no placeholder form of the call exists.
+     * The fragment sinks that have no bindings parameter, so no placeholder form of the call exists.
      *
      * It is here because a rule's ADVICE is part of its correctness. The interpolation finding tells
      * a reader to pass the value as a binding and shows the shape — `whereRaw('… = ?', [$value])` —
@@ -194,7 +194,7 @@ final readonly class RawSqlSinks
      * first: `insertUsing(array $columns, $query)` names the target columns before the query.
      *
      * They stay out of {@see FRAGMENT_SINKS} for two reasons, and both are about correctness rather
-     * than tidiness. The text is not always argument 0, and the string form takes NO bindings: the
+     * than tidiness. The text is not always argument 0, and the string form takes no bindings: the
      * argument after it is the alias, so advice to "pass it as a binding" would put the value in the
      * alias.
      *

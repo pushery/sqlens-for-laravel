@@ -17,7 +17,7 @@ use Pushery\SQLens\Exceptions\InvalidAnalyseConfiguration;
  * annotated, some of them thinly — and the second afterwards. Collapsing them into one switch makes
  * that migration impossible and gets the rule turned off instead.
  *
- * ## What NO mode touches
+ * ## What no mode touches
  *
  * The injection rules. `SEC.INJ.RAW_INTERPOLATION` and `SEC.INJ.DYNAMIC_IDENTIFIER` report an
  * exposure rather than a missing sentence, and severity is not level-gated in this package.

@@ -66,7 +66,7 @@ namespace Pushery\SQLens\Audit;
  * ## The table prefix
  *
  * An application with a configured prefix stores `wp_orders` and writes `orders` everywhere in its
- * own code. A pattern is therefore matched with AND without the prefix, so both spellings work.
+ * own code. A pattern is therefore matched with and without the prefix, so both spellings work.
  * The alternative — demanding the stored name — would make every ignore line in a prefixed project
  * disagree with the migration it refers to, and the first person to copy a table name out of a
  * model would write a line that silently matches nothing.

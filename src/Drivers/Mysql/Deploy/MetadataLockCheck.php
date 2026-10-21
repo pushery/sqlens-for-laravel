@@ -47,7 +47,7 @@ use Throwable;
  * `ENABLED=YES` out of the box, with 480 of 1259 instruments off — so the query does see disabled
  * ones and the reading is not an artifact. The load-bearing reason is that both can be turned off,
  * and the distinction matters in the direction that costs: a reader who measures the default and
- * finds YES could conclude that silence is trustworthy and simplify the check away.
+ * finds `YES` could conclude that silence is trustworthy and simplify the check away.
  *
  * That is why the activity reader asks both switches, `@@performance_schema` and the instrument's row
  * in `performance_schema.setup_instruments`, and records either one off as a gap, and why this check
@@ -141,7 +141,7 @@ final readonly class MetadataLockCheck implements PreflightCheck
         }
 
         // Nothing found — and on MySQL that is precisely where the answer must be earned. An empty
-        // reading is what a healthy server produces AND what a disabled instrument produces, and
+        // reading is what a healthy server produces and what a disabled instrument produces, and
         // only the named gaps tell them apart. Reporting a pass off the empty list would be the
         // single failure this package exists to prevent.
         if (! $snapshot->silenceIsTrustworthy()) {

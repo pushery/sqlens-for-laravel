@@ -423,8 +423,8 @@ final readonly class DriverCaptorFactory
     {
         // Two engines, on one line, and both halves of it run — the shape is the point.
         //
-        // This was a three-arm `match` with `default => null`, and that third arm was a line NO RUN
-        // COULD ENTER: every caller passes one of the two keys. `sweeperFor()` is reached only through
+        // This was a three-arm `match` with `default => null`, and that third arm was a line no run
+        // could enter: every caller passes one of the two keys. `sweeperFor()` is reached only through
         // `shadow()`, which returns `unknownDriver` unless `formatterFor($key)` answered, and that
         // answers for `pgsql` and `mysql` and nothing else; the name factories in `provisionerFor()`
         // sit inside the arm of their own engine. An unreachable line is not a gap a test can close —
@@ -629,7 +629,7 @@ final readonly class DriverCaptorFactory
 
     /**
      * The context every canonical statement carries — the driver whose grammar it
-     * describes, the run profile, and the strict-tools flag. It carries NO server version, and the
+     * describes, the run profile, and the strict-tools flag. It carries no server version, and the
      * runner attaches the resolved one immediately (`LintRunner` calls
      * `withResolvedServerVersion()` on what this returns) — because only the runner has resolved it.
      *

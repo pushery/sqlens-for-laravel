@@ -32,7 +32,7 @@ use Throwable;
  *
  *   1. MariaDB is a declared non-goal — refused as a named unsupported result, not
  *      routed through the MySQL path.
- *   2. The user must be able to create AND drop the database this run will create,
+ *   2. The user must be able to create and drop the database this run will create,
  *      or the run is undetermined before anything is created. The name is generated
  *      first for that reason: MySQL grants both per database, so the question only
  *      has an answer about a name.
