@@ -47,12 +47,12 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ```sql
  * ALTER TABLE orders ADD COLUMN total_cents bigint;   -- expand
- * UPDATE orders SET total_cents = total * 100;        -- the backfill — THIS is the evidence
+ * UPDATE orders SET total_cents = total * 100;        -- the backfill — this is the evidence
  * ALTER TABLE orders DROP COLUMN total;               -- contract
  * ```
  *
  * A column added for genuinely new data is not back-filled from the rows that already exist. So the
- * rule asks for the pair — added AND written to in this run — and reports only when nothing in the
+ * rule asks for the pair — added and written to in this run — and reports only when nothing in the
  * run drops a column from that table.
  *
  * ## What it deliberately does not try to read

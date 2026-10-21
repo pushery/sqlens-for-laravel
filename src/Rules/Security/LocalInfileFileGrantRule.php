@@ -12,11 +12,11 @@ use Pushery\SQLens\Severity\Severity;
 use Pushery\SQLens\Subjects\SchemaObject;
 
 /**
- * `local_infile` is on AND an account on this instance holds `FILE` — the two halves of a path.
+ * `local_infile` is on and an account on this instance holds `FILE` — the two halves of a path.
  *
  * The escalation of {@see LocalInfileRule}, and a second rule id rather than a second severity,
  * because severity is metadata on the RULE here. That is not a technicality: the two say different
- * sentences, and the deduplication key is rule id AND location, so both survive into one report —
+ * sentences, and the deduplication key is rule id and location, so both survive into one report —
  * which is only right if a reader learns something from the second.
  *
  * They do. `local_infile` alone says the server accepts a statement that reads a file off the

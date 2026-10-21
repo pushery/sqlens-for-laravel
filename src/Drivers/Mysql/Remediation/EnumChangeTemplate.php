@@ -17,7 +17,7 @@ use Pushery\SQLens\Rules\RuleEvidenceEntry;
  *
  * ## Why the sequence opens by looking at the live column
  *
- * MySQL's `MODIFY` names the column's WHOLE definition, so the statement carries the list it will
+ * MySQL's `MODIFY` names the column's whole definition, so the statement carries the list it will
  * END with and never the change. Six different operations produce statements that look alike:
  * appending, appending across the 255-member boundary, inserting in the middle, removing,
  * reordering, and renaming. Only a comparison with the live column says which one this is — so the

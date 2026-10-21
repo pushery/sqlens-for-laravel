@@ -15,7 +15,7 @@ use Pushery\SQLens\Canonical\QuotedIdentifier;
  * one nobody writes — so the two engines' shapes are reconciled once, at the edge, and every rule
  * downstream sees one vocabulary. The reconciliation is not cosmetic:
  *
- * - **Identity.** A PostgreSQL role is a name; a MySQL account is a name AND a host, and
+ * - **Identity.** A PostgreSQL role is a name; a MySQL account is a name and a host, and
  *   `'app'@'10.0.0.%'` and `'app'@'%'` are two different accounts with different powers. So the host
  *   is a field rather than being folded into the name, and it is null on PostgreSQL — a real
  *   difference, not a missing value.

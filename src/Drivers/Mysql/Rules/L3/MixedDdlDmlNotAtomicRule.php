@@ -24,7 +24,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  * ## Why this is a MySQL rule and not the driver-neutral one registered here
  *
  * The driver-neutral `GEN.L3.DML_ON_SCHEMA_CHANGED_TABLE` judges a different shape: a schema change
- * and a data write in ONE TRANSACTION, where the ALTER's lock is held for the whole backfill. That
+ * and a data write in one transaction, where the ALTER's lock is held for the whole backfill. That
  * is a PostgreSQL hazard, and on MySQL it cannot happen — measured, not assumed: Laravel's MySQL
  * grammar reports `supportsSchemaTransactions() === false`, so the migrator never wraps a MySQL
  * migration in a transaction at all. There is no transaction to hold a lock across, so the neutral

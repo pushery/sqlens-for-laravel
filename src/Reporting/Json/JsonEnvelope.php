@@ -66,7 +66,7 @@ final readonly class JsonEnvelope
      * the header's fixed key order. Merging them into one list would let a run field pass the
      * finding guard by being absent from every finding, which is exactly what it is.
      *
-     * It shipped for one day with NO guard at all — the sentence above described a check that did
+     * It shipped for one day with no guard at all — the sentence above described a check that did
      * not exist, and `grep` found this declaration and no reader. That is the shape this package
      * refuses in rules, so it does not get an exemption in the register that announces a schema
      * bump. `tests/Feature/Reporting/JsonReporterTest.php` now holds it in both directions.

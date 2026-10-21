@@ -59,7 +59,7 @@ final readonly class RlsReading
          *
          * It rides beside `configured` rather than replacing it: the three states are produced by
          * three named constructors and nothing else can build one, so the combination that would be
-         * nonsense — declined AND configured — is unreachable by construction rather than by rule.
+         * nonsense — declined and configured — is unreachable by construction rather than by rule.
          */
         public bool $declined = false,
         /**

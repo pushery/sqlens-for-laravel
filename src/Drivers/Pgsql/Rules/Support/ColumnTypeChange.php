@@ -39,7 +39,7 @@ final readonly class ColumnTypeChange
         /** The column being retyped, unquoted, exactly as the canonical statement names it. */
         public string $column,
         /**
-         * Everything after `TYPE`, verbatim — the target type AND any `USING` clause behind it.
+         * Everything after `TYPE`, verbatim — the target type and any `USING` clause behind it.
          *
          * The rewrite question turns on this: `USING` forces a full-table rewrite whatever the
          * types are, so a reader that only saw the type would miss the decisive part.

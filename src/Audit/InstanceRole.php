@@ -102,7 +102,7 @@ enum InstanceRole: string
     /**
      * Whether a rule whose subject is the write path can be answered here.
      *
-     * False for a replica AND for an unestablished role — the two are different situations with
+     * False for a replica and for an unestablished role — the two are different situations with
      * the same correct handling, because a verdict nobody can place is worth exactly as much as
      * one placed on the wrong machine.
      */

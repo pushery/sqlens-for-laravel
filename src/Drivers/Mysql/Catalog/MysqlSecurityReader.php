@@ -869,7 +869,7 @@ final readonly class MysqlSecurityReader implements SecurityReader
         $grants = $answer[1] ?? [];
 
         // No early `refused()` arm here, unlike `hbaRules()` — and the reason is that it would be a
-        // line no test on any machine can reach AND a no-op if it did. `attempt()` answers with an
+        // line no test on any machine can reach and a no-op if it did. `attempt()` answers with an
         // empty list and a recorded skip when the read fails, so the fall-through below already
         // constructs `partial([], $skips)`, which is the same object `refused()` builds. `pg_hba` keeps
         // its arm because that view genuinely refuses `42501` and a real test drives it; this view answers every

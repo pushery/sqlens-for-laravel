@@ -29,7 +29,7 @@ use Pushery\SQLens\Canonical\StringLiteralMask;
  *
  * ## What is shared here, and what deliberately is not
  *
- * WHAT a bulk write is — an `UPDATE`/`DELETE` carrying a predicate, or an `INSERT … SELECT` — is the
+ * What a bulk write is — an `UPDATE`/`DELETE` carrying a predicate, or an `INSERT … SELECT` — is the
  * same question on both engines, and it is answered once, here. Whether the statement is BOUNDED is
  * not: MySQL writes `LIMIT` and PostgreSQL cannot, so that half arrives as a
  * {@see BulkWriteBounds} the driver supplies. A single reader looking for both signals on both
@@ -52,7 +52,7 @@ final readonly class BulkWrite
     /**
      * Read a canonical statement as a bulk write, or null when it is not one.
      *
-     * An `UPDATE` or `DELETE` with NO `WHERE` is deliberately not one: that statement's problem is
+     * An `UPDATE` or `DELETE` with no `WHERE` is deliberately not one: that statement's problem is
      * that it touches every row whether or not that was meant, which is a correctness question
      * `GEN.L1.DML_WITHOUT_WHERE` owns at level 1. Returning it here too would put two findings on
      * one statement, and a report that says the same thing twice teaches its reader to skim.

@@ -133,7 +133,7 @@ enum SkipReason: string
      *
      * MySQL's `performance_schema` is the case this was built for, and it is the most dangerous
      * shape a gap takes here: with it off the tables are still present and still queryable, and
-     * they return NO ROWS. Not an error, not a refusal — the exact answer a healthy, idle server
+     * they return no rows. Not an error, not a refusal — the exact answer a healthy, idle server
      * gives. A reader that trusted the emptiness would report calm for a server it cannot see at
      * all.
      *

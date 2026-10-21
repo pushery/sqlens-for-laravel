@@ -146,7 +146,7 @@ final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements Decl
      * The class for this statement.
      *
      * A `DROP PRIMARY KEY` gets it from the matrix — that statement really does rebuild the
-     * table. A `CREATE TABLE` gets NONE, and that absence is a statement of its own: creating a
+     * table. A `CREATE TABLE` gets none, and that absence is a statement of its own: creating a
      * table blocks nobody, so the class here is inapplicable rather than unknown. Attaching
      * `rewrite` because the eventual FIX rebuilds the table would tell a release gate that this
      * deploy needs a maintenance window, which is simply not true.
@@ -174,7 +174,7 @@ final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements Decl
      * choosing somebody's clustering order for them, which on InnoDB decides physical row order.
      *
      * After a `DROP PRIMARY KEY` the table has rows, and putting a key back needs a candidate that
-     * is unique AND `NOT NULL` across all of them — a fact about data this package never reads. If
+     * is unique and `NOT NULL` across all of them — a fact about data this package never reads. If
      * no natural candidate exists, the route is the staged swap rather than a one-liner, and the
      * reason names it rather than this rule handing over a plan for a column nobody has chosen.
      *
@@ -211,7 +211,7 @@ final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements Decl
      *
      * The conclusion is not new here, which is why this rule was chosen to go first: the lint side
      * already reasoned it out and wrote it down. Putting a key on a populated table needs a
-     * candidate that is unique AND `NOT NULL` across every row, and that is a fact about DATA this
+     * candidate that is unique and `NOT NULL` across every row, and that is a fact about data this
      * package never reads. A surrogate `id BIGINT UNSIGNED AUTO_INCREMENT` is usually right, and a
      * rule that emitted it would be choosing somebody's clustering order — which on InnoDB decides
      * physical row order. So the answer is a decision named, not a statement handed over.

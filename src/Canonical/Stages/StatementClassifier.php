@@ -873,7 +873,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
         // The role is the last tiebreak, and only a tiebreak.
         //
         // Determinism does not need it — PHP's sort is stable and the two keys above already order
-        // every real statement — but two targets that agree on type AND qualified name would then be
+        // every real statement — but two targets that agree on type and qualified name would then be
         // ordered by input position, which is the one thing this sort exists to remove. Appending it
         // costs nothing and leaves every committed canonical golden byte-identical, because no
         // statement in the corpus has two same-named targets of one type.

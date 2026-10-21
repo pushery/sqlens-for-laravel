@@ -18,7 +18,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * ## Identity is the whole difficulty, and the rule id is not it
  *
  * Merging on the rule id alone is the wrong merge: two different tables, one rule, collapsed into an
- * entry that is true of neither. So this matches on the rule id AND the schema object, and a finding
+ * entry that is true of neither. So this matches on the rule id and the schema object, and a finding
  * that names no object is never matched — "no target" is not an agreement, it is an absence, and
  * treating the two alike is exactly the substitution this package refuses everywhere else.
  *

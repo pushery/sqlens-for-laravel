@@ -27,7 +27,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  * ## Why this is MySQL's question and PostgreSQL never asks it
  *
  * PostgreSQL has no `db.*` and no `*.*`. Its nearest equivalent is
- * `GRANT … ON ALL TABLES IN SCHEMA …`, which is a snapshot and does NOT reach tables added later —
+ * `GRANT … ON ALL TABLES IN SCHEMA …`, which is a snapshot and does not reach tables added later —
  * a genuinely different guarantee, with `ALTER DEFAULT PRIVILEGES` as the separate construct for the
  * forward-looking case. So a PostgreSQL migration cannot produce the shape this rule matches, and
  * the silence is a property of the statement rather than of a driver check — which is what

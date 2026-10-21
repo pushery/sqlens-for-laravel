@@ -13,7 +13,7 @@ use Pushery\SQLens\Catalog\CatalogContext;
  * schemas match" and "no expectation could be built" are different answers, and a caller handed a
  * null would have to remember which one it meant. Here the reason travels with the absence.
  *
- * There is deliberately NO `isComplete()` helper, and its absence is load-bearing rather than an
+ * There is deliberately no `isComplete()` helper, and its absence is load-bearing rather than an
  * omission. Both callers narrow with `$outcome->report instanceof DriftReport`, because a method
  * call cannot narrow a nullable in PHPStan: with a helper the report would stay `?DriftReport`
  * inside the very branch that exists because there is one, and every use of it would take a null

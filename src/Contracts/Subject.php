@@ -16,7 +16,7 @@ use Pushery\SQLens\Subjects\SubjectKind;
  * Dispatch semantics a rule's appliesTo(Subject) must honor, documented here
  * because they are the whole point of the seam:
  *   - it is side-effect free, never throws, and touches no database;
- *   - a subject it does not apply to produces NO finding (no pass noise);
+ *   - a subject it does not apply to produces no finding (no pass noise);
  *   - a subject it applies to but cannot evaluate produces an undetermined
  *     finding with a named reason.
  * "Not applicable" and "not evaluable" are two different things — collapsing

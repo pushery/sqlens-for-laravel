@@ -36,7 +36,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * The same reason its level-1 neighbors did not: the group was built driver by driver and MySQL
  * never got its turn. Measured before it was built, `DROP TABLE invoices` produced
- * `MY.L1.DROP_TABLE` alone, where PostgreSQL produced both its level-1 finding AND this one.
+ * `MY.L1.DROP_TABLE` alone, where PostgreSQL produced both its level-1 finding and this one.
  *
  * The parity guard that should have caught it was scoped to level 1, on the reasoning that higher
  * levels are engine-shaped. That is true of levels 2, 3 and 5 — and level 4 is mixed:

@@ -8,7 +8,7 @@ namespace Pushery\SQLens\Rules;
  * The suite axis — one of the four independent axes the engine filters a run by
  * (suite ∩ level ∩ version window ∩ category). A rule declares which suites it
  * runs in, so the promise "implement once, use twice" (an "FK without index"
- * rule runs in lint AND audit) needs no inheritance tree, only metadata.
+ * rule runs in lint and audit) needs no inheritance tree, only metadata.
  *
  * `security` is deliberately both a category (Category::Security) and a suite:
  * `sqlens:security` runs across lint+audit+analyse. The two are set

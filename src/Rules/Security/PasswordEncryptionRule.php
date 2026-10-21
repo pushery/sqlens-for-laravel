@@ -28,7 +28,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * PostgreSQL's md5 verifier is salted with the ROLE NAME and nothing else. Two servers carrying a
  * role called `app` therefore produce the same digest for the same password, so a digest captured
- * anywhere is crackable offline AND replayable as the password itself against every other server
+ * anywhere is crackable offline and replayable as the password itself against every other server
  * that role exists on. `scram-sha-256` has a per-password random salt and an iteration count, and it
  * never puts anything replayable on the wire.
  *

@@ -299,7 +299,7 @@ final readonly class SelectStarInView
             }
 
             if ($char === '(') {
-                // The one parenthesis that is NOT a nesting level: `CREATE VIEW v AS (SELECT …)`
+                // The one parenthesis that is not a nesting level: `CREATE VIEW v AS (SELECT …)`
                 // wraps the definition itself, so counting it would put the definition's own SELECT
                 // at depth 1 and hide it — measured, this arm was red before the exception existed.
                 //

@@ -84,7 +84,7 @@ final readonly class CorpusFormat
      * What is wrong with a manifest, named one item at a time.
      *
      * A boolean would say a collection is invalid and leave whoever wrote it to guess which of eight
-     * fields it was. Every message names the field AND the reason it exists, because a required
+     * fields it was. Every message names the field and the reason it exists, because a required
      * field whose purpose is unstated gets filled with a placeholder.
      *
      * @param  array<string, mixed>  $manifest

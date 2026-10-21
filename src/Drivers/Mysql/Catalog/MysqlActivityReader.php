@@ -63,7 +63,7 @@ final readonly class MysqlActivityReader implements ActivityReader
      *
      * `SHARED_UPGRADABLE` is the entry worth checking twice. Its name reads like "shared but
      * restricted", and a documentation-only mapping lands it on `SharedNoWrite`. It is held during
-     * online DDL, allows reads AND writes, and blocks other DDL — which is exactly what
+     * online DDL, allows reads and writes, and blocks other DDL — which is exactly what
      * `MaintenanceExclusive` means, and the same role PostgreSQL's `ShareUpdateExclusiveLock` plays.
      *
      * `INTENTION_EXCLUSIVE` is the most common type on a live server and the least alarming: a
@@ -102,7 +102,7 @@ final readonly class MysqlActivityReader implements ActivityReader
         $hasProcessPrivilege = $this->hasProcessPrivilege($session, $skips);
 
         // SECOND, and for the same reason: it qualifies every lock reading below. With
-        // `performance_schema` off those views still exist, still answer, and return NO ROWS —
+        // `performance_schema` off those views still exist, still answer, and return no rows —
         // which is exactly what an idle server returns. Nothing downstream could tell the two
         // apart, so the question is asked here rather than inferred there.
         $this->requireInstrumentation($session, $skips);

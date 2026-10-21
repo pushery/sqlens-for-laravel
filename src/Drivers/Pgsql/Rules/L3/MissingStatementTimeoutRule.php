@@ -23,7 +23,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  * with its own id, page and finding, not a restatement of {@see MissingLockTimeoutRule}.
  *
  * It reuses the shared {@see StrongLockStatements} classification and ordering — the
- * strong-lock set and "is the timeout set BEFORE the first one?" question are defined
+ * strong-lock set and "is the timeout set before the first one?" question are defined
  * once and consumed here, never copied. It fires once per migration, on the first
  * strong-lock statement acting on a pre-existing object, when no `SET [LOCAL]
  * statement_timeout` appears before it. A `lock_timeout` alone does not satisfy it: the
@@ -76,7 +76,7 @@ final class MissingStatementTimeoutRule extends AbstractPgsqlSafetyRule implemen
             return null;
         }
 
-        // The gate's OWN transaction context, not the view's. Which SET form bounds anything depends
+        // The gate's own transaction context, not the view's. Which SET form bounds anything depends
         // on whether the statement being bounded runs inside a transaction, and that is a property of
         // the statement -- a `CONCURRENTLY` build is exactly the case where the two differ.
         return $this->template->forTimeout(

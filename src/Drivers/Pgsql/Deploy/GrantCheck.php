@@ -188,7 +188,7 @@ final readonly class GrantCheck implements PreflightCheck
      * `ALTER SCHEMA` does not reach here, because the grammar does not classify it — see
      * {@see StatementKind::DropSchema} for why that stayed out. The destructive sibling is the one
      * that is captured, which is the right half to have if only one is: a `DROP SCHEMA` the role
-     * does not own fails a deploy AND would have been irreversible had it succeeded.
+     * does not own fails a deploy and would have been irreversible had it succeeded.
      */
     #[RawSql(reason: 'reads pg_namespace.nspowner through pg_has_role; a schema owner has no other representation, and reimplementing role inheritance would be a second opinion about the server own rules')]
     private function ownsSchema(PreflightContext $context, string $role, string $schema): bool

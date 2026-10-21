@@ -36,7 +36,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ## What this base deliberately does not handle: the refusal
  *
- * `pg_hba_file_rules` is a VIEW over a superuser-only FUNCTION, and `pg_read_all_settings` is NOT enough to read it — measured on PostgreSQL 18.4: a role holding `pg_read_all_settings` gets `permission denied for function pg_hba_file_rules`, and `has_function_privilege` says `f`. Only superuser, or a role that has been granted EXECUTE on that function explicitly (`GRANT EXECUTE ON FUNCTION pg_hba_file_rules() TO …`, measured: 6 rows afterwards). On a managed instance that refusal is the normal case rather
+ * `pg_hba_file_rules` is a VIEW over a superuser-only FUNCTION, and `pg_read_all_settings` is not enough to read it — measured on PostgreSQL 18.4: a role holding `pg_read_all_settings` gets `permission denied for function pg_hba_file_rules`, and `has_function_privilege` says `f`. Only superuser, or a role that has been granted EXECUTE on that function explicitly (`GRANT EXECUTE ON FUNCTION pg_hba_file_rules() TO …`, measured: 6 rows afterwards). On a managed instance that refusal is the normal case rather
  * than a fault. It produces no rule subjects at all
  * — but it is not silent, because the reading carries a named skip that the audit runner turns into
  * `SEC.SKIPPED.PG.HBA`. A rule that also spoke there would report one refusal seven times over. The

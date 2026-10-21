@@ -17,7 +17,7 @@ namespace Pushery\SQLens\Catalog\Understanding;
  *
  *     (((title)::text || ' '::text) || (COALESCE(heading, ''::character varying))::text)
  *
- * which is ONE key position with a comma inside `COALESCE(…)`. Exploded, it became two pieces that
+ * which is one key position with a comma inside `COALESCE(…)`. Exploded, it became two pieces that
  * are not key positions at all, and the index was reported as not understood although nothing about
  * it was unclear. An expression may carry a semicolon inside a string literal just as legally, and
  * that one took the member list itself apart.

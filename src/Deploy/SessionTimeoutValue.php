@@ -13,7 +13,7 @@ namespace Pushery\SQLens\Deploy;
  * milliseconds is arithmetic rather than engine knowledge. Two copies of this parser — one per
  * driver — would be exactly the duplicate this seam was split out to avoid.
  *
- * **Zero survives as zero.** Zero means NO TIMEOUT on both engines, which is exactly the state the
+ * **Zero survives as zero.** Zero means no timeout on both engines, which is exactly the state the
  * session-defense check exists to catch; folding it into null would make "unbounded" and "unreadable"
  * the same answer, and only one of those is a defect in the run.
  */

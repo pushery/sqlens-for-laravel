@@ -131,7 +131,7 @@ final class ExchangePartitionClauseIgnoredRule extends AbstractMysqlRule impleme
     }
 
     /**
-     * Whether this statement exchanges a partition AND names a clause the server will discard.
+     * Whether this statement exchanges a partition and names a clause the server will discard.
      *
      * Both halves are required. An exchange without the clause has made no promise to break, and a
      * clause on any other partition operation is honored — reporting either would be a false

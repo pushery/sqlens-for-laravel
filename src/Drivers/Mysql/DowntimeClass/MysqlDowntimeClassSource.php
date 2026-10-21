@@ -57,7 +57,7 @@ use Pushery\SQLens\Rules\ServerVersion;
  * - a mixed DML+DDL statement takes the class of the DDL operation involved, because that is what
  *   holds the lock; with no single operation to key on, `blocking`.
  *
- * **A pure convention finding gets NO class at all.** A missing `down()` has no runtime effect to
+ * **A pure convention finding gets no class at all.** A missing `down()` has no runtime effect to
  * classify, so the field is absent rather than `undetermined`: the class is not unknown here, it
  * is inapplicable, and saying "unknown" would invite someone to go and find it out.
  */

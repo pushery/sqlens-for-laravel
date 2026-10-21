@@ -30,7 +30,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * points at it instead of guessing — a `critical` asserted on an unread setting would be a severity
  * derived from an assumption.
  *
- * ## And there is deliberately no composite id for "cleartext AND unencrypted"
+ * ## And there is deliberately no composite id for "cleartext and unencrypted"
  *
  * The obvious next rule — a `SEC.L0.HBA_CLEARTEXT_UNENCRYPTED` that fires when a `host` line uses
  * `password` on a server whose `ssl` is off — was specified and then dropped. It would fire on

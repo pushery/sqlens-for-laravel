@@ -22,7 +22,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * The first draft rated it `medium`, reasoning that on a database with no RLS the attribute bypasses
  * nothing. That reasoning is right about the consequence and wrong about the risk, for one reason:
- * NOBODY SETS THIS BY ACCIDENT. `BYPASSRLS` is not a default, not a side effect of a framework, and
+ * Nobody sets this by accident. `BYPASSRLS` is not a default, not a side effect of a framework, and
  * not something a managed provider hands out — an account has it because somebody typed it. So the
  * finding is rare, which is exactly the shape a `high` should have, and where it does fire the
  * protection a project believes it has is not there.

@@ -25,7 +25,7 @@ use Pushery\SQLens\Rules\RuleEvidenceEntry;
  * ## The advice that would be wrong
  *
  * "Split everything" is not the fix, and a template that said so would make migrations worse.
- * Several `ALTER` clauses on the SAME table in one statement are ONE lock, not a bundle — splitting
+ * Several `ALTER` clauses on the same table in one statement are one lock, not a bundle — splitting
  * those into separate migrations takes the same lock several times and lengthens the total. The
  * distinction is the whole content of the second step.
  *

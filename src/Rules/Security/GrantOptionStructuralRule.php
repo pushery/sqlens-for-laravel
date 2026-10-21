@@ -8,7 +8,7 @@ use Override;
 use Pushery\SQLens\Severity\Severity;
 
 /**
- * A grant that hands on the power to CHANGE THE SCHEMA.
+ * A grant that hands on the power to change the schema.
  *
  * `high`. The difference from its sibling is not degree: a re-grantable data privilege widens who
  * can read or write what exists, and a re-grantable structural one widens who can decide what

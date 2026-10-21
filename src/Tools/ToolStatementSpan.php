@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Tools;
 
 /**
- * Where one statement sits in the document handed to the tool — ONE-based, inclusive on both
+ * Where one statement sits in the document handed to the tool — one-based, inclusive on both
  * ends, the way a text editor counts.
  *
  * The counting base is in the property names on purpose. Squawk answers in ZERO-based lines

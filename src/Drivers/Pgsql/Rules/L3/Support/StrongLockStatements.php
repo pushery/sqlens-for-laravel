@@ -28,7 +28,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * query up behind it — and the class `MISSING_LOCK_TIMEOUT`, `MISSING_STATEMENT_TIMEOUT`
  * and `RISKY_OPS_SINGLE_TX` all reason about.
  *
- * Three operations are deliberately NOT strong locks here. `CREATE TABLE` builds a new
+ * Three operations are deliberately not strong locks here. `CREATE TABLE` builds a new
  * object nobody is waiting on. A bare `RENAME` (`ALTER TABLE … RENAME`) takes ACCESS
  * EXCLUSIVE but only for a metadata flip that is effectively instant — flagging every
  * `renameColumn()` migration for a missing timeout is the cry-wolf noise a linter gets
@@ -71,7 +71,7 @@ final class StrongLockStatements
 
     /**
      * Whether the statement takes a strong, queue-waiting lock. The index kinds are
-     * strong only when NOT concurrent — the whole point of `CONCURRENTLY` is to trade a
+     * strong only when not concurrent — the whole point of `CONCURRENTLY` is to trade a
      * strong lock for a slow, online build.
      */
     public static function takesStrongLock(MigrationStatementDigest $digest): bool
@@ -199,10 +199,10 @@ final class StrongLockStatements
     /**
      * Whether every table this statement locks was created in the same migration — the
      * carve-out scaled to a statement that touches more than one table. A foreign key
-     * `ADD CONSTRAINT` names both the constrained AND the referenced table, so a single
+     * `ADD CONSTRAINT` names both the constrained and the referenced table, so a single
      * `soleTarget` cannot see it; a pivot migration that creates both tables and then wires
      * the key would otherwise be flagged, which is the commonest migration shape there is.
-     * A statement with no resolvable table (a `DROP INDEX` names the index) is NOT fresh —
+     * A statement with no resolvable table (a `DROP INDEX` names the index) is not fresh —
      * it is kept, conservatively, exactly as before.
      */
     private static function locksOnlyFreshTables(MigrationStatementDigest $digest, MigrationContext $migration): bool

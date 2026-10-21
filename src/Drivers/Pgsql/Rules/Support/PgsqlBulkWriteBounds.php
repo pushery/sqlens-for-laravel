@@ -39,7 +39,7 @@ use Pushery\SQLens\Rules\Data\BulkWriteBounds;
  * on a non-key column bounds nothing — which is the right direction for a heuristic whose
  * credibility is the thing it can least afford to spend.
  *
- * ## The one place a plain `LIMIT` DOES bound a PostgreSQL write
+ * ## The one place a plain `LIMIT` does bound a PostgreSQL write
  *
  * `INSERT INTO archive (…) SELECT … FROM orders LIMIT 1000` is ordinary PostgreSQL, and the `LIMIT`
  * bounds exactly the rows written. Refusing it here reported the chunked copy this rule's own advice

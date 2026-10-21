@@ -227,7 +227,7 @@ final readonly class PgTypeChangeMatrix
     /**
      * Whether the target type's dominant real case is a NARROWING — a shrink of range or
      * precision that can truncate data and break an old app version writing wider values.
-     * This is orthogonal to {@see classify()}: `integer` both rewrites AND narrows, on two
+     * This is orthogonal to {@see classify()}: `integer` both rewrites and narrows, on two
      * different axes. It is only true for the target types whose one common source is a
      * wider sibling (`integer`, `smallint`, `real`); a parametrized type like `varchar(50)`
      * cannot be told from a widening by the target alone and is deliberately not listed, so

@@ -48,7 +48,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ## Why it reads the whole RUN, not this file
  *
- * `VALIDATE CONSTRAINT` belongs in a LATER migration; that separation IS the safe pattern. A rule
+ * `VALIDATE CONSTRAINT` belongs in a later migration; that separation is the safe pattern. A rule
  * that read only its own file would report every correctly split pair as an open end — the finding
  * would sit on a file the reader is not allowed to edit, and its advice would be to add what has
  * already been added. So the question is asked of {@see MigrationContext::$runStatements},

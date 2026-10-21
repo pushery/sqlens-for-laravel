@@ -84,7 +84,7 @@ final class AuditCommand extends Command
             return ExitCode::Misconfiguration->value;
         }
 
-        // The reporter and the output stream are resolved FIRST: an unknown format or an unwritable
+        // The reporter and the output stream are resolved first: an unknown format or an unwritable
         // path is a misconfiguration that must not cost a connection to discover.
         $format = $this->option('format');
 

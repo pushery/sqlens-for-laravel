@@ -43,7 +43,7 @@ use Throwable;
  * this package will not shell out to a database server to learn it.
  *
  * So the check reports what it can establish: the estimated need. When headroom is unreadable it
- * ends `undetermined` with a named reason AND the number attached, because that number is the one
+ * ends `undetermined` with a named reason and the number attached, because that number is the one
  * thing a human in a deploy window can hold against their own monitoring. An undetermined result
  * that also withheld the estimate would be correct and useless.
  *

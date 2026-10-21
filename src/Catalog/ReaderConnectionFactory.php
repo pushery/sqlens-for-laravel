@@ -281,7 +281,7 @@ final readonly class ReaderConnectionFactory
      * command that held a `Connection` is a command one line away from querying through it. Handing
      * it a sealed session gives it everything it needs and nothing it should not have.
      *
-     * Answers with a session OR a named reason, never an exception: this runs inside a gate, and a
+     * Answers with a session or a named reason, never an exception: this runs inside a gate, and a
      * gate that dies on its own configuration has blocked a deploy without saying anything about the
      * database.
      *

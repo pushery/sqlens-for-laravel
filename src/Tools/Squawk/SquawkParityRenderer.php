@@ -207,7 +207,7 @@ final readonly class SquawkParityRenderer
             );
         }
 
-        // Deliberately NO trailing '' here, unlike legend() above. legend()'s one creates the blank
+        // Deliberately no trailing '' here, unlike legend() above. legend()'s one creates the blank
         // line BETWEEN the sections, which is right. render() then appends a final '' of its own — so
         // a second one here made the page end `|\n\n`, and markdownlint reports that as
         // MD012/no-multiple-blanks. Each half read correctly on its own; the SEAM did not, and the

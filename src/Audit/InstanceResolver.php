@@ -159,7 +159,7 @@ final readonly class InstanceResolver
         // A pin the configuration does not offer is a typo, and obeying it would audit a server the
         // project never configured — worse than not running at all.
         //
-        // A connection that offers NO host is refused too, and that used to be the hole here: the
+        // A connection that offers no host is refused too, and that used to be the hole here: the
         // check was skipped whenever the list was empty, which is exactly the case of a socket, a
         // DSN or a `url` connection. `--host` was then taken at face value and dialed — the
         // project's credentials sent over TCP to a machine the operator named and the configuration

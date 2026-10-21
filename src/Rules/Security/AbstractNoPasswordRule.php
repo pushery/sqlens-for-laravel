@@ -134,11 +134,11 @@ abstract class AbstractNoPasswordRule extends AbstractSchemaObjectSecurityRule i
 
         // An ANONYMOUS account with no password belongs to the anonymous family, which reports both
         // halves in one finding at `critical`. Speaking here as well would produce two ids about one
-        // account, and the reporting layer deduplicates by rule id AND location — so both survive,
+        // account, and the reporting layer deduplicates by rule id and location — so both survive,
         // and the reader is left to work out that they are the same account.
         //
         // The stand-down lives here rather than there because this is the rule that would be the
-        // SECOND voice: the anonymous finding says strictly more (no name AND no password), so the
+        // SECOND voice: the anonymous finding says strictly more (no name and no password), so the
         // narrower statement is the one that yields.
         if ($object->getBool('anonymous') === true) {
             return [];

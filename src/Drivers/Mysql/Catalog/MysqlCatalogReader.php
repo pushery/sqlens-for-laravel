@@ -515,7 +515,7 @@ final readonly class MysqlCatalogReader implements CatalogReader, ReadsKeyCounte
      *   ```
      *
      *   A rule reading that as documentation would report every view in every schema as documented,
-     *   in the direction nobody checks. So it is discarded FOR A VIEW ONLY: a table genuinely
+     *   in the direction nobody checks. So it is discarded for a view only: a table genuinely
      *   commented `VIEW` — odd, but a person's choice — keeps its comment.
      */
     private function tableComment(?string $raw, bool $isView): ?string
@@ -803,7 +803,7 @@ final readonly class MysqlCatalogReader implements CatalogReader, ReadsKeyCounte
      * different answers:
      *
      *     SELECT only                       → the row is not visible at all
-     *     SELECT + EXECUTE                  → the row IS visible, ROUTINE_DEFINITION is NULL
+     *     SELECT + EXECUTE                  → the row is visible, ROUTINE_DEFINITION is NULL
      *     SELECT + EXECUTE + SHOW_ROUTINE   → the definition comes back
      *
      * The middle one is where an ordinary application role lands: `EXECUTE` is granted so the app can

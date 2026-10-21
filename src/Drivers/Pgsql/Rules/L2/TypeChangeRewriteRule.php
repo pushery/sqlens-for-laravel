@@ -222,7 +222,7 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
     #[Override]
     protected function verdict(MigrationStatementView $statement): ?RuleVerdict
     {
-        // ALTER COLUMN <col> TYPE <target…>, read by the ONE reader of that clause. A SET NOT NULL
+        // ALTER COLUMN <col> TYPE <target…>, read by the one reader of that clause. A SET NOT NULL
         // or SET DEFAULT alter has no TYPE and is left to its own rule.
         $change = ColumnTypeChange::of($statement);
 

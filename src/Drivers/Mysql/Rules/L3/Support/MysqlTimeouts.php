@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Drivers\Mysql\Rules\L3\Support;
 
 /**
- * MySQL's timeout vocabulary — its OWN, not a translation of PostgreSQL's.
+ * MySQL's timeout vocabulary — its own, not a translation of PostgreSQL's.
  *
  * PostgreSQL bounds a migration with two client settings that pair neatly: `lock_timeout` caps the
  * wait in the lock queue, `statement_timeout` caps the run. MySQL has neither of those names and

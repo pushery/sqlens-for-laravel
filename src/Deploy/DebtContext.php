@@ -20,7 +20,7 @@ namespace Pushery\SQLens\Deploy;
  *
  * `debt_kind` already exists in two other places in the same document — on a remediation payload
  * ("applying this fix would OPEN a debt of this kind") and in the rule catalog. This one answers a
- * third question: "this finding IS a debt of this kind". They are at different depths so nothing
+ * third question: "this finding is a debt of this kind". They are at different depths so nothing
  * collides, and they must never disagree, which is why the value here is the registrar's own word
  * off the entry rather than a second spelling produced here.
  *

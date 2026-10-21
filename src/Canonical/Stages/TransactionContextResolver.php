@@ -20,7 +20,7 @@ use Pushery\SQLens\Subjects\SubjectContext;
  *
  * The resolution is deliberately per-statement and three-valued. A normal
  * statement runs in the migrator's implicit transaction only when the migration
- * asks for it AND the engine actually wraps DDL — so the same migration under an
+ * asks for it and the engine actually wraps DDL — so the same migration under an
  * engine that commits DDL implicitly (MySQL) gets a different, reasoned `None`. An
  * explicit opener starts an explicit transaction; a lone closer, a conditional
  * opener inside the migrator transaction, an unresolvable migration class, or a

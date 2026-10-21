@@ -16,7 +16,7 @@ use Pushery\SQLens\Catalog\CatalogSkip;
  * are the same three:
  *
  * - **read** — the rules, in file order.
- * - **refused** — `pg_hba_file_rules` is a VIEW over a superuser-only FUNCTION, and `pg_read_all_settings` is NOT enough to read it — measured on PostgreSQL 18.4: a role holding `pg_read_all_settings` gets `permission denied for function pg_hba_file_rules`, and `has_function_privilege` says `f`. Only superuser, or a role that has been granted EXECUTE on that function explicitly (`GRANT EXECUTE ON FUNCTION pg_hba_file_rules() TO …`, measured: 6 rows afterwards). On a managed instance the
+ * - **refused** — `pg_hba_file_rules` is a VIEW over a superuser-only FUNCTION, and `pg_read_all_settings` is not enough to read it — measured on PostgreSQL 18.4: a role holding `pg_read_all_settings` gets `permission denied for function pg_hba_file_rules`, and `has_function_privilege` says `f`. Only superuser, or a role that has been granted EXECUTE on that function explicitly (`GRANT EXECUTE ON FUNCTION pg_hba_file_rules() TO …`, measured: 6 rows afterwards). On a managed instance the
  *   refusal is therefore the NORMAL case rather than a fault, and an empty list would report a
  *   server that lets nobody in, which is both alarming and false.
  * - **unsupported** — MySQL has no `pg_hba.conf` and nothing shaped like it. Its access control is

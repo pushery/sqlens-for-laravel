@@ -35,7 +35,7 @@ final readonly class ExpectationReport
     private function __construct(
         /** Whether `--expect-shadow` was passed at all. */
         public bool $requested,
-        /** Whether a comparison actually happened — false when it was not asked for OR could not run. */
+        /** Whether a comparison actually happened — false when it was not asked for or could not run. */
         public bool $compared,
         /** @var list<Finding> */
         public array $findings,

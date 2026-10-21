@@ -15,8 +15,8 @@ use Pushery\SQLens\Today;
 
 /**
  * The BASE collector: it reads the run's mode, profile, and strict flags from config (falling back to
- * safe defaults) and the package version from Composer's installed-versions manifest. It probes NO
- * server and discovers NO tools, so those two lists leave here empty — and each runner fills them
+ * safe defaults) and the package version from Composer's installed-versions manifest. It probes no
+ * server and discovers no tools, so those two lists leave here empty — and each runner fills them
  * afterwards from what it actually addressed (`LintRunner::buildContext`, `AuditRunner`). Reading no
  * live state keeps this deterministic and side-effect-free, which is exactly what a reproducibility
  * header needs.

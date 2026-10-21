@@ -114,7 +114,7 @@ final readonly class NullableKeyMember
     }
 
     /**
-     * The unique keys whose NULL treatment IS known to be distinct — the ones a verdict may rest on.
+     * The unique keys whose NULL treatment is known to be distinct — the ones a verdict may rest on.
      *
      * @return array<string, list<string>> index name => its columns
      */

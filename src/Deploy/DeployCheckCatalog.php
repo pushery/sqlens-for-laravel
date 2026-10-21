@@ -173,7 +173,7 @@ final readonly class DeployCheckCatalog
      * that says exactly what was accepted — "we cannot read sequences on this instance" — and
      * leaves the three answers armed.
      *
-     * ## It names NO severity, deliberately
+     * ## It names no severity, deliberately
      *
      * Its finding is always `undetermined`, and a severity would put a number on a check that
      * reached no verdict. Same shape and same reason as `DEPLOY.PREFLIGHT.STATISTICS_UNREAD`.

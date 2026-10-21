@@ -145,7 +145,7 @@ final readonly class EmittableIds
         return array_any(
             $this->families,
             // The family's own name counts too — see the class docblock: `LINT.SKIPPED` is a family
-            // AND an id the lint runner emits on its own.
+            // and an id the lint runner emits on its own.
             static fn (string $family): bool => $id === $family || str_starts_with($id, $family.'.'),
         );
     }

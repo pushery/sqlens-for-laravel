@@ -29,7 +29,7 @@ use Throwable;
  *    because a person wrote it about this exact operation. Read by reflection off the
  *    class the capture path already loaded (`class_exists` with autoload OFF), never by
  *    parsing the file, and fail-safe toward flagging: a malformed attribute (one missing
- *    its reason) is treated as NO consent, so the destructive finding stays visible.
+ *    its reason) is treated as no consent, so the destructive finding stays visible.
  *  - **The project-wide `sqlens.allow_destructive` config switch** — for a project that
  *    has decided, as a whole, that destructive migrations are expected. It suppresses
  *    with a fixed reason naming the switch, so the report says WHERE the consent came

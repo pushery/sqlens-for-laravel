@@ -14,7 +14,7 @@ namespace Pushery\SQLens\Tools\Pgls;
  *  "category":"splinter/security/functionSearchPathMutable"}
  * ```
  *
- * Three fields, and notably NO file and no line. That is not an omission — `dblint` judges a
+ * Three fields, and notably no file and no line. That is not an omission — `dblint` judges a
  * database schema rather than a document, so there is nothing for a position to point at. The
  * package's `ToolPositionMapper` therefore does not apply here, and the identity of a finding has
  * to come from the object named in the message instead.

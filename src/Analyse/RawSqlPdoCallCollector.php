@@ -60,7 +60,7 @@ use PHPStan\Type\VerbosityLevel;
  * the string handed to `prepare()` is already in the statement, and no later `execute()` can take
  * it back out. A literal with `?` placeholders classifies as a literal and draws nothing.
  *
- * So all three names are classified with the text as the first argument and NO bindings argument,
+ * So all three names are classified with the text as the first argument and no bindings argument,
  * which is the truth about the call rather than a simplification of it.
  *
  * @implements Collector<MethodCall, array{method: string, line: int, resolved: string, scope: string|null, signal: string, quoted: bool, origin: string, reason: string|null}>

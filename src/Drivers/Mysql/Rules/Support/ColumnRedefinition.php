@@ -14,7 +14,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * What a canonical `ALTER TABLE … MODIFY` / `… CHANGE` says about the column it redefines —
  * and, just as importantly, what it does not say.
  *
- * MySQL's redefinition syntax takes the column's WHOLE definition, never a delta. `MODIFY col
+ * MySQL's redefinition syntax takes the column's whole definition, never a delta. `MODIFY col
  * BIGINT NOT NULL` is what you write to change the type, and it is also what you write to flip
  * the nullability, to move the column, or to change nothing at all. Which of those it turns out
  * to be depends on the column's CURRENT definition, which is not in the migration. That is the

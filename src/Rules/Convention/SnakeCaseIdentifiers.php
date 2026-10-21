@@ -264,7 +264,7 @@ final readonly class SnakeCaseIdentifiers
     }
 
     /**
-     * The bare identifier out of a qualified name — unqualified AND unquoted.
+     * The bare identifier out of a qualified name — unqualified and unquoted.
      *
      * A column arrives as `schema.table.column` and a table as `schema.table`, so the last segment
      * is the name this rule is about. Splitting on the last dot rather than the first is what keeps

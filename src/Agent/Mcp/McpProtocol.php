@@ -9,15 +9,15 @@ namespace Pushery\SQLens\Agent\Mcp;
  *
  * ## Why a pin and not a range
  *
- * Left to itself, the SDK answers the `initialize` handshake in whichever of its two revisions,
- * `2025-11-25` and `2025-06-18`, the client asks for, and in `2025-11-25` when the client asks for
- * any other; its newer discovery handshake offers its `LATEST`, `2026-07-28`. The revision a session
+ * Left to itself, the SDK answers the `initialize` handshake in whichever of its three revisions,
+ * `2025-11-25`, `2025-06-18` and `2025-03-26`, the client asks for, and in `2025-11-25` when the
+ * client asks for any other; its newer discovery handshake offers its `LATEST`, `2026-07-28`. The revision a session
  * speaks would then depend on the client and on the SDK release installed. That makes the protocol
  * a second thing that can differ between two runs over an unchanged database, and determinism is
  * one of this package's three principles: the same state must produce the same answer on a
  * developer's machine and in CI, whichever agent happens to be driving.
  *
- * The revisions named here are those of `laravel/mcp` 1.0.
+ * The revisions named here are those of `laravel/mcp` 1.1.
  *
  * A client asking for another revision is answered with this one, as the protocol's version
  * negotiation requires, and decides itself whether to continue. It is never answered in a revision

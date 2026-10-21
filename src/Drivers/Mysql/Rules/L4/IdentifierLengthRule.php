@@ -109,9 +109,9 @@ final class IdentifierLengthRule extends AbstractMysqlRule implements ProvidesRe
      * Every name this statement writes that the server will not accept as written.
      *
      * Static and shared, so the judgment and the fix material can never disagree about whether
-     * there is a problem. It reads the statement's targets AND the columns a key names: reading
+     * there is a problem. It reads the statement's targets and the columns a key names: reading
      * only the table would miss the case that actually bites, because Laravel derives an index or
-     * constraint name from the table AND its columns, and the derived name goes over while every
+     * constraint name from the table and its columns, and the derived name goes over while every
      * name a person typed is comfortably under.
      *
      * @return list<string> sorted, deduplicated, and empty when the statement is fine

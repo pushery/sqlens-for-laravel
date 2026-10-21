@@ -25,7 +25,7 @@ use Pushery\SQLens\Canonical\Fingerprint;
 final readonly class ToolPositionMapper
 {
     /**
-     * Map a ONE-based line, the way a text editor counts.
+     * Map a one-based line, the way a text editor counts.
      *
      * The base is in the method name because the tools disagree about it, and the disagreement is
      * silent: Squawk answers zero-based (measured), so a caller that forgot would be off by one on

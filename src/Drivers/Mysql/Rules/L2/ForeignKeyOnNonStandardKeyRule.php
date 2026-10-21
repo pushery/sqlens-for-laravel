@@ -34,7 +34,7 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  * |---|---|
  * | the target's PRIMARY KEY | accepted |
  * | a column carrying a non-unique index | **ERROR 6125** |
- * | the FIRST column of a composite PRIMARY KEY | **ERROR 6125** |
+ * | the first column of a composite PRIMARY KEY | **ERROR 6125** |
  * | a non-first column of a composite PRIMARY KEY | **ERROR 6125** |
  * | a column with no index at all | **ERROR 6125** |
  *

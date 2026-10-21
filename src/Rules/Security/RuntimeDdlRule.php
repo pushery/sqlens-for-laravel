@@ -44,7 +44,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
 final class RuntimeDdlRule extends AbstractSchemaObjectSecurityRule implements DeclaresJudgedObjectTypes
 {
     /**
-     * Grants AND the connecting role.
+     * Grants and the connecting role.
      *
      * Grants because that is where a privilege somebody granted lives — and the grant reading is
      * refusable on a managed database, which makes "no subject" an ordinary state here rather than a
@@ -87,7 +87,7 @@ final class RuntimeDdlRule extends AbstractSchemaObjectSecurityRule implements D
      * next door: `GRANT_OPTION` is medium and `GRANT_OPTION_STRUCTURAL` is high, over the same
      * privilege, differing only in reach.
      *
-     * The escalated case is not swallowed by this. A runtime role that ALSO holds `SUPERUSER` or
+     * The escalated case is not swallowed by this. A runtime role that also holds `SUPERUSER` or
      * `ALL PRIVILEGES` is reported at high by the rules that own those facts — so the severe
      * arrangement is reported severely, by the rule whose subject it is, instead of this one
      * inflating to cover a case it does not read.

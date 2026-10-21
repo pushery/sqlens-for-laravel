@@ -151,7 +151,7 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
             'ALWAYS', 'GENERATED', 'STORED', 'VIRTUAL',
 
             // TYPE names and the words that ride with them. Without these, `varchar(100)` and
-            // `VARCHAR(100)` canonicalize differently — ONE statement, TWO fingerprints — and a
+            // `VARCHAR(100)` canonicalize differently — one statement, two fingerprints — and a
             // baseline entry stops matching the moment someone reformats a migration. Measured from
             // what Laravel's PostgreSQL grammar actually emits, not recalled.
             //
@@ -280,7 +280,7 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
 
         return new StatementClassificationProfile(
             signatures: [
-                // CREATE [UNIQUE] INDEX [CONCURRENTLY] <i> ON <t> (<c>, …) — and NOTHING after it.
+                // CREATE [UNIQUE] INDEX [CONCURRENTLY] <i> ON <t> (<c>, …) — and nothing after it.
                 //
                 // Tried before the column-less variant below, which stays as the fallback: a shape
                 // whose list cannot be read still classifies as an index rather than falling
@@ -508,7 +508,7 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                 ]),
                 // UPDATE <t> SET <c> = …, <c> = … — the assignment targets, in order.
                 //
-                // BEFORE the plain `UPDATE <t>` signature below, because signatures are tried in
+                // Before the plain `UPDATE <t>` signature below, because signatures are tried in
                 // order and the plain one matches everything this one does. It captures the columns
                 // the statement writes, which is what a debt rule asking "was this new column
                 // back-filled" needs; the columns it reads sit inside expressions and stay there.

@@ -23,7 +23,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * ## Why this rule exists at all
  *
  * It was measured, not supposed. Against all 127 shipped rules, `DROP TABLE invoices` produced two
- * findings and `DROP SCHEMA public CASCADE` produced NONE — the tool reported dropping one table and
+ * findings and `DROP SCHEMA public CASCADE` produced none — the tool reported dropping one table and
  * said nothing about dropping the namespace that contains every table. The sibling rule sits at
  * level 1, the level that always runs, which made the silence the wrong way round for a package
  * whose second principle is primum non nocere.
@@ -35,7 +35,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * ## CASCADE is the difference between bad and unbounded
  *
  * Without it PostgreSQL refuses a non-empty schema, so the statement is a safety check that failed
- * loudly. With it the drop takes every table, view, sequence and routine in the namespace AND every
+ * loudly. With it the drop takes every table, view, sequence and routine in the namespace and every
  * dependent object outside it — a foreign key or view in another schema goes too. The message
  * therefore names it when it is there, the way the table rule does.
  *

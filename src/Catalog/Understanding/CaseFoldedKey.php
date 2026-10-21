@@ -60,7 +60,7 @@ namespace Pushery\SQLens\Catalog\Understanding;
  *
  * Anything that is not exactly one fold of exactly one column returns null: a nested call, a
  * concatenation, a `COALESCE`, a plain column. Measured, `lower(btrim(email))` prints as
- * `lower(btrim(email::text))` — folded AND trimmed, so the value the index is unique over is not the
+ * `lower(btrim(email::text))` — folded and trimmed, so the value the index is unique over is not the
  * column's case-folded value and a sentence saying it is would be false. The whole worth of this
  * reading is that the sentence it enables is exact; a fold this class admits it cannot read costs a
  * report line, and one it misreads costs the reader's trust in every other line.

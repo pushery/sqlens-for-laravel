@@ -10,7 +10,7 @@ use Pushery\SQLens\Findings\Finding;
 use Pushery\SQLens\Subjects\SchemaObject;
 
 /**
- * What came out of asking every rule about every subject: the findings, AND which rules were asked.
+ * What came out of asking every rule about every subject: the findings, and which rules were asked.
  *
  * The second half is the point. A dispatch that returned findings alone cannot answer the question
  * a reader actually has about a quiet report — did this rule look and find nothing, or was it never
