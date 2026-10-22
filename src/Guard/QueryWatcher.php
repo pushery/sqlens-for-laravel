@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Guard;
 
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Database\Events\MigrationsEnded;
+use Illuminate\Database\Events\MigrationsStarted;
 use Illuminate\Database\Events\QueryExecuted;
 use Pushery\SQLens\Guard\Contracts\AccumulatesPerWindow;
+use Pushery\SQLens\Guard\Contracts\PausesDuringMigrations;
 use Pushery\SQLens\Guard\Contracts\QueryInspector;
 use Pushery\SQLens\Guard\Contracts\RuntimeGuard;
 
@@ -52,7 +55,8 @@ final readonly class QueryWatcher implements RuntimeGuard
      *
      * Without these the cumulative budget is dead from the second job onward in any long-lived
      * process — and dead in the way that looks healthiest: the log reports once and then goes quiet
-     * forever, which reads like an application that got faster.
+     * forever, which reads like an application that got faster. The same three events end a pause of
+     * the runtime DDL guardrail that the migrator never ended ({@see PausesDuringMigrations}).
      *
      * @var list<string>
      */
@@ -109,6 +113,29 @@ final readonly class QueryWatcher implements RuntimeGuard
                 }
             });
         }
+
+        // The migrator's own two ends, for the inspectors that stand still while it runs. Its events live in
+        // illuminate/database, which this package requires, so they are imported rather than named.
+        $pausing = array_values(array_filter(
+            $active,
+            static fn (QueryInspector $inspector): bool => $inspector instanceof PausesDuringMigrations,
+        ));
+
+        if ($pausing === []) {
+            return;
+        }
+
+        $this->events->listen(MigrationsStarted::class, static function () use ($pausing): void {
+            foreach ($pausing as $inspector) {
+                $inspector->migrationsStarted();
+            }
+        });
+
+        $this->events->listen(MigrationsEnded::class, static function () use ($pausing): void {
+            foreach ($pausing as $inspector) {
+                $inspector->migrationsEnded();
+            }
+        });
     }
 
     /**

@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Guard\Guards;
 
 use Illuminate\Database\Events\QueryExecuted;
 use Pushery\SQLens\Categories\Category;
+use Pushery\SQLens\Guard\Contracts\PausesDuringMigrations;
 use Pushery\SQLens\Guard\Contracts\QueryInspector;
 use Pushery\SQLens\Guard\GuardProfile;
 use Pushery\SQLens\Guard\ViolationLogger;
@@ -35,8 +36,18 @@ use Pushery\SQLens\Guard\Violations\Violation;
  * application's own code, a job or a scheduled closure, so they are watched like a request
  * ({@see self::APPLICATION_COMMANDS}). Under Octane a worker is no console process at all: Octane's
  * bootstrap sets `APP_RUNNING_IN_CONSOLE` to false, so every request there is watched too.
+ *
+ * ## A migration the application runs itself is a migration too
+ *
+ * A watched process can run the migrator: a job that rebuilds a database with `Artisan::call('migrate')`,
+ * a screen that migrates a tenant. Its statements are migrations, and reported they would bury the one
+ * finding that matters under thousands of them. So the guardrail pauses while the migrator runs, from
+ * `MigrationsStarted` to `MigrationsEnded`, and stays watching outside that run: a `CREATE DATABASE`
+ * the same job issues before it migrates is still DDL outside any migration. The migrator announces no
+ * end when a migration fails, so the next request, job or command ends the pause as well
+ * ({@see PausesDuringMigrations}).
  */
-final readonly class RuntimeDdlGuard implements QueryInspector
+final class RuntimeDdlGuard implements PausesDuringMigrations, QueryInspector
 {
     /**
      * The leading keywords that make a statement DDL.
@@ -79,23 +90,43 @@ final readonly class RuntimeDdlGuard implements QueryInspector
      */
     public const array APPLICATION_COMMANDS = ['queue:work', 'queue:listen', 'horizon:work', 'schedule:run', 'schedule:work'];
 
+    /** Whether the migrator is running in this process, between its start and its end. */
+    private bool $migrating = false;
+
     /**
      * @param  bool  $exempt  true in a console process that runs any other Artisan command, which is where
      *                        migrations, seeders and maintenance commands run
      */
-    public function __construct(private ViolationLogger $logger, private bool $exempt = false) {}
+    public function __construct(private readonly ViolationLogger $logger, private readonly bool $exempt = false) {}
 
     public function appliesTo(GuardProfile $profile): bool
     {
         return $profile->runtimeDdl;
     }
 
+    public function migrationsStarted(): void
+    {
+        $this->migrating = true;
+    }
+
+    public function migrationsEnded(): void
+    {
+        $this->migrating = false;
+    }
+
+    /** A new request, job or command: a run of the migrator that never announced its end is over. */
+    public function startWindow(): void
+    {
+        $this->migrating = false;
+    }
+
     public function inspect(QueryExecuted $query, GuardProfile $profile): void
     {
         // Migrations, seeders and maintenance commands legitimately issue DDL. Reporting them would
         // produce a violation on every deploy, which is how a guardrail gets switched off in its
-        // first week. A queue worker and the scheduler are not exempt (see APPLICATION_COMMANDS).
-        if ($this->exempt) {
+        // first week. A queue worker and the scheduler are not exempt (see APPLICATION_COMMANDS),
+        // but a run of the migrator inside one is a migration all the same.
+        if ($this->exempt || $this->migrating) {
             return;
         }
 
@@ -125,7 +156,7 @@ final readonly class RuntimeDdlGuard implements QueryInspector
         $this->logger->record($profile, Violation::found(
             type: 'runtime_ddl',
             category: Category::Safety,
-            message: 'a running request changed the schema, outside any migration',
+            message: 'the running application changed the schema, outside any migration',
             connection: $query->connectionName,
             sql: $query->sql,
             bindings: $query->bindings,
