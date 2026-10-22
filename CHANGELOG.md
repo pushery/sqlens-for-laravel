@@ -2,6 +2,16 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.2] - 2026-10-22
+
+### 🔧 Changed
+
+- **The `runtime_ddl` finding says "the running application changed the schema".** It said "a running request", while it also comes from queue workers and the scheduler. The rest of the sentence, "outside any migration", is unchanged. A filter that matched the old words has to match the new ones.
+
+### 🐛 Fixed
+
+- **`runtime_ddl` no longer reports a migration the application runs itself.** A job or a request that ran the migrator, such as `Artisan::call('migrate')` in a job or a tenant migration started from a screen, had every statement of those migrations reported as DDL outside any migration. The guardrail now pauses from the migrator's `MigrationsStarted` to its `MigrationsEnded`, and the next request, job or command ends a pause whose migration failed before announcing its end. DDL outside the migrator's run, such as a `CREATE DATABASE` before it, is still reported.
+
 ## [0.31.1] - 2026-10-21
 
 ### 🔧 Changed
@@ -1644,7 +1654,8 @@ The package connects to production databases and shells out to external binaries
 
 Everything above is the first release, so there is nothing for it to be a change *from*. The development history that produced it — several hundred entries, each arguing a decision through — lives in the git log, where it belongs. From 0.2.0 on, this file records changes.
 
-[Unreleased]: https://github.com/pushery/sqlens-for-laravel/compare/v0.31.1...HEAD
+[Unreleased]: https://github.com/pushery/sqlens-for-laravel/compare/v0.31.2...HEAD
+[0.31.2]: https://github.com/pushery/sqlens-for-laravel/compare/v0.31.1...v0.31.2
 [0.31.1]: https://github.com/pushery/sqlens-for-laravel/compare/v0.31.0...v0.31.1
 [0.31.0]: https://github.com/pushery/sqlens-for-laravel/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/pushery/sqlens-for-laravel/compare/v0.29.1...v0.30.0

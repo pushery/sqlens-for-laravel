@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace Pushery\SQLens\Guard\Contracts;
 
 /**
- * An inspector that accumulates across the queries of one request, job or command.
+ * An inspector that keeps state across the queries of one request, job or command.
  *
- * Its own contract rather than a method on {@see QueryInspector}, because only one guardrail needs
- * it and a method every implementation had to define — most of them as an empty body — is a method
+ * Its own contract rather than a method on {@see QueryInspector}, because only some guardrails need
+ * it: the slow-query budget, and through {@see PausesDuringMigrations} the pause of the runtime DDL
+ * guardrail. A method every implementation had to define, most of them as an empty body, is a method
  * somebody eventually fills in for the wrong reason.
  *
  * ## Why any of this exists
@@ -23,6 +24,9 @@ namespace Pushery\SQLens\Guard\Contracts;
  */
 interface AccumulatesPerWindow
 {
-    /** Begin a fresh window: totals at zero, and anything already reported forgotten. */
+    /**
+     * Begin a fresh window: totals at zero, anything already reported forgotten, and a pause the migrator
+     * never ended over.
+     */
     public function startWindow(): void;
 }
