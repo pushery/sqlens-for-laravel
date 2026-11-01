@@ -2,6 +2,14 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.3] - 2026-11-01
+
+### 🐛 Fixed
+
+- **A deploy without an exact server version pin is no longer stopped by its own note.** `DEPLOY.CONTEXT.VERSION_SKEW` passes when no `assume_server_version` is configured and when the pin names another minor of the server's major, as its documentation says, but both notes were built as failing findings at level 0. The level gate of `sqlens:predeploy` and `sqlens:postdeploy` counts every failing finding at its level, whatever its severity, so every deploy whose pin did not match the server's major and minor exactly stopped there. The notes are passing findings now and still stand in the report. A pin on another major still stops the deploy.
+
+  **Upgrade:** nothing to do. A deploy script that skipped `sqlens:predeploy` or `sqlens:postdeploy` for this can run them again.
+
 ## [0.31.2] - 2026-10-22
 
 ### 🔧 Changed
@@ -1654,7 +1662,8 @@ The package connects to production databases and shells out to external binaries
 
 Everything above is the first release, so there is nothing for it to be a change *from*. The development history that produced it — several hundred entries, each arguing a decision through — lives in the git log, where it belongs. From 0.2.0 on, this file records changes.
 
-[Unreleased]: https://github.com/pushery/sqlens-for-laravel/compare/v0.31.2...HEAD
+[Unreleased]: https://github.com/pushery/sqlens-for-laravel/compare/v0.31.3...HEAD
+[0.31.3]: https://github.com/pushery/sqlens-for-laravel/compare/v0.31.2...v0.31.3
 [0.31.2]: https://github.com/pushery/sqlens-for-laravel/compare/v0.31.1...v0.31.2
 [0.31.1]: https://github.com/pushery/sqlens-for-laravel/compare/v0.31.0...v0.31.1
 [0.31.0]: https://github.com/pushery/sqlens-for-laravel/compare/v0.30.0...v0.31.0

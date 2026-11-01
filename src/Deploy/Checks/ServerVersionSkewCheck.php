@@ -146,6 +146,27 @@ final readonly class ServerVersionSkewCheck implements PreflightCheck
                 : 'The majors agree, so no verdict changed. The pin is stale and will drift further.',
         );
 
+        // Nothing about a skew makes a deploy slower or locks anything — it makes the REPORT wrong.
+        // Saying `online` here is honest and keeps the downtime axis meaning what it says.
+        //
+        // A minor skew is a note, so its finding passes with the check. The level gate of a deploy
+        // counts every failing finding at its level, whatever its severity, and a note built as a
+        // failure stopped the deploy this check had let through.
+        if (! $majorSkew) {
+            return Finding::pass(
+                ruleId: self::ID,
+                messagePrefix: DeployNotice::MESSAGE_PREFIX,
+                message: $message,
+                location: Location::inCatalog($context->driver, $context->connection, 'server version', SchemaObjectType::Setting),
+                category: Category::Safety,
+                level: Level::Capturable,
+                stability: StabilityTier::Stable,
+                documentationUrl: RuleDocumentationUrl::for(self::ID),
+                context: new SubjectContext(driver: $context->driver, profile: $context->profile, strictTools: false),
+                severity: $severity,
+            )->withDowntimeClass(DowntimeClass::Online);
+        }
+
         return Finding::fail(
             ruleId: self::ID,
             messagePrefix: DeployNotice::MESSAGE_PREFIX,
@@ -157,14 +178,14 @@ final readonly class ServerVersionSkewCheck implements PreflightCheck
             documentationUrl: RuleDocumentationUrl::for(self::ID),
             context: new SubjectContext(driver: $context->driver, profile: $context->profile, strictTools: false),
             severity: $severity,
-            // Nothing about a skew makes a deploy slower or locks anything — it makes the REPORT
-            // wrong. Saying `online` here is honest and keeps the downtime axis meaning what it says.
         )->withDowntimeClass(DowntimeClass::Online);
     }
 
     private function noPinFinding(PreflightContext $context, ServerVersion $real): Finding
     {
-        return Finding::fail(
+        // A note that passes, for the reason the minor skew does: a failing finding at level 0 stops
+        // every deploy, and running without a pin is a choice this check does not refuse.
+        return Finding::pass(
             ruleId: self::ID,
             messagePrefix: DeployNotice::MESSAGE_PREFIX,
             message: sprintf(
