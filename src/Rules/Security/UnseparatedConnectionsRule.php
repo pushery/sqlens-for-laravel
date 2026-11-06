@@ -85,7 +85,14 @@ final class UnseparatedConnectionsRule extends AbstractSchemaObjectSecurityRule 
             )];
         }
 
-        if (in_array($migration, [null, '', $runtime], true)) {
+        // One name on both sides is one connection, unless the framework migrates it over its `direct`
+        // block. From Laravel 13.17 a PostgreSQL connection with one runs `migrate` on `<name>::direct`,
+        // so a pooled account serving requests and a schema owner deploying them share the name, and
+        // a project can declare that arrangement only by naming the connection twice. The name then
+        // says nothing either way, and the identities below decide, as they do for two names.
+        $direct = $migration === $runtime && $object->getBool('migration_direct') === true;
+
+        if (in_array($migration, [null, '', $runtime], true) && ! $direct) {
             return [RuleVerdict::flag(sprintf(
                 'the application serves requests and deploys migrations on the same connection (%s), so '
                 .'its runtime role holds whatever DDL the migrations need. A SQL injection that reaches '
@@ -120,9 +127,9 @@ final class UnseparatedConnectionsRule extends AbstractSchemaObjectSecurityRule 
 
         return match ($sharesIdentity) {
             // The identity is compared and never printed: the user, the host and the database are
-            // the coordinates this package keeps out of every finding, and the two connection names
+            // the coordinates this package keeps out of every finding, and the connection names
             // already say which entries a reader has to look at.
-            true => [RuleVerdict::flag(sprintf(
+            true => [RuleVerdict::flag($direct ? $this->sharedDirectIdentity($runtime) : sprintf(
                 'the application names two connections (%s and %s) that authenticate as the same '
                 .'identity, the same user against the same host and database, so the separation exists '
                 .'in config/database.php and nowhere else: requests are still served by the account the '
@@ -133,7 +140,7 @@ final class UnseparatedConnectionsRule extends AbstractSchemaObjectSecurityRule 
                 $migration,
             ))],
 
-            null => [RuleVerdict::undetermined(sprintf(
+            null => [RuleVerdict::undetermined($direct ? $this->unresolvedDirectIdentity($runtime) : sprintf(
                 'the application names two connections (%s and %s), but this run cannot resolve who '
                 .'they authenticate as, so it cannot tell whether they are the same identity. '
                 .'Credentials resolved from the environment at runtime look like this. Two names '
@@ -147,6 +154,33 @@ final class UnseparatedConnectionsRule extends AbstractSchemaObjectSecurityRule 
         };
     }
 
+    /** One connection whose `direct` block authenticates as the account its requests are served by. */
+    private function sharedDirectIdentity(string $connection): string
+    {
+        return sprintf(
+            'the application serves requests on %s and migrates over its direct block, and both '
+            .'authenticate as the same identity, the same user against the same host and database, so '
+            .'the separation exists in config/database.php and nowhere else: requests are still served '
+            .'by the account the migrations run as, holding whatever DDL they need. Give the direct block '
+            .'its own database user and leave the DDL rights only there — a direct block with the same '
+            .'credentials buys the application nothing.',
+            $connection,
+        );
+    }
+
+    /** One connection with a `direct` block whose two accounts this run cannot resolve. */
+    private function unresolvedDirectIdentity(string $connection): string
+    {
+        return sprintf(
+            'the application serves requests on %s and migrates over its direct block, but this run '
+            .'cannot resolve who the two authenticate as, so it cannot tell whether they are the same '
+            .'identity. Credentials resolved from the environment at runtime look like this. A direct '
+            .'block is not a second identity by itself, and reporting a pass here would certify a '
+            .'separation nobody could see.',
+            $connection,
+        );
+    }
+
     /**
      * @return list<string>
      */
@@ -154,7 +188,7 @@ final class UnseparatedConnectionsRule extends AbstractSchemaObjectSecurityRule 
     public function limitations(): array
     {
         return [
-            'reads the project\'s CONFIGURATION, not its behavior: a project that names one connection and uses two roles through it is separated in practice and reported here anyway',
+            'reads the project\'s CONFIGURATION, not its behavior: a project that names one connection and uses two roles through it other than through that connection\'s direct block is separated in practice and reported here anyway',
             'cannot tell an unset value from a deliberate decision that one connection is right — a small application with a single role is a legitimate shape, and this finding is the prompt to say so rather than a verdict that it is wrong',
         ];
     }

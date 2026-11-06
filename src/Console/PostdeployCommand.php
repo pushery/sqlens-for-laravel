@@ -444,7 +444,8 @@ final class PostdeployCommand extends Command
             // unexpected drift — hundreds of findings, all of them artifacts, and the orphan
             // promotion above would fire on every one of them.
             return ExpectationReport::unavailable('the pending migrations could not be resolved: '
-                .$resolution->skip->value);
+                .$resolution->skip->value
+                .($resolution->remedy === null ? '' : '. '.$resolution->remedy));
         }
 
         $context = new SubjectContext(

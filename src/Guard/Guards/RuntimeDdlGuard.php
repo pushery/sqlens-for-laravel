@@ -6,9 +6,11 @@ namespace Pushery\SQLens\Guard\Guards;
 
 use Illuminate\Database\Events\QueryExecuted;
 use Pushery\SQLens\Categories\Category;
-use Pushery\SQLens\Guard\Contracts\PausesDuringMigrations;
 use Pushery\SQLens\Guard\Contracts\QueryInspector;
+use Pushery\SQLens\Guard\Contracts\TracksUnitsOfWork;
+use Pushery\SQLens\Guard\ExpectedSchemaChanges;
 use Pushery\SQLens\Guard\GuardProfile;
+use Pushery\SQLens\Guard\QueryWatcher;
 use Pushery\SQLens\Guard\ViolationLogger;
 use Pushery\SQLens\Guard\Violations\Violation;
 
@@ -43,11 +45,25 @@ use Pushery\SQLens\Guard\Violations\Violation;
  * a screen that migrates a tenant. Its statements are migrations, and reported they would bury the one
  * finding that matters under thousands of them. So the guardrail pauses while the migrator runs, from
  * `MigrationsStarted` to `MigrationsEnded`, and stays watching outside that run: a `CREATE DATABASE`
- * the same job issues before it migrates is still DDL outside any migration. The migrator announces no
- * end when a migration fails, so the next request, job or command ends the pause as well
- * ({@see PausesDuringMigrations}).
+ * the same job issues before it migrates is still DDL outside any migration.
+ *
+ * Started as a command, a run covers the whole command. `migrate` creates the migrator's own table through
+ * `migrate:install` before `MigrationsStarted`, and `migrate:fresh` drops every table first, so the pause
+ * begins with the start of a command that runs the migrator and ends with that command
+ * ({@see QueryWatcher::MIGRATION_COMMANDS}, and the commands `sqlens.guard.migration_commands` adds).
+ *
+ * A job or a command that starts while the migrator runs belongs to that run: a migration that dispatches
+ * a job onto a synchronous queue, or calls `Artisan::call()`, runs it inside itself, and the pause holds
+ * through it. The migrator announces no end when a migration fails, so the end of the job or the command
+ * that ran it ends the pause as well, and the end of a request ends every pause ({@see TracksUnitsOfWork}).
+ *
+ * ## A change the application declares is no finding
+ *
+ * Some code changes a schema on purpose outside a migration: a job that creates the partition of the month ahead. It
+ * says so with {@see ExpectedSchemaChanges::during()} and a reason, and while that work runs the guardrail reports no
+ * DDL. The declaration is a block of work, never a form of statement, so the same statement anywhere else is reported.
  */
-final class RuntimeDdlGuard implements PausesDuringMigrations, QueryInspector
+final class RuntimeDdlGuard implements QueryInspector, TracksUnitsOfWork
 {
     /**
      * The leading keywords that make a statement DDL.
@@ -90,14 +106,36 @@ final class RuntimeDdlGuard implements PausesDuringMigrations, QueryInspector
      */
     public const array APPLICATION_COMMANDS = ['queue:work', 'queue:listen', 'horizon:work', 'schedule:run', 'schedule:work'];
 
-    /** Whether the migrator is running in this process, between its start and its end. */
-    private bool $migrating = false;
+    /** The id of a unit whose event carried no object. No object has the id 0. */
+    private const int UNNAMED = 0;
+
+    /**
+     * The jobs and Artisan commands under way in this process, the outermost first, by object id.
+     *
+     * @var list<int>
+     */
+    private array $units = [];
+
+    /**
+     * For each run of the migrator under way, how many units were under way when it started.
+     *
+     * A run started among two units runs inside the second, and is over once fewer than two remain. A run
+     * started among none runs in a request, and ends with the migrator or with the request.
+     *
+     * @var list<int>
+     */
+    private array $runs = [];
 
     /**
      * @param  bool  $exempt  true in a console process that runs any other Artisan command, which is where
      *                        migrations, seeders and maintenance commands run
+     * @param  ExpectedSchemaChanges  $expected  the declarations of this process, the one the container holds
      */
-    public function __construct(private readonly ViolationLogger $logger, private readonly bool $exempt = false) {}
+    public function __construct(
+        private readonly ViolationLogger $logger,
+        private readonly bool $exempt = false,
+        private readonly ExpectedSchemaChanges $expected = new ExpectedSchemaChanges,
+    ) {}
 
     public function appliesTo(GuardProfile $profile): bool
     {
@@ -106,18 +144,44 @@ final class RuntimeDdlGuard implements PausesDuringMigrations, QueryInspector
 
     public function migrationsStarted(): void
     {
-        $this->migrating = true;
+        $this->runs[] = count($this->units);
     }
 
+    /** The innermost run ended. A migration that calls the migrator itself runs one inside another. */
     public function migrationsEnded(): void
     {
-        $this->migrating = false;
+        array_pop($this->runs);
     }
 
-    /** A new request, job or command: a run of the migrator that never announced its end is over. */
+    public function unitStarted(?object $unit): void
+    {
+        $this->units[] = $unit === null ? self::UNNAMED : spl_object_id($unit);
+    }
+
+    public function unitEnded(?object $unit): void
+    {
+        $id = $unit === null ? self::UNNAMED : spl_object_id($unit);
+        $positions = array_keys($this->units, $id, true);
+
+        // An end whose start this guardrail never saw, because it was armed while the unit ran, changes nothing.
+        if ($positions === []) {
+            return;
+        }
+
+        // The innermost unit of that id ends, and a unit inside it that announced no end of its own is over
+        // with it.
+        $this->units = array_slice($this->units, 0, max($positions));
+
+        // So is every run of the migrator that started inside it, announced or not.
+        $open = count($this->units);
+        $this->runs = array_values(array_filter($this->runs, static fn (int $startedAmong): bool => $startedAmong <= $open));
+    }
+
+    /** The request is over, and with it every unit and every run of the migrator inside it. */
     public function startWindow(): void
     {
-        $this->migrating = false;
+        $this->units = [];
+        $this->runs = [];
     }
 
     public function inspect(QueryExecuted $query, GuardProfile $profile): void
@@ -125,8 +189,9 @@ final class RuntimeDdlGuard implements PausesDuringMigrations, QueryInspector
         // Migrations, seeders and maintenance commands legitimately issue DDL. Reporting them would
         // produce a violation on every deploy, which is how a guardrail gets switched off in its
         // first week. A queue worker and the scheduler are not exempt (see APPLICATION_COMMANDS),
-        // but a run of the migrator inside one is a migration all the same.
-        if ($this->exempt || $this->migrating) {
+        // but a run of the migrator inside one is a migration all the same, and work the application declared
+        // as a schema change is what it says it is.
+        if ($this->exempt || $this->runs !== [] || $this->expected->underWay()) {
             return;
         }
 

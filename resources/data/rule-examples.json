@@ -596,6 +596,13 @@
             "false_positives": "The reading session's own timezone is NOT the server's, and the check never reads it. TimeZone is settable per connection — PGTZ, a per-role ALTER ROLE ... SET, or a client library — so a correctly configured server audited from a connection running local time must not be reported, and a misconfigured one must still be reported when the audit's own connection happens to be UTC. Etc/UTC is accepted alongside UTC. GMT, Zulu and Universal are NOT accepted even though they resolve to the same offset: they are the same instant but a different statement, and a server set to one of them was configured by somebody who did not mean UTC.",
             "language": "sql"
         },
+        "PG.L7.AUTOVACUUM_COST_PER_WORKER": {
+            "bad": "# postgresql.conf\nautovacuum_max_workers = 5\n# autovacuum_vacuum_cost_limit stays -1, so the five share vacuum_cost_limit = 200",
+            "good": "# postgresql.conf\nautovacuum_max_workers = 5\nautovacuum_vacuum_cost_limit = 334",
+            "language": "ini",
+            "note": "The workers share one cost limit, so five of them on 200 get 40 each where the default three get 66. Raising the limit with the workers keeps each one's share, and the extra workers then add throughput instead of slowing every vacuum down.",
+            "false_positives": "A server whose tables rarely need a vacuum may never run more than one worker, and then nothing is split; this check reads the settings, not the workers running at the moment, and the answer is an ignore entry with the reason beside it. A table with its own cost limit or delay in its storage parameters is left out of the split, which the check does not model."
+        },
         "PG.L7.AUTOVACUUM_DISABLED": {
             "bad": "Schema::table('events', function (Blueprint $table) {\n    DB::statement('ALTER TABLE events SET (autovacuum_enabled = false)');\n});",
             "good": "DB::statement('ALTER TABLE events SET (autovacuum_vacuum_scale_factor = 0.02)');",
@@ -642,11 +649,24 @@
             "note": "The judged value is the one a new connection gets: a superuser switching it off for one session is not a finding, while a database default set with ALTER DATABASE is, because every new connection of that database gets it.",
             "false_positives": "None known on a server where autovacuum is expected to work. A role that cannot read the setting gets undetermined, never a pass."
         },
+        "PG.L7.TYPE_CHANGE_DROPS_STATISTICS": {
+            "bad": "// A free change: note was varchar, and text rewrites nothing.\nDB::statement('ALTER TABLE orders ALTER COLUMN note TYPE text');",
+            "good": "DB::statement('ALTER TABLE orders ALTER COLUMN note TYPE text');\n\n// The type change removed the column's planner statistics; this puts them back:\nDB::statement('ANALYZE orders');",
+            "note": "Every form of ALTER COLUMN … TYPE removes the column's planner statistics, the free ones too, and the change adds nothing to n_mod_since_analyze, so autovacuum has no reason to analyze the table again; an ANALYZE after the change puts them back at once.",
+            "false_positives": "An ANALYZE that runs elsewhere, in a later migration of the same deploy or in a deploy step, puts the statistics back too, and this rule, which reads one migration, still reports the change. Where the change rewrites the table, or might, PG.L2.TYPE_CHANGE_REWRITE reports it and names the statistics in its own finding, so this rule stays silent there."
+        },
         "PG.L7.UNBATCHED_MASS_DML": {
             "bad": "DB::table('orders')->where('status', 'old')->update(['status' => 'new']);",
             "good": "// PostgreSQL has no LIMIT on UPDATE, so Laravel compiles this into a ctid subselect —\n// `where \"ctid\" in (select … limit 1000)` — which is exactly the bound the rule reads:\nDB::table('orders')->where('status', 'old')->limit(1000)->update(['status' => 'new']);\n// …or walk a key range, which bounds it just as well:\n// DB::table('orders')->whereBetween('id', [$from, $to])->update(['status' => 'new']);",
             "note": "A write with a predicate but no bound runs as one statement over every row it matches, holding row locks and keeping a transaction open for the whole of it — during which autovacuum cannot clean up behind it — while the migration blocks the deploy. The chunk SIGNAL is engine-specific even though the hazard is not: MySQL writes `LIMIT` on an `UPDATE` and PostgreSQL cannot, so the framework compiles the same call into a `ctid` subselect, and that is the shape this rule looks for.",
             "false_positives": "This is a heuristic and says so in the finding: it can see that a statement is unbounded, never how many rows that means, and it never asks the server for a row count. On a small lookup table an unbounded write is a non-event and is still reported — which is why the rule sits at level 7, the band a project turns on when it wants estimates as well as facts. It is lenient in the other direction too: a `BETWEEN` silences it, because a key-range walk is the fix it recommends, and a `BETWEEN` on a non-key column bounds nothing. The `ctid` form is matched as a SHAPE rather than as a `LIMIT` keyword — `UPDATE … WHERE id IN (SELECT id FROM other LIMIT 10)` bounds the subquery and says nothing about the rows written, and accepting it would be a false negative."
+        },
+        "PG.L7.UPDATED_AT_INDEX_BLOCKS_HOT": {
+            "bad": "CREATE INDEX orders_updated_at_index ON orders (updated_at);",
+            "good": "DROP INDEX CONCURRENTLY orders_updated_at_index;",
+            "language": "sql",
+            "note": "Laravel writes updated_at on every save that changes anything, so a non-summarizing index on it leaves no such update HOT: each one writes an entry into every index of the table and leaves a dead one in each. Drop the index if nothing reads it; a BRIN index on the column does not cost HOT, but it serves a range filter, not an ORDER BY.",
+            "false_positives": "An index that a frequent ORDER BY updated_at really needs is worth its cost on purpose, and the answer is an ignore entry with the reason beside it. The share of HOT updates is read over the whole table, so a table whose many other updates leave updated_at alone can stay at 80 percent or above and is then not reported."
         },
         "PG.L8.FK_ID_SUFFIX": {
             "bad": "Schema::create('posts', function (Blueprint $table) {\n    $table->id();\n    $table->foreignId('author')->constrained('users');\n});",

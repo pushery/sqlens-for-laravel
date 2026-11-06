@@ -56,6 +56,12 @@ final readonly class IndexUsageReading
      * @param  bool  $counting  whether the server counts the scans of new connections at all. False on
      *                          a PostgreSQL server that hands them `track_counts = off`: a scan made
      *                          there leaves the counter where it was, so a zero says nothing.
+     * @param  array<string, array{updates: int, hot: int}>  $tableUpdates  table qualified name => how many row updates
+     *                                                                      the server counted for it, and how many of
+     *                                                                      them were HOT, rewriting no index. Empty on
+     *                                                                      a server without HOT updates, MySQL among
+     *                                                                      them. Counted over the same window as the
+     *                                                                      scans above.
      */
     public function __construct(
         public array $scans = [],
@@ -63,6 +69,7 @@ final readonly class IndexUsageReading
         public ?int $windowDays = null,
         public bool $available = true,
         public bool $counting = true,
+        public array $tableUpdates = [],
     ) {}
 
     /** The reading a driver returns when it cannot answer at all. */
@@ -80,5 +87,16 @@ final readonly class IndexUsageReading
     public function scansOf(string $index): ?int
     {
         return $this->scans[$index] ?? null;
+    }
+
+    /**
+     * How many updates this table took and how many of them were HOT, or null when the reading does
+     * not cover it.
+     *
+     * @return array{updates: int, hot: int}|null
+     */
+    public function updatesOf(string $table): ?array
+    {
+        return $this->tableUpdates[$table] ?? null;
     }
 }

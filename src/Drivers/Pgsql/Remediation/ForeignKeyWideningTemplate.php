@@ -20,12 +20,12 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * `PG.L5.FK_NEAR_CEILING` once the referenced key's sequence has nearly filled the column. One change
  * puts both right, so both hand out this one sequence rather than two copies free to drift apart.
  *
- * Every step is its own migration: add a `bigint` column beside the old one, backfill it from a job,
- * ship a release that writes both and reads the new one, move the constraint, and only then drop the
- * old column. `ALTER TABLE … ALTER COLUMN … TYPE bigint` reaches the same end state in one statement
- * and is named in a precondition rather than emitted: on PostgreSQL it rewrites every row under
- * `ACCESS EXCLUSIVE`, and the size at which that stops being acceptable is a fact about the table
- * nothing here can read.
+ * Every step is its own migration or release: add a `bigint` column beside the old one, ship a
+ * release that writes both, backfill the new column from a job, ship a release that reads it, move
+ * the constraint, and only then drop the old column. `ALTER TABLE … ALTER COLUMN … TYPE bigint`
+ * reaches the same end state in one statement and is named in a precondition rather than emitted:
+ * on PostgreSQL it rewrites every row under `ACCESS EXCLUSIVE`, and the size at which that stops
+ * being acceptable is a fact about the table nothing here can read.
  *
  * No downtime class and no step in a migration at hand: a state finding has no deploy to describe,
  * and its fix is a new migration.
@@ -49,16 +49,21 @@ final readonly class ForeignKeyWideningTemplate
             ),
             new RemediationStep(
                 order: 2,
-                kind: RemediationStepKind::QueuedJob,
-                noteKey: 'sqlens::messages.remediation.expand_contract.backfill',
-            ),
-            new RemediationStep(
-                order: 3,
                 kind: RemediationStepKind::ManualGate,
                 noteKey: 'sqlens::messages.remediation.expand_contract.dual_write',
             ),
             new RemediationStep(
+                order: 3,
+                kind: RemediationStepKind::QueuedJob,
+                noteKey: 'sqlens::messages.remediation.expand_contract.backfill',
+            ),
+            new RemediationStep(
                 order: 4,
+                kind: RemediationStepKind::ManualGate,
+                noteKey: 'sqlens::messages.remediation.expand_contract.switch_reads',
+            ),
+            new RemediationStep(
+                order: 5,
                 kind: RemediationStepKind::SeparateMigration,
                 noteKey: 'sqlens::messages.remediation.expand_contract.swap_the_key',
                 // Two statements, one migration: a table with the constraint on neither column
@@ -69,7 +74,7 @@ final readonly class ForeignKeyWideningTemplate
                     .'FOREIGN KEY ({{new_column}}) REFERENCES {{referenced_table}} ({{referenced_column}})',
             ),
             new RemediationStep(
-                order: 5,
+                order: 6,
                 kind: RemediationStepKind::SeparateMigration,
                 noteKey: 'sqlens::messages.remediation.expand_contract.contract',
                 sqlTemplate: 'ALTER TABLE {{table}} DROP COLUMN {{old_column}}',

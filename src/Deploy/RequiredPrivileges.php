@@ -28,6 +28,15 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * cannot resolve therefore produces a requirement with a named reason and no class, so a check
  * downstream reports `undetermined` instead of certifying a role it never tested against that
  * object.
+ *
+ * ## A recognized statement without a target is the driver's question
+ *
+ * The classifier keeps a session setting, a comment and a row security policy without a target on
+ * purpose, so an empty target set does not mean "unrecognized". What such a statement needs is a
+ * question about the engine: `SET LOCAL lock_timeout` needs nothing any role lacks, which the lock
+ * rules rely on when they ask a migration to open with it, while `SET ROLE` needs a membership. The
+ * driver answers it through {@see TargetlessPrivileges}, and only where it cannot does the statement
+ * stay underivable.
  */
 final readonly class RequiredPrivileges
 {
@@ -70,9 +79,12 @@ final readonly class RequiredPrivileges
     /**
      * The requirements this pending set implies, deduplicated and deterministically ordered.
      *
+     * Without the driver's {@see TargetlessPrivileges}, every statement without a target stays
+     * underivable.
+     *
      * @return list<PrivilegeRequirement>
      */
-    public static function forPending(PendingWork $pending): array
+    public static function forPending(PendingWork $pending, ?TargetlessPrivileges $targetless = null): array
     {
         $requirements = [];
 
@@ -85,7 +97,17 @@ final readonly class RequiredPrivileges
                 ...array_map(static fn (StatementAction $action): array => [$action->kind, $action->targets], $statement->actions),
             ];
 
-            foreach ($actions as [$kind, $targets]) {
+            foreach ($actions as $position => [$kind, $targets]) {
+                // Only the statement's own classification is the driver's to read: an action of an
+                // `ALTER TABLE` list without a target is a list the classifier could not resolve.
+                $known = $targets === [] && $position === 0 ? $targetless?->requirementsOf($statement) : null;
+
+                if ($known !== null) {
+                    $requirements = [...$requirements, ...$known];
+
+                    continue;
+                }
+
                 if ($targets === []) {
                     // No target means no object to ask about — and that is exactly the state that must
                     // not vanish. A raw `DO $$ … $$` or a driver-specific form the classifier does not

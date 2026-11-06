@@ -426,8 +426,8 @@ final readonly class SarifDocument
         // not about withholding the advice.
         //
         // Revisited when the schema is promoted `preview` → stable, and not before. That is the
-        // trigger, not a date and not somebody's judgment that it looks ready.
-        // `tests/Feature/Reporting/SarifCarriesNoFixesTest.php` holds this to it.
+        // trigger, not a date and not somebody's judgment that it looks ready, and a test holds
+        // this to it.
 
         return $result;
     }

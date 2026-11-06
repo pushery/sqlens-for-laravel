@@ -89,7 +89,7 @@ final class CallDeclaredTool extends CallTool
 
         $tool = $context->tools()->first(
             static fn (Tool $tool): bool => $tool->name() === $name,
-            static fn () => throw new JsonRpcException(sprintf('Tool [%s] not found.', is_scalar($name) ? (string) $name : get_debug_type($name)), -32602, $request->id),
+            static fn (): never => throw new JsonRpcException(sprintf('Tool [%s] not found.', is_scalar($name) ? (string) $name : get_debug_type($name)), -32602, $request->id),
         );
 
         $open = array_keys($this->database->getConnections());

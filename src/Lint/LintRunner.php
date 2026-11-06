@@ -245,8 +245,8 @@ final readonly class LintRunner implements LintRuns
         // Three guards on it, and each one is load-bearing:
         //
         //  - `$file === null`: the single-file fast path returns before any of this and must stay
-        //    connectionless. `tests/Feature/Lint/FastPathNoDatabaseTest.php` counts ATTEMPTS with a
-        //    spy, so a regression here is red rather than quiet.
+        //    connectionless. A test counts ATTEMPTS with a spy, so a regression here is red rather
+        //    than quiet.
         //  - a driver this build supports: opening a `sqlite` connection creates the file, and
         //    sqlite is a reserved non-goal engine that is refused a few lines below anyway. Read
         //    from the configuration, which needs no connection to answer.
@@ -1274,13 +1274,16 @@ final readonly class LintRunner implements LintRuns
         // throw guards that invariant rather than inventing a default.
         $reason = $resolution->skip ?? throw new LogicException('An unresolved pending resolution without a skip reason is unconstructible.');
 
-        $result = Result::of([$this->skipFinding($reason, $connectionName, $migrationPaths, $subjectContext)]);
+        $result = Result::of([$this->skipFinding($reason, $resolution->skipText() ?? $reason->description(), $connectionName, $migrationPaths, $subjectContext)]);
 
         return new LintOutcome($result, $context, $this->exitCodes->resolve($result, $context, false), $connectionName);
     }
 
-    /** @param  list<string>  $migrationPaths */
-    private function skipFinding(PendingSkipReason $reason, string $connectionName, array $migrationPaths, SubjectContext $subjectContext): Finding
+    /**
+     * @param  string  $message  the skip's description, followed by its remedy where the resolver named one
+     * @param  list<string>  $migrationPaths
+     */
+    private function skipFinding(PendingSkipReason $reason, string $message, string $connectionName, array $migrationPaths, SubjectContext $subjectContext): Finding
     {
         // The skip is about the migration source for a connection, not a single
         // migration, so it is located at the first configured path as a callsite.
@@ -1289,7 +1292,7 @@ final readonly class LintRunner implements LintRuns
         return Finding::undetermined(
             $reason->ruleId(),
             RunnerNotice::MESSAGE_PREFIX,
-            $reason->description(),
+            $message,
             $reason->undeterminedReason(),
             Location::inCallsite($path, 0, 'connection '.$connectionName, $this->projectRoot()),
             RunnerNotice::Skipped->category(),

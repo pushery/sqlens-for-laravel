@@ -59,7 +59,7 @@ final class TypeNarrowingRule extends AbstractPgsqlSafetyRule implements Provide
     }
 
     /**
-     * The four-phase sequence, filled with the one fact a narrowing statement actually carries.
+     * The five-phase sequence, filled with the one fact a narrowing statement actually carries.
      *
      * The table is fillable; the new column's name and type are not, because they do not exist yet
      * — they are decisions somebody makes, and inventing them would be inventing a schema. The old
@@ -71,7 +71,7 @@ final class TypeNarrowingRule extends AbstractPgsqlSafetyRule implements Provide
      *
      * It asks the same matrix {@see judge()} asks, and that is not belt-and-braces. A widening is a
      * different operation, not a milder one: nothing that read the narrower type stops working, so
-     * there is nothing to stage. A four-phase plan handed over for `integer → bigint` would be a
+     * there is nothing to stage. A five-phase plan handed over for `integer → bigint` would be a
      * work order attached to a change that costs nothing — more expensive than saying nothing, which
      * is what this level's guardrail against cargo-cult advice means.
      *

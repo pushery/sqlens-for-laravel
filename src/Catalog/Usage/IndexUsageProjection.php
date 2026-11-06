@@ -92,7 +92,23 @@ final readonly class IndexUsageProjection
             ]);
         }
 
-        return $attached;
+        // The updates of an index's table ride on the index as well: whether an index costs the
+        // table its HOT updates is a question about that index, and it is answered by its table's
+        // counters. -1 where the reading covers no such table, which is not the same as none.
+        return array_map(static function (SchemaObject $object) use ($usage): SchemaObject {
+            if ($object->type !== SchemaObjectType::Index) {
+                return $object;
+            }
+
+            $updates = $usage->updatesOf($object->parent ?? '');
+
+            return $object->withAttributes([
+                'table_updates' => $updates['updates'] ?? -1,
+                'table_hot_updates' => $updates['hot'] ?? -1,
+                'index_stats_reset_at' => $usage->statsResetAt ?? '',
+                'index_stats_counting' => $usage->counting,
+            ]);
+        }, $attached);
     }
 
     /**

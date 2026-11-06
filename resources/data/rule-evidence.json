@@ -743,7 +743,7 @@
                 "type": "doc",
                 "url": "https://www.postgresql.org/docs/18/sql-altertable.html",
                 "applies_to": "PostgreSQL 18",
-                "note": "Changing a column's type rewrites the whole table unless the new type is binary-coercible from the old one, and a USING clause forces the rewrite unconditionally. The duration therefore grows with the row count, which is why a change that is instant in development can be an outage in production."
+                "note": "Changing a column's type rewrites the whole table unless the new type is binary-coercible from the old one, and a USING clause forces the rewrite unconditionally. The duration therefore grows with the row count, which is why a change that is instant in development can be an outage in production. The same page says that every type change removes the column's statistics, and it recommends an ANALYZE of the table afterwards."
             }
         ],
         "PG.L2.VACUUM_FULL": [
@@ -1168,6 +1168,20 @@
                 "note": "The remediation path, and why this rule reports no downtime: ALTER SYSTEM writes the value to a file the server reads, and a parameter of this class takes effect on a configuration reload rather than a restart. Sessions already open keep what they have, so the change reaches an application when its pool next reconnects."
             }
         ],
+        "PG.L7.AUTOVACUUM_COST_PER_WORKER": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/runtime-config-vacuum.html#GUC-AUTOVACUUM-VACUUM-COST-LIMIT",
+                "applies_to": "PostgreSQL 18",
+                "note": "The fact this rule rests on: the value is distributed proportionally among the running autovacuum workers, if there is more than one, so that the sum of the limits for each worker does not exceed it. And -1, the default, uses vacuum_cost_limit, so the rule reads that one where the first is -1."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/runtime-config-vacuum.html#GUC-AUTOVACUUM-MAX-WORKERS",
+                "applies_to": "PostgreSQL 18",
+                "note": "The default of three workers, and the cap the rule applies: a setting above autovacuum_worker_slots has no effect, since autovacuum workers are taken from the pool of slots that setting establishes, and the pool takes a restart."
+            }
+        ],
         "PG.L7.AUTOVACUUM_DISABLED": [
             {
                 "type": "doc",
@@ -1284,12 +1298,34 @@
                 "note": "States that track_counts must be on for autovacuum to work, so a server with it off vacuums and analyzes no table on its own while autovacuum itself still reads on."
             }
         ],
+        "PG.L7.TYPE_CHANGE_DROPS_STATISTICS": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/sql-altertable.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "SET DATA TYPE: \"When this form is used, the column's statistics are removed, so running ANALYZE on the table afterwards is recommended.\" Measured on PostgreSQL 18.0 over 50,000 rows with autovacuum off for the table: a binary-coercible varchar(10) to varchar(20), the type a column already had beside DROP NOT NULL, and an integer to bigint rewrite each left the column without pg_stats rows, while the other columns kept theirs and n_mod_since_analyze did not move. An ANALYZE of the table restored them."
+            }
+        ],
         "PG.L7.UNBATCHED_MASS_DML": [
             {
                 "type": "doc",
                 "url": "https://www.postgresql.org/docs/18/sql-update.html",
                 "applies_to": "PostgreSQL 18 and newer",
                 "note": "The UPDATE page's synopsis carries no LIMIT clause — the engine has none, which is why a chunked write on PostgreSQL is compiled by Laravel into a `ctid` subselect instead and why this rule's signal differs from its MySQL sibling's while the hazard does not."
+            }
+        ],
+        "PG.L7.UPDATED_AT_INDEX_BLOCKS_HOT": [
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/storage-hot.html",
+                "applies_to": "PostgreSQL 18",
+                "note": "What a HOT update is and when it is possible: only when the update modifies no column referenced by the table's indexes, other than by summarizing indexes, and there is room on the page. A BRIN index is summarizing, which is why it is the control."
+            },
+            {
+                "type": "doc",
+                "url": "https://www.postgresql.org/docs/18/monitoring-stats.html#MONITORING-PG-STAT-ALL-TABLES-VIEW",
+                "applies_to": "PostgreSQL 18",
+                "note": "Measured on PostgreSQL 18.0 over three tables of 10,000 rows with fillfactor 70, each updated once with updated_at = now(): n_tup_hot_upd was 4416 with no index on the column, 4416 with a BRIN index and 0 with a B-tree index. n_tup_upd and n_tup_hot_upd are the counters this view documents."
             }
         ],
         "PG.L8.FK_ID_SUFFIX": [

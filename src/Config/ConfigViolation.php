@@ -20,8 +20,8 @@ use Pushery\SQLens\Findings\CredentialRedactor;
  *
  * It will not be. This package ships one locale, deliberately: everything it emits goes to a
  * terminal, a CI annotation, a SARIF file or an agent artifact, and none of those is a user
- * interface. `tests/Unit/LocaleParityTest.php` is inverted for exactly that reason and goes red if a
- * second locale directory appears, so a translation path built here would take the guard with it.
+ * interface. Its locale test is inverted for exactly that reason and goes red if a second locale
+ * directory appears, so a translation path built here would take the guard with it.
  *
  * The case is stronger for a CONFIG message than anywhere else. It names a dotted key that is
  * English (`sqlens.security.min_severity`), quotes a value from a file whose comments are English,

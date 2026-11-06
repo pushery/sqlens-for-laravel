@@ -94,8 +94,8 @@ final readonly class RuleEvaluation
      * Whether this subject is one this rule actually judges.
      *
      * A rule that declares nothing judges whatever it is handed — true for every table rule, and the
-     * only reading of silence that is not a guess. `tests/Unit/Rules/JudgedObjectTypeDeclarationTest.php`
-     * is what keeps it true: a rule whose body narrows by type and does not declare fails there,
+     * only reading of silence that is not a guess. A test keeps it true: a rule whose body narrows
+     * by type and does not declare fails it,
      * because otherwise the default would quietly start meaning "we did not check".
      */
     private static function judges(Rule $rule, SchemaObject $object): bool

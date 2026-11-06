@@ -476,6 +476,9 @@ final readonly class SecuritySubjects
                 // folding into "separate".
                 'runtime_identity' => $separation->runtimeIdentity,
                 'migration_identity' => $separation->migrationIdentity,
+                // Whether the migration connection migrates over its `direct` block, the one case in
+                // which the same name on both sides is not yet one account.
+                'migration_direct' => $separation->migrationDirect,
                 // Whether this RUN is looking at the runtime connection — as a word rather than a
                 // bool, because a bool has only two of the three answers. `undetermined` is the one
                 // that matters: a rule judging the CONNECTING role must not assume it is the runtime

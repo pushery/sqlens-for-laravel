@@ -119,9 +119,9 @@ final readonly class EffectiveConnectionConfig
     public static function forMigrations(mixed $config): array
     {
         $parsed = self::withoutUrl($config);
-        $direct = $parsed['direct'] ?? null;
+        $direct = self::directBlock($parsed);
 
-        if (($parsed['driver'] ?? null) !== 'pgsql' || ! is_array($direct) || $direct === [] || ! self::frameworkMigratesDirect()) {
+        if ($direct === null) {
             return self::for($config);
         }
 
@@ -136,6 +136,37 @@ final readonly class EffectiveConnectionConfig
         ]);
 
         return $merged;
+    }
+
+    /**
+     * Whether the framework migrates this connection over its `direct` block rather than over the
+     * connection itself.
+     *
+     * Then one connection name carries two accounts: the one requests are served by and the one the
+     * block names. Whether those are two identities is a question of the credentials, not of the
+     * name, which is why a rule that compares connection names has to ask this first.
+     */
+    public static function migratesThroughDirect(mixed $config): bool
+    {
+        return self::directBlock(self::withoutUrl($config)) !== null;
+    }
+
+    /**
+     * The `direct` block the framework migrates through, or null when it migrates over the connection
+     * itself: on another driver, without a block, or on a framework that has no direct connection.
+     *
+     * @param  array<string, mixed>  $parsed
+     * @return array<array-key, mixed>|null
+     */
+    private static function directBlock(array $parsed): ?array
+    {
+        $direct = $parsed['direct'] ?? null;
+
+        if (($parsed['driver'] ?? null) !== 'pgsql' || ! is_array($direct) || $direct === [] || ! self::frameworkMigratesDirect()) {
+            return null;
+        }
+
+        return $direct;
     }
 
     /** Whether the installed framework routes migrations over a direct connection at all. */

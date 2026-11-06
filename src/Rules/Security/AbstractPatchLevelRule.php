@@ -15,6 +15,7 @@ use Pushery\SQLens\Security\Advisory\EolRepository;
 use Pushery\SQLens\Security\Advisory\PatchAssessment;
 use Pushery\SQLens\Security\Advisory\PatchLevelEvaluator;
 use Pushery\SQLens\Security\Advisory\PatchVerdict;
+use Pushery\SQLens\Severity\Severity;
 use Pushery\SQLens\Subjects\SchemaObject;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
@@ -94,6 +95,9 @@ abstract class AbstractPatchLevelRule extends AbstractSchemaObjectSecurityRule i
     /** The finding, once the shared half has established that this rule is the one to report it. */
     abstract protected function flag(PatchAssessment $assessment): string;
 
+    /** The weight of the finding where it differs from the rule's own, or null for the rule's. */
+    abstract protected function severityFor(PatchAssessment $assessment): ?Severity;
+
     /** @return list<RuleVerdict> */
     public function judgeSchemaObject(SchemaObject $object): array
     {
@@ -143,14 +147,14 @@ abstract class AbstractPatchLevelRule extends AbstractSchemaObjectSecurityRule i
             )];
         }
 
-        $assessment = $this->evaluator->evaluate($reported, $product, $lookup->data, $this->today);
+        $assessment = $this->evaluator->evaluate($reported, $product, $lookup->data, $this->today, $this->advisories->leadDays());
 
         if (! $this->judges($assessment->verdict)) {
             return [];
         }
 
         return $assessment->verdict->isFinding()
-            ? [RuleVerdict::flag($this->flag($assessment))]
+            ? [RuleVerdict::flag($this->flag($assessment), severity: $this->severityFor($assessment))]
             : [RuleVerdict::undetermined($this->gap($assessment), $this->reasonFor($assessment->verdict))];
     }
 
@@ -184,7 +188,7 @@ abstract class AbstractPatchLevelRule extends AbstractSchemaObjectSecurityRule i
                 .'to look up',
                 $assessment->reported,
             ),
-            PatchVerdict::Ended, PatchVerdict::BehindLatestPatch, PatchVerdict::Current => throw $this->notAGap($assessment->verdict),
+            PatchVerdict::Ended, PatchVerdict::EndsSoon, PatchVerdict::BehindLatestPatch, PatchVerdict::Current => throw $this->notAGap($assessment->verdict),
         };
 
         return sprintf('the server reports %s, and %s (%s).', $assessment->reported, $why, $assessment->provenance());
@@ -200,12 +204,12 @@ abstract class AbstractPatchLevelRule extends AbstractSchemaObjectSecurityRule i
             // `unknown_server_version`: a pin answers that one, and this check judges the live value,
             // which a pin does not replace.
             PatchVerdict::VersionUnparsable => UndeterminedReason::SettingValueUnrecognized,
-            PatchVerdict::Ended, PatchVerdict::BehindLatestPatch, PatchVerdict::Current => throw $this->notAGap($verdict),
+            PatchVerdict::Ended, PatchVerdict::EndsSoon, PatchVerdict::BehindLatestPatch, PatchVerdict::Current => throw $this->notAGap($verdict),
         };
     }
 
     /**
-     * The three verdicts that are not gaps have no sentence and no reason, and asking for one is a
+     * The four verdicts that are not gaps have no sentence and no reason, and asking for one is a
      * defect in the caller rather than a state of the server.
      *
      * Both methods above used to end in a `default`, and the default hid that only one of the four

@@ -31,8 +31,7 @@ use Throwable;
  * rather than an inconsistency.
  *
  * The finding IDs are therefore identical across `sqlens:predeploy` and `sqlens:postdeploy` by
- * construction, and `tests/Postgres/PostdeployInvalidIndexTest.php` compares two real runs to keep
- * it that way.
+ * construction, and a test compares two real runs against a server to keep it that way.
  *
  * ## The one intervention: a build that is still running
  *

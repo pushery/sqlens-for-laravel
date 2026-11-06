@@ -135,9 +135,9 @@ final class ForeignKeyNarrowerThanKeyRule extends AbstractCatalogRule implements
      * The fix material for a narrowing key that stands alone on its constraint.
      *
      * Its end state is no judgment call: the child has to be as wide as what it references. The
-     * sequence is expand/contract, every step its own migration: add a `bigint` column beside the old
-     * one, backfill it from a job, ship a release that writes both and reads the new one, move the
-     * constraint, and only then drop the old column.
+     * sequence is expand/contract, every step its own migration or release: add a `bigint` column
+     * beside the old one, ship a release that writes both, backfill the new column from a job, ship a
+     * release that reads it, move the constraint, and only then drop the old column.
      *
      * `ALTER TABLE … ALTER COLUMN … TYPE bigint` reaches the same end state in one statement, and on
      * a small table it is the better choice. It is named in a precondition rather than emitted,

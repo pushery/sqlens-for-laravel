@@ -17,8 +17,8 @@ use Pushery\SQLens\Exceptions\UnreadableShippedArtifact;
  * loader would leave the same thing true of the ninth: the reason those three drifted is that every
  * loader got to decide for itself, and a decision made ten times is a decision made differently.
  *
- * Here it is made once, and `tests/Feature/Architecture/BundledArtifactPolicyTest` can then check
- * that every shipped path goes through it instead of hand-rolling a fallback.
+ * Here it is made once, and an architecture test can then check that every shipped path goes
+ * through it instead of hand-rolling a fallback.
  *
  * ## Why it takes a path
  *

@@ -22,6 +22,10 @@ use Pushery\SQLens\Severity\Severity;
  * Not `critical`: nothing here is known to be exploitable, and reserving the top weight for
  * demonstrated exposure is what keeps it meaningful. A team that has to plan a major upgrade needs
  * to know it is overdue, not to be told the building is on fire.
+ *
+ * Ahead of the end, within `sqlens.security.advisories.lead_days`, the same rule reports the series
+ * as ending, at `medium`. That finding is about time left to plan rather than about exposure, so it
+ * names the date and the days left and stays below the threshold a default gate blocks on.
  */
 final class PatchEolRule extends AbstractPatchLevelRule
 {
@@ -49,11 +53,32 @@ final class PatchEolRule extends AbstractPatchLevelRule
         //
         // The two that remain are real failures to answer: a cycle this data has never heard of, and
         // a version string nothing could parse. Neither is "in support" and neither is "not".
-        return in_array($verdict, [PatchVerdict::Ended, PatchVerdict::CycleUnknown, PatchVerdict::VersionUnparsable], true);
+        return in_array($verdict, [PatchVerdict::Ended, PatchVerdict::EndsSoon, PatchVerdict::CycleUnknown, PatchVerdict::VersionUnparsable], true);
+    }
+
+    #[Override]
+    protected function severityFor(PatchAssessment $assessment): ?Severity
+    {
+        return $assessment->verdict === PatchVerdict::EndsSoon ? Severity::Medium : null;
     }
 
     protected function flag(PatchAssessment $assessment): string
     {
+        if ($assessment->verdict === PatchVerdict::EndsSoon) {
+            return sprintf(
+                'the server reports %s, and support for the %s series ends on %s, with %d day(s) of it '
+                .'left. Nothing is wrong with the server yet, and it receives fixes until then. An '
+                .'upgrade across a major is a project rather than a patch, so plan it now, while there '
+                .'is time to test it. %s (%s).',
+                $assessment->reported,
+                (string) $assessment->cycle,
+                (string) $assessment->entry?->eolDate,
+                (int) $assessment->daysLeft,
+                (string) $assessment->entry?->note,
+                $assessment->provenance(),
+            );
+        }
+
         return sprintf(
             'the server reports %s, and support for the %s series ended on %s. What that costs is not '
             .'visible today: the server is not newly broken, it is simply no longer on the list that '

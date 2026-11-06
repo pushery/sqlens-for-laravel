@@ -87,7 +87,7 @@ final readonly class GrantCheck implements PreflightCheck
             return CheckResult::pass(self::ID);
         }
 
-        $requirements = RequiredPrivileges::forPending($context->pending);
+        $requirements = RequiredPrivileges::forPending($context->pending, new PgsqlTargetlessPrivileges);
 
         if ($requirements === []) {
             return CheckResult::pass(self::ID);
@@ -152,18 +152,17 @@ final readonly class GrantCheck implements PreflightCheck
             }
         }
 
-        if ($unanswered !== []) {
-            return CheckResult::undetermined(
-                self::ID,
-                UndeterminedReason::PrivilegeCheckIncomplete,
-                ''.implode('; ', $unanswered),
-                $findings,
-            );
+        // A privilege that is missing for certain decides the run, whatever else stayed unanswered:
+        // the migration stops at that statement either way, and an undetermined answer can be
+        // waived where a missing privilege must not be. What stayed unanswered is reported once
+        // the missing privilege is granted.
+        if ($findings !== []) {
+            return CheckResult::fail(self::ID, $findings);
         }
 
-        return $findings === []
+        return $unanswered === []
             ? CheckResult::pass(self::ID)
-            : CheckResult::fail(self::ID, $findings);
+            : CheckResult::undetermined(self::ID, UndeterminedReason::PrivilegeCheckIncomplete, implode('; ', $unanswered));
     }
 
     /**

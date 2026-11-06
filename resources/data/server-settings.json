@@ -183,6 +183,18 @@
             "note": "Off stops the autovacuum daemon for every table, and a table storage parameter cannot turn it back on for one. Dead rows are then reclaimed by nobody and row estimates go stale, while a table that crosses autovacuum_freeze_max_age is still vacuumed, by a worker that does not yield to a lock request. Measured on 18.0: context sighup, so a configuration change and a reload."
         },
         {
+            "variable": "autovacuum_max_workers",
+            "driver": "pgsql",
+            "min_version": "18",
+            "max_version": null,
+            "vendor_default": "3",
+            "sqlens_expectation": null,
+            "scope": "instance",
+            "changeable": "reload",
+            "source_url": "https://www.postgresql.org/docs/18/runtime-config-vacuum.html#GUC-AUTOVACUUM-MAX-WORKERS",
+            "note": "No expectation on purpose: the number of workers is not wrong on its own, only against the cost limit they share, which PostgreSQL divides among the workers that run. PG.L7.AUTOVACUUM_COST_PER_WORKER reads it beside autovacuum_vacuum_cost_limit, vacuum_cost_limit where that is -1, and autovacuum_worker_slots, the pool PostgreSQL 18 takes the workers from. Documented for 18 as a reload, the pool as a restart."
+        },
+        {
             "variable": "data_checksums",
             "driver": "pgsql",
             "min_version": "18",

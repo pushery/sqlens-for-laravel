@@ -40,6 +40,9 @@ final class EolRepository
     /** The schema this build understands. A file from the future is refused rather than guessed at. */
     public const int SCHEMA_VERSION = 1;
 
+    /** How many days ahead an ending series is reported where `sqlens.security.advisories.lead_days` says nothing. */
+    public const int DEFAULT_LEAD_DAYS = 180;
+
     private ?EolLookup $cached = null;
 
     public function __construct(
@@ -108,6 +111,20 @@ final class EolRepository
         // constructor could build an empty object would be a shipped dependency bought for a stub.
         // Null reads as "nothing configured", which is precisely what this constructor means.
         return new self(null, '');
+    }
+
+    /**
+     * How many days before a series leaves support it is reported as ending.
+     *
+     * Read here because this object already holds the configuration the advisory data is resolved
+     * from. A reader without one, such as {@see bundled()}, answers the default, and so does a value
+     * the configuration check refuses, should one reach this.
+     */
+    public function leadDays(): int
+    {
+        $days = $this->config?->get('sqlens.security.advisories.lead_days', self::DEFAULT_LEAD_DAYS);
+
+        return is_int($days) && $days >= 0 ? $days : self::DEFAULT_LEAD_DAYS;
     }
 
     /**

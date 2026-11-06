@@ -23,7 +23,9 @@ use Pushery\SQLens\Tools\ToolRunResult;
  * the tool sends to the server. Against 0.25.7 a run issues **sixteen statements, none of them
  * mutating**, over **ten sessions that are all open at once**: twelve reads spread across the
  * sessions, and on one of them a transaction of four statements — `begin`,
- * `set local search_path = ''`, the lint query, `commit`.
+ * `set local search_path = ''`, the lint query, `commit`. 0.27.1 and 0.28.2 send eighteen over the
+ * same ten sessions, with the same transaction: the two more are reads of `pg_cast` and
+ * `pg_operator` for the tool's schema cache, and none of the eighteen mutates.
  *
  * The reads are not free of locks. Two of them call `pg_total_relation_size()` over every relation
  * in the database, which opens each one with ACCESS SHARE for the length of the call. Measured with a

@@ -58,7 +58,11 @@ final readonly class PglsTool implements Tool
      * 0.26.0 was measured against the same probe database as the minimum: it executes the
      * identical splinter catalog, byte for byte, answers in the identical report shape with the
      * identical findings, prints the identical `--version` line, and answers an unreachable server
-     * in the identical plain text. So the window reaches through the 0.26 line, and the catalog in
+     * in the identical plain text. 0.27.1 and 0.28.2 were measured the same way, against an object
+     * made for each rule of the catalog: the same catalog byte for byte, the same report shape, the
+     * same findings with the same messages, the same `--version` line, and an unreachable server
+     * still answered in plain text with exit 1, which now carries the driver's own words where
+     * 0.25.7 printed a placeholder. So the window reaches through the 0.28 line, and the catalog in
      * {@see PglsRuleMap} still names its measurement as the minimum. The next minor is a new
      * measurement, not a number to move.
      *
@@ -66,7 +70,7 @@ final readonly class PglsTool implements Tool
      * pattern. The tool will have started promising something, and what it promises is what the
      * window should be drawn from.
      */
-    public const string BELOW_VERSION = '0.27.0';
+    public const string BELOW_VERSION = '0.29.0';
 
     /**
      * The exact shape of the measured `--version` line: `Version: 0.25.7`.

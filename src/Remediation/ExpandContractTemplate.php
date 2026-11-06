@@ -10,20 +10,27 @@ use Pushery\SQLens\Rules\RuleEvidence;
 use Pushery\SQLens\Rules\RuleEvidenceEntry;
 
 /**
- * The sequence that turns a breaking schema change into four ordinary ones — and the reference the
+ * The sequence that turns a breaking schema change into five ordinary ones — and the reference the
  * other multi-step strategies are shaped after.
  *
- * ## Why it is four phases and why the middle two are not statements
+ * ## Why it is five phases and why the middle three are not statements
  *
  * A narrowing, a rename, a retyping: each is one statement that breaks every application version
  * still running against the old shape. The fix is not a better statement, it is a different SHAPE of
- * change — add the new thing beside the old one, move the data, move the readers and writers, and
+ * change — add the new thing beside the old one, write both, move the data, move the readers, and
  * only then remove what nobody uses any more.
  *
- * Two of those four phases are not SQL at all. The backfill is a job because it is unbounded in
- * time, and the dual-write window is a decision a person makes about releases. A template that
+ * Three of those five phases are not SQL at all. The backfill is a job because it is unbounded in
+ * time, and the two release windows are decisions a person makes about releases. A template that
  * emitted only the two statements would be a template that shipped the dangerous half: the second
- * `ALTER` is safe exactly and only because the window before it happened.
+ * `ALTER` is safe exactly and only because the windows before it happened.
+ *
+ * ## Why both columns are written before the backfill
+ *
+ * The release that writes both columns comes first, and the backfill runs once it is everywhere. A
+ * row that a release writing only the old column touches after the job has passed it would never
+ * reach the new column, and the release that reads the new column would then read it empty. In
+ * this order every row is either copied by the job or written into both columns by the application.
  *
  * ## Why it is driver-neutral, and what that costs
  *
@@ -44,7 +51,7 @@ use Pushery\SQLens\Rules\RuleEvidenceEntry;
  *
  * The backfill's own recipe. Batching is its own strategy with its own template, and restating it
  * here would create a second definition free to drift from the first — with each looking correct
- * alone. Step two names the job and points at that strategy; it carries no SQL.
+ * alone. Step three names the job and points at that strategy; it carries no SQL.
  *
  * ## It renders; it never runs
  *
@@ -87,7 +94,7 @@ final readonly class ExpandContractTemplate
     }
 
     /**
-     * The four-phase sequence for a change that would break a running old version.
+     * The five-phase sequence for a change that would break a running old version.
      *
      * @param  array<string, string>  $context  placeholder values the CALLER measured — typically
      *                                          just the table and the old column, because
@@ -116,24 +123,32 @@ final readonly class ExpandContractTemplate
                         noteKey: self::LANG.'expand',
                         sqlTemplate: 'ALTER TABLE {{table}} ADD COLUMN {{new_column}} {{new_type}} NULL',
                     ),
-                    // 2 — BACKFILL. A job, because the work is unbounded in time and a migration
-                    // that holds a transaction open for it is the incident. No SQL here: the recipe
-                    // belongs to the batching strategy, and a copy would be free to drift from it.
+                    // 2 — DUAL WRITE. A release that writes both columns and still reads the old
+                    // one, so every row written from here on reaches the new column and the
+                    // backfill has a fixed amount of work rather than a moving target.
                     new RemediationStep(
                         order: 2,
-                        kind: RemediationStepKind::QueuedJob,
-                        noteKey: self::LANG.'backfill',
-                    ),
-                    // 3 — DUAL WRITE. The phase that makes phase four safe, and the only one that is
-                    // not a change to the schema at all.
-                    new RemediationStep(
-                        order: 3,
                         kind: RemediationStepKind::ManualGate,
                         noteKey: self::LANG.'dual_write',
                     ),
-                    // 4 — CONTRACT. A separate migration in a later release, never this one.
+                    // 3 — BACKFILL. A job, because the work is unbounded in time and a migration
+                    // that holds a transaction open for it is the incident. No SQL here: the recipe
+                    // belongs to the batching strategy, and a copy would be free to drift from it.
+                    new RemediationStep(
+                        order: 3,
+                        kind: RemediationStepKind::QueuedJob,
+                        noteKey: self::LANG.'backfill',
+                    ),
+                    // 4 — SWITCH THE READS. The phase that makes phase five safe: a release that
+                    // reads the new column, left running before anything is dropped.
                     new RemediationStep(
                         order: 4,
+                        kind: RemediationStepKind::ManualGate,
+                        noteKey: self::LANG.'switch_reads',
+                    ),
+                    // 5 — CONTRACT. A separate migration in a later release, never this one.
+                    new RemediationStep(
+                        order: 5,
                         kind: RemediationStepKind::SeparateMigration,
                         noteKey: self::LANG.'contract',
                         sqlTemplate: 'ALTER TABLE {{table}} DROP COLUMN {{old_column}}',
@@ -162,8 +177,8 @@ final readonly class ExpandContractTemplate
      *
      * The debt rule that reports an unfinished expand/contract is not a complaint about the expand:
      * adding the column and filling it was the right move, and it already happened. So the material
-     * is one statement, not four. Handing over the whole sequence here would tell somebody to add a
-     * column that is already there, in a migration they are not allowed to edit any more.
+     * is one statement, not five phases. Handing over the whole sequence here would tell somebody to
+     * add a column that is already there, in a migration they are not allowed to edit any more.
      *
      * **`{{old_column}}` stays a placeholder, and that is the honest answer rather than a gap.**
      * Which column the new one replaced is a decision — this class says so about itself at the top —

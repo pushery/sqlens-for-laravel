@@ -52,14 +52,17 @@ use Pushery\SQLens\Drivers\Pgsql\Rules\L6\StandardConformingStringsOffRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L6\TimestampWithoutTimeZoneRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L6\TimeZoneNotUtcRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L6\UuidV4PrimaryKeyRule;
+use Pushery\SQLens\Drivers\Pgsql\Rules\L7\AutovacuumCostPerWorkerRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L7\AutovacuumDisabledRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L7\AutovacuumOffRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L7\DataChecksumsDisabledRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L7\InvalidIndexRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L7\RedundantIndexRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L7\TrackCountsOffRule;
+use Pushery\SQLens\Drivers\Pgsql\Rules\L7\TypeChangeDropsStatisticsRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L7\UnbatchedMassDmlRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L7\UnusedIndexRule;
+use Pushery\SQLens\Drivers\Pgsql\Rules\L7\UpdatedAtIndexBlocksHotRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L8\ForeignKeyIdSuffixRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L8\SnakeCaseIdentifiersRule;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L8\UniqueCaseFoldedIndexRule;
@@ -177,11 +180,14 @@ final readonly class PgsqlRuleSet
             new DataChecksumsDisabledRule($projectRoot),
             new AutovacuumDisabledRule($projectRoot),
             new AutovacuumOffRule($projectRoot),
+            new AutovacuumCostPerWorkerRule($projectRoot),
             new TrackCountsOffRule($projectRoot),
             new InvalidIndexRule($projectRoot),
             new RedundantIndexRule($projectRoot),
             new UnbatchedMassDmlRule($projectRoot),
+            new TypeChangeDropsStatisticsRule($projectRoot),
             new UnusedIndexRule($projectRoot, $unusedIndexMinDays),
+            new UpdatedAtIndexBlocksHotRule($projectRoot),
             new TableWithoutPrimaryKeyRule($projectRoot),
             new ForeignKeyIdSuffixRule($projectRoot, $naming ?? NamingConvention::shipped()),
             new SnakeCaseIdentifiersRule($projectRoot, $naming ?? NamingConvention::shipped()),

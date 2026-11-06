@@ -82,7 +82,7 @@ final readonly class EnumChangeTemplate
                         noteKey: self::LANG.'append_at_the_end',
                     ),
                     // 3 — everything else, by reference: a staged column swap, which already has a
-                    // template. Restating it here would be a second definition of a four-phase plan.
+                    // template. Restating it here would be a second definition of a five-phase plan.
                     new RemediationStep(
                         order: 3,
                         kind: RemediationStepKind::ManualGate,

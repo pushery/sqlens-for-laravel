@@ -16,7 +16,7 @@ namespace Pushery\SQLens\Corpus;
 final readonly class CorpusCollection
 {
     /**
-     * @param  string  $path  repo-relative, e.g. `tests/Fixtures/Corpus/synthetic/pgsql-locking`
+     * @param  string  $path  repo-relative, under the corpus root's `synthetic/` or `real/`
      * @param  string  $provenance  `synthetic` or `real` — read from the LAYOUT, never from a field
      * @param  array<string, string>  $manifest  validated against the closed schema
      * @param  list<array{rule_id: string, outcome: string}>  $expectations  the ground truth

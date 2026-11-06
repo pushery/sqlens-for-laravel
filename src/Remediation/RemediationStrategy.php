@@ -109,6 +109,18 @@ enum RemediationStrategy: string
      */
     case ReindexBeforeRefresh = 'reindex_before_refresh';
 
+    /**
+     * Leave the statement as written and follow it with an `ANALYZE` of its table, in the same
+     * migration.
+     *
+     * The sequence for a change that costs the planner its statistics and rewrites nothing:
+     * `ALTER COLUMN … TYPE` removes a column's statistics in every form, and nothing about the change
+     * prompts autovacuum to collect them again. It is the one strategy that adds a statement after
+     * the one it is about. `none` would not describe it, because the safe sequence exists and is two
+     * statements long. Schema version 4 is the first document that carries it.
+     */
+    case AnalyzeAfter = 'analyze_after';
+
     /** Looked at, and there is no safe standard sequence — a statement, not an absence. */
     case None = 'none';
 }

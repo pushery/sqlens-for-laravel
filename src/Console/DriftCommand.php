@@ -205,7 +205,8 @@ final class DriftCommand extends Command
             // every object the migrations added reads as unexpected drift. Hundreds of findings, all
             // of them artifacts.
             $this->outputErrorLine('sqlens:drift: the pending migrations could not be resolved: '
-                .($resolution->skip->value));
+                .($resolution->skip->value)
+                .($resolution->remedy === null ? '' : '. '.$resolution->remedy));
 
             return ExitCode::Misconfiguration->value;
         }

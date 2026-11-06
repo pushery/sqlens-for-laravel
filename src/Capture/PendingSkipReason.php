@@ -26,6 +26,17 @@ enum PendingSkipReason: string
     /** The connection is reachable but has no migration repository table yet. */
     case NoMigrationTable = 'no_migration_table';
 
+    /**
+     * The migration repository table exists, and the role the connection reads as may not read it.
+     *
+     * Its own case rather than {@see self::ConnectionUnreachable} or a stack trace, because the
+     * remedy is one statement and the reader should be handed it: a least-privileged preflight role
+     * holds what the activity and settings views need, and none of that lets it read a table of the
+     * application. The grant can only be given once the table exists, so a role set up before the
+     * first `migrate` lacks it by construction.
+     */
+    case MigrationTableUnreadable = 'migration_table_unreadable';
+
     /** No migration path holds any migration file to resolve. */
     case EmptyMigrationPath = 'empty_migration_path';
 
@@ -48,6 +59,7 @@ enum PendingSkipReason: string
         return 'LINT.SKIPPED.'.match ($this) {
             self::ConnectionUnreachable => 'CONNECTION_UNREACHABLE',
             self::NoMigrationTable => 'NO_MIGRATION_TABLE',
+            self::MigrationTableUnreadable => 'MIGRATION_TABLE_UNREADABLE',
             self::EmptyMigrationPath => 'EMPTY_MIGRATION_PATH',
             self::OnlyVendorMigrations => 'ONLY_VENDOR_MIGRATIONS',
         };
@@ -62,6 +74,7 @@ enum PendingSkipReason: string
     {
         return match ($this) {
             self::ConnectionUnreachable => UndeterminedReason::ServerUnreachable,
+            self::MigrationTableUnreadable => UndeterminedReason::MissingPrivilege,
             self::NoMigrationTable, self::EmptyMigrationPath, self::OnlyVendorMigrations => UndeterminedReason::StructurallyNotApplicable,
         };
     }
@@ -72,6 +85,7 @@ enum PendingSkipReason: string
         return match ($this) {
             self::ConnectionUnreachable => 'The connection could not be reached, so which migrations are pending is unknown.',
             self::NoMigrationTable => 'The connection has no migration repository table yet, so the pending set could not be read.',
+            self::MigrationTableUnreadable => 'The role the connection reads as may not read the migration repository table, so the pending set could not be read.',
             self::EmptyMigrationPath => 'No migration path holds a migration file to resolve.',
             self::OnlyVendorMigrations => 'Every pending migration lives inside a package, and this run does not judge those. Set sqlens.security.include_vendor_migrations to true, or name the path explicitly with --path.',
         };

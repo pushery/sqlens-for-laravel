@@ -1006,6 +1006,8 @@ final readonly class AuditRunner implements AuditRuns
             // would name the migration role as the runtime one. The option alone would leave every run
             // without it undetermined, and the runtime rules silent on the most ordinary invocation.
             $audited,
+            migrationDirect: $migrationName !== null
+                && EffectiveConnectionConfig::migratesThroughDirect($this->config->get('database.connections.'.$migrationName)),
         );
     }
 

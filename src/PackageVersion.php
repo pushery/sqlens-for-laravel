@@ -22,7 +22,7 @@ use Throwable;
  * Nothing was red, and nothing could be: a fallback that always runs is indistinguishable from a
  * fallback that never does, and both write a plausible string. What surfaced it was asking whether
  * every config path the code reads is one the validator accepts — the direction the schema had never
- * been checked in, now held by `tests/Unit/Config/ConfigKeysAreReadableTest.php`.
+ * been checked in, and one the package's own suite checks now.
  *
  * ## Why Composer and not config
  *

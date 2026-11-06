@@ -24,8 +24,10 @@ final readonly class PatchLevelEvaluator
      * @param  string  $today  an ISO-8601 date; passed in rather than read from the clock, so the
      *                         same server and the same file produce the same verdict in a test
      *                         and in a run
+     * @param  int  $leadDays  how many days before its end a supported cycle is reported as ending;
+     *                         0 never reports one before support has ended
      */
-    public function evaluate(string $reported, string $product, EolData $data, string $today): PatchAssessment
+    public function evaluate(string $reported, string $product, EolData $data, string $today, int $leadDays = 0): PatchAssessment
     {
         $candidates = $this->parse($reported);
 
@@ -37,7 +39,7 @@ final readonly class PatchLevelEvaluator
             $cycle = $data->cycleFor($product, $cycleName);
 
             if ($cycle instanceof EolCycle) {
-                return $this->judge($cycle, $cycleName, $patch, $reported, $data, $today);
+                return $this->judge($cycle, $cycleName, $patch, $reported, $data, $today, $leadDays);
             }
         }
 
@@ -47,10 +49,18 @@ final readonly class PatchLevelEvaluator
         return new PatchAssessment(PatchVerdict::CycleUnknown, $reported, $candidates[0][0], null, $data);
     }
 
-    private function judge(EolCycle $cycle, string $cycleName, int $patch, string $reported, EolData $data, string $today): PatchAssessment
+    private function judge(EolCycle $cycle, string $cycleName, int $patch, string $reported, EolData $data, string $today, int $leadDays): PatchAssessment
     {
         if ($cycle->endedBy($today)) {
             return new PatchAssessment(PatchVerdict::Ended, $reported, $cycleName, $cycle, $data);
+        }
+
+        // Still supported, and close enough to its end to plan the upgrade now. The end date itself
+        // is in here with 0 days left, since it still counts as supported. A lead of 0 asks for none.
+        $daysLeft = $cycle->daysLeft($today);
+
+        if ($leadDays > 0 && $daysLeft !== null && $daysLeft <= $leadDays) {
+            return new PatchAssessment(PatchVerdict::EndsSoon, $reported, $cycleName, $cycle, $data, $daysLeft);
         }
 
         // Null means this build records no patch levels at all, which is a statement about the DATA

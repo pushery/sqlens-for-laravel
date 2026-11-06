@@ -1055,6 +1055,16 @@ return [
              * costs the most.
              */
             'source' => env('SQLENS_ADVISORIES_SOURCE'),
+
+            /*
+             * How many days before a release series leaves support SEC.CFG.PATCH_EOL starts to
+             * report it, as a medium finding that names the date and the days left.
+             *
+             * An upgrade across a major is a project rather than a patch, and a finding on the day
+             * support ends comes too late to plan one. The day itself and every day after stay
+             * the high finding they always were. 0 reports a series only once its support ended.
+             */
+            'lead_days' => 180,
         ],
 
         /*
@@ -1968,6 +1978,19 @@ return [
          * The active profile, or null for off. Read once at boot.
          */
         'profile' => null,
+
+        /*
+         * Artisan commands that run the migrator, in addition to Laravel's own.
+         *
+         * An application that migrates from a job or a request is spared by
+         * `runtime_ddl` for the whole of such a command, from its start to its
+         * end: `migrate` creates its migration table before the migrator
+         * starts, and `migrate:fresh` drops every table first. Laravel's own
+         * commands are always included. Name a command that calls one of them
+         * itself, a tenancy package's `tenants:migrate` or one of your own: a
+         * command called from another one announces no start of its own.
+         */
+        'migration_commands' => [],
 
         /*
          * The profiles themselves. The three shipped ones are examples in the
