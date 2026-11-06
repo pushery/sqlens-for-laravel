@@ -11,6 +11,7 @@ use Pushery\SQLens\Contracts\Rule;
 use Pushery\SQLens\Drivers\Pgsql\Canonical\PgsqlCanonicalization;
 use Pushery\SQLens\Drivers\Pgsql\Rules\L3\Support\ExpectedTimeouts;
 use Pushery\SQLens\Drivers\Pgsql\Rules\PgsqlRuleSet;
+use Pushery\SQLens\Patterns\WritesIndexStatements;
 use Pushery\SQLens\Rules\Convention\NamingConvention;
 use Pushery\SQLens\Rules\Lifecycle\LifecycleRuleSet;
 use Pushery\SQLens\Rules\Money\MoneyColumnDictionary;
@@ -34,7 +35,7 @@ use Pushery\SQLens\Tools\Tool;
  * versa. The two drivers never know about each other — that isolation is the
  * insurance for the later core+driver split, and it must never hold "only almost".
  */
-final class PgsqlDriver implements AcceptsRunClock, DeclaresMeasuredServerVersion, Driver
+final class PgsqlDriver implements AcceptsRunClock, DeclaresMeasuredServerVersion, Driver, WritesIndexStatements
 {
     /**
      * @param  string  $projectRoot  so a rule's finding location is repo-relative; the
@@ -189,5 +190,20 @@ final class PgsqlDriver implements AcceptsRunClock, DeclaresMeasuredServerVersio
     public function tools(): iterable
     {
         return [new SquawkTool, new PglsTool];
+    }
+
+    /**
+     * The statement that builds a suggested index.
+     *
+     * `CONCURRENTLY` builds the index without a lock that blocks writes; the migration that carries it runs
+     * outside a transaction, which {@see Remediation\ConcurrentlyTemplate} explains.
+     *
+     * @param  list<string>  $columns
+     * @param  list<string>  $conditions
+     */
+    public function indexStatement(string $target, string $name, array $columns, array $conditions): string
+    {
+        return 'CREATE INDEX CONCURRENTLY '.$name.' ON '.$target.' ('.implode(', ', $columns).')'
+            .($conditions === [] ? '' : ' WHERE '.implode(' AND ', $conditions)).';';
     }
 }

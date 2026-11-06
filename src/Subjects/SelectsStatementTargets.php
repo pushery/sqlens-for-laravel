@@ -23,8 +23,8 @@ use Pushery\SQLens\Canonical\TargetRole;
  * role logic written twice, is the shape this repository has already paid for elsewhere — one rule,
  * two implementations, both green, free to disagree.
  *
- * `tests/Unit/Subjects/StatementTargetSelectionTest.php` holds the two carriers to the same answers,
- * so "there is only one implementation" is a check rather than a sentence.
+ * A test holds the two carriers to the same answers, so "there is only one implementation" is a
+ * check rather than a sentence.
  */
 trait SelectsStatementTargets
 {

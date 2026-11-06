@@ -40,8 +40,8 @@ use Pushery\SQLens\Resources\ShippedJson;
  *
  * That cannot be decided while resolving one candidate, because whether the partner survives is only
  * known once every candidate is resolved. So {@see SuppressionResolver::resolve()} does it in a
- * second pass and hands anything orphaned back to the visible set. The measured consequence is
- * pinned in `tests/Feature/Reporting/PairedViewDedupeTest.php`.
+ * second pass and hands anything orphaned back to the visible set, and a test pins the measured
+ * consequence.
  */
 final readonly class PairedViewDedupeSuppressionSource
 {

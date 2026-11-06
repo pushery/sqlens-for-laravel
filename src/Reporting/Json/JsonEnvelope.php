@@ -69,7 +69,7 @@ final readonly class JsonEnvelope
      * It shipped for one day with no guard at all — the sentence above described a check that did
      * not exist, and `grep` found this declaration and no reader. That is the shape this package
      * refuses in rules, so it does not get an exemption in the register that announces a schema
-     * bump. `tests/Feature/Reporting/JsonReporterTest.php` now holds it in both directions.
+     * bump. A test of the JSON reporter now holds it in both directions.
      *
      * @var list<string>
      */

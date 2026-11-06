@@ -353,8 +353,8 @@ final readonly class MysqlActivityReader implements ActivityReader
      * an empty set, so a transaction old enough to be asked about here was already in it; only a
      * transaction younger than the window can be missing, and one that young is never the answer to
      * "has something been running too long". Sleeping off the window would make every preflight
-     * slower to avoid a staleness that cannot reach the verdict. Measured in
-     * `tests/MySql/InnodbTrxCacheWindowTest.php`.
+     * slower to avoid a staleness that cannot reach the verdict, as measured against a real MySQL
+     * server.
      */
     private function transactionQuery(): string
     {

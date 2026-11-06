@@ -7,6 +7,8 @@ namespace Pushery\SQLens\Capture;
 use Illuminate\Database\Connection;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Migrations\Migrator;
+use Illuminate\Database\QueryException;
+use Pushery\SQLens\Attributes\RawSql;
 use Pushery\SQLens\Contracts\PendingResolver;
 use Pushery\SQLens\Security\PathBinding;
 use Throwable;
@@ -103,10 +105,17 @@ final readonly class PendingMigrationResolver implements PendingResolver
         // inner bound over an identical outer one restores the outer value rather than the pre-run
         // one. On PostgreSQL the inner window is a savepoint, and rolling back to it puts the outer
         // `SET LOCAL` back.
-        return $this->sessionGuard->within(
+        $resolution = $this->sessionGuard->within(
             $target,
             fn (): PendingResolution => $this->resolveBounded($target, $connection),
         );
+
+        // The grant is named after the window has closed, not inside it. On PostgreSQL the refused
+        // read aborts the window's transaction, so every statement after it in there is refused as
+        // well; the rollback that ends the window makes the session usable again.
+        return $resolution->skip === PendingSkipReason::MigrationTableUnreadable
+            ? PendingResolution::skipped(PendingSkipReason::MigrationTableUnreadable, $this->grantFor($target))
+            : $resolution;
     }
 
     /**
@@ -137,15 +146,33 @@ final readonly class PendingMigrationResolver implements PendingResolver
 
         // The already-run migrations and the last batch, read from the WRITE side so a
         // lagging replica cannot make a recorded migration look pending.
+        //
+        // A role that may not read the table is refused here, after the table check above has
+        // answered yes: PostgreSQL's catalog lists a table to every role, MySQL's to an account
+        // holding any privilege on it, and only SELECT reads its rows. That refusal is a named skip
+        // like the others, not an exception that ends the run without a report; any other failure
+        // of the read stays the failure it is.
+        try {
+            $read = $target->table($this->migrationsTable)->useWritePdo()->pluck('migration')->all();
+            $maxBatch = $target->table($this->migrationsTable)->useWritePdo()->max('batch');
+        } catch (QueryException $exception) {
+            if (! $this->refusedByPrivilege($exception)) {
+                throw $exception;
+            }
+
+            return PendingResolution::skipped(PendingSkipReason::MigrationTableUnreadable);
+        }
+
+        // The reads alone stand in the `try`, so the filter over what they returned is a branch
+        // line coverage can see.
         $ran = [];
 
-        foreach ($target->table($this->migrationsTable)->useWritePdo()->pluck('migration') as $migration) {
+        foreach ($read as $migration) {
             if (is_string($migration)) {
                 $ran[] = $migration;
             }
         }
 
-        $maxBatch = $target->table($this->migrationsTable)->useWritePdo()->max('batch');
         $batch = (is_numeric($maxBatch) ? (int) $maxBatch : 0) + 1;
 
         $outstanding = array_diff_key($files, array_flip($ran));
@@ -180,6 +207,90 @@ final readonly class PendingMigrationResolver implements PendingResolver
         }
 
         return PendingResolution::resolved($migrations);
+    }
+
+    /**
+     * Whether the server refused the read because the role may not read the table.
+     *
+     * PostgreSQL names the refusal with its own SQLSTATE, `42501`. MySQL answers `42000`, the class it
+     * shares with a syntax error, so there the driver's code decides: `1142` is a table the account
+     * holds no privilege on.
+     */
+    private function refusedByPrivilege(QueryException $exception): bool
+    {
+        $state = $exception->errorInfo[0] ?? null;
+        $code = $exception->errorInfo[1] ?? null;
+
+        return $state === '42501' || ($state === '42000' && is_numeric($code) && (int) $code === 1142);
+    }
+
+    /**
+     * What lets the reading role read the migration repository table, as a sentence with the statement.
+     *
+     * The role is asked of the server rather than read from the configuration: a `url` connection and
+     * a read/write split each name the account somewhere else than the configuration's `username`,
+     * and the refused read went to the write side, which is where this asks too. Where the server
+     * will not say, the sentence names the table alone.
+     */
+    #[RawSql(reason: 'asks the session which role it reads as; current_user has no query builder expression')]
+    private function grantFor(Connection $target): string
+    {
+        $table = $target->getTablePrefix().$this->migrationsTable;
+        $driver = $target->getDriverName();
+
+        // The question is chosen before the `try`, so the read is all that stands in it.
+        $question = match ($driver) {
+            'pgsql' => 'select current_user as reader',
+            'mysql' => 'select current_user() as reader',
+            default => null,
+        };
+        $row = null;
+
+        if ($question !== null) {
+            try {
+                $row = $target->selectOne($question, [], false);
+            } catch (Throwable) {
+                $row = null;
+            }
+        }
+
+        $reader = is_object($row) ? ($row->reader ?? null) : null;
+
+        // PostgreSQL lets the table's owner grant on it, which is the role the migrations run as.
+        // MySQL has no owner of a table: an account holding the privilege with GRANT OPTION grants it.
+        $grantor = $driver === 'mysql' ? 'As an account that may grant it' : 'As the table\'s owner';
+
+        if (! is_string($reader) || $reader === '') {
+            return sprintf('%s, grant SELECT on `%s` to the role this connection reads as.', $grantor, $table);
+        }
+
+        $statement = $driver === 'mysql'
+            ? sprintf('GRANT SELECT ON %s.%s TO %s;', $this->mysqlIdentifier($target->getDatabaseName()), $this->mysqlIdentifier($table), $this->mysqlAccount($reader))
+            : sprintf('GRANT SELECT ON %s TO %s;', implode('.', array_map($this->pgIdentifier(...), explode('.', $table))), $this->pgIdentifier($reader));
+
+        return sprintf('%s, run `%s`', $grantor, $statement);
+    }
+
+    /** A PostgreSQL identifier as it has to be written: bare when it folds to itself, quoted otherwise. */
+    private function pgIdentifier(string $name): string
+    {
+        return preg_match('/^[a-z_][a-z0-9_$]*$/', $name) === 1 ? $name : '"'.str_replace('"', '""', $name).'"';
+    }
+
+    /** A MySQL identifier, bare when it holds only the characters MySQL reads unquoted. */
+    private function mysqlIdentifier(string $name): string
+    {
+        return preg_match('/^[A-Za-z0-9_$]+$/', $name) === 1 ? $name : '`'.str_replace('`', '``', $name).'`';
+    }
+
+    /** `CURRENT_USER()` answers `user@host`; a grant names the account as `'user'@'host'`. */
+    private function mysqlAccount(string $reader): string
+    {
+        $at = strrpos($reader, '@');
+
+        return $at === false
+            ? "'".str_replace("'", "''", $reader)."'"
+            : "'".str_replace("'", "''", substr($reader, 0, $at))."'@'".str_replace("'", "''", substr($reader, $at + 1))."'";
     }
 
     /**

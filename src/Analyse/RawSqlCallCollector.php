@@ -33,8 +33,8 @@ use PHPStan\Type\VerbosityLevel;
  * The one question that decides this design: does `DB::statement(...)` resolve to a type, or must
  * SQLens carry its own facade resolution?
  *
- * It is answered, pinned, and not by this file. `tests/Feature/Analyse/PhpStanExtensionApiTest` runs
- * a real analyse against a real fixture project and asserts the result:
+ * It is answered, pinned, and not by this file. A test runs a real analysis against a real fixture
+ * project and asserts the result:
  *
  *     DB::connection('pgsql')->statement(…)   subject type  →  Illuminate\Database\Connection
  *     DB::statement(…)                        return type   →  bool   (= Connection::statement())

@@ -55,7 +55,8 @@ use Symfony\Component\Console\Output\OutputInterface;
  * how many were omitted and which rules, so the overflow is visible, never
  * swallowed. The preamble below is a notice too and takes one of the ten notice
  * slots, so an overflowing notice level emits eight. The full set always remains
- * in the JSON report.
+ * in the JSON report and in `--format=agent`, whose Markdown a workflow can append
+ * to the job's summary page, and the collector line says so.
  *
  * An annotated run opens with a single `::notice::` preamble naming the run
  * parameters — mode, profile, the two gate thresholds, the server and tool versions
@@ -333,7 +334,7 @@ final class GithubReporter implements Reporter
         $ids = implode(', ', array_map(static fn (Finding $finding): string => $finding->ruleId, $findings));
 
         return '::'.$command.'::'.$this->escapeData(sprintf(
-            '%d more %s finding(s) were not annotated (GitHub caps annotations at %d per level); see the full report. Omitted: %s',
+            '%d more %s finding(s) were not annotated (GitHub caps annotations at %d per level); the JSON report and --format=agent carry every one. Omitted: %s',
             count($findings),
             $command,
             self::DISPLAY_LIMIT,

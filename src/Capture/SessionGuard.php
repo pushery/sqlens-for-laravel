@@ -88,8 +88,8 @@ use Throwable;
  * relabels the HOST's session, and under Octane or a queue worker it outlives the run — so the
  * operator's own label is what SQLens would be hiding.
  *
- * `tests/Unit/Capture/SessionStatementParityTest.php` holds the two statement sets to each other
- * and names exactly these two as declared differences. Anything else drifting apart turns it red.
+ * A parity test holds the two statement sets to each other and names exactly these two as declared
+ * differences, so anything else drifting apart fails it.
  */
 final readonly class SessionGuard
 {

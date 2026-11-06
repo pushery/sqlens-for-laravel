@@ -59,7 +59,7 @@ final class EnumValueRemovedRule extends AbstractPgsqlSafetyRule implements Prov
      *
      * Not "removing is expensive": `ALTER TYPE … DROP VALUE` does not exist. So the remedy is a new
      * type and a column moved onto it, which is expand/contract and already has a template. Handing
-     * over that one rather than writing an enum-flavored copy is the whole point: two four-phase
+     * over that one rather than writing an enum-flavored copy is the whole point: two five-phase
      * plans drift the first time either is touched, and both look correct alone.
      *
      * The plan's placeholders stay standing here, and that is honest rather than lazy. Neither the

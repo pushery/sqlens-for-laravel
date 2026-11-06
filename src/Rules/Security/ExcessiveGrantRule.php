@@ -37,8 +37,8 @@ use Pushery\SQLens\Subjects\MigrationStatementView;
  *   complained here would be arguing against its own remedy.
  * - **Grantee `PUBLIC`, including `GRANT ALL … TO PUBLIC`.** The sibling rule owns that statement
  *   whole. Two findings recommending the same fix is noise, and it doubles what a baseline has to
- *   carry for one line of SQL. `tests/Feature/Security/ExcessiveGrantRuleTest.php` holds the
- *   partition: exactly one of the two rules speaks for any given statement.
+ *   carry for one line of SQL. A test holds the partition: exactly one of the two rules speaks for
+ *   any given statement.
  *
  * ## The false positives this rule knowingly accepts
  *

@@ -19,6 +19,14 @@ enum PatchVerdict: string
     case Ended = 'ended';
 
     /**
+     * The cycle is still supported, and its support ends within the lead the configuration sets.
+     *
+     * A finding, at a lower weight than {@see self::Ended}: nothing is wrong with the server yet,
+     * but an upgrade across a major is a project, and the day support ends is too late to start one.
+     */
+    case EndsSoon = 'ends_soon';
+
+    /**
      * The cycle is still supported, and this data cannot say whether the PATCH level is current.
      *
      * Not a pass. `latest_patch` is deliberately null in the bundled file — a patch number moves
@@ -49,6 +57,6 @@ enum PatchVerdict: string
     /** Whether this verdict is a finding about the server rather than a gap in the data. */
     public function isFinding(): bool
     {
-        return $this === self::Ended || $this === self::BehindLatestPatch;
+        return in_array($this, [self::Ended, self::EndsSoon, self::BehindLatestPatch], true);
     }
 }

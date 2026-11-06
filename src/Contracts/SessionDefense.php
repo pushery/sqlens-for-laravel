@@ -36,8 +36,7 @@ interface SessionDefense
      * hides the host's own identity. That is not a weaker copy of this interface; it is the same
      * promise made to a connection with a different owner.
      *
-     * So a statement added here is not automatically one to add there. The parity guard in
-     * `tests/Unit/Capture/SessionStatementParityTest.php` will say so.
+     * So a statement added here is not automatically one to add there, and the parity test says so.
      *
      * @return list<string>
      */

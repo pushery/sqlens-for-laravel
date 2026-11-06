@@ -24,13 +24,19 @@ use Pushery\SQLens\Drivers\Pgsql\Catalog\RoleDefaults;
  *
  * The setting can be stored per role and per database with `ALTER ROLE … SET` and
  * `ALTER DATABASE … SET`, and `current_setting()` answers for the role that reads it. A preflight
- * reads through an account of its own, and an operator who hardens that account with
- * `default_transaction_read_only = on` has done the right thing. Read as the instance's state, it
- * stopped every deploy on a writable primary, while a migration role that really starts read-only
- * passed. So the value is resolved as a fresh session of the migration role gets it: the role's own
- * default for this database, then for every database, then the default of this database or of every
- * role, then the server's value, the same order `ServerSettingsCheck` reads `lock_timeout` in. Where
- * the rows cannot tell, the answer is that it cannot, never the reading role's value.
+ * reads through an account of its own, and that account may be hardened with
+ * `default_transaction_read_only = on`. Read as the instance's state, the hardened value stopped
+ * every deploy on a writable primary, while a migration role that really starts read-only passed.
+ * So the value is resolved as a fresh session of the migration role gets it: the role's own default
+ * for this database, then for every database, then the default of this database or of every role,
+ * then the server's value, the same order `ServerSettingsCheck` reads `lock_timeout` in.
+ *
+ * Where the rows cannot tell, the answer is that it cannot, never the reading role's value. That is
+ * the state a hardened reading role produces when nothing is stored for the migration role or its
+ * database: the session's value is the reading role's own, and the server's value cannot be asked
+ * for behind it: PostgreSQL lets only superusers read `pg_file_settings` by default, and a value set
+ * on the command line appears nowhere else. The answer then names the way out, a value stored for the
+ * migration role, which a fresh session of that role reads before the server's.
  */
 final readonly class PgsqlWriteAcceptance implements ReadsWriteAcceptance
 {
@@ -101,8 +107,10 @@ final readonly class PgsqlWriteAcceptance implements ReadsWriteAcceptance
 
         if ($stored === null && in_array($defaults->reader, $owners, true)) {
             throw new PreflightStateUnreadable(sprintf(
-                '`%s`, the role this check reads as, carries a `default_transaction_read_only` default of '
-                .'its own, which hides the server\'s value, and `%s`, the role the migrations run as, has none',
+                '`%1$s`, the role this check reads as, carries a `default_transaction_read_only` default of '
+                .'its own, which hides the server\'s value, and `%2$s`, the role the migrations run as, has none; '
+                .'store one for it with `ALTER ROLE %2$s SET default_transaction_read_only = off`, or leave the '
+                .'reading role without a default',
                 $defaults->reader,
                 (string) $role,
             ));

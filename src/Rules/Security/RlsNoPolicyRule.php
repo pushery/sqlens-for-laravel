@@ -32,8 +32,8 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * So the developer who created the table sees everything working, the migration passes, the seeder
  * passes, and the application returns empty result sets for whichever role it actually connects as.
- * The measurement is in `tests/Postgres/RlsForceRulesTest.php`, against the server rather than
- * against a reading of the manual — a finding that states the exemption wrongly would send somebody
+ * That was measured against the server rather than against a reading of the manual — a finding
+ * that states the exemption wrongly would send somebody
  * to debug their application instead of their policy.
  *
  * ## Why `medium` rather than `high`

@@ -44,6 +44,14 @@ final readonly class ConnectionSeparation
          * looking at it. Keeping them apart is the whole point — see {@see self::auditedIsRuntime()}.
          */
         public ?string $audited = null,
+        /**
+         * Whether the framework migrates the migration connection over its `direct` block.
+         *
+         * Then one connection name carries two accounts, so a project that runs its requests through
+         * a pooler and its migrations as the schema owner names the same connection twice. The names
+         * agree, and only the two identities above say whether the accounts do.
+         */
+        public bool $migrationDirect = false,
     ) {}
 
     /**
@@ -111,9 +119,29 @@ final readonly class ConnectionSeparation
      * True also when the migration connection is unset while the runtime one is set: a project that
      * named one and not the other is telling us it has one connection, and the finding for that state
      * is the same one — a runtime role that holds DDL because the deploy needs it.
+     *
+     * One name migrating over its `direct` block is a second connection exactly when the block
+     * authenticates as another identity. While the identities cannot be compared the answer stays
+     * true, the advice for one connection, because nothing shows that the block is another account.
      */
     public function runtimeIsMigration(): bool
     {
-        return $this->runtime !== null && ($this->migration === null || $this->migration === $this->runtime);
+        if ($this->runtime === null) {
+            return false;
+        }
+
+        if ($this->migration !== null && $this->migration !== $this->runtime) {
+            return false;
+        }
+
+        return $this->migration === null || ! $this->migrationDirect || ! $this->identitiesDiffer();
+    }
+
+    /** Whether both identities are known and are not the same one. */
+    private function identitiesDiffer(): bool
+    {
+        return $this->runtimeIdentity !== null && $this->runtimeIdentity !== ''
+            && $this->migrationIdentity !== null && $this->migrationIdentity !== ''
+            && $this->runtimeIdentity !== $this->migrationIdentity;
     }
 }

@@ -120,6 +120,7 @@ use Pushery\SQLens\Format\FormatterRegistry;
 use Pushery\SQLens\Format\PgFormatterBackend;
 use Pushery\SQLens\Format\PhpSqlFormatter;
 use Pushery\SQLens\Format\SqlFluffBackend;
+use Pushery\SQLens\Guard\ExpectedSchemaChanges;
 use Pushery\SQLens\Guard\GuardManager;
 use Pushery\SQLens\Guard\GuardProfile;
 use Pushery\SQLens\Guard\Guards\RuntimeDdlGuard;
@@ -419,6 +420,9 @@ final class SQLensServiceProvider extends ServiceProvider
         // One fence per application. It guards each connection once, and a second fence would guard
         // them all again without being the one a capture runs under.
         $this->app->singleton(CaptureConnectionFence::class);
+        // One set of declared schema changes per process, bound whether a guardrail is armed or not, so the code
+        // that declares never asks. The runtime DDL guardrail reads this one instance.
+        $this->app->singleton(ExpectedSchemaChanges::class);
         // One tap per application, for the same reason: it hooks each connection once.
         $this->app->singleton(PretendStatementTap::class);
         // And its shadow counterpart, which hooks each event dispatcher once: a tap per run
@@ -1016,7 +1020,19 @@ final class SQLensServiceProvider extends ServiceProvider
         // the logger a PSR-3 instance rather than a channel name is what keeps `ViolationLogger`
         // free of Laravel's logging package entirely.
         $grammars = $this->app->make(CanonicalExtensionRegistry::class);
-        $logger = new ViolationLogger($this->app->make('log')->channel($profile->logChannel), $grammars);
+        $logger = new ViolationLogger($this->app->make('log')->channel($profile->logChannel), $grammars, $this->app->make(Dispatcher::class));
+
+        // The commands a package adds to the framework's own, read as the names they are. A value of another
+        // shape adds none, which costs reports rather than hiding any, and every SQLens command refuses that
+        // configuration by its key.
+        $migrationCommands = QueryWatcher::MIGRATION_COMMANDS;
+        $added = is_array($commands = $guard['migration_commands'] ?? null) ? $commands : [];
+
+        foreach ($added as $command) {
+            if (is_string($command) && $command !== '' && ! in_array($command, $migrationCommands, true)) {
+                $migrationCommands[] = $command;
+            }
+        }
 
         $armed = new GuardManager([
             // The application's own providers boot after this one, so what they do to Eloquent's
@@ -1026,9 +1042,13 @@ final class SQLensServiceProvider extends ServiceProvider
             // closures on the hot path of every query an application runs.
             new QueryWatcher($this->app->make(Dispatcher::class), [
                 new SlowQueryGuard($logger),
-                new RuntimeDdlGuard($logger, $this->app->runningInConsole() && ! $this->app->runningConsoleCommand(RuntimeDdlGuard::APPLICATION_COMMANDS)),
+                new RuntimeDdlGuard(
+                    $logger,
+                    $this->app->runningInConsole() && ! $this->app->runningConsoleCommand(RuntimeDdlGuard::APPLICATION_COMMANDS),
+                    $this->app->make(ExpectedSchemaChanges::class),
+                ),
                 new UnboundRawSqlGuard($logger, $grammars),
-            ]),
+            ], $migrationCommands),
         ])->arm($profile);
 
         // Bound after arming and only when something was armed, so a test can ask what happened

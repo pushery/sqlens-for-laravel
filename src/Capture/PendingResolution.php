@@ -18,10 +18,13 @@ final readonly class PendingResolution
 {
     /**
      * @param  list<PendingMigration>  $migrations
+     * @param  ?string  $remedy  for a skip whose cure is one statement the resolver could name, that
+     *                           statement in a sentence; null for every other answer
      */
     private function __construct(
         public array $migrations,
         public ?PendingSkipReason $skip,
+        public ?string $remedy = null,
     ) {}
 
     /**
@@ -35,10 +38,24 @@ final readonly class PendingResolution
         return new self($migrations, null);
     }
 
-    /** The pending set could not be determined, for the named reason. */
-    public static function skipped(PendingSkipReason $reason): self
+    /** The pending set could not be determined, for the named reason, and what cures it when known. */
+    public static function skipped(PendingSkipReason $reason, ?string $remedy = null): self
     {
-        return new self([], $reason);
+        return new self([], $reason, $remedy);
+    }
+
+    /**
+     * The skip's description followed by its remedy, as a finding or a console line states it.
+     *
+     * Null for a resolved answer, which has nothing to explain.
+     */
+    public function skipText(): ?string
+    {
+        if (! $this->skip instanceof PendingSkipReason) {
+            return null;
+        }
+
+        return $this->remedy === null ? $this->skip->description() : $this->skip->description().' '.$this->remedy;
     }
 
     public function isResolved(): bool

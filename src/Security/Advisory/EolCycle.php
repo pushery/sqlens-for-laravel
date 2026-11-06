@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Security\Advisory;
 
+use DateTimeImmutable;
+use DateTimeZone;
+
 /**
  * One release series of one engine, with the two dates that decide whether running it is a finding.
  *
@@ -53,5 +56,28 @@ final readonly class EolCycle
     public function endedBy(string $on): bool
     {
         return $on > $this->eolDate;
+    }
+
+    /**
+     * How many days of support the cycle has left on the given day: 0 on the end date itself, which
+     * still counts as supported, and below 0 once support has ended. Null when either date cannot
+     * be read as one.
+     *
+     * Counted in UTC, so a change of daylight saving time between the two dates cannot shorten the
+     * count by an hour and a day.
+     *
+     * @param  string  $on  an ISO-8601 date
+     */
+    public function daysLeft(string $on): ?int
+    {
+        $utc = new DateTimeZone('UTC');
+        $today = DateTimeImmutable::createFromFormat('!Y-m-d', $on, $utc);
+        $end = DateTimeImmutable::createFromFormat('!Y-m-d', $this->eolDate, $utc);
+
+        if ($today === false || $end === false) {
+            return null;
+        }
+
+        return (int) $today->diff($end)->format('%r%a');
     }
 }

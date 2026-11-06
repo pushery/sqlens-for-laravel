@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Guard;
 
+use Illuminate\Contracts\Events\Dispatcher;
 use Psr\Log\LoggerInterface;
 use Pushery\SQLens\Canonical\Extensions\CanonicalExtensionRegistry;
 use Pushery\SQLens\Canonical\StringLiteralMask;
 use Pushery\SQLens\Contracts\DriverCanonicalization;
+use Pushery\SQLens\Guard\Events\ViolationRecorded;
 use Pushery\SQLens\Guard\Violations\Violation;
 use Pushery\SQLens\Security\SecretLiteralMask;
 use Pushery\SQLens\Severity\Severity;
@@ -44,6 +46,13 @@ use Throwable;
  * A `security` violation and a slow query at the same profile level would otherwise arrive as the
  * same log line, and the axis this package keeps separate everywhere else would be flattened in the
  * one output somebody pages on.
+ *
+ * ## A listener reads the same record
+ *
+ * Each record is dispatched as {@see ViolationRecorded} as well, with the context of the log line,
+ * so a listener that hands findings on, an APM client among them, reads them without parsing log
+ * lines. A record is rare next to the statements it is about, so the event goes out whether or not
+ * anybody listens, and a test can assert on it through `Event::fake()`.
  *
  * ## What it never does
  *
@@ -86,6 +95,7 @@ final readonly class ViolationLogger
     public function __construct(
         private LoggerInterface $log,
         private ?CanonicalExtensionRegistry $grammars = null,
+        private ?Dispatcher $events = null,
     ) {}
 
     public function record(GuardProfile $profile, Violation $violation): void
@@ -96,12 +106,53 @@ final readonly class ViolationLogger
             $profile->includeBindings ? $this->shapes($violation->bindings) : null,
         );
 
+        $level = $this->level($profile, $violation);
+
         try {
-            $this->log->log($this->level($profile, $violation), 'sqlens.guard: '.$violation->message, $context);
+            $this->log->log($level, 'sqlens.guard: '.$violation->message, $context);
         } catch (Throwable) {
             // Deliberately silent. See the class docblock: a guardrail must never be the reason a
             // request fails, and the one configuration error that could reach here is refused at
             // boot instead.
+        }
+
+        $this->announce($profile, $violation, $level, $context);
+    }
+
+    /**
+     * Dispatch the record to whoever listens, with the context the log line went out with.
+     *
+     * A listener runs inside the report, and what it does can be a finding of its own. A lazy load
+     * it triggers reaches the same handler before the relation loads, so a listener that reads the
+     * relation a finding named would be handed its own finding again, as deep as the stack goes; a
+     * listener that runs a slow statement for every finding would do the same. A finding that
+     * arises while one is announced is therefore logged like any other and not announced again.
+     *
+     * Silent on failure for the reason the log is: a listener that throws must not turn a finding
+     * the application survived into a failed request.
+     *
+     * @param  array<string, mixed>  $context
+     */
+    private function announce(GuardProfile $profile, Violation $violation, string $level, array $context): void
+    {
+        /** @var bool $announcing set while a listener runs, and read by a finding that arises inside it */
+        static $announcing = false;
+
+        $events = $this->events;
+
+        if ($announcing || ! $events instanceof Dispatcher) {
+            return;
+        }
+
+        $sql = $context['sql'] ?? null;
+        $announcing = true;
+
+        try {
+            $events->dispatch(new ViolationRecorded($profile->name, $violation->type, $level, $violation->message, is_string($sql) ? $sql : null, $context));
+        } catch (Throwable) {
+            // Deliberately silent, as above.
+        } finally {
+            $announcing = false;
         }
     }
 

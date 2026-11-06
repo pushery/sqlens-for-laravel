@@ -11,6 +11,7 @@ use Pushery\SQLens\Contracts\Rule;
 use Pushery\SQLens\Drivers\Mysql\Canonical\MysqlCanonicalization;
 use Pushery\SQLens\Drivers\Mysql\Rules\AbstractMysqlRule;
 use Pushery\SQLens\Drivers\Mysql\Rules\MysqlRuleSet;
+use Pushery\SQLens\Patterns\WritesIndexStatements;
 use Pushery\SQLens\Rules\Convention\NamingConvention;
 use Pushery\SQLens\Rules\Lifecycle\LifecycleRuleSet;
 use Pushery\SQLens\Rules\Money\MoneyColumnDictionary;
@@ -32,7 +33,7 @@ use Pushery\SQLens\Tools\Tool;
  * versa. The two drivers never know about each other — that isolation is the
  * insurance for the later core+driver split, and it must never hold "only almost".
  */
-final class MysqlDriver implements AcceptsRunClock, DeclaresMeasuredServerVersion, Driver
+final class MysqlDriver implements AcceptsRunClock, DeclaresMeasuredServerVersion, Driver, WritesIndexStatements
 {
     /**
      * @param  string  $projectRoot  so a rule's finding location is repo-relative; the registry
@@ -195,5 +196,19 @@ final class MysqlDriver implements AcceptsRunClock, DeclaresMeasuredServerVersio
     public function tools(): iterable
     {
         return [];
+    }
+
+    /**
+     * The statement that builds a suggested index.
+     *
+     * `ALGORITHM=INPLACE, LOCK=NONE` builds the index while writes go on, or refuses to run. MySQL has no partial
+     * index, so the advisor hands it no condition.
+     *
+     * @param  list<string>  $columns
+     * @param  list<string>  $conditions
+     */
+    public function indexStatement(string $target, string $name, array $columns, array $conditions): string
+    {
+        return 'ALTER TABLE '.$target.' ADD INDEX '.$name.' ('.implode(', ', $columns).'), ALGORITHM=INPLACE, LOCK=NONE;';
     }
 }

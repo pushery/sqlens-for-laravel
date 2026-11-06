@@ -102,6 +102,19 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
      */
     private const array CONDITIONAL_ON_SESSION_TIMEZONE = PgTypeChangeMatrix::DECIDED_BY_THE_SESSION;
 
+    /**
+     * The sentence every finding of this rule ends with.
+     *
+     * Every `ALTER COLUMN … TYPE` removes the column's planner statistics, a change that rewrites
+     * nothing included, and it adds nothing to the count of changed rows at which autovacuum
+     * analyzes the table again. Measured on 18.0 over 50,000 rows: after `integer -> bigint`, after
+     * `varchar(10) -> varchar(20)` and after a type restated beside `DROP NOT NULL`, `pg_stats` held
+     * no row for the column, and `n_mod_since_analyze` did not move. An UPDATE of every row, the
+     * control, raised it by 50,000.
+     */
+    private const string STATISTICS_NOTE = ' The statement also removes the column\'s planner statistics, and nothing '
+        .'about it prompts autovacuum to analyze the table again, so run ANALYZE on the table right after it.';
+
     private readonly PgTypeChangeMatrix $matrix;
 
     /** The staged retyping this rule hands over, built once — it resolves the citation itself. */
@@ -159,7 +172,7 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
      * The version-awareness this rule must have, expressed as an absence. A change the
      * matrix classifies as metadata-only produces no finding and gets no plan; and a change the
      * matrix cannot classify — the source type is not in the statement — gets none either, because
-     * that finding is a QUESTION rather than a verdict. Handing over a six-step migration plan for
+     * that finding is a QUESTION rather than a verdict. Handing over a staged migration plan for
      * a change that may well be free is a false positive with a work order attached, which is more
      * expensive than saying nothing.
      *
@@ -194,6 +207,16 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
         }
 
         return $this->template->payload($context, $this->id(), $this->downtimeClass());
+    }
+
+    /**
+     * Whether this rule reports the statement: a rewrite it establishes, or a question it asks. Every
+     * one of its messages names the planner statistics the change removes, so the rule about those
+     * statistics speaks only where this one is silent.
+     */
+    public function reports(MigrationStatementView $statement): bool
+    {
+        return $this->verdict($statement) instanceof RuleVerdict;
     }
 
     public function level(): Level
@@ -241,7 +264,7 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
             return RuleVerdict::flag(
                 'ALTER COLUMN … TYPE with a USING clause rewrites the whole table under an ACCESS '
                 .'EXCLUSIVE lock, for a full pass over every row — an outage on a large, live table. '
-                .'A USING expression forces the rewrite unconditionally.',
+                .'A USING expression forces the rewrite unconditionally.'.self::STATISTICS_NOTE,
             );
         }
 
@@ -277,7 +300,7 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
                     .'current type before deploying.',
                     $change->column,
                     $change->targetType(),
-                ).$this->sessionTimeZoneCaveat($change->targetType()),
+                ).$this->sessionTimeZoneCaveat($change->targetType()).self::STATISTICS_NOTE,
                 UndeterminedReason::UnclassifiedTypeChange,
             );
         }
@@ -287,14 +310,14 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
                 'ALTER COLUMN … TYPE to this type rewrites the whole table under an ACCESS EXCLUSIVE '
                 .'lock, for a full pass over every row — an outage on a large, live table. If the '
                 .'change is unavoidable, take a maintenance window or stage it through a new column.'
-                .$this->sessionTimeZoneCaveat($change->targetType()),
+                .$this->sessionTimeZoneCaveat($change->targetType()).self::STATISTICS_NOTE,
             ),
             TypeChangeImpact::MetadataOnly => null,
             TypeChangeImpact::Unknown => RuleVerdict::undetermined(
                 'ALTER COLUMN … TYPE targets a type SQLens cannot classify from the migration alone — '
                 .'the source type is not in the statement — so whether it rewrites the table is unknown. '
                 .'Verify against the target column\'s current type before deploying.'
-                .$this->sessionTimeZoneCaveat($change->targetType()),
+                .$this->sessionTimeZoneCaveat($change->targetType()).self::STATISTICS_NOTE,
                 UndeterminedReason::UnclassifiedTypeChange,
             ),
         };
@@ -324,7 +347,7 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
                     $change->column,
                     $source->type,
                     $change->targetType(),
-                ).$this->sessionTimeZoneCaveat($change->targetType()),
+                ).$this->sessionTimeZoneCaveat($change->targetType()).self::STATISTICS_NOTE,
             ),
             TypeChangeImpact::MetadataOnly => null,
             TypeChangeImpact::Unknown => RuleVerdict::undetermined(
@@ -335,7 +358,7 @@ final class TypeChangeRewriteRule extends AbstractPgsqlSafetyRule implements Dec
                     $change->column,
                     $source->type,
                     $change->targetType(),
-                ).$this->sessionTimeZoneCaveat($change->targetType()),
+                ).$this->sessionTimeZoneCaveat($change->targetType()).self::STATISTICS_NOTE,
                 UndeterminedReason::UnclassifiedTypeChange,
             ),
         };

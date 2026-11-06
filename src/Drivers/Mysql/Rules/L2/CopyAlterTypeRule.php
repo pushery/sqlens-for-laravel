@@ -312,8 +312,9 @@ final class CopyAlterTypeRule extends AbstractMysqlRule implements DeclaresOpera
             .'changes — and every change it can express rebuilds the table. A data type change runs with '
             .'ALGORITHM=COPY: a full copy of every row under a shared lock, with writes queuing for the duration. A '
             .'nullability flip or a column move rebuilds it in place, which costs the same pass over the data. Stage '
-            .'the change instead: add the new column, backfill it in batches, cut over, then drop the old one. If it '
-            .'must run in place, issue it as a raw statement with ALGORITHM=INPLACE, LOCK=NONE — MySQL then refuses '
+            .'the change instead: add the new column, ship a release that writes both, backfill it in batches, '
+            .'cut over, then drop the old one. If it must run in place, issue it as a raw statement with '
+            .'ALGORITHM=INPLACE, LOCK=NONE — MySQL then refuses '
             .'the statement rather than quietly copying the table. (A redefinition whose only change is the column\'s '
             .'default is instant; this rule cannot tell that case apart and reports it too.)';
     }

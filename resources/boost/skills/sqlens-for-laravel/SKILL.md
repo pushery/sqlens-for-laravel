@@ -31,11 +31,12 @@ The service provider is registered automatically through package discovery.
 
 ### 2. Configure
 
-Publish everything at once, or only the configuration file:
+Publish everything at once, only the configuration file, or only the translations:
 
 ```bash
 php artisan vendor:publish --tag="sqlens"
 php artisan vendor:publish --tag="sqlens-config"
+php artisan vendor:publish --tag="sqlens-lang"
 ```
 
 `config/sqlens.php` documents every option inline. The ones a new application usually

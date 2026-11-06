@@ -23,6 +23,8 @@ final readonly class PatchAssessment
         /** The data's entry for that cycle, or null when it has none. */
         public ?EolCycle $entry,
         public EolData $data,
+        /** The days of support the cycle has left, for a cycle whose support ends soon; null otherwise. */
+        public ?int $daysLeft = null,
     ) {}
 
     /**

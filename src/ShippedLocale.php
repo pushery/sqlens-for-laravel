@@ -31,10 +31,10 @@ namespace Pushery\SQLens;
  * Nothing about that is red. The package has no opinion about the host's locale config, the
  * translator does exactly what it documents, and the only symptom is a user seeing a dotted token
  * in their terminal. So the locale is not left to be inferred: every call passes this constant, and
- * `tests/Feature/Localization/ShippedLocaleTest.php` holds the host-locale cases that used to leak.
+ * a test holds the host-locale cases that used to leak.
  *
- * Its sibling `tests/Unit/LocaleParityTest.php` holds the other half — that `en` is the only locale
- * shipped — so a re-added translation cannot quietly reintroduce the second language this constant
+ * Another test holds the other half — that `en` is the only locale shipped — so a re-added
+ * translation cannot quietly reintroduce the second language this constant
  * exists to rule out.
  */
 final readonly class ShippedLocale

@@ -155,9 +155,8 @@ final class ReaderSession
         //
         // The statement that would be retried is the seal's own write probe below. The package
         // would write into the database it promises never to write to — and only then report that
-        // the session is not sealed. Measured against a real server in
-        // tests/Postgres/ReaderSessionEffectiveTest.php; tests/MySql/ReaderSessionEffectiveTest.php
-        // measures that MySQL would not retry, because the detector's needle is PostgreSQL's wording
+        // the session is not sealed. Measured against a real PostgreSQL server. Against a real MySQL
+        // server the probe is not retried, because the detector's needle is PostgreSQL's wording
         // rather than the SQLSTATE.
         $this->connection->beginTransaction();
 

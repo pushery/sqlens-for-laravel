@@ -19,10 +19,18 @@ namespace Pushery\SQLens\Guard\Contracts;
  * job that follows, and a guardrail that says nothing looks exactly like an application with nothing to
  * say. So the next request, job or command ends a pause too, through {@see AccumulatesPerWindow::startWindow()},
  * and the type makes that second end impossible to leave out.
+ *
+ * A job or a command that a migration starts itself would end the pause in the middle of the run that way. An
+ * inspector that has to stay paused through it follows the units of work instead ({@see TracksUnitsOfWork}).
  */
 interface PausesDuringMigrations extends AccumulatesPerWindow
 {
-    /** The migrator is about to run its first migration. */
+    /**
+     * The migrator is about to run its first migration.
+     *
+     * An inspector that follows units of work also hears it when a command that runs the migrator starts
+     * ({@see TracksUnitsOfWork}).
+     */
     public function migrationsStarted(): void;
 
     /** The migrator ran its last migration. */

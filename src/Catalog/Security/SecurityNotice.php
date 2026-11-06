@@ -78,8 +78,8 @@ enum SecurityNotice: string implements RunNotice
     /**
      * The catalog each area is read from, as the readers name it, mapped to its id.
      *
-     * Explicit rather than computed, and total by test: `tests/Unit/Catalog/Security/…` asserts that
-     * every reference the two security readers actually pass is a key here, so a reader that starts
+     * Explicit rather than computed, and total by test: a test asserts that every reference the two
+     * security readers actually pass is a key here, so a reader that starts
      * reading a new catalog cannot quietly report under the fallback.
      *
      * @var array<string, string>

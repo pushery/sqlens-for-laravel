@@ -11,8 +11,8 @@ namespace Pushery\SQLens\Analyse;
  * A guessed method name is a defect in both directions and only one of them is visible. A name that
  * does not exist is dead weight nobody notices; a name that exists and is missing means the rule is
  * silent on real raw SQL, in a project that believes it is covered. The second is why this list has
- * its own file and its own verification arm: `tests/Unit/Analyse/RawSqlSinksTest` reflects the
- * INSTALLED framework and fails if a listed method has disappeared or changed shape.
+ * its own file and its own test, which reflects the INSTALLED framework and fails if a listed
+ * method has disappeared or changed shape.
  *
  * Read out of `laravel/framework` v13.23.0 on 2026-08-14; the subquery methods and Eloquent's
  * `fromQuery()` out of v13.30.1 on 2026-09-30.

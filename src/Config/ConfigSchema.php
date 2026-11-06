@@ -17,6 +17,7 @@ use Pushery\SQLens\Deploy\EscalationThresholds;
 use Pushery\SQLens\Exceptions\UndeclaredConfigPath;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Format\FormatDiscovery;
+use Pushery\SQLens\Guard\QueryWatcher;
 use Pushery\SQLens\ProjectPath;
 use Pushery\SQLens\Reporting\Baseline\StaleBaselinePolicy;
 use Pushery\SQLens\Reporting\RunProfile;
@@ -177,7 +178,7 @@ final readonly class ConfigSchema
         'security.rls' => ['mode', 'tables', 'tenant_column', 'reason'],
         'security.privacy' => ['enabled', 'dictionary', 'extra_terms', 'ignore_columns'],
         'security.analyse' => ['mode', 'result_path'],
-        'security.advisories' => ['path', 'source'],
+        'security.advisories' => ['path', 'source', 'lead_days'],
         'preflight' => ['connection', 'budget_ms', 'long_running_ms', 'replication_lag_ms', 'thresholds'],
         'deploy' => ['drift', 'debt', 'predeploy', 'postdeploy'],
         'deploy.postdeploy' => ['budget_ms', 'transition_patterns'],
@@ -200,7 +201,7 @@ final readonly class ConfigSchema
         'format' => ['paths', 'exclude', 'extensions', 'backend', 'dialect', 'binaries', 'timeout', 'style'],
         'format.binaries' => ['pgformatter', 'sqlfluff'],
         'format.style' => ['indent', 'uppercase_keywords', 'leading_commas', 'line_width'],
-        'guard' => ['profile', 'profiles'],
+        'guard' => ['profile', 'migration_commands', 'profiles'],
         'guard.profiles.*' => ['strict', 'slow_query', 'runtime', 'logging', 'connections'],
         'guard.profiles.*.strict' => ['lazy_loading', 'discarding_attributes', 'missing_attributes', 'destructive_commands', 'throw'],
         'guard.profiles.*.slow_query' => ['enabled', 'threshold_ms', 'cumulative_threshold_ms'],
@@ -532,9 +533,10 @@ final readonly class ConfigSchema
             'pgsql.max_locks_per_transaction' => 'a positive integer — how many distinct existing tables one migration transaction may strong-lock before it is flagged',
             'security' => 'an array with the keys: '.implode(', ', self::SECTION_KEYS['security']),
             'security.audit_connection' => "a connection name from config/database.php for the security readers of sqlens:security to RUN ON, or null for the run's own connection; sqlens:audit reads its --connection or sqlens.connection instead. Not to be confused with runtime_connection and migration_connection beside it, which name connections this suite ANALYZES. A name no database config defines is refused rather than fallen back from: falling back would examine a different instance and report it as clean",
-            'security.advisories' => 'an array with the keys: path, source',
+            'security.advisories' => 'an array with the keys: path, source, lead_days',
             'security.advisories.source' => 'an https URL serving a document in this package\'s advisory format, or null — no default ships',
             'security.advisories.path' => 'an absolute path to an end-of-life data file, or null to use the published or bundled copy',
+            'security.advisories.lead_days' => 'a non-negative integer — how many days before a release series leaves support SEC.CFG.PATCH_EOL reports it as ending; 0 reports a series only once its support ended',
             'security.rls' => 'an array with the keys: mode, tables, tenant_column, reason',
             'security.server' => 'an array with the key: lifetime',
             'security.server.lifetime' => "one of: 'persistent' (somebody deploys onto this server and operates it, so its own configuration is judged) or 'disposable' (the job creates and destroys it, so the checks whose subject is the server or the connecting role answer not_applicable and point at sqlens:security and sqlens:audit, run against the host that is operated). Declared, never detected: a container and a production server answer every query identically",
@@ -578,7 +580,7 @@ final readonly class ConfigSchema
             'format.style.uppercase_keywords' => 'true or false',
             'format.style.leading_commas' => 'true or false — whether a comma leads its line. The one purely aesthetic option here, and it is present because it is the one people argue about',
             'format.style.line_width' => 'a positive integer column past which a single-line statement is broken up',
-            'guard' => 'an array with the keys: profile, profiles',
+            'guard' => 'an array with the keys: profile, migration_commands, profiles',
             'guard.profile' => 'the name of the active guard profile, or null. NULL IS OFF — nothing is bound, no listener is registered, and the run reports it as deliberately off rather than as clean. A name this config does not define is an ERROR rather than off: a typo that silently disabled every guardrail is precisely what this key exists to prevent',
             'guard.profiles' => 'a map of profile NAME to profile definition. The names are yours; everything inside one is validated, because a typo in a profile is a guardrail that quietly does nothing',
             'guard.profiles.*' => 'an array with the keys: strict, slow_query, runtime, logging, connections',
@@ -601,6 +603,8 @@ final readonly class ConfigSchema
             'guard.profiles.*.logging.include_bindings' => 'true or false — whether query BINDINGS are written to the log. False by default and deliberately: bindings are row data, and a log is the one place row data leaks to somewhere with different access rules',
             'guard.profiles.*.logging.max_sql_length' => 'a positive integer — how many characters of the offending SQL reach the log before it is truncated',
             'guard.profiles.*.connections-item' => 'a connection name that `database.connections` defines',
+            'guard.migration_commands' => 'a list of Artisan command names that run the migrator, in addition to Laravel\'s own ('.implode(', ', QueryWatcher::MIGRATION_COMMANDS).'). Runtime DDL pauses from the start of such a command to its end, so a tenancy package\'s tenants:migrate creating its migration table is no runtime schema change. Empty adds none',
+            'guard.migration_commands-item' => 'an Artisan command name (a non-empty string), for example "tenants:migrate"',
             'guard.profiles.*.connections' => 'a list of connection names this profile applies to, or an empty list for every connection. A name database.connections does not define is an ERROR: the guardrail would otherwise be silently off for the connection somebody meant',
             'deploy' => 'an array with the keys: drift, debt, predeploy, postdeploy',
             'deploy.postdeploy' => 'an array with the keys: budget_ms, transition_patterns',
@@ -1227,6 +1231,13 @@ final readonly class ConfigSchema
             'guard.profiles.*.logging.channel' => $value === null || (is_string($value) && $value !== '')
                 ? []
                 : [ConfigViolation::wrongType($path, $expected, $value)],
+            'guard.migration_commands' => $this->listOfStrings(
+                $path,
+                $value,
+                'guard.migration_commands',
+                static fn (string $item): bool => $item !== '',
+                'guard.migration_commands-item',
+            ),
             'guard.profiles.*.connections' => $this->listOfStrings(
                 $path,
                 $value,
@@ -1297,6 +1308,11 @@ final readonly class ConfigSchema
                 ? []
                 : (is_string($value)
                     ? ($value !== '' && $this->isAbsolutePath($value) ? [] : [ConfigViolation::outOfRange($path, $expected, $value)])
+                    : [ConfigViolation::wrongType($path, $expected, $value)]),
+            'security.advisories.lead_days' => is_int($value) && $value >= 0
+                ? []
+                : (is_int($value)
+                    ? [ConfigViolation::outOfRange($path, $expected, $value)]
                     : [ConfigViolation::wrongType($path, $expected, $value)]),
             // Repository-relative and never null, the opposite of `baseline.path` below. A project
             // may genuinely have no baseline; it always has somewhere the debt account would live,

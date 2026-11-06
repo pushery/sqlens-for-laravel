@@ -56,11 +56,9 @@ final readonly class SessionDefenseAppliedCheck implements PreflightCheck, Reads
      * No default, and that is the point rather than an oversight.
      *
      * `[]` builds a check that answers `undetermined` for every engine — correct behavior, and
-     * indistinguishable from a wiring mistake. It was one: 82d95e5b moved the engine question
-     * behind this parameter and updated the Unit and Feature arms, while the three sites in
-     * `tests/MySql/SessionDefenseAppliedLiveTest.php` kept the argument-less spelling and went on
-     * compiling. The pull-request lane does not run that suite, so the first red was the develop
-     * push gate — three arms, all of them reading as a live MySQL server refusing to answer.
+     * indistinguishable from a wiring mistake: a call site written before the engines moved behind
+     * this parameter would go on compiling and report every engine as a server that refused to
+     * answer.
      *
      * Required, `new SessionDefenseAppliedCheck()` stops being a plausible line: it is an
      * ArgumentCountError the moment it executes, in whatever lane executes it. The one caller that

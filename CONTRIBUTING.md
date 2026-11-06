@@ -12,7 +12,9 @@ version and a minimal reproduction, and never paste secrets or credentials.
 
 - Keep the public API stable, or call out the break explicitly.
 - Add tests for any behavior change.
-- Update `README.md` and the `CHANGELOG.md` `## [Unreleased]` section.
+- Update `README.md` where your change alters what it describes. Leave `CHANGELOG.md` as it
+  is: it lists released versions, and the entry for your change is written when the change is
+  carried into the development repository.
 - Keep each commit focused.
 
 ## Where this file applies
@@ -368,20 +370,18 @@ The two sides of the diff are:
 ### Announcing a tightening
 
 A severity may be raised in a minor — a security risk does not wait for the next
-major — but only where a reader of the release notes will find it. Add an entry
-under `### Security` inside `## [Unreleased]` in `CHANGELOG.md` that **names the
-rule id** and says what a consumer's run will now do differently:
+major — but only where a reader of the release notes will find it. The release that
+raises it carries an entry under `### Security` in its changelog section that **names
+the rule id** and says what a consumer's run will now do differently:
 
 ```markdown
-## [Unreleased]
-
 ### Security
 
 - **SEC.PRIV.LITERAL is now `high`.** A hardcoded credential in a migration blocks a
   run whose `security.min_severity` is `high`, where it previously needed `medium`.
 ```
 
-Only the `### Security` rubric of the `[Unreleased]` section counts. A mention in
+Only the `### Security` rubric of the section the next release publishes counts. A mention in
 `### Fixed` or in an already-released section does not: otherwise a rule that got a
 typo fix in the same release would silently satisfy the requirement for a severity
 change nobody wrote about.

@@ -31,7 +31,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * forcing it to say "all of them" is a sentence that can only be wrong. Absence therefore means
  * exactly one thing — this rule judges whatever it is handed — and that meaning is held by a guard
  * rather than by hope: a rule whose source narrows by type and does not implement this fails
- * `tests/Unit/Rules/JudgedObjectTypeDeclarationTest.php`.
+ * a test.
  */
 interface DeclaresJudgedObjectTypes
 {

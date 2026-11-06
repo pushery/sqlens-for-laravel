@@ -84,11 +84,26 @@ final readonly class PgsqlSettingCrossFactCollector implements SettingCrossFactC
      */
     public const string TIMEOUT_OVERRIDES = 'timeout_overrides';
 
+    /**
+     * The cost limit the autovacuum workers share, read beside `autovacuum_max_workers`.
+     *
+     * The reset value of `autovacuum_vacuum_cost_limit`, or of `vacuum_cost_limit` where the first
+     * is `-1`, which is its default. Resolved here rather than by the rule, so no rule ever reads the
+     * `-1` literally and blames a server that raised `vacuum_cost_limit` instead.
+     */
+    public const string AUTOVACUUM_COST_LIMIT = 'autovacuum_cost_limit';
+
+    /**
+     * The pool the autovacuum workers are taken from, `autovacuum_worker_slots`, read beside
+     * `autovacuum_max_workers`: a setting above the pool has no effect.
+     */
+    public const string AUTOVACUUM_WORKER_POOL = 'autovacuum_worker_pool';
+
     public function __construct(private ReaderSession $session) {}
 
     public function collect(): SettingCrossFacts
     {
-        return $this->withStatementTimeout($this->withTlsOffered(SettingCrossFacts::none()));
+        return $this->withAutovacuumCost($this->withStatementTimeout($this->withTlsOffered(SettingCrossFacts::none())));
     }
 
     /**
@@ -188,6 +203,51 @@ final readonly class PgsqlSettingCrossFactCollector implements SettingCrossFactC
         return $this->withTimeoutOverrides(
             $facts->withMeasured('lock_timeout', self::STATEMENT_TIMEOUT, (string) $value),
         );
+    }
+
+    /**
+     * The cost limit the autovacuum workers share and the pool they come from, read beside
+     * `autovacuum_max_workers`.
+     *
+     * One statement for all three rows, so the limit, its fallback and the pool describe the same
+     * backend. `reset_val`, as for the timeouts above: what the configuration settled, which a new
+     * worker starts with. A server without `autovacuum_worker_slots` has no pool to cap its workers,
+     * so the pool is measured as none there rather than as unavailable.
+     */
+    #[RawSql(reason: 'reads the reset values of the autovacuum cost limit, its fallback and the worker pool, so autovacuum_max_workers is judged against the budget its workers share')]
+    private function withAutovacuumCost(SettingCrossFacts $facts): SettingCrossFacts
+    {
+        try {
+            $rows = $this->session->read(fn (Connection $db): array => $db->select(
+                "select name, reset_val from pg_settings where name in ('autovacuum_vacuum_cost_limit', 'vacuum_cost_limit', 'autovacuum_worker_slots')",
+            ));
+        } catch (Throwable $exception) {
+            return $facts
+                ->withUnavailable('autovacuum_max_workers', self::AUTOVACUUM_COST_LIMIT, UndeterminedReason::CatalogReadFailed, $exception->getMessage())
+                ->withUnavailable('autovacuum_max_workers', self::AUTOVACUUM_WORKER_POOL, UndeterminedReason::CatalogReadFailed, $exception->getMessage());
+        }
+
+        $values = [];
+
+        foreach ($rows as $row) {
+            $name = is_object($row) ? ($row->name ?? null) : null;
+            $value = is_object($row) ? ($row->reset_val ?? null) : null;
+
+            if (is_string($name) && is_scalar($value)) {
+                $values[$name] = (string) $value;
+            }
+        }
+
+        $own = $values['autovacuum_vacuum_cost_limit'] ?? null;
+        $limit = $own === '-1' ? ($values['vacuum_cost_limit'] ?? null) : $own;
+
+        $facts = $limit === null
+            // Unavailable rather than an invented 200: a guessed limit would make the rule judge a
+            // budget nobody measured.
+            ? $facts->withUnavailable('autovacuum_max_workers', self::AUTOVACUUM_COST_LIMIT, UndeterminedReason::CatalogReadFailed, 'pg_settings returned no reset_val for the autovacuum cost limit')
+            : $facts->withMeasured('autovacuum_max_workers', self::AUTOVACUUM_COST_LIMIT, $limit);
+
+        return $facts->withMeasured('autovacuum_max_workers', self::AUTOVACUUM_WORKER_POOL, $values['autovacuum_worker_slots'] ?? null);
     }
 
     /**

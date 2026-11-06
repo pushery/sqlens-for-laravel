@@ -16,10 +16,10 @@ use Throwable;
  *
  * It is excluded from the coverage gate, and the exclusion holds on two conditions rather than one:
  * every statement here is per-PROCESS wiring — a shield, a signal listener, a shutdown reporter, a
- * transport over the real streams — and a REAL SUBPROCESS proves the lot of it —
- * `tests/Feature/Agent/McpStdioSubprocessTest.php` starts the actual command with actual JSON-RPC
- * frames on its stdin and reads the frames that come back. No in-process coverage run can observe
- * that, and no in-process run can drive this method either: `run()` takes over STDIN, so calling
+ * transport over the real streams — and a REAL SUBPROCESS proves the lot of it: a test starts the
+ * actual command with actual JSON-RPC frames on its stdin and reads the frames that come back. No
+ * in-process coverage run can observe that, and no in-process run can drive this method either:
+ * `run()` takes over STDIN, so calling
  * it from a test runner would hand the runner's own stdin to the loop.
  *
  * The subprocess arms cover each ending: a client that closes, a SIGTERM, a SIGINT, and a session

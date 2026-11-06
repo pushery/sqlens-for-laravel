@@ -53,7 +53,7 @@ use Throwable;
  *
  * The same statements whatever the schema holds: the session's own, the scope, version and privilege
  * reads, and one per kind of object the request wants. The count never grows with the schema, and
- * `tests/Postgres/CatalogQueryCountTest.php` holds that. The alternative — walk the tables, then ask
+ * a test against a real server holds that. The alternative — walk the tables, then ask
  * about each one's columns — turns a 400-table database into 1,600 round trips, and the reader whose
  * whole promise is not to burden a production instance would be the heaviest thing on it.
  *
@@ -749,6 +749,16 @@ final readonly class PgsqlCatalogReader implements CatalogReader, ReadsKeyCounte
                            (SELECT s.reset_val FROM pg_catalog.pg_settings s WHERE s.name = 'track_counts') AS track_counts
                     FROM pg_stat_database WHERE datname = pg_catalog.current_database()
                     SQL, []);
+
+                // The updates each table took over the same window, and how many were HOT: an update
+                // that changed no indexed column and found room on its page writes no index entry.
+                // A non-summarizing index on a column every update writes makes that impossible.
+                $updates = $this->rows($reader, <<<'SQL'
+                    SELECT schemaname AS schema, relname AS name, n_tup_upd AS updates, n_tup_hot_upd AS hot
+                    FROM pg_stat_all_tables
+                    WHERE schemaname = ANY (?)
+                    ORDER BY schemaname, relname
+                    SQL, [$this->arrayLiteral($schemas)]);
             } catch (Throwable) {
                 // Named, never swallowed as an empty reading. A role that cannot see the statistics
                 // views and a database whose indexes are genuinely unused produce the same empty
@@ -763,6 +773,15 @@ final readonly class PgsqlCatalogReader implements CatalogReader, ReadsKeyCounte
                     = (int) ($row['scans'] ?? 0);
             }
 
+            $tableUpdates = [];
+
+            foreach ($updates as $row) {
+                $tableUpdates[$this->canonicalizer->qualified($this->str($row, 'schema'), $this->str($row, 'name'))] = [
+                    'updates' => (int) ($row['updates'] ?? 0),
+                    'hot' => (int) ($row['hot'] ?? 0),
+                ];
+            }
+
             $resetAt = $this->nullableStr($reset[0] ?? [], 'reset_at');
 
             return new IndexUsageReading(
@@ -772,6 +791,7 @@ final readonly class PgsqlCatalogReader implements CatalogReader, ReadsKeyCounte
                 // Only an explicit off stops the counting. A value the reading could not see leaves
                 // the counters judged as before rather than every index undetermined.
                 counting: strcasecmp($this->nullableStr($reset[0] ?? [], 'track_counts') ?? 'on', 'off') !== 0,
+                tableUpdates: $tableUpdates,
             );
         });
     }
