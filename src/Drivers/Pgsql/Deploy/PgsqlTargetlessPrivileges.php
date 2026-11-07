@@ -21,6 +21,9 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *   `user`: any role may set it for its own session or transaction. `SET ROLE` needs a membership,
  *   `SET SESSION AUTHORIZATION` and a parameter of the `superuser` context need more than a session
  *   has, and a parameter this list does not name stays unanswered rather than assumed harmless.
+ * - A `RESET` needs nothing to put back every parameter the session set, the role it took on or the
+ *   authorization it switched to: each returns to what the session started with, which any role
+ *   may. For one parameter it asks what a `SET` of that parameter asks.
  * - `COMMENT ON TABLE` and `COMMENT ON COLUMN` need ownership of the table. Laravel writes one beside
  *   every `->change()`, next to the `ALTER TABLE` that needs the same ownership.
  * - `CREATE POLICY`, `ALTER POLICY` and `DROP POLICY` need ownership of the table they name.
@@ -64,6 +67,10 @@ final readonly class PgsqlTargetlessPrivileges implements TargetlessPrivileges
     /** @return list<PrivilegeRequirement>|null */
     private function sessionSetting(string $sql): ?array
     {
+        if (preg_match('/^RESET\b\s*(.*?)\s*;?$/is', $sql, $reset) === 1) {
+            return $this->reset($reset[1]);
+        }
+
         $setting = (string) preg_replace('/^SET\s+(?:(?:SESSION|LOCAL)\s+)?/i', '', $sql);
 
         // A role and an authorization are a change of identity, which a session cannot grant itself.
@@ -77,6 +84,27 @@ final readonly class PgsqlTargetlessPrivileges implements TargetlessPrivileges
         }
 
         if (preg_match('/^("?)([A-Za-z_][A-Za-z0-9_]*)\1\s*(?:=|\bTO\b)/i', $setting, $parameter) !== 1) {
+            return null;
+        }
+
+        return in_array(strtolower($parameter[2]), self::USER_PARAMETERS, true) ? [] : null;
+    }
+
+    /**
+     * What a `RESET` of the given setting asks. `RESET ALL` puts back only what the session itself
+     * set, and `RESET ROLE` and `RESET SESSION AUTHORIZATION` return to the identity it logged in
+     * with, so none of them needs a right. A parameter is answered as its `SET` is, and a name the
+     * list does not know stays unanswered.
+     *
+     * @return list<PrivilegeRequirement>|null
+     */
+    private function reset(string $setting): ?array
+    {
+        if (preg_match('/^(?:ALL|ROLE|SESSION\s+AUTHORIZATION|TIME\s+ZONE|TRANSACTION\s+ISOLATION\s+LEVEL)$/i', $setting) === 1) {
+            return [];
+        }
+
+        if (preg_match('/^("?)([A-Za-z_][A-Za-z0-9_]*)\1$/', $setting, $parameter) !== 1) {
             return null;
         }
 

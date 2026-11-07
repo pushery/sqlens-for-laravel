@@ -113,7 +113,7 @@ enum StatementKind: string
     case RefreshMaterializedView = 'refresh_materialized_view';
     /**
      * A session configuration command — `SET lock_timeout`, `SET LOCAL statement_timeout`,
-     * `SET foreign_key_checks = 0`.
+     * `SET foreign_key_checks = 0`, and on PostgreSQL `RESET lock_timeout` and `RESET ALL`.
      *
      * Recognized valid SQL that changes no schema and writes no row. It has its own case rather
      * than sharing {@see self::Unknown} because the two mean opposite things to a rule that has to
