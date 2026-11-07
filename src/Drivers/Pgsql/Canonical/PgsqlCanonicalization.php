@@ -49,7 +49,7 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
         // pg_get_keywords() category U: not reserved.
         'ACTION', 'ADD', 'ALTER', 'ALWAYS', 'BY', 'CASCADE', 'CLUSTER', 'COMMENT', 'DELETE', 'DOUBLE',
         'DROP', 'GENERATED', 'IDENTITY', 'INDEX', 'INSERT', 'KEY', 'NO', 'OPTION', 'PRIVILEGES',
-        'REFRESH', 'REINDEX', 'RENAME', 'RESTRICT', 'REVOKE', 'SCHEMA', 'SET', 'STORED', 'TEXT',
+        'REFRESH', 'REINDEX', 'RENAME', 'RESET', 'RESTRICT', 'REVOKE', 'SCHEMA', 'SET', 'STORED', 'TEXT',
         'TRUNCATE', 'TYPE', 'UPDATE', 'VACUUM', 'VALID', 'VALIDATE', 'VIRTUAL', 'WITHOUT', 'ZONE',
         // Category C: not reserved, though no function or type may carry the name.
         'BETWEEN', 'BIGINT', 'BOOLEAN', 'CHAR', 'DECIMAL', 'FLOAT', 'INTEGER', 'JSON', 'PRECISION',
@@ -204,6 +204,11 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
             // `MATERIALIZED` and `VIEW` stay out: a `CREATE MATERIALIZED VIEW` keeps the canonical
             // form it had, and the refresh signatures read the two words as names.
             'CLUSTER', 'REINDEX', 'REFRESH', 'VERBOSE',
+
+            // `RESET` leads a statement the lead fallback reads as a session setting, as it reads a
+            // `SET`. PostgreSQL does not reserve the word, so it is in UNRESERVED_NAMES as well and
+            // a table called `reset` stays a table.
+            'RESET',
         ];
     }
 
@@ -653,6 +658,10 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                 // be anything" are opposite answers to a rule that must hedge over what it could
                 // not read.
                 'SET' => StatementKind::SessionSetting,
+                // The other half of the same command: `RESET lock_timeout` puts one parameter back to
+                // its default, and `RESET ALL` every parameter the session set. The timeout rules read
+                // it as the bound taken away, never as one set.
+                'RESET' => StatementKind::SessionSetting,
 
                 // The privilege grammar. Measured, and the measurement is the reason these two
                 // lines exist: without them `GRANT SELECT ON orders TO PUBLIC` was

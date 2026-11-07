@@ -193,8 +193,24 @@ final readonly class CanonicalFormVersion
      *     create table "vacuum" (id bigint)
      *       form 9  -> CREATE TABLE vacuum (id BIGINT)
      *       form 10 -> CREATE TABLE "vacuum" (id BIGINT)
+     *
+     * Went to 11 for `RESET` in the PostgreSQL list, so that the statement leads with a keyword and
+     * reaches the lead fallback, which reads it as {@see StatementKind::SessionSetting}, as it reads
+     * a `SET`. Before, it had no canonical form and made its whole migration undetermined.
+     * PostgreSQL does not reserve the word, so a name spelled with it is still read as one, and like
+     * `vacuum` in form 10 it keeps its quotes now:
+     *
+     *     reset lock_timeout
+     *       form 10 -> no canonical form (unrecognized_statement_form)
+     *       form 11 -> RESET lock_timeout
+     *
+     *     create table "reset" (id bigint)
+     *       form 10 -> CREATE TABLE reset (id BIGINT)
+     *       form 11 -> CREATE TABLE "reset" (id BIGINT)
+     *
+     * MySQL knows `RESET` only as an administration command, and its list did not change.
      */
-    public const int CURRENT = 10;
+    public const int CURRENT = 11;
 
     public function __construct(public int $version) {}
 

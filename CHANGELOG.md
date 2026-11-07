@@ -2,6 +2,14 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.32.1] - 2026-11-07
+
+### 🐛 Fixed
+
+- **A `RESET` no longer makes its whole PostgreSQL migration undetermined (canonical form version 11).** The statement had no canonical form, so a migration that put a session parameter back to its default with `RESET lock_timeout` or `RESET ALL` reported `CAP.L0.UNDETERMINED_CAPTURE`, and nothing in it was judged. A `RESET` is a session setting now, as a `SET` is. `PG.L3.MISSING_LOCK_TIMEOUT` and `PG.L3.MISSING_STATEMENT_TIMEOUT` read it as the timeout taken away again, so a lock behind it is reported, and `DEPLOY.PREFLIGHT.MISSING_PRIVILEGE` asks nothing for it, except for a parameter whose `SET` would need more than a session has. `RESET` joined the PostgreSQL keyword list, so a table named `reset` keeps its quotes in the canonical form, and a baseline entry for a finding about such a statement reports as new once after upgrading.
+
+  **Upgrade:** nothing to do. A migration with a `RESET` in it is judged now, and a lock behind a timeout it takes away is a new finding.
+
 ## [0.32.0] - 2026-11-06
 
 ### ✨ Added
@@ -1719,7 +1727,8 @@ The package connects to production databases and shells out to external binaries
 
 Everything above is the first release, so there is nothing for it to be a change *from*. The development history that produced it — several hundred entries, each arguing a decision through — lives in the git log, where it belongs. From 0.2.0 on, this file records changes.
 
-[Unreleased]: https://github.com/pushery/sqlens-for-laravel/compare/v0.32.0...HEAD
+[Unreleased]: https://github.com/pushery/sqlens-for-laravel/compare/v0.32.1...HEAD
+[0.32.1]: https://github.com/pushery/sqlens-for-laravel/compare/v0.32.0...v0.32.1
 [0.32.0]: https://github.com/pushery/sqlens-for-laravel/compare/v0.31.3...v0.32.0
 [0.31.3]: https://github.com/pushery/sqlens-for-laravel/compare/v0.31.2...v0.31.3
 [0.31.2]: https://github.com/pushery/sqlens-for-laravel/compare/v0.31.1...v0.31.2
