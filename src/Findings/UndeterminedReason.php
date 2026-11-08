@@ -36,6 +36,18 @@ enum UndeterminedReason: string
      * nothing there, and the remedy sits on this side rather than on the server's.
      */
     case UnknownServerVersion = 'unknown_server_version';
+
+    /**
+     * A pretend capture holds a read of the system catalog, such as the query `Schema::hasTable()` sends.
+     *
+     * Pretend mode answers every query with nothing, so the migration went on as if the table, column or
+     * index did not exist, and the statements captured after the read may not be the ones it sends to a
+     * real schema. The static pre-scan flags the guards it recognizes before the capture. This reason is
+     * the capture's own answer to one the pre-scan did not recognize, and the finding names the statement
+     * that read the catalog. Shadow mode answers the read from a database that holds the schema.
+     *
+     * A read of data is not one: a migration that counts rows only to log the number captures whole.
+     */
     case PretendLimit = 'pretend_limit';
 
     /**

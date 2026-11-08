@@ -60,6 +60,54 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
     ];
 
     /**
+     * The relations of `pg_catalog`, lower case. An unqualified name reaches them before any schema of
+     * the search path, because the server searches `pg_catalog` first unless the path names it later.
+     *
+     * Read from the server rather than from memory, as {@see self::UNRESERVED_NAMES} is: every table and
+     * view of `pg_catalog` on PostgreSQL 18.0. An older server holds a subset. A relation a later version
+     * adds is missing until it is added here, and a read of it is judged as a read of data, the way
+     * every read was judged before this list existed.
+     *
+     * @var list<string>
+     */
+    private const array CATALOG_RELATIONS = [
+        // The system catalogs: relkind r.
+        'pg_aggregate', 'pg_am', 'pg_amop', 'pg_amproc', 'pg_attrdef', 'pg_attribute', 'pg_auth_members',
+        'pg_authid', 'pg_cast', 'pg_class', 'pg_collation', 'pg_constraint', 'pg_conversion', 'pg_database',
+        'pg_db_role_setting', 'pg_default_acl', 'pg_depend', 'pg_description', 'pg_enum',
+        'pg_event_trigger', 'pg_extension', 'pg_foreign_data_wrapper', 'pg_foreign_server',
+        'pg_foreign_table', 'pg_index', 'pg_inherits', 'pg_init_privs', 'pg_language', 'pg_largeobject',
+        'pg_largeobject_metadata', 'pg_namespace', 'pg_opclass', 'pg_operator', 'pg_opfamily',
+        'pg_parameter_acl', 'pg_partitioned_table', 'pg_policy', 'pg_proc', 'pg_publication',
+        'pg_publication_namespace', 'pg_publication_rel', 'pg_range', 'pg_replication_origin', 'pg_rewrite',
+        'pg_seclabel', 'pg_sequence', 'pg_shdepend', 'pg_shdescription', 'pg_shseclabel', 'pg_statistic',
+        'pg_statistic_ext', 'pg_statistic_ext_data', 'pg_subscription', 'pg_subscription_rel',
+        'pg_tablespace', 'pg_transform', 'pg_trigger', 'pg_ts_config', 'pg_ts_config_map', 'pg_ts_dict',
+        'pg_ts_parser', 'pg_ts_template', 'pg_type', 'pg_user_mapping',
+        // The system views: relkind v.
+        'pg_aios', 'pg_available_extension_versions', 'pg_available_extensions',
+        'pg_backend_memory_contexts', 'pg_config', 'pg_cursors', 'pg_file_settings', 'pg_group',
+        'pg_hba_file_rules', 'pg_ident_file_mappings', 'pg_indexes', 'pg_locks', 'pg_matviews',
+        'pg_policies', 'pg_prepared_statements', 'pg_prepared_xacts', 'pg_publication_tables',
+        'pg_replication_origin_status', 'pg_replication_slots', 'pg_roles', 'pg_rules', 'pg_seclabels',
+        'pg_sequences', 'pg_settings', 'pg_shadow', 'pg_shmem_allocations', 'pg_shmem_allocations_numa',
+        'pg_stat_activity', 'pg_stat_all_indexes', 'pg_stat_all_tables', 'pg_stat_archiver',
+        'pg_stat_bgwriter', 'pg_stat_checkpointer', 'pg_stat_database', 'pg_stat_database_conflicts',
+        'pg_stat_gssapi', 'pg_stat_io', 'pg_stat_progress_analyze', 'pg_stat_progress_basebackup',
+        'pg_stat_progress_cluster', 'pg_stat_progress_copy', 'pg_stat_progress_create_index',
+        'pg_stat_progress_vacuum', 'pg_stat_recovery_prefetch', 'pg_stat_replication',
+        'pg_stat_replication_slots', 'pg_stat_slru', 'pg_stat_ssl', 'pg_stat_subscription',
+        'pg_stat_subscription_stats', 'pg_stat_sys_indexes', 'pg_stat_sys_tables', 'pg_stat_user_functions',
+        'pg_stat_user_indexes', 'pg_stat_user_tables', 'pg_stat_wal', 'pg_stat_wal_receiver',
+        'pg_stat_xact_all_tables', 'pg_stat_xact_sys_tables', 'pg_stat_xact_user_functions',
+        'pg_stat_xact_user_tables', 'pg_statio_all_indexes', 'pg_statio_all_sequences',
+        'pg_statio_all_tables', 'pg_statio_sys_indexes', 'pg_statio_sys_sequences', 'pg_statio_sys_tables',
+        'pg_statio_user_indexes', 'pg_statio_user_sequences', 'pg_statio_user_tables', 'pg_stats',
+        'pg_stats_ext', 'pg_stats_ext_exprs', 'pg_tables', 'pg_timezone_abbrevs', 'pg_timezone_names',
+        'pg_user', 'pg_user_mappings', 'pg_views', 'pg_wait_events',
+    ];
+
+    /**
      * The keywords that END a column's type and begin its modifiers.
      *
      * PostgreSQL's list, and it cannot be shared with MySQL's: `CHARACTER VARYING` is a TYPE here
@@ -724,6 +772,8 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                 'ANALYZE' => StatementKind::Unknown,
             ],
             unreservedNames: self::UNRESERVED_NAMES,
+            catalogSchemas: ['pg_catalog', 'information_schema'],
+            catalogRelations: self::CATALOG_RELATIONS,
         );
     }
 }

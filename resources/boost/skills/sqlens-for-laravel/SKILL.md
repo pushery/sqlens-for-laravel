@@ -476,10 +476,13 @@ did not ask for and the machine that *does* have the binary would rewrite every 
 `sqlens.guard.profile` names a profile and that is the whole setup — no command, no route, no
 middleware, no line in `AppServiceProvider`. Three examples ship: `local`, `ci`, `production`.
 
-```php
-// config/sqlens.php
-'guard' => ['profile' => env('SQLENS_GUARD')],
+```ini
+# .env
+SQLENS_GUARD=production
 ```
+
+The shipped `config/sqlens.php` reads `SQLENS_GUARD` into `sqlens.guard.profile`, so it needs no published
+file; unset or empty is off.
 
 It sets Eloquent's strictness switches, reports a query past a threshold, reports a *request* past a
 cumulative one, and names DDL a request issued outside a migration.

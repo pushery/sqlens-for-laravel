@@ -86,12 +86,13 @@ return [
     | topology is unambiguous or which pins from CI. A host that the connection
     | does not offer is refused rather than dialed — pinning a server outside the
     | configured topology is a typo far more often than it is an intention.
+    | `SQLENS_HOST` pins it without publishing this file; a blank value is null.
     |
     | Docs: https://docs.pushery.com/sqlens-for-laravel/read-write-split/
     |
     */
 
-    'host' => null,
+    'host' => is_string($host = env('SQLENS_HOST')) && trim($host) !== '' ? trim($host) : null,
 
     /*
     |--------------------------------------------------------------------------
@@ -1975,9 +1976,11 @@ return [
     'guard' => [
 
         /*
-         * The active profile, or null for off. Read once at boot.
+         * The active profile, or null for off. Read once at boot. `SQLENS_GUARD` names
+         * it without publishing this file; a blank value is off, not a profile called
+         * nothing, which would stop the application at boot.
          */
-        'profile' => null,
+        'profile' => is_string($guardProfile = env('SQLENS_GUARD')) && trim($guardProfile) !== '' ? trim($guardProfile) : null,
 
         /*
          * Artisan commands that run the migrator, in addition to Laravel's own.

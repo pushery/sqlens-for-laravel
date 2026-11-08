@@ -111,6 +111,8 @@ final readonly class SchemaIntrospectionGuardDetector implements PreScanDetector
             // Only a guard steers control flow. A bare `Schema::hasTable(...)`
             // whose result is thrown away is not a guard and hides no DDL — the
             // trap is specifically that a BRANCH is decided on the empty answer.
+            // The answer may reach the branch through a variable or through the
+            // return of a helper method; the collector counts both as deciding.
             if (! $call['context']->insideCondition) {
                 continue;
             }

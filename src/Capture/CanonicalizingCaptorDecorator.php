@@ -9,6 +9,7 @@ use Pushery\SQLens\Canonical\CanonicalizationFailure;
 use Pushery\SQLens\Canonical\CanonicalizationPipeline;
 use Pushery\SQLens\Canonical\Canonicalizer;
 use Pushery\SQLens\Canonical\CanonicalStatement;
+use Pushery\SQLens\Canonical\CatalogRead;
 use Pushery\SQLens\Canonical\Fingerprint;
 use Pushery\SQLens\Canonical\RawStatement;
 use Pushery\SQLens\Canonical\Stages\StatementSplitter;
@@ -52,6 +53,12 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * `DROP TABLE` behind a `CREATE INDEX` would pass. So each entry is split here,
  * with the {@see StatementSplitter} every batch in this package goes through,
  * and each statement it holds is canonicalized and judged on its own.
+ *
+ * A pretend capture that reads the system catalog is not taken as the whole migration either. Pretend
+ * mode answered the read with nothing, so what the migration ran after it is what it runs against a
+ * schema without the table it asked about. Such a capture becomes undetermined at the statement that
+ * read the catalog ({@see CatalogRead}), and its statements reach no rule and no preflight check: a
+ * privilege check over them would ask about the introspection query instead of the DDL behind it.
  *
  * A session setting can change how the server reads text: under MySQL's `ANSI_QUOTES` a double
  * quote names an object, and under `NO_BACKSLASH_ESCAPES` a backslash is an ordinary character.
@@ -158,6 +165,17 @@ final readonly class CanonicalizingCaptorDecorator implements Captor
                         $result,
                         UndeterminedReason::UncanonicalizableStatement,
                         sprintf('statement %d could not be canonicalized (%s): %s', $sequence + 1, $rendered->reason->value, $rendered->detail),
+                        $sequence,
+                    );
+                }
+
+                $catalog = $result->mode === CaptureMode::Pretend ? CatalogRead::in($rendered->canonicalSql ?? '', $this->syntax) : null;
+
+                if ($catalog !== null) {
+                    return $this->undetermined(
+                        $result,
+                        UndeterminedReason::PretendLimit,
+                        sprintf('statement %d reads %s, which pretend mode answers with nothing', $sequence + 1, $catalog),
                         $sequence,
                     );
                 }

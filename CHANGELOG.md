@@ -2,6 +2,22 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.32.2] - 2026-11-08
+
+### 🐛 Fixed
+
+- **A schema-introspection guard is found where its answer reaches the branch through a variable or a helper method.** `CAP.PRESCAN.INTROSPECTION_GUARD` counted `Schema::hasTable()` and its siblings only where they stood in the deciding expression itself. A migration that decided on `$this->constrains()`, whose `constrains()` returned `Schema::hasTable('billing_documents') && …`, or on a variable assigned from such a call, ran under pretend unmarked: the helper answered false, the DDL behind it was never captured, and the introspection `SELECT` was all the run recorded, which `sqlens:predeploy` then reported as `privilege_check_incomplete` and stopped the deploy on. Such a migration is undetermined now, as a guard in the condition itself makes it, with shadow mode as the way to capture it. The pre-scan reads a predicate the same way for `->count()` and `->exists()`: a branch decided on a count through a variable is reported, while a count that is only logged is not.
+
+  **Upgrade:** nothing to do. A migration with such a guard is reported by the pre-scan now, where it passed unseen before.
+
+- **`SQLENS_GUARD` and `SQLENS_HOST` are read by the shipped configuration.** The documentation showed both as lines of `config/sqlens.php`, and the shipped file set `sqlens.guard.profile` and `sqlens.host` to null, so a host that wrote `SQLENS_GUARD=production` into its `.env` without publishing the file had no guard, and nothing said so. Both read the environment now, as every other `SQLENS_*` setting does. A blank value is none: the guard stays off and the host is decided per run.
+
+  **Upgrade:** nothing to do. A host that set either variable gets what it asked for; one that published the file keeps the value it wrote there.
+
+- **A pretend capture that reads the system catalog is reported as undetermined, at that statement.** A guard the pre-scan does not recognize still sends its question to the catalog, and pretend mode answers it with nothing, so the statements captured after it are the ones the migration runs where the table it asked about does not exist. `sqlens:lint` judged them as the whole migration, and `sqlens:predeploy` handed the read to the privilege check, which answered `privilege_check_incomplete` about the migration role instead of naming the migration. Such a capture is now `undetermined` with the reason `pretend_limit`, reported by `CAP.L0.UNDETERMINED_CAPTURE` at the statement that read `pg_catalog`, `information_schema` or MySQL's `performance_schema`, and its statements reach no rule and no check. Shadow mode answers the read from a real schema. A read of the application's own tables, such as a count that is only logged, captures whole as before.
+
+  **Upgrade:** nothing to do. A migration with such a guard is reported as undetermined now, and it holds a run under `strict_undetermined`, as every undetermined migration does.
+
 ## [0.32.1] - 2026-11-07
 
 ### 🐛 Fixed
@@ -1727,7 +1743,8 @@ The package connects to production databases and shells out to external binaries
 
 Everything above is the first release, so there is nothing for it to be a change *from*. The development history that produced it — several hundred entries, each arguing a decision through — lives in the git log, where it belongs. From 0.2.0 on, this file records changes.
 
-[Unreleased]: https://github.com/pushery/sqlens-for-laravel/compare/v0.32.1...HEAD
+[Unreleased]: https://github.com/pushery/sqlens-for-laravel/compare/v0.32.2...HEAD
+[0.32.2]: https://github.com/pushery/sqlens-for-laravel/compare/v0.32.1...v0.32.2
 [0.32.1]: https://github.com/pushery/sqlens-for-laravel/compare/v0.32.0...v0.32.1
 [0.32.0]: https://github.com/pushery/sqlens-for-laravel/compare/v0.31.3...v0.32.0
 [0.31.3]: https://github.com/pushery/sqlens-for-laravel/compare/v0.31.2...v0.31.3
