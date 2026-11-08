@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Canonical\Classification;
 
+use Pushery\SQLens\Canonical\CatalogRead;
 use Pushery\SQLens\Canonical\StatementKind;
 
 /**
@@ -17,7 +18,10 @@ use Pushery\SQLens\Canonical\StatementKind;
  *  - `leadFallback` — a lead keyword (upper case) → the kind to assign when no
  *    signature matched but the statement is still recognizable (`INSERT` → dml,
  *    `CREATE` → ddl_other, `SET` → unknown). A lead keyword absent here is an
- *    unrecognized form, reported undetermined rather than guessed.
+ *    unrecognized form, reported undetermined rather than guessed;
+ *  - `catalogSchemas` and `catalogRelations` — where the engine keeps its system
+ *    catalog, so a `SELECT` that asks it is told apart from one that reads data
+ *    ({@see CatalogRead}).
  *
  * An empty `signatures` list is a missing artifact — the classifier reports it as
  * undetermined, never as a silent "everything is unknown".
@@ -44,6 +48,15 @@ final readonly class StatementClassificationProfile
      *                                         MySQL does. The classifier then reads it as the action
      *                                         list it means; an engine that refuses the form keeps
      *                                         the default and its signatures see it as written
+     * @param  list<string>  $catalogSchemas  the schemas, lower case, that hold the engine's system
+     *                                        catalog, such as `information_schema`. A relation a
+     *                                        `SELECT` qualifies with one of them is a catalog read
+     * @param  list<string>  $catalogRelations  the catalog's relations, lower case, that an unqualified
+     *                                          name reaches, such as PostgreSQL's `pg_class`, which the
+     *                                          server finds in `pg_catalog` before any other schema.
+     *                                          Empty for an engine whose catalog is only reached
+     *                                          qualified. With both lists empty no statement is a
+     *                                          catalog read
      */
     public function __construct(
         public array $signatures,
@@ -52,5 +65,7 @@ final readonly class StatementClassificationProfile
         public array $actionOptions = [],
         public array $unreservedNames = [],
         public bool $parenthesizedAddColumns = false,
+        public array $catalogSchemas = [],
+        public array $catalogRelations = [],
     ) {}
 }

@@ -14,6 +14,13 @@ namespace Pushery\SQLens\Capture\PreScan;
  * every migration that counts anything, and a rule that flags everything gets
  * switched off — at which point it protects nothing.
  *
+ * `insideCondition` follows the value, not only the position: a call decides a
+ * branch where it stands in the deciding expression, where it is assigned to a
+ * variable such an expression reads, and where a method of the migration returns
+ * it and that method's call decides a branch. `if (! $exists)` after
+ * `$exists = Schema::hasTable('t')` branches on the table as much as
+ * `if (! Schema::hasTable('t'))` does.
+ *
  * `insideLoopBody` carries the same idea for the classic backfill: DDL emitted
  * from inside a loop over query results is DDL the capture never sees, because
  * the loop runs zero times.

@@ -917,6 +917,10 @@ final class MysqlCanonicalization implements DeclaresReservedWords, DriverCanoni
             // `ALTER TABLE t ADD (a INT, b INT)` adds two columns, the manual's
             // `ADD [COLUMN] (col_name column_definition, ...)`.
             parenthesizedAddColumns: true,
+            // MySQL reaches its catalog only qualified, so no unqualified name is one of its relations.
+            // `mysql` and `sys` are system schemas as well and stay out: both are ordinary words for a
+            // table alias, and `sys.id` read as the catalog would turn a read of data undetermined.
+            catalogSchemas: ['information_schema', 'performance_schema'],
         );
     }
 }
