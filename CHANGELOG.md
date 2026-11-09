@@ -2,6 +2,20 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.33.0] - 2026-11-09
+
+### ✨ Added
+
+- **`GEN.L1.DOWN_DROPS_WHAT_UP_FOUND` reports a `down()` that drops what a guarded `up()` may have found already.** A migration that creates a table or adds a column only where it is missing, with `Schema::hasTable()`, `hasColumn()` or `hasColumns()` deciding the branch, builds nothing on a database where an earlier install created it, and a `down()` that drops it then deletes rows the migration never wrote. `GEN.L1.DOWN_MORE_DESTRUCTIVE` cannot see that, because pretend answers the guard with nothing and captures the `CREATE` as if it always ran. The pre-scan now reads the guard off the file, and the rule reports a dropped or truncated table `up()` asked about and created, and a dropped column `up()` asked about, unless `down()` can throw. A guarded migration is captured in shadow mode, so that is where the rule speaks; it carries a `none` as its fix material, with the reason. **The shipped registry holds 262 entries**, one more than 0.32.2: this rule. By category: **159 safety**, 59 security, 19 idiom, 15 performance, 7 convention and 3 privacy. By maturity: 255 stable, **4 preview**, 3 experimental. **181** answer to the level gate; the other 81 carry a severity, unchanged at 7 critical, 33 high, 29 medium, 8 low and 4 info. This rule carries the `downtime_class` `online`, so 65 entries carry one, split 41 online, 20 blocking and 4 rewrite.
+
+  **Upgrade:** nothing to do. The rule starts in preview, and a project asks for it with `sqlens.stability`.
+
+- **A migration names what its `DO` blocks need with `#[DoBlockPrivilege]`, and `DEPLOY.PREFLIGHT.MISSING_PRIVILEGE` checks those rights in their place.** A `DO` block runs code, so the check could not tell what the migration role must be allowed to do and ended undetermined, and the only way past it was the waiver on `privilege_check_incomplete`, which opens the deploy for every other open question too. The attribute sits on the migration class or on its `up()`, one per object and right, as `#[DoBlockPrivilege('public.invoices', SchemaObjectType::Table, PrivilegeClass::Trigger, reason: '…')]`. It answers the blocks of its own migration only, and the pre-scan reads it from the source, so a declaration with a value that is not literal or with an empty reason answers nothing. On PostgreSQL the check now asks who owns a routine through `pg_proc`, so a block that alters a function is checked against the function's owner, and the finding names `ALTER ROUTINE … OWNER TO`. **Upgrade:** nothing to do. A migration without the attribute is checked as before.
+
+### 🐛 Fixed
+
+- **`DEPLOY.PREFLIGHT.MISSING_PRIVILEGE` answers for functions, triggers, views, types and extensions on PostgreSQL.** None of these has a statement form of its own, so each was kept as DDL without a target, the derivation had nothing to say about it, and `predeploy` held the first deploy of every project whose migrations create one with `privilege_check_incomplete`. `CREATE FUNCTION`, `CREATE PROCEDURE`, `CREATE VIEW`, `CREATE MATERIALIZED VIEW` and `CREATE TYPE` now ask for `CREATE` on the schema the object lands in. `CREATE TRIGGER` asks for the new `trigger` class, the `TRIGGER` privilege on its table. `CREATE EXTENSION` asks the database: an extension installed already needs nothing, a trusted one `CREATE` on the database, any other one a superuser. A `DO` block stays unanswered, and its reason now names how a deploy waives it. **Upgrade:** nothing to do. A deploy that waived `privilege_check_incomplete` over one of these statements can drop the waiver, and a migration role that lacks one of the rights is now told which.
+
 ## [0.32.2] - 2026-11-08
 
 ### 🐛 Fixed
@@ -1743,7 +1757,8 @@ The package connects to production databases and shells out to external binaries
 
 Everything above is the first release, so there is nothing for it to be a change *from*. The development history that produced it — several hundred entries, each arguing a decision through — lives in the git log, where it belongs. From 0.2.0 on, this file records changes.
 
-[Unreleased]: https://github.com/pushery/sqlens-for-laravel/compare/v0.32.2...HEAD
+[Unreleased]: https://github.com/pushery/sqlens-for-laravel/compare/v0.33.0...HEAD
+[0.33.0]: https://github.com/pushery/sqlens-for-laravel/compare/v0.32.2...v0.33.0
 [0.32.2]: https://github.com/pushery/sqlens-for-laravel/compare/v0.32.1...v0.32.2
 [0.32.1]: https://github.com/pushery/sqlens-for-laravel/compare/v0.32.0...v0.32.1
 [0.32.0]: https://github.com/pushery/sqlens-for-laravel/compare/v0.31.3...v0.32.0

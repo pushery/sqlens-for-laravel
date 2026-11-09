@@ -162,6 +162,7 @@ final readonly class PreflightService implements PreflightRuns
                 files: $lint->pendingFiles,
                 statements: $lint->pendingStatements,
                 statementsComplete: $lint->pendingStatementsComplete,
+                declaredPrivileges: $lint->pendingDoBlockPrivileges,
             ),
             profile: $profileName,
             deadlineAt: $startedAt + ($budget * 1_000_000),

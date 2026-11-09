@@ -13,6 +13,7 @@ use Illuminate\Filesystem\Filesystem;
 use LogicException;
 use Pushery\SQLens\Canonical\Extensions\CanonicalExtensionRegistry;
 use Pushery\SQLens\Capture\CaptureConnectionResolver;
+use Pushery\SQLens\Capture\CapturedStatement;
 use Pushery\SQLens\Capture\CaptureFindingCatalog;
 use Pushery\SQLens\Capture\CaptureFindingCollector;
 use Pushery\SQLens\Capture\CaptureRun;
@@ -52,6 +53,7 @@ use Pushery\SQLens\Deploy\DebtOrigin;
 use Pushery\SQLens\Deploy\DebtReconciliation;
 use Pushery\SQLens\Deploy\DebtRegistrar;
 use Pushery\SQLens\Deploy\DebtState;
+use Pushery\SQLens\Deploy\PrivilegeRequirement;
 use Pushery\SQLens\Drivers\Capture\DriverCaptorFactory;
 use Pushery\SQLens\Drivers\DriverManager;
 use Pushery\SQLens\Drivers\DriverResolutionFailure;
@@ -103,6 +105,7 @@ use Pushery\SQLens\Tools\ToolFindingGate;
 use Pushery\SQLens\Tools\ToolLocator;
 use Pushery\SQLens\Tools\UnverifiableToolPrefixes;
 use Throwable;
+use WeakMap;
 
 /**
  * The lint suite's spine: it drives one run from a connection and a set of migration
@@ -586,6 +589,7 @@ final readonly class LintRunner implements LintRuns
         }
 
         $pendingStatementsComplete = array_all($pendingFiles, static fn (string $file): bool => isset($capturedUp[$file]));
+        $pendingDoBlockPrivileges = $this->declaredDoBlockPrivileges($run);
         $findings = $this->collector()->collect($run, $activeRules, $subjectContext, $this->projectRoot());
 
         // A category filter that removed every rule is not a clean run — it checked
@@ -781,7 +785,35 @@ final readonly class LintRunner implements LintRuns
             staleBaselineBreaks: $staleBreaks,
             unreadMigrations: array_values(array_diff($existingMigrations, $readMigrations)),
             shadowNotes: $noteRecorder->notes(),
+            pendingDoBlockPrivileges: $pendingDoBlockPrivileges,
         );
+    }
+
+    /**
+     * What the migration of each `up()` statement declares its `DO` blocks need, keyed by the
+     * statement, or null when no migration of the run declares anything.
+     *
+     * Built here, where the statements are still grouped by the file they came from: the deploy
+     * check reads them as one list, and a declaration answers only the blocks of its own migration.
+     *
+     * @return WeakMap<CapturedStatement, list<PrivilegeRequirement>>|null
+     */
+    private function declaredDoBlockPrivileges(CaptureRun $run): ?WeakMap
+    {
+        /** @var WeakMap<CapturedStatement, list<PrivilegeRequirement>> $declared */
+        $declared = new WeakMap;
+
+        foreach ($run->results as $captured) {
+            if ($captured->section !== CaptureSection::Up || $captured->doBlockPrivileges === []) {
+                continue;
+            }
+
+            foreach ($captured->statements as $statement) {
+                $declared[$statement] = $captured->doBlockPrivileges;
+            }
+        }
+
+        return count($declared) === 0 ? null : $declared;
     }
 
     /** The connection a run addresses: an explicit `--connection`, else the resolved default. */

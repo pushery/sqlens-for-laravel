@@ -89,6 +89,44 @@ final readonly class ApplicationSearchPath
     }
 
     /**
+     * `pg_catalog.to_regproc()` over a routine name as a migration writes it, resolved the way
+     * {@see self::regclass()} resolves a relation: a qualified name as it stands, a bare one with the
+     * schema the application's path finds a routine of that name in.
+     *
+     * A routine is no relation, so `to_regclass()` never finds one. `to_regproc()` answers null for
+     * a name that several routines share, and an overloaded routine is named with its argument types
+     * through {@see self::regprocedure()} instead.
+     *
+     * Takes the three bindings {@see self::regclassBindings()} returns.
+     *
+     * @return literal-string
+     */
+    public static function regproc(): string
+    {
+        return 'pg_catalog.to_regproc(coalesce(('
+            .'select pg_catalog.format(\'%I.%I\', n2.nspname, p2.proname) from pg_catalog.pg_proc p2'
+            .' join pg_catalog.pg_namespace n2 on n2.oid = p2.pronamespace'
+            .' where pg_catalog.strpos(?, \'.\') = 0 and p2.proname = ?'
+            .' and n2.nspname = any('.self::effective().')'
+            .' order by pg_catalog.array_position('.self::effective().', n2.nspname)'
+            .' limit 1), ?))';
+    }
+
+    /**
+     * `pg_catalog.to_regprocedure()` over a routine named with its argument types, `name(integer)`.
+     * It is looked up as it stands, so a name without its schema is found only on the reading
+     * session's own path: such a name is written qualified.
+     *
+     * Takes one binding, the name.
+     *
+     * @return literal-string
+     */
+    public static function regprocedure(): string
+    {
+        return 'pg_catalog.to_regprocedure(?)';
+    }
+
+    /**
      * The schemas the application's path names, without the implicit ones, as a `name[]`.
      *
      * @return literal-string

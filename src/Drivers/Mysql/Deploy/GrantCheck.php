@@ -311,6 +311,7 @@ final readonly class GrantCheck implements PreflightCheck
             PrivilegeClass::References => 'REFERENCES',
             PrivilegeClass::Write => 'INSERT',
             PrivilegeClass::Index => 'INDEX',
+            PrivilegeClass::Trigger => 'TRIGGER',
         };
     }
 

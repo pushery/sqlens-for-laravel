@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Deploy;
 
+use Pushery\SQLens\Attributes\DoBlockPrivilege;
 use Pushery\SQLens\Canonical\StatementAction;
 use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Canonical\TargetRole;
@@ -37,6 +38,13 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * rules rely on when they ask a migration to open with it, while `SET ROLE` needs a membership. The
  * driver answers it through {@see TargetlessPrivileges}, and only where it cannot does the statement
  * stay underivable.
+ *
+ * ## A block of code is the one open question a migration may answer
+ *
+ * A `DO` block runs code, and no reading of the statement tells what that code needs. Its migration
+ * can say so with {@see DoBlockPrivilege}, read by the pre-scan and
+ * handed over in {@see PendingWork::declaredFor()}: the declared rights take the block's place and
+ * are checked like any other. A block in a migration that declares nothing stays open.
  */
 final readonly class RequiredPrivileges
 {
@@ -103,7 +111,7 @@ final readonly class RequiredPrivileges
                 $known = $targets === [] && $position === 0 ? $targetless?->requirementsOf($statement) : null;
 
                 if ($known !== null) {
-                    $requirements = [...$requirements, ...$known];
+                    $requirements = [...$requirements, ...self::answered($known, $pending->declaredFor($statement))];
 
                     continue;
                 }
@@ -171,6 +179,33 @@ final readonly class RequiredPrivileges
         }
 
         return self::deduplicated($requirements);
+    }
+
+    /**
+     * The driver's answer, with each open question of a block of code replaced by what the block's
+     * migration declares it needs.
+     *
+     * Only a block of code is replaced. Its rights depend on the code it runs, and the migration's
+     * author is the one who knows them; every other open question stays open, because a declaration
+     * about the blocks of a migration says nothing about its other statements.
+     *
+     * @param  list<PrivilegeRequirement>  $known
+     * @param  list<PrivilegeRequirement>  $declared
+     * @return list<PrivilegeRequirement>
+     */
+    private static function answered(array $known, array $declared): array
+    {
+        if ($declared === []) {
+            return $known;
+        }
+
+        $answered = [];
+
+        foreach ($known as $requirement) {
+            $answered = $requirement->isCodeBlock() ? [...$answered, ...$declared] : [...$answered, $requirement];
+        }
+
+        return $answered;
     }
 
     /** Whether the statement builds an index, which names the existing table it is built on. */

@@ -10,6 +10,14 @@
                 "note": "An UPDATE or DELETE applies to every row of the table unless a WHERE clause restricts which rows it touches. The documentation is explicit that WHERE is what limits the affected set; with no WHERE the statement is not a smaller operation but the largest one — every row rewritten or removed. This is SQL-standard behavior, identical on PostgreSQL and MySQL, which is why the rule is driver-neutral."
             }
         ],
+        "GEN.L1.DOWN_DROPS_WHAT_UP_FOUND": [
+            {
+                "type": "doc",
+                "url": "https://laravel.com/docs/13.x/migrations",
+                "applies_to": "Laravel 13 (every engine — the rollback path is the framework's, not a database's)",
+                "note": "Laravel rolls a migration back by calling its down() method and nothing else: whatever down() contains runs, whether up() created the table or found it there. Schema::hasTable() and Schema::hasColumn() are the documented way to let up() run on a database that may already hold the table, and nothing in the framework carries that answer over to down()."
+            }
+        ],
         "GEN.L1.DOWN_MORE_DESTRUCTIVE": [
             {
                 "type": "doc",

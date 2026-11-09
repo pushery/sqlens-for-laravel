@@ -213,6 +213,60 @@ final readonly class GrantCheck implements PreflightCheck
     }
 
     /**
+     * Whether the role owns the named routine, or is a member of the role that does.
+     *
+     * Read from `pg_proc.proowner` through `pg_has_role`, as the owner of a relation is. A name with
+     * its argument types, `public.touch_updated_at()`, picks one routine of an overloaded name; a
+     * name without them is resolved over the application's path and must name exactly one.
+     */
+    #[RawSql(reason: 'reads pg_proc.proowner through pg_has_role; the owner of a routine has no other representation, and reimplementing role inheritance would be a second opinion about the server own rules')]
+    private function ownsRoutine(PreflightContext $context, string $role, string $routine): bool
+    {
+        $withArguments = str_contains($routine, '(');
+
+        $row = $context->session->read(static fn (Connection $db): array => $db->select(
+            'select pg_catalog.pg_has_role(?, p.proowner, \'USAGE\') as allowed from pg_catalog.pg_proc p where p.oid = '
+                .($withArguments ? ApplicationSearchPath::regprocedure() : ApplicationSearchPath::regproc()),
+            [$role, ...($withArguments ? [$routine] : ApplicationSearchPath::regclassBindings($routine))],
+        ))[0] ?? null;
+
+        // No row means no single routine of that name was found: it is not there, or the name is
+        // shared by several and carries no argument types. Neither is a refusal, so it raises and
+        // the caller reports it unanswered, as it does for a schema that is not there.
+        if (! is_object($row)) {
+            throw new PreflightStateUnreadable(sprintf(
+                'no single routine `%s` is in this database, so whether the role owns it cannot be '
+                .'answered. A name that several routines share is written with its argument types, '
+                .'`name(integer)`, and qualified with its schema.',
+                $routine,
+            ));
+        }
+
+        return ($row->allowed ?? false) === true;
+    }
+
+    /**
+     * Whether the role may create the named extension: it is installed already, so the statement
+     * needs nothing, the role is a superuser, or the extension is trusted and the role holds CREATE
+     * on the database. A name quoted in the migration is asked about without its quotes.
+     */
+    #[RawSql(reason: 'reads pg_extension, pg_roles and pg_available_extension_versions and asks has_database_privilege(); whether an extension is trusted and who may create it have no other representation')]
+    private function mayCreateExtension(PreflightContext $context, string $role, string $extension): bool
+    {
+        $name = preg_match('/^"(.*)"$/s', $extension, $quoted) === 1 ? str_replace('""', '"', $quoted[1]) : $extension;
+
+        $row = $context->session->read(static fn (Connection $db): array => $db->select(
+            'select exists (select 1 from pg_catalog.pg_extension where extname = ?)'
+            .' or coalesce((select rolsuper from pg_catalog.pg_roles where rolname = ?), false)'
+            .' or (coalesce((select pg_catalog.bool_or(trusted) from pg_catalog.pg_available_extension_versions where name = ?), false)'
+            .' and pg_catalog.has_database_privilege(?, pg_catalog.current_database(), \'CREATE\')) as allowed',
+            [$name, $role, $name, $role],
+        ))[0] ?? null;
+
+        return is_object($row) && ($row->allowed ?? false) === true;
+    }
+
+    /**
      * Whether this server knows the role at all.
      *
      * `pg_roles` rather than `pg_authid`: the former is readable by any connected role, the latter
@@ -259,6 +313,19 @@ final readonly class GrantCheck implements PreflightCheck
             return ['allowed' => $this->ownsSchema($context, $role, $object), 'atSchema' => false, 'schema' => null];
         }
 
+        // A routine is no relation either, so `to_regclass` never finds one: its owner is read from
+        // `pg_proc`. Changing a routine needs its ownership, which is what a DO block that alters a
+        // function declares; creating one is a CREATE and is asked at its schema below.
+        if ($requirement->objectType === SchemaObjectType::Routine && $requirement->class !== PrivilegeClass::Create) {
+            return ['allowed' => $this->ownsRoutine($context, $role, $object), 'atSchema' => false, 'schema' => null];
+        }
+
+        // An extension is no relation and lands in no schema a privilege could be asked of, so it is
+        // asked of the database, the way PostgreSQL decides it.
+        if ($requirement->objectType === SchemaObjectType::Extension) {
+            return ['allowed' => $this->mayCreateExtension($context, $role, $object), 'atSchema' => false, 'schema' => null];
+        }
+
         // Existence first. `has_table_privilege` RAISES for an object the catalog does not have, and
         // a migration that creates a table names exactly such an object — so the absent case is
         // judged at the schema, which is the right question for a CREATE anyway.
@@ -283,6 +350,12 @@ final readonly class GrantCheck implements PreflightCheck
                 // checks before it allows the statement.
                 'select pg_catalog.pg_has_role(?, c.relowner, \'USAGE\') as allowed'
                 .' from pg_class c where c.oid = '.ApplicationSearchPath::regclass(),
+                [$role, ...ApplicationSearchPath::regclassBindings($object)],
+            ],
+            // A grant rather than ownership: the table's owner holds TRIGGER, and another role can be
+            // given it, so `has_table_privilege` answers both.
+            $requirement->class === PrivilegeClass::Trigger => [
+                'select pg_catalog.has_table_privilege(?, '.ApplicationSearchPath::regclass().', \'TRIGGER\') as allowed',
                 [$role, ...ApplicationSearchPath::regclassBindings($object)],
             ],
             $requirement->class === PrivilegeClass::References => [
@@ -379,6 +452,23 @@ final readonly class GrantCheck implements PreflightCheck
         // `ALTER TABLE` really does need the table, and the same measurement shows it: the schema
         // owner is refused with "must be owner of table".
         $needs = match (true) {
+            $requirement->objectType === SchemaObjectType::Extension => sprintf(
+                'may not create the extension `%s`: PostgreSQL lets a role create a trusted extension '
+                .'with CREATE on the database, `GRANT CREATE ON DATABASE <database> TO %s`, and asks a '
+                .'superuser for any other one, so have one install it before the deploy',
+                $requirement->object,
+                $grantee,
+            ),
+            // A routine is handed over by naming it as one, as a schema is. `ALTER ROUTINE` covers a
+            // function and a procedure alike.
+            $requirement->objectType === SchemaObjectType::Routine => sprintf(
+                'must own the routine `%s`, and ownership cannot be granted — no `GRANT` produces it. '
+                .'Either `ALTER ROUTINE %s OWNER TO %s`, or make %s a member of the role that owns it',
+                $requirement->object,
+                $requirement->object,
+                $grantee,
+                $role,
+            ),
             // A schema is handed over by naming it as one: `ALTER TABLE` on a schema name finds no
             // relation, measured on 18 as `relation "app_ns" does not exist`.
             $requirement->objectType === SchemaObjectType::Schema => sprintf(
