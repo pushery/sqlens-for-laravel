@@ -45,6 +45,7 @@ final readonly class LifecycleRuleSet
             new DmlOnSchemaChangedTableRule($projectRoot),
             new DownMissingRule($projectRoot),
             new DownMoreDestructiveRule($projectRoot),
+            new DownDropsWhatUpFoundRule($projectRoot),
         ]);
     }
 

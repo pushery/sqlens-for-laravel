@@ -7,12 +7,14 @@ namespace Pushery\SQLens\Capture;
 use Pushery\SQLens\Canonical\StatementAction;
 use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Capture\PreScan\PreScanHit;
+use Pushery\SQLens\Deploy\PrivilegeRequirement;
 use Pushery\SQLens\Exceptions\UncanonicalizedStatement;
 use Pushery\SQLens\Findings\Outcome;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Subjects\CaptureMode;
 use Pushery\SQLens\Subjects\DownLegDigest;
 use Pushery\SQLens\Subjects\DownMethodState;
+use Pushery\SQLens\Subjects\FoundSubjects;
 use Pushery\SQLens\Subjects\MigrationContext;
 use Pushery\SQLens\Subjects\MigrationSql;
 use Pushery\SQLens\Subjects\MigrationStatementDigest;
@@ -81,6 +83,24 @@ final readonly class CaptureResult
          * migration.
          */
         public ?int $failureStatementIndex = null,
+        /**
+         * The tables and columns the migration's `up()` asks about before it builds them, and
+         * whether its `down()` can refuse, read statically by the pre-scan.
+         *
+         * Null when no pre-scan read the file, or where it could not tell the two methods apart,
+         * and that is "nobody looked", not "up() asks about nothing".
+         */
+        public ?FoundSubjects $foundSubjects = null,
+        /**
+         * What the migration declares its `DO` blocks need, read statically by the pre-scan from
+         * `#[DoBlockPrivilege]` on the class and on `up()`.
+         *
+         * Empty when it declares nothing, and then a `DO` block of it stays an open question for
+         * the privilege check.
+         *
+         * @var list<PrivilegeRequirement>
+         */
+        public array $doBlockPrivileges = [],
     ) {}
 
     /**
@@ -109,6 +129,8 @@ final readonly class CaptureResult
             $downLeg,
             $clone->declaredEmptyOn,
             $clone->failureStatementIndex,
+            $clone->foundSubjects,
+            $clone->doBlockPrivileges,
         );
     }
 
@@ -138,6 +160,8 @@ final readonly class CaptureResult
             $clone->downLeg,
             $clone->declaredEmptyOn,
             $clone->failureStatementIndex,
+            $clone->foundSubjects,
+            $clone->doBlockPrivileges,
         );
     }
 
@@ -169,6 +193,70 @@ final readonly class CaptureResult
             $clone->downLeg,
             $declaredEmptyOn,
             $clone->failureStatementIndex,
+            $clone->foundSubjects,
+            $clone->doBlockPrivileges,
+        );
+    }
+
+    /**
+     * The same result carrying what the file says about the subjects `up()` may find already.
+     *
+     * Attached by the pre-scan gate for the reason the three above are: it has already parsed the
+     * file, and a second parse would break the cost model the fast path rests on.
+     */
+    public function withFoundSubjects(FoundSubjects $foundSubjects): self
+    {
+        $clone = clone $this;
+
+        return new self(
+            $clone->file,
+            $clone->migrationClass,
+            $clone->statements,
+            $clone->section,
+            $clone->mode,
+            $clone->outcome,
+            $clone->reason,
+            $clone->failureDetail,
+            $clone->preScanHits,
+            $clone->annotationClass,
+            $clone->downMethodState,
+            $clone->downLeg,
+            $clone->declaredEmptyOn,
+            $clone->failureStatementIndex,
+            $foundSubjects,
+            $clone->doBlockPrivileges,
+        );
+    }
+
+    /**
+     * The same result carrying what the file declares its `DO` blocks need.
+     *
+     * Attached by the pre-scan gate for the reason the four above are: it has already parsed the
+     * file, and a second parse would break the cost model the fast path rests on.
+     *
+     * @param  list<PrivilegeRequirement>  $doBlockPrivileges
+     */
+    public function withDoBlockPrivileges(array $doBlockPrivileges): self
+    {
+        $clone = clone $this;
+
+        return new self(
+            $clone->file,
+            $clone->migrationClass,
+            $clone->statements,
+            $clone->section,
+            $clone->mode,
+            $clone->outcome,
+            $clone->reason,
+            $clone->failureDetail,
+            $clone->preScanHits,
+            $clone->annotationClass,
+            $clone->downMethodState,
+            $clone->downLeg,
+            $clone->declaredEmptyOn,
+            $clone->failureStatementIndex,
+            $clone->foundSubjects,
+            $doBlockPrivileges,
         );
     }
 
@@ -305,6 +393,7 @@ final readonly class CaptureResult
             $this->downLeg,
             $runStatements ?? $digests,
             $runStatements === null ? 0 : $runOffset,
+            $this->foundSubjects,
         );
 
         return array_map(

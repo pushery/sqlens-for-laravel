@@ -8,6 +8,7 @@ use PhpParser\Node;
 use PhpParser\Node\Attribute;
 use PhpParser\Node\AttributeGroup;
 use PhpParser\Node\Expr\Array_;
+use PhpParser\Node\Expr\ClassConstFetch;
 use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Expr\StaticCall;
@@ -20,8 +21,13 @@ use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Nop;
 use PhpParser\NodeFinder;
 use Pushery\SQLens\Attributes\AttributeReason;
+use Pushery\SQLens\Attributes\DoBlockPrivilege;
 use Pushery\SQLens\Attributes\NoSqlOnDriver;
+use Pushery\SQLens\Deploy\PrivilegeClass;
+use Pushery\SQLens\Deploy\PrivilegeRequirement;
 use Pushery\SQLens\Subjects\DownMethodState;
+use Pushery\SQLens\Subjects\SchemaObjectType;
+use UnitEnum;
 
 /**
  * One migration file, parsed once, with every call in it already resolved.
@@ -165,7 +171,7 @@ final readonly class ScannedMigration
 
         foreach ($groups as $group) {
             foreach ($group->attrs as $attribute) {
-                if (strtolower($attribute->name->getLast()) !== $this->noSqlOnDriverName()) {
+                if (strtolower($attribute->name->getLast()) !== $this->shortName(NoSqlOnDriver::class)) {
                     continue;
                 }
 
@@ -184,18 +190,127 @@ final readonly class ScannedMigration
     }
 
     /**
-     * The short name of {@see NoSqlOnDriver}, lowercased — read off the class, never typed.
+     * What this file declares its `DO` blocks need, with `#[DoBlockPrivilege]`, as requirements.
+     *
+     * Read off the AST the pre-scan already parsed, like {@see self::driversDeclaredEmpty()}. The
+     * class and its `up()` are read, because a deploy runs `up()`: a declaration on `down()` would
+     * answer a block no deploy runs.
+     *
+     * A declaration counts only when every value in it is literal: the object as a string, the type
+     * and the class as cases of their enums, and a reason that states one. Anything else answers
+     * nothing and the block stays open, the state a declaration nobody could read has to keep.
+     *
+     * @return list<PrivilegeRequirement>
+     */
+    public function doBlockPrivileges(): array
+    {
+        $declared = [];
+
+        foreach (new NodeFinder()->findInstanceOf($this->ast, ClassLike::class) as $class) {
+            $groups = $class->attrGroups;
+
+            foreach ($class->getMethods() as $method) {
+                if ($method->name->toLowerString() === 'up') {
+                    $groups = [...$groups, ...$method->attrGroups];
+                }
+            }
+
+            foreach ($groups as $group) {
+                foreach ($group->attrs as $attribute) {
+                    $requirement = $this->doBlockPrivilege($attribute);
+
+                    if ($requirement instanceof PrivilegeRequirement) {
+                        $declared[$requirement->sortKey()] = $requirement;
+                    }
+                }
+            }
+        }
+
+        ksort($declared);
+
+        return array_values($declared);
+    }
+
+    /** One `#[DoBlockPrivilege]` as the requirement it declares, or null when it declares none. */
+    private function doBlockPrivilege(Attribute $attribute): ?PrivilegeRequirement
+    {
+        if (strtolower($attribute->name->getLast()) !== $this->shortName(DoBlockPrivilege::class)) {
+            return null;
+        }
+
+        $object = trim((string) $this->literalArgument($attribute, 0, 'object'));
+        $type = $this->caseNamed(SchemaObjectType::cases(), $this->caseArgument($attribute, 1, 'type', SchemaObjectType::class));
+        $privilege = $this->caseNamed(PrivilegeClass::cases(), $this->caseArgument($attribute, 2, 'privilege', PrivilegeClass::class));
+        $reason = $this->literalArgument($attribute, 3, 'reason');
+
+        if ($object === '' || ! $type instanceof SchemaObjectType || ! $privilege instanceof PrivilegeClass || $reason === null || ! AttributeReason::states($reason)) {
+            return null;
+        }
+
+        return PrivilegeRequirement::of($object, $type, $privilege);
+    }
+
+    /**
+     * The case one argument names, by position or by name, when it is written `Enum::Case` with the
+     * given enum, matched on the last segment of its name like the attribute itself.
+     *
+     * @param  class-string<UnitEnum>  $enum
+     */
+    private function caseArgument(Attribute $attribute, int $position, string $name, string $enum): ?string
+    {
+        foreach ($attribute->args as $index => $argument) {
+            $matchesName = $argument->name?->toString() === $name;
+            $matchesPosition = $argument->name === null && $index === $position;
+
+            if (! $matchesName && ! $matchesPosition) {
+                continue;
+            }
+
+            $value = $argument->value;
+
+            if (! $value instanceof ClassConstFetch || ! $value->class instanceof Name || ! $value->name instanceof Identifier) {
+                return null;
+            }
+
+            return strtolower($value->class->getLast()) === $this->shortName($enum) ? $value->name->toString() : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * The case of these that carries this name.
+     *
+     * @template T of UnitEnum
+     *
+     * @param  list<T>  $cases
+     * @return T|null
+     */
+    private function caseNamed(array $cases, ?string $name): ?UnitEnum
+    {
+        foreach ($cases as $case) {
+            if ($case->name === $name) {
+                return $case;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The short name of a class, lowercased, the way an attribute's name is matched — read off the
+     * class, never typed.
      *
      * A literal here would leave the attribute class with no reference anywhere in `src/`, which is
      * what the unwired-mechanism guard reports and is right to: a class nothing names is a class a
      * rename silently detaches from the reader looking for it. Deriving it means a rename either
      * carries this along or does not compile.
      *
-     * A constant cannot hold this — `const` takes no function call — so it is a method.
+     * @param  class-string  $class
      */
-    private function noSqlOnDriverName(): string
+    private function shortName(string $class): string
     {
-        $segments = explode('\\', NoSqlOnDriver::class);
+        $segments = explode('\\', $class);
 
         return strtolower(end($segments));
     }
@@ -288,13 +403,41 @@ final readonly class ScannedMigration
      */
     private function reachableScopes(): ?array
     {
-        $reachable = [...self::MIGRATION_METHODS, '__construct', ...$this->callableReferences()];
+        return $this->reach([...self::MIGRATION_METHODS, '__construct', ...$this->callableReferences()], topLevel: true);
+    }
+
+    /**
+     * The named function-likes one migration method runs: the method itself, and what it calls of
+     * its own class or file, followed to the end. The constructor, the top-level code and a method
+     * handed over as `[$this, 'm']` run for either direction and are left to neither.
+     *
+     * Null when one of them calls a method of its own class by a name only known at run time, so
+     * which of them run is unknown.
+     *
+     * @return list<string>|null
+     */
+    public function scopesReachedFrom(string $method): ?array
+    {
+        return $this->reach([$method], topLevel: false);
+    }
+
+    /**
+     * The roots and every named function-like they reach, or null where a call to a method of the
+     * own class names it only at run time.
+     *
+     * @param  list<string>  $roots
+     * @param  bool  $topLevel  whether the top-level code of the file runs too, so its calls reach
+     * @return list<string>|null
+     */
+    private function reach(array $roots, bool $topLevel): ?array
+    {
+        $reachable = $roots;
 
         for ($grown = true; $grown;) {
             $grown = false;
 
             foreach ($this->calls as $call) {
-                if ($call['scope'] !== null && ! in_array($call['scope'], $reachable, true)) {
+                if ($call['scope'] === null ? ! $topLevel : ! in_array($call['scope'], $reachable, true)) {
                     continue;
                 }
 

@@ -7,9 +7,11 @@ namespace Pushery\SQLens\Lint;
 use Pushery\SQLens\Capture\CapturedStatement;
 use Pushery\SQLens\Capture\SingleFileFailure;
 use Pushery\SQLens\Console\ExitCode;
+use Pushery\SQLens\Deploy\PrivilegeRequirement;
 use Pushery\SQLens\Drivers\DriverResolutionFailure;
 use Pushery\SQLens\Findings\Result;
 use Pushery\SQLens\Reporting\RunContext;
+use WeakMap;
 
 /**
  * Everything one lint run produced — the aggregate result, the reproducibility
@@ -118,6 +120,16 @@ final readonly class LintOutcome
          * @var list<string>
          */
         public array $shadowNotes = [],
+        /**
+         * What the migration of each pending statement declares its `DO` blocks need, with
+         * `#[DoBlockPrivilege]`, keyed by the statement itself.
+         *
+         * Null when no pending migration declares anything. Keyed by identity rather than by
+         * position, so it cannot fall out of line with {@see self::$pendingStatements}.
+         *
+         * @var WeakMap<CapturedStatement, list<PrivilegeRequirement>>|null
+         */
+        public ?WeakMap $pendingDoBlockPrivileges = null,
     ) {}
 
     /**

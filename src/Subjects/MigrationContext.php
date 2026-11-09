@@ -110,6 +110,14 @@ final readonly class MigrationContext
          * gap that nothing marks.
          */
         public ?int $runOffset = 0,
+        /**
+         * The tables and columns this migration's `up()` asks about before it builds them, and
+         * whether its `down()` can refuse, or null when nothing looked.
+         *
+         * Null is "nobody read the file", the third answer the two fields above also keep: a rule
+         * that read it as "up() asks about nothing" would vouch for a rollback it never compared.
+         */
+        public ?FoundSubjects $foundSubjects = null,
     ) {}
 
     /** The context of a migration whose statements were never classified — creates nothing known. */

@@ -10,11 +10,13 @@ use Pushery\SQLens\Capture\CaptureSection;
 use Pushery\SQLens\Capture\PendingMigration;
 use Pushery\SQLens\Contracts\Captor;
 use Pushery\SQLens\Contracts\PreScanDetector;
+use Pushery\SQLens\Deploy\PrivilegeRequirement;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Rules\StabilityGate;
 use Pushery\SQLens\Subjects\CaptureMode;
 use Pushery\SQLens\Subjects\DownLegDigest;
 use Pushery\SQLens\Subjects\DownMethodState;
+use Pushery\SQLens\Subjects\FoundSubjects;
 
 /**
  * The gate that turns a pre-scan hit into a safe consequence: a flagged migration
@@ -65,6 +67,7 @@ final readonly class PreScanGate implements Captor
         private array $detectors,
         private MigrationFileScanner $scanner = new MigrationFileScanner,
         private ?Captor $downLegCaptor = null,
+        private FoundSubjectsReader $foundSubjectsReader = new FoundSubjectsReader,
     ) {}
 
     /**
@@ -119,8 +122,14 @@ final readonly class PreScanGate implements Captor
         /** @var array<string, array<string, string>> $declaredEmpty */
         $declaredEmpty = [];
 
+        /** @var array<string, FoundSubjects> $foundSubjects */
+        $foundSubjects = [];
+
+        /** @var array<string, list<PrivilegeRequirement>> $doBlockPrivileges */
+        $doBlockPrivileges = [];
+
         foreach ($migrations as $migration) {
-            $verdict = $this->judge($migration, $section, $downStates, $declaredEmpty);
+            $verdict = $this->judge($migration, $section, $downStates, $declaredEmpty, $foundSubjects, $doBlockPrivileges);
 
             if ($verdict instanceof CaptureResult) {
                 $flagged[] = $verdict;
@@ -149,6 +158,25 @@ final readonly class PreScanGate implements Captor
         $captured = array_map(
             static fn (CaptureResult $result): CaptureResult => ($declaredEmpty[$result->file] ?? []) !== []
                 ? $result->withDeclaredEmptyOn($declaredEmpty[$result->file])
+                : $result,
+            $captured,
+        );
+
+        // What the file declares its DO blocks need rides back the same way. It is read for the up
+        // section only, the one a deploy runs, and the privilege check is its only reader.
+        $captured = array_map(
+            static fn (CaptureResult $result): CaptureResult => ($doBlockPrivileges[$result->file] ?? []) !== []
+                ? $result->withDoBlockPrivileges($doBlockPrivileges[$result->file])
+                : $result,
+            $captured,
+        );
+
+        // What up() asks about before it builds, and whether down() can refuse, ride back the same
+        // way: a rule comparing the two halves of a migration needs the question, which only the
+        // parse can see, since pretend answers it with nothing.
+        $captured = array_map(
+            static fn (CaptureResult $result): CaptureResult => isset($foundSubjects[$result->file])
+                ? $result->withFoundSubjects($foundSubjects[$result->file])
                 : $result,
             $captured,
         );
@@ -219,12 +247,14 @@ final readonly class PreScanGate implements Captor
      *
      * @param  array<string, DownMethodState>  $downStates  keyed by migration file path
      * @param  array<string, array<string, string>>  $declaredEmpty  keyed by file, then driver => reason
+     * @param  array<string, FoundSubjects>  $foundSubjects  keyed by migration file path
+     * @param  array<string, list<PrivilegeRequirement>>  $doBlockPrivileges  keyed by migration file path
      *
      * A file the scanner cannot parse is undetermined too, for its own reason — a
      * file whose syntax the scanner cannot follow is a file whose side effects it
      * also cannot see, so it never gets the benefit of the doubt and never runs.
      */
-    private function judge(PendingMigration $migration, CaptureSection $section, array &$downStates, array &$declaredEmpty): ?CaptureResult
+    private function judge(PendingMigration $migration, CaptureSection $section, array &$downStates, array &$declaredEmpty, array &$foundSubjects, array &$doBlockPrivileges): ?CaptureResult
     {
         $scanned = $this->scanner->scan($migration->file);
 
@@ -245,6 +275,18 @@ final readonly class PreScanGate implements Captor
         // Recorded for every scannable file too, and for the section being captured: a declaration
         // is a fact about the file, not about whether the gate let it through.
         $declaredEmpty[$migration->file] = $scanned->driversDeclaredEmpty($section->direction()->value);
+
+        // What it declares its DO blocks need, for the section a deploy runs.
+        if ($section === CaptureSection::Up) {
+            $doBlockPrivileges[$migration->file] = $scanned->doBlockPrivileges();
+        }
+
+        // And so is what up() asks about before it builds, where the two methods can be told apart.
+        $found = $this->foundSubjectsReader->read($scanned);
+
+        if ($found instanceof FoundSubjects) {
+            $foundSubjects[$migration->file] = $found;
+        }
 
         $hits = $this->hits($scanned);
 

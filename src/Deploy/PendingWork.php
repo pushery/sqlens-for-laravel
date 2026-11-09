@@ -6,6 +6,7 @@ namespace Pushery\SQLens\Deploy;
 
 use Pushery\SQLens\Capture\CapturedStatement;
 use Pushery\SQLens\Subjects\MigrationDirection;
+use WeakMap;
 
 /**
  * The migrations this deploy is about to run, as the preflight sees them.
@@ -30,12 +31,27 @@ final readonly class PendingWork
      *                                    captured. A check that concludes from an ABSENCE among the
      *                                    statements may do so only then; a migration the capture
      *                                    could not determine contributes none
+     * @param  WeakMap<CapturedStatement, list<PrivilegeRequirement>>|null  $declaredPrivileges  what
+     *                                                                                           the migration of a statement declares its `DO` blocks need,
+     *                                                                                           with `#[DoBlockPrivilege]`, keyed by the statement itself so
+     *                                                                                           no position has to line up with `$statements`
      */
     public function __construct(
         public array $files = [],
         public array $statements = [],
         public bool $statementsComplete = false,
+        public ?WeakMap $declaredPrivileges = null,
     ) {}
+
+    /**
+     * What the migration this statement belongs to declares its `DO` blocks need, or nothing.
+     *
+     * @return list<PrivilegeRequirement>
+     */
+    public function declaredFor(CapturedStatement $statement): array
+    {
+        return $this->declaredPrivileges[$statement] ?? [];
+    }
 
     public function isEmpty(): bool
     {

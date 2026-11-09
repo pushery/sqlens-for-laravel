@@ -9,6 +9,7 @@ use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Capture\CapturedStatement;
 use Pushery\SQLens\Deploy\PrivilegeClass;
 use Pushery\SQLens\Deploy\PrivilegeRequirement;
+use Pushery\SQLens\Deploy\RequiredPrivileges;
 use Pushery\SQLens\Deploy\TargetlessPrivileges;
 use Pushery\SQLens\Drivers\Pgsql\Canonical\PgsqlCanonicalization;
 use Pushery\SQLens\Subjects\SchemaObjectType;
@@ -27,8 +28,18 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * - `COMMENT ON TABLE` and `COMMENT ON COLUMN` need ownership of the table. Laravel writes one beside
  *   every `->change()`, next to the `ALTER TABLE` that needs the same ownership.
  * - `CREATE POLICY`, `ALTER POLICY` and `DROP POLICY` need ownership of the table they name.
+ * - `CREATE FUNCTION`, `CREATE PROCEDURE`, `CREATE VIEW`, `CREATE MATERIALIZED VIEW` and `CREATE TYPE`
+ *   need `CREATE` on the schema the object lands in. Replacing a routine or a view that exists
+ *   already needs its ownership as well, which this answer does not ask.
+ * - `CREATE TRIGGER` needs the `TRIGGER` privilege on the table it is put on, which the table's owner
+ *   holds and another role can be given.
+ * - `CREATE EXTENSION` is asked of the database: a trusted extension needs `CREATE` on it, any other
+ *   one a superuser, and one that is installed already needs nothing.
  * - `GRANT` and `REVOKE` stay unanswered: ownership of the object or the grant option on it lets a
  *   role run them, and which of the two the role holds is not a question this check asks.
+ * - A `DO` block stays unanswered, with what to do about it: what it needs depends on the code it
+ *   runs, which no reading of the statement can tell. Its migration can answer it with
+ *   `#[DoBlockPrivilege]`, which {@see RequiredPrivileges} puts in its place.
  */
 final readonly class PgsqlTargetlessPrivileges implements TargetlessPrivileges
 {
@@ -56,6 +67,19 @@ final readonly class PgsqlTargetlessPrivileges implements TargetlessPrivileges
     public function requirementsOf(CapturedStatement $statement): ?array
     {
         $sql = trim($statement->canonicalSql ?? $statement->rawSql);
+
+        // Before the kind, because a `DO` block has none: the classifier keeps it unrecognized on
+        // purpose, so that no rule takes code it cannot read for a statement that changes nothing.
+        if (preg_match('/^DO\b/i', $sql) === 1) {
+            return [PrivilegeRequirement::codeBlock(
+                'privilege_requirement_underivable: a DO block runs code, and what the role must be '
+                .'allowed to do depends on what that code does, which reading the statement cannot '
+                .'tell. Name each right it needs with #[DoBlockPrivilege] on its migration, and the '
+                .'check asks about those instead; a deploy that may go on without the answer waives '
+                .'privilege_check_incomplete with --allow-undetermined or '
+                .'sqlens.deploy.predeploy.allow_undetermined.',
+            )];
+        }
 
         return match ($statement->statementKind) {
             StatementKind::SessionSetting => $this->sessionSetting($sql),
@@ -127,6 +151,34 @@ final readonly class PgsqlTargetlessPrivileges implements TargetlessPrivileges
             return $this->ownershipOf($policy[1]);
         }
 
+        // A routine, a view or a type lands in a schema, and creating one needs CREATE on it. An
+        // argument list or a column list ends the name, since a name holds no parenthesis.
+        if (preg_match('/^CREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|PROCEDURE)\s+('.self::NAME.')/i', $sql, $routine) === 1) {
+            return $this->creationOf($routine[1], SchemaObjectType::Routine);
+        }
+
+        if (preg_match('/^CREATE\s+(?:OR\s+REPLACE\s+)?(?:(?:TEMP|TEMPORARY)\s+)?(?:RECURSIVE\s+)?VIEW\s+('.self::NAME.')/i', $sql, $view) === 1) {
+            return $this->creationOf($view[1], SchemaObjectType::View);
+        }
+
+        if (preg_match('/^CREATE\s+MATERIALIZED\s+VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?('.self::NAME.')/i', $sql, $view) === 1) {
+            return $this->creationOf($view[1], SchemaObjectType::MaterializedView);
+        }
+
+        if (preg_match('/^CREATE\s+TYPE\s+('.self::NAME.')/i', $sql, $type) === 1) {
+            return $this->creationOf($type[1], SchemaObjectType::Type);
+        }
+
+        // The events and their columns stand between the trigger's name and the table, and the
+        // first `ON` after the name is the one that names the table.
+        if (preg_match('/^CREATE\s+(?:OR\s+REPLACE\s+)?(?:CONSTRAINT\s+)?TRIGGER\s+(?:"(?:[^"]|"")*"|[^\s"]+)\s+.*?\bON\s+('.self::NAME.')/is', $sql, $trigger) === 1) {
+            return $this->onTable($trigger[1], PrivilegeClass::Trigger);
+        }
+
+        if (preg_match('/^CREATE\s+EXTENSION\s+(?:IF\s+NOT\s+EXISTS\s+)?("(?:[^"]|"")*"|[^\s"(),;]+)/i', $sql, $extension) === 1) {
+            return $this->creationOf($extension[1], SchemaObjectType::Extension);
+        }
+
         if (preg_match('/^(?:GRANT|REVOKE)\b/i', $sql) === 1) {
             return [PrivilegeRequirement::underivable(
                 '(unresolved)',
@@ -143,10 +195,26 @@ final readonly class PgsqlTargetlessPrivileges implements TargetlessPrivileges
     /** @return list<PrivilegeRequirement>|null */
     private function ownershipOf(?string $table): ?array
     {
+        return $this->onTable($table, PrivilegeClass::Ownership);
+    }
+
+    /** @return list<PrivilegeRequirement>|null */
+    private function onTable(?string $table, PrivilegeClass $class): ?array
+    {
         $identifier = $table === null ? null : Identifier::parse($table, $this->canonicalization);
 
         return $identifier instanceof Identifier
-            ? [PrivilegeRequirement::of($identifier->canonical(), SchemaObjectType::Table, PrivilegeClass::Ownership)]
+            ? [PrivilegeRequirement::of($identifier->canonical(), SchemaObjectType::Table, $class)]
+            : null;
+    }
+
+    /** @return list<PrivilegeRequirement>|null */
+    private function creationOf(string $name, SchemaObjectType $type): ?array
+    {
+        $identifier = Identifier::parse($name, $this->canonicalization);
+
+        return $identifier instanceof Identifier
+            ? [PrivilegeRequirement::of($identifier->canonical(), $type, PrivilegeClass::Create)]
             : null;
     }
 

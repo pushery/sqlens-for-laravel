@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Deploy;
 
+use Pushery\SQLens\Attributes\DoBlockPrivilege;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 
 /**
@@ -19,6 +20,9 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  */
 final readonly class PrivilegeRequirement
 {
+    /** The object a block of code is reported under, since it names none of its own. */
+    private const string CODE_BLOCK = '(do block)';
+
     public function __construct(
         public string $object,
         public SchemaObjectType $objectType,
@@ -42,6 +46,25 @@ final readonly class PrivilegeRequirement
     public static function underivable(string $object, SchemaObjectType $type, string $reason): self
     {
         return new self($object, $type, null, $reason);
+    }
+
+    /**
+     * The open question of a block of code, a `DO` block on PostgreSQL: what it needs depends on the
+     * code it runs.
+     *
+     * A requirement of its own kind rather than an underivable one with a recognizable name, because
+     * it is the one open question a migration can answer: {@see DoBlockPrivilege}
+     * puts what it declares in this requirement's place, and nothing else may be replaced that way.
+     */
+    public static function codeBlock(string $reason): self
+    {
+        return new self(self::CODE_BLOCK, SchemaObjectType::Routine, null, $reason);
+    }
+
+    /** Whether this is the open question of a block of code, the one a migration may answer itself. */
+    public function isCodeBlock(): bool
+    {
+        return ! $this->class instanceof PrivilegeClass && $this->object === self::CODE_BLOCK && $this->objectType === SchemaObjectType::Routine;
     }
 
     /**

@@ -68,4 +68,13 @@ enum PrivilegeClass: string
      * is a separate requirement of class `Create`, which PostgreSQL asks at the schema it lands in.
      */
     case Index = 'index';
+
+    /**
+     * Putting a trigger on a table that already exists.
+     *
+     * Its own class because the right sits on the TABLE rather than on the trigger, and it is a grant
+     * rather than ownership: PostgreSQL asks for the `TRIGGER` privilege on the table, which its owner
+     * holds and another role can be given, and MySQL for `TRIGGER` as well.
+     */
+    case Trigger = 'trigger';
 }

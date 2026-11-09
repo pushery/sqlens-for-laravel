@@ -2,8 +2,8 @@
     "schema_version": 1,
     "documentation_base": "https://docs.pushery.com/sqlens-for-laravel/rules/",
     "counts": {
-        "total": 261,
-        "published": 261,
+        "total": 262,
+        "published": 262,
         "pending": 0
     },
     "entries": [
@@ -2100,6 +2100,36 @@
             "severity_derived": false,
             "stability": "stable",
             "confidence": "deterministic",
+            "deprecated_since": null,
+            "replaced_by": null,
+            "min_version": null,
+            "max_version": null,
+            "downtime_class": "online",
+            "downtime_class_derived": false,
+            "message_prefix": "sqlens.lint",
+            "reported_identifier": null,
+            "debt_kind": null,
+            "suites": [
+                "lint"
+            ],
+            "limitations": null
+        },
+        {
+            "id": "GEN.L1.DOWN_DROPS_WHAT_UP_FOUND",
+            "slug": "gen-l1-down-drops-what-up-found",
+            "source": "rule",
+            "covers": "exact",
+            "attribution": "authored",
+            "title": "GEN.L1.DOWN_DROPS_WHAT_UP_FOUND — A rollback that drops what up() may have found already",
+            "summary": "A guard lets up() run on a database that already holds the table, and nothing carries that answer over to down().",
+            "documentation_url": "https://docs.pushery.com/sqlens-for-laravel/rules/gen-l1-down-drops-what-up-found/",
+            "documentation_state": "published",
+            "category": "safety",
+            "level": 1,
+            "severity": null,
+            "severity_derived": false,
+            "stability": "preview",
+            "confidence": "heuristic",
             "deprecated_since": null,
             "replaced_by": null,
             "min_version": null,
