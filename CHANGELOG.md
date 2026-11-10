@@ -2,6 +2,14 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.33.1] - 2026-11-09
+
+### 🐛 Fixed
+
+- **`DROP TRIGGER`, `DROP FUNCTION` and a plain `SELECT` no longer hold a first deploy at `privilege_check_incomplete`.** The migrations of legal-consent drop their triggers and guard functions before they create them again, and polyslug and billing read rows in theirs, and none of these statements was given a right to ask about, so `MISSING_PRIVILEGE` stayed undetermined and `sqlens:predeploy` held every project that installs them. `DROP TRIGGER` asks for ownership of its table, `DROP FUNCTION`, `DROP PROCEDURE` and `DROP ROUTINE` for ownership of each routine, and on a first deploy both are asked at the schema, where the earlier migrations create them. A plain `SELECT` needs nothing the check asks about; one that creates a table, locks rows or sets a sequence stays unanswered.
+
+- **A `#[DoBlockPrivilege]` with `Ownership` of a routine that an earlier pending migration creates is answered on a first deploy.** The check asked who owns the routine, found none, and left the whole privilege check undetermined, on exactly the first deploy that needs the declaration most. A routine that isn't there at all is now asked about at its schema, as a table a migration creates is: the role needs CREATE there and owns the routine afterwards, and a refusal names `GRANT CREATE ON SCHEMA` rather than a transfer of ownership. A name several routines share stays open, as before.
+
 ## [0.33.0] - 2026-11-09
 
 ### ✨ Added
@@ -1757,7 +1765,8 @@ The package connects to production databases and shells out to external binaries
 
 Everything above is the first release, so there is nothing for it to be a change *from*. The development history that produced it — several hundred entries, each arguing a decision through — lives in the git log, where it belongs. From 0.2.0 on, this file records changes.
 
-[Unreleased]: https://github.com/pushery/sqlens-for-laravel/compare/v0.33.0...HEAD
+[Unreleased]: https://github.com/pushery/sqlens-for-laravel/compare/v0.33.1...HEAD
+[0.33.1]: https://github.com/pushery/sqlens-for-laravel/compare/v0.33.0...v0.33.1
 [0.33.0]: https://github.com/pushery/sqlens-for-laravel/compare/v0.32.2...v0.33.0
 [0.32.2]: https://github.com/pushery/sqlens-for-laravel/compare/v0.32.1...v0.32.2
 [0.32.1]: https://github.com/pushery/sqlens-for-laravel/compare/v0.32.0...v0.32.1

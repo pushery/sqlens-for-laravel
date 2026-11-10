@@ -246,6 +246,25 @@ final readonly class GrantCheck implements PreflightCheck
     }
 
     /**
+     * Whether no routine of the name is there at all, which is how a first deploy finds one that an
+     * earlier pending migration creates. A name with its argument types is absent when
+     * `to_regprocedure()` finds nothing; a name without them when no routine carries it where
+     * {@see ApplicationSearchPath::routineExists()} looks. A name several routines share is there.
+     */
+    #[RawSql(reason: 'reads pg_proc through to_regprocedure() and parse_ident(); whether a routine is there at all has no other representation')]
+    private function routineIsAbsent(PreflightContext $context, string $routine): bool
+    {
+        $row = $context->session->read(static fn (Connection $db): array => $db->select(
+            str_contains($routine, '(')
+                ? 'select '.ApplicationSearchPath::regprocedure().' is null as absent'
+                : 'select not '.ApplicationSearchPath::routineExists().' as absent',
+            [$routine],
+        ))[0] ?? null;
+
+        return is_object($row) && ($row->absent ?? false) === true;
+    }
+
+    /**
      * Whether the role may create the named extension: it is installed already, so the statement
      * needs nothing, the role is a superuser, or the extension is trusted and the role holds CREATE
      * on the database. A name quoted in the migration is asked about without its quotes.
@@ -316,7 +335,16 @@ final readonly class GrantCheck implements PreflightCheck
         // A routine is no relation either, so `to_regclass` never finds one: its owner is read from
         // `pg_proc`. Changing a routine needs its ownership, which is what a DO block that alters a
         // function declares; creating one is a CREATE and is asked at its schema below.
-        if ($requirement->objectType === SchemaObjectType::Routine && $requirement->class !== PrivilegeClass::Create) {
+        //
+        // A routine that is not there at all is one an earlier migration of the same run creates,
+        // as on a first deploy, where every migration is pending. The role that creates it owns it
+        // afterwards, so it is asked at its schema, as an absent relation is. A name that several
+        // routines share is there, and ownsRoutine() reports it unanswered.
+        $routineToCreate = $requirement->objectType === SchemaObjectType::Routine
+            && $requirement->class !== PrivilegeClass::Create
+            && $this->routineIsAbsent($context, $object);
+
+        if ($requirement->objectType === SchemaObjectType::Routine && $requirement->class !== PrivilegeClass::Create && ! $routineToCreate) {
             return ['allowed' => $this->ownsRoutine($context, $role, $object), 'atSchema' => false, 'schema' => null];
         }
 
@@ -329,7 +357,9 @@ final readonly class GrantCheck implements PreflightCheck
         // Existence first. `has_table_privilege` RAISES for an object the catalog does not have, and
         // a migration that creates a table names exactly such an object — so the absent case is
         // judged at the schema, which is the right question for a CREATE anyway.
-        $exists = $context->session->read(static fn (Connection $db): array => $db->select(
+        // A routine about to be created is known to be absent, and `to_regclass` would parse a name with
+        // argument types as a relation's.
+        $exists = $routineToCreate ? null : $context->session->read(static fn (Connection $db): array => $db->select(
             'select '.ApplicationSearchPath::regclass().' is not null as present',
             ApplicationSearchPath::regclassBindings($object),
         ))[0] ?? null;
@@ -439,7 +469,10 @@ final readonly class GrantCheck implements PreflightCheck
         // expensive distinction: a role can hold every grant on a table and still not be able to
         // ALTER it. One id for both would let somebody read "missing privilege", run the GRANT it
         // names, and watch the next deploy fail identically.
-        $ownership = in_array($class, [PrivilegeClass::Ownership, PrivilegeClass::Drop, PrivilegeClass::Index], true);
+        // A routine asked about at its schema is one the run creates, and what it needs there is CREATE,
+        // which a grant gives: the creator owns it afterwards.
+        $routineToCreate = $requirement->objectType === SchemaObjectType::Routine && $answer['atSchema'];
+        $ownership = ! $routineToCreate && in_array($class, [PrivilegeClass::Ownership, PrivilegeClass::Drop, PrivilegeClass::Index], true);
 
         // The role as a statement names it. It comes from the configuration, and unquoted a name
         // like `app-migrator` does not parse while `AppMigrator` folds to `appmigrator`, another role
@@ -461,7 +494,7 @@ final readonly class GrantCheck implements PreflightCheck
             ),
             // A routine is handed over by naming it as one, as a schema is. `ALTER ROUTINE` covers a
             // function and a procedure alike.
-            $requirement->objectType === SchemaObjectType::Routine => sprintf(
+            $requirement->objectType === SchemaObjectType::Routine && ! $routineToCreate => sprintf(
                 'must own the routine `%s`, and ownership cannot be granted — no `GRANT` produces it. '
                 .'Either `ALTER ROUTINE %s OWNER TO %s`, or make %s a member of the role that owns it',
                 $requirement->object,

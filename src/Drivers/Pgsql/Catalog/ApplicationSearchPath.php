@@ -113,6 +113,26 @@ final readonly class ApplicationSearchPath
     }
 
     /**
+     * Whether a routine of a name without argument types is there at all, looked for where
+     * {@see self::regproc()} looks: a qualified name in the schema it names, a bare one in every schema
+     * on the application's path. Unlike `to_regproc()`, a name that several routines share is there.
+     * The name is split as the server splits an identifier, so a quoted part keeps its case.
+     *
+     * Takes one binding, the name.
+     *
+     * @return literal-string
+     */
+    public static function routineExists(): string
+    {
+        return 'exists (select 1 from pg_catalog.pg_proc p2'
+            .' join pg_catalog.pg_namespace n2 on n2.oid = p2.pronamespace,'
+            .' pg_catalog.parse_ident(?) as ident(parts)'
+            .' where p2.proname = ident.parts[pg_catalog.array_length(ident.parts, 1)]'
+            .' and case when pg_catalog.array_length(ident.parts, 1) > 1 then n2.nspname = ident.parts[1]'
+            .' else n2.nspname = any('.self::effective().') end)';
+    }
+
+    /**
      * `pg_catalog.to_regprocedure()` over a routine named with its argument types, `name(integer)`.
      * It is looked up as it stands, so a name without its schema is found only on the reading
      * session's own path: such a name is written qualified.

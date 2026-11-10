@@ -32,7 +32,13 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *   need `CREATE` on the schema the object lands in. Replacing a routine or a view that exists
  *   already needs its ownership as well, which this answer does not ask.
  * - `CREATE TRIGGER` needs the `TRIGGER` privilege on the table it is put on, which the table's owner
- *   holds and another role can be given.
+ *   holds and another role can be given. `DROP TRIGGER` needs ownership of that table.
+ * - `DROP FUNCTION`, `DROP PROCEDURE` and `DROP ROUTINE` need ownership of each routine they name,
+ *   with its argument types where the statement gives them.
+ * - A plain `SELECT` reads and changes no structure, so it needs nothing this check asks about:
+ *   Laravel writes one into the capture of a migration that reads rows, chunks through them or
+ *   looks a routine up. A `SELECT` that creates a table with `INTO`, takes a row lock, or calls a
+ *   function that writes a sequence or reaches outside the database stays unanswered.
  * - `CREATE EXTENSION` is asked of the database: a trusted extension needs `CREATE` on it, any other
  *   one a superuser, and one that is installed already needs nothing.
  * - `GRANT` and `REVOKE` stay unanswered: ownership of the object or the grant option on it lets a
@@ -79,6 +85,10 @@ final readonly class PgsqlTargetlessPrivileges implements TargetlessPrivileges
                 .'privilege_check_incomplete with --allow-undetermined or '
                 .'sqlens.deploy.predeploy.allow_undetermined.',
             )];
+        }
+
+        if ($this->isPlainRead($sql)) {
+            return [];
         }
 
         return match ($statement->statementKind) {
@@ -175,6 +185,14 @@ final readonly class PgsqlTargetlessPrivileges implements TargetlessPrivileges
             return $this->onTable($trigger[1], PrivilegeClass::Trigger);
         }
 
+        if (preg_match('/^DROP\s+TRIGGER\s+(?:IF\s+EXISTS\s+)?(?:"(?:[^"]|"")*"|[^\s"]+)\s+ON\s+('.self::NAME.')/i', $sql, $trigger) === 1) {
+            return $this->ownershipOf($trigger[1]);
+        }
+
+        if (preg_match('/^DROP\s+(?:FUNCTION|PROCEDURE|ROUTINE)\s+(?:IF\s+EXISTS\s+)?(.+?)\s*(?:\b(?:CASCADE|RESTRICT)\b\s*)?;?$/is', $sql, $routines) === 1) {
+            return $this->routineOwnershipOf($routines[1]);
+        }
+
         if (preg_match('/^CREATE\s+EXTENSION\s+(?:IF\s+NOT\s+EXISTS\s+)?("(?:[^"]|"")*"|[^\s"(),;]+)/i', $sql, $extension) === 1) {
             return $this->creationOf($extension[1], SchemaObjectType::Extension);
         }
@@ -190,6 +208,90 @@ final readonly class PgsqlTargetlessPrivileges implements TargetlessPrivileges
         }
 
         return null;
+    }
+
+    /**
+     * Whether the statement only reads: a `SELECT` without `INTO`, without a row lock and without a call
+     * that writes a sequence or reaches outside the database. A quoted string that happens to hold one
+     * of those words leaves the statement unanswered, which is the side that holds a deploy rather than
+     * waving one through.
+     */
+    private function isPlainRead(string $sql): bool
+    {
+        if (preg_match('/^\(*\s*SELECT\b/i', $sql) !== 1) {
+            return false;
+        }
+
+        return preg_match(
+            '/\bINTO\b|\bFOR\s+(?:NO\s+KEY\s+)?UPDATE\b|\bFOR\s+(?:KEY\s+)?SHARE\b'
+            .'|\b(?:setval|nextval|lo_\w+|pg_read_\w+|pg_ls_\w+|pg_file_\w+|dblink\w*|pg_terminate_backend'
+            .'|pg_cancel_backend|pg_reload_conf|pg_switch_wal|pg_create_\w+|pg_drop_\w+)\s*\(/i',
+            $sql,
+        ) !== 1;
+    }
+
+    /**
+     * Ownership of each routine a `DROP FUNCTION`, `DROP PROCEDURE` or `DROP ROUTINE` names, each with
+     * its argument types where the statement gives them, so an overloaded name asks about the one it
+     * drops. A list that cannot be split into names stays unanswered.
+     *
+     * @return list<PrivilegeRequirement>|null
+     */
+    private function routineOwnershipOf(string $list): ?array
+    {
+        $requirements = [];
+
+        foreach ($this->topLevelParts($list) as $part) {
+            if (preg_match('/^('.self::NAME.')\s*(\(.*\))?$/s', trim($part), $routine) !== 1) {
+                return null;
+            }
+
+            $identifier = Identifier::parse($routine[1], $this->canonicalization);
+
+            if (! $identifier instanceof Identifier) {
+                return null;
+            }
+
+            $arguments = isset($routine[2]) ? (string) preg_replace(['/\s+/', '/\(\s+/', '/\s+\)/'], [' ', '(', ')'], $routine[2]) : '';
+            $requirements[] = PrivilegeRequirement::of($identifier->canonical().$arguments, SchemaObjectType::Routine, PrivilegeClass::Ownership);
+        }
+
+        return $requirements === [] ? null : $requirements;
+    }
+
+    /**
+     * The parts of a list split at each comma outside parentheses and quotes, so the comma of a type such as
+     * `numeric(10,2)` stays inside its routine.
+     *
+     * @return list<string>
+     */
+    private function topLevelParts(string $list): array
+    {
+        $parts = [];
+        $current = '';
+        $depth = 0;
+        $quoted = false;
+
+        foreach (mb_str_split($list) as $character) {
+            if ($character === '"') {
+                $quoted = ! $quoted;
+            } elseif (! $quoted && $character === '(') {
+                $depth++;
+            } elseif (! $quoted && $character === ')') {
+                $depth--;
+            } elseif (! $quoted && $depth === 0 && $character === ',') {
+                $parts[] = $current;
+                $current = '';
+
+                continue;
+            }
+
+            $current .= $character;
+        }
+
+        $parts[] = $current;
+
+        return $parts;
     }
 
     /** @return list<PrivilegeRequirement>|null */
