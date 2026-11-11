@@ -1,6 +1,6 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://docs.pushery.com/sqlens-for-laravel/schemas/remediation-payload-v1.schema.json",
+    "$id": "https://raw.githubusercontent.com/pushery/sqlens-for-laravel/main/resources/data/schemas/remediation-payload-v1.schema.json",
     "title": "SQLens remediation payload, version 1",
     "description": "The machine-readable fix template that rides beside a finding. Material for an agent to apply, never something this tool executes: no field names a path, a command or an execution. A reader that meets a HIGHER schema_version than it understands must ignore the payload rather than guess at it; within a version, unknown keys may be ignored, because fields are only ever added, never removed or renamed.",
     "type": "object",

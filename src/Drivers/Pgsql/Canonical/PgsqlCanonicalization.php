@@ -257,6 +257,13 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
             // `SET`. PostgreSQL does not reserve the word, so it is in UNRESERVED_NAMES as well and
             // a table called `reset` stays a table.
             'RESET',
+
+            // `DO` leads an anonymous code block, which the lead fallback reads as `Unknown`. The
+            // body is a dollar-quoted string no stage reads, so the word is the only part of the
+            // block that folds. PostgreSQL reserves it, so a name spelled with it was quoted already
+            // and keeps its quotes; where it is syntax inside another statement, as in `ON CONFLICT
+            // DO NOTHING`, it is spelled in upper case now.
+            'DO',
         ];
     }
 
@@ -770,6 +777,15 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                 // `CLUSTER`, `REINDEX` and `REFRESH` stay out for the same reason: each has a form
                 // that blocks and a lead word that does not say which.
                 'ANALYZE' => StatementKind::Unknown,
+
+                // `DO` runs an anonymous code block. Its body is a dollar-quoted string that no stage
+                // reads, so the block is `Unknown`, as a `SELECT` that calls a function is: the
+                // statement is recognized and names no target, and what the block does stays unread.
+                // Refused, it made the whole migration undetermined, so a migration that pins the
+                // search path of its functions in a block was never judged, and the
+                // `#[DoBlockPrivilege]` it declares for the block was keyed to no statement. The
+                // privilege check reads the block by its lead and asks for those declarations.
+                'DO' => StatementKind::Unknown,
             ],
             unreservedNames: self::UNRESERVED_NAMES,
             catalogSchemas: ['pg_catalog', 'information_schema'],
