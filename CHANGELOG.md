@@ -2,6 +2,20 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.34.0] - 2026-11-11
+
+### 🔧 Changed
+
+- **The `$id` of each bundled JSON schema answers with the schema.** The five schemas under `resources/data/schemas/` named an address on docs.pushery.com that served nothing, so a tool that loads a schema by its `$id` found none. Each `$id` is now the schema's file in the public repository, `https://raw.githubusercontent.com/pushery/sqlens-for-laravel/main/resources/data/schemas/remediation-payload-v4.schema.json` and so on, and the documents themselves are unchanged.
+
+  **Upgrade:** a validator registry that holds the schemas under their old `$id` loads them again under the new one.
+
+### 🐛 Fixed
+
+- **A `DO` block no longer makes its whole PostgreSQL migration undetermined (canonical form version 12).** The statement had no canonical form, so a migration that ran an anonymous code block, such as one that pins the search path of its trigger functions, reported `CAP.L0.UNDETERMINED_CAPTURE`, and nothing in it was judged. The `#[DoBlockPrivilege]` it declares for the block was keyed to no statement either, so `DEPLOY.PREFLIGHT.MISSING_PRIVILEGE` never asked whether the migration's role holds what the declaration names. A `DO` block reads as `unknown` now, as a `SELECT` that calls a function does: the statement is recognized and names no target, and what its body does stays unread, so a rule that looks for a blocking statement does not see one inside it. `DO` joined the PostgreSQL keyword list, so where it is syntax inside another statement, as in `ON CONFLICT DO NOTHING`, the canonical form spells it in upper case, and a baseline entry for a finding about such a statement reports as new once after upgrading.
+
+  **Upgrade:** nothing to do. A migration with a `DO` block is judged now, and on a deploy the rights its declarations name are checked.
+
 ## [0.33.1] - 2026-11-09
 
 ### 🐛 Fixed
@@ -1765,7 +1779,8 @@ The package connects to production databases and shells out to external binaries
 
 Everything above is the first release, so there is nothing for it to be a change *from*. The development history that produced it — several hundred entries, each arguing a decision through — lives in the git log, where it belongs. From 0.2.0 on, this file records changes.
 
-[Unreleased]: https://github.com/pushery/sqlens-for-laravel/compare/v0.33.1...HEAD
+[Unreleased]: https://github.com/pushery/sqlens-for-laravel/compare/v0.34.0...HEAD
+[0.34.0]: https://github.com/pushery/sqlens-for-laravel/compare/v0.33.1...v0.34.0
 [0.33.1]: https://github.com/pushery/sqlens-for-laravel/compare/v0.33.0...v0.33.1
 [0.33.0]: https://github.com/pushery/sqlens-for-laravel/compare/v0.32.2...v0.33.0
 [0.32.2]: https://github.com/pushery/sqlens-for-laravel/compare/v0.32.1...v0.32.2

@@ -18,8 +18,9 @@ namespace Pushery\SQLens\Canonical;
  *
  * On which side of that line a statement falls is measured, not assumed: a `SET`
  * has a kind of its own ({@see self::SessionSetting}), a PostgreSQL `COMMENT ON` is
- * {@see self::DdlOther}, an `ANALYZE` is `Unknown` on both engines, and so is a plain
- * `VACUUM`. A `VACUUM FULL`, a `CLUSTER` and MySQL's `OPTIMIZE TABLE` are
+ * {@see self::DdlOther}, an `ANALYZE` is `Unknown` on both engines, and so are a plain
+ * `VACUUM` and a PostgreSQL `DO` block, whose body no stage reads; MySQL's `DO`, which evaluates
+ * expressions, is not recognized. A `VACUUM FULL`, a `CLUSTER` and MySQL's `OPTIMIZE TABLE` are
  * {@see self::RebuildTable}, and PostgreSQL's `REINDEX` and `REFRESH MATERIALIZED VIEW`
  * have kinds of their own. A `VACUUM` without FULL whose option list holds an option the
  * signatures do not read is not recognized, and that is deliberate: a statement read in part

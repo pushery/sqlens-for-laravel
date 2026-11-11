@@ -209,8 +209,25 @@ final readonly class CanonicalFormVersion
      *       form 11 -> CREATE TABLE "reset" (id BIGINT)
      *
      * MySQL knows `RESET` only as an administration command, and its list did not change.
+     *
+     * Went to 12 for `DO` in the PostgreSQL list, so that an anonymous code block leads with a keyword
+     * and reaches the lead fallback, which reads it as {@see StatementKind::Unknown}. Before, it had no
+     * canonical form and made its whole migration undetermined, so the `#[DoBlockPrivilege]` a
+     * migration declares for its block was keyed to no statement. PostgreSQL reserves the word, so a
+     * name spelled with it kept its quotes already; what moves is the word where it is syntax, in the
+     * block itself and in the conflict clause of an upsert:
+     *
+     *     do $$ begin perform 1; end $$
+     *       form 11 -> no canonical form (unrecognized_statement_form)
+     *       form 12 -> DO $$ begin perform 1; end $$
+     *
+     *     insert into "orders" ("id") values (1) on conflict do nothing
+     *       form 11 -> INSERT INTO orders (id) VALUES (1) ON conflict do nothing
+     *       form 12 -> INSERT INTO orders (id) VALUES (1) ON conflict DO nothing
+     *
+     * The MySQL list did not change.
      */
-    public const int CURRENT = 11;
+    public const int CURRENT = 12;
 
     public function __construct(public int $version) {}
 
