@@ -121,7 +121,7 @@ final readonly class PostdeployInvalidIndexCheck implements PostdeployCheck, Pro
                 UndeterminedReason::InvalidIndexFoundButBuildsUnverifiable,
                 ''.count($result->findings).' index(es) '
                 .'report `indisvalid = false`, and this run has no activity reader — so whether a '
-                .'`CREATE INDEX CONCURRENTLY` is STILL BUILDING them could not be established. '
+                .'`CREATE INDEX CONCURRENTLY` is still building them could not be established. '
                 .'Immediately after a deploy that is the likely explanation, and reporting wreckage '
                 .'here would be wrong more often than right.',
                 $result->findings,

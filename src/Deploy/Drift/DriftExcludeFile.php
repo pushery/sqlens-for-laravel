@@ -125,8 +125,7 @@ final readonly class DriftExcludeFile
         }
 
         return new self($path, self::sorted(array_map(
-            static fn (mixed $row, int $index): DriftExcludeEntry => self::entry($path, $index, $row),
-            $entries,
+            static fn (int $index): DriftExcludeEntry => self::entry($path, $index, $entries[$index]),
             array_keys($entries),
         )));
     }

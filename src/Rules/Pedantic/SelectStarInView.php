@@ -420,7 +420,7 @@ final readonly class SelectStarInView
             return null;
         }
 
-        if (preg_match('/([A-Za-z_][A-Za-z0-9_$]*|"(?:[^"]|"")*"|`(?:[^`]|``)*`)\.$/', $before, $matches) !== 1) {
+        if (preg_match('/([A-Za-z_][A-Za-z0-9_$]*|"(?:[^"]|"")*"|`(?:[^`]|``)*`)\.$/D', $before, $matches) !== 1) {
             return null;
         }
 
@@ -442,7 +442,7 @@ final readonly class SelectStarInView
      */
     private static function endsWithSetQuantifier(string $before): bool
     {
-        return preg_match('/\b(DISTINCT|ALL)$/i', $before) === 1;
+        return preg_match('/\b(DISTINCT|ALL)$/iD', $before) === 1;
     }
 
     /** Whether `$word` stands at `$offset` as a whole word. */

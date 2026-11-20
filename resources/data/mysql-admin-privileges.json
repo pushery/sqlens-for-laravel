@@ -372,7 +372,7 @@
         },
         {
             "privilege": "RESOURCE_GROUP_USER",
-            "reason": "Lets an account move its OWN thread between resource groups. The administrative counterpart, RESOURCE_GROUP_ADMIN, is listed; this one cannot affect anybody else."
+            "reason": "Lets an account move its own thread between resource groups. The administrative counterpart, RESOURCE_GROUP_ADMIN, is listed; this one cannot affect anybody else."
         },
         {
             "privilege": "SET_USER_ID",

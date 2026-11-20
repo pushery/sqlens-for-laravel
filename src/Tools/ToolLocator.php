@@ -13,8 +13,8 @@ use Illuminate\Contracts\Config\Repository;
  * the ProcessRunner seam.
  *
  * The precedence (config path → `$PATH`) is what lets a project pin a specific binary
- * for reproducibility while still working out of the box when the tool is simply
- * installed system-wide.
+ * for reproducibility while a tool that is simply installed system-wide still runs
+ * without a setting.
  *
  * A pinned path that does not run does not fall through to `$PATH`. That fall-through was
  * here, and it was the dangerous kind of helpful: the configuration would read as honored

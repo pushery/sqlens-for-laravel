@@ -152,6 +152,6 @@ final class AutovacuumCostPerWorkerRule extends AbstractServerSettingRule implem
     {
         $value = trim($value);
 
-        return preg_match('/^-?\d+$/', $value) === 1 ? (int) $value : null;
+        return preg_match('/^-?\d+$/D', $value) === 1 ? (int) $value : null;
     }
 }

@@ -68,6 +68,8 @@ final class UnreadableDriftExcludes extends RuntimeException
      * A newer file comes from a build that could express something this one cannot, so reading the
      * parts we recognize would silently drop the rest. An older one would need a migration path, and
      * there is none to run yet.
+     *
+     * @param  mixed  $found  the version the file declared, of whatever type its JSON holds
      */
     public static function unsupportedVersion(string $path, mixed $found, int $supported): self
     {

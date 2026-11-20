@@ -39,8 +39,8 @@ use Pushery\SQLens\Lint\LintOutcome;
  * preflight instead, and the preflight service refuses a run whose lint half refused, so the refusal
  * reaches the tool and the command alike without passing through here.
  *
- * A tool still has to call it, and nothing in PHP makes a new one do so. `RunRefusalTest` does: it
- * reads every tool that starts a lint run and fails for one that does not call this class.
+ * A tool still has to call it, and nothing in PHP makes a new one do so. The suite does: it reads
+ * every tool that starts a lint run and fails for one that does not call this class.
  *
  * Nothing here invents a reason. The identifiers come from the engine's own named failures, or name
  * one the engine carries as a sentence without an enum (`baseline_unreadable`), and stay stable

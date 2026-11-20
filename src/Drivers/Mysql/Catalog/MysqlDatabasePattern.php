@@ -40,6 +40,6 @@ final readonly class MysqlDatabasePattern
             }
         }
 
-        return preg_match('/^'.$regex.'$/s', $name) === 1;
+        return preg_match('/^'.$regex.'$/sD', $name) === 1;
     }
 }

@@ -80,6 +80,8 @@ final readonly class StabilityGate
      * And that answer is **no opt-in**, never a full one. The failure direction of this axis is
      * admitting unfinished rules into somebody's pipeline; a config the package could not read must
      * not be the door that happens through.
+     *
+     * @param  mixed  $value  a value of the package's config, which a host may have set to any type
      */
     public static function fromConfig(mixed $value): self
     {

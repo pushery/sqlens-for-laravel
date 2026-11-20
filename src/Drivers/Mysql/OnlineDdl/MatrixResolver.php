@@ -151,7 +151,7 @@ final readonly class MatrixResolver
     }
 
     /**
-     * Whether $candidate's window is strictly inside every OTHER applicable entry's window —
+     * Whether $candidate's window is strictly inside every other applicable entry's window —
      * the test for "most specific".
      *
      * @param  list<MatrixEntry>  $applicable

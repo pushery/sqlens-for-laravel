@@ -42,7 +42,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * ## Audit only
  *
- * A migration's `->comment()` becomes a SEPARATE `COMMENT ON` statement on this engine, so the lint
+ * A migration's `->comment()` becomes a separate `COMMENT ON` statement on this engine, so the lint
  * path could in principle see one. It is still not built, and the reason is what a lint run can
  * answer: it sees the migrations that are PENDING. A table documented two years ago carries its
  * comment in the catalog and in no pending migration, so a lint half would report almost every

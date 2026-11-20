@@ -170,6 +170,6 @@ final readonly class CheckResult
         ];
 
         // One rule for the whole document: a field with no value is ABSENT, never present-as-null.
-        return array_filter($projection, static fn (mixed $value): bool => $value !== null);
+        return array_diff_key($projection, array_filter($projection, is_null(...)));
     }
 }

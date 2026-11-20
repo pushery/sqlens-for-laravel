@@ -66,7 +66,9 @@ final readonly class FindingFingerprint
      */
     public static function fromStored(string $value): ?self
     {
-        return preg_match('/^[0-9a-f]{64}$/', $value) === 1 ? new self($value) : null;
+        // `\z`, not `$`: `$` also matches before a final line feed, and a value with one would
+        // pass here and then match nothing, exactly as a truncated one would.
+        return preg_match('/^[0-9a-f]{64}\z/', $value) === 1 ? new self($value) : null;
     }
 
     public function equals(self $other): bool

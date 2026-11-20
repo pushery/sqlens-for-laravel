@@ -245,14 +245,14 @@ final readonly class MysqlStaticPrivileges
         // Interpolated into SQL, so the shape is asserted rather than assumed. MySQL identifiers can
         // hold far more than this; a grant-table privilege column cannot, and the narrow rule is what
         // makes the interpolation safe to read.
-        if (preg_match('/^[A-Za-z_]+$/', $column) !== 1) {
+        if (preg_match('/^[A-Za-z_]+$/D', $column) !== 1) {
             throw InvalidRuleEvidence::malformed($origin, 'column', 'a grant-table column name, letters and underscores only');
         }
 
         $privilege = self::str($data, 'privilege', $origin);
 
         // Upper-case words separated by single spaces — `CREATE TEMPORARY TABLES`, never a quote.
-        if (preg_match('/^[A-Z]+( [A-Z]+)*$/', $privilege) !== 1) {
+        if (preg_match('/^[A-Z]+( [A-Z]+)*$/D', $privilege) !== 1) {
             throw InvalidRuleEvidence::malformed($origin, 'privilege', 'an upper-case MySQL privilege name, single spaces only');
         }
 

@@ -230,7 +230,7 @@ final class UnbatchedMassDmlRule extends AbstractMysqlRule implements DeclaresOp
 
     private function updateMessage(): string
     {
-        return 'This write has a predicate but nothing that bounds it, so it runs as ONE statement over every row '
+        return 'This write has a predicate but nothing that bounds it, so it runs as one statement over every row '
             .'the predicate matches — locking every row its scan reads and growing the undo log for as long as that '
             .'takes, while the migration blocks the deploy. This is a HEURISTIC: SQLens can see that the statement '
             .'is unbounded, not how many rows that means, and it never asks the server for a row count. On a small '

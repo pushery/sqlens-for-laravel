@@ -139,6 +139,7 @@ final readonly class ReadTopology
     /**
      * A host value as a list, whatever shape it arrived in.
      *
+     * @param  mixed  $host  a connection's host as the config holds it: a string, a list, or what a host wrote
      * @return list<string>
      */
     private static function hostsIn(mixed $host): array

@@ -46,7 +46,7 @@ enum RoleAttribute: string
      * Inherits the privileges of roles it is a member of without an explicit `SET ROLE` — PG
      * `rolinherit`.
      *
-     * It is in the shared vocabulary because it changes what a membership MEANS: a non-inheriting
+     * It is in the shared vocabulary because it changes what a membership means: a non-inheriting
      * member of a powerful role holds that power only after asking for it, which is a materially
      * different exposure from holding it always.
      *

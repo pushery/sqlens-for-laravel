@@ -212,9 +212,9 @@ final readonly class DriftFindings
      * The catalog row for an id, or a loud failure — never a finding with a dead link.
      *
      * The refusal shares its line with the lookup deliberately: it is unreachable while every
-     * `DriftClass` id and {@see self::UNCOMPARED_ID} are cataloged, which `DriftFindingsTest` holds,
-     * so an `if` here would be a branch no run can enter and the 100% floor would have to be bought
-     * with an ignore annotation this repository does not use anywhere.
+     * `DriftClass` id and {@see self::UNCOMPARED_ID} are cataloged, which a test holds, so an `if`
+     * here would be a branch no run can enter and the 100% floor would have to be bought with an
+     * ignore annotation this repository does not use anywhere.
      */
     private static function metadata(string $id): DeployCheckMetadata
     {

@@ -157,7 +157,9 @@ final class SnakeCaseIdentifiersRule extends AbstractCatalogRule implements Decl
             $offenders[] = $this->sentence($object->type->value, $own);
         }
 
-        foreach (SnakeCaseIdentifiers::offendingMembers($object, $this->naming->pattern) as $name => $kind) {
+        foreach (SnakeCaseIdentifiers::offendingMembers($object, $this->naming->pattern) as $member => $kind) {
+            $name = (string) $member;
+
             if ($this->naming->exempts($name)) {
                 continue;
             }

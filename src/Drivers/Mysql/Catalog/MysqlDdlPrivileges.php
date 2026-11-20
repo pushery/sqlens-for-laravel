@@ -22,7 +22,7 @@ use Pushery\SQLens\Exceptions\InvalidRuleEvidence;
  *
  * ## Why a driver class rather than a list in the rule
  *
- * `CorePurityArchTest` keeps every core namespace free of a driver reference and of an engine's
+ * An architecture test keeps every core namespace free of a driver reference and of an engine's
  * vocabulary, with the exemptions pinned to four composition roots. That is the right rule and this
  * is the shape it asks for: the READER stamps the fact, and the rule reads a boolean.
  *
@@ -111,7 +111,7 @@ final readonly class MysqlDdlPrivileges
             // Checked rather than cast. A name that is not a string is a broken artifact, and a cast
             // would turn it into one the comparison then runs against — matching nothing, forever,
             // and looking exactly like a server where nobody holds a structural privilege.
-            if (! is_string($privilege) || preg_match('/^[A-Z]+( [A-Z]+)*$/', $privilege) !== 1) {
+            if (! is_string($privilege) || preg_match('/^[A-Z]+( [A-Z]+)*$/D', $privilege) !== 1) {
                 throw InvalidRuleEvidence::malformed($origin, 'privilege', 'an upper-case MySQL privilege name, single spaces only');
             }
 

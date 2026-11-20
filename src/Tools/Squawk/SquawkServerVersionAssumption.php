@@ -29,7 +29,7 @@ final readonly class SquawkServerVersionAssumption
      * That would arrive as a failed run, which is true and useless: the cause is a version string
      * this package built, not a tool that misbehaved. Refusing it here names the real problem.
      */
-    private const string ACCEPTED_SHAPE = '/^\d+\.\d+$/';
+    private const string ACCEPTED_SHAPE = '/^\d+\.\d+$/D';
 
     /**
      * The assumption for this run, or the named reason there is none.

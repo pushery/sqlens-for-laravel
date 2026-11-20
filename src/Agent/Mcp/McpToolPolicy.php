@@ -45,6 +45,8 @@ final readonly class McpToolPolicy
      * Takes `mixed` and narrows here rather than asking every caller to: the value arrives from
      * `config()`, and a second narrowing beside a second caller would be a second answer about
      * one file.
+     *
+     * @param  mixed  $configured  a value of the package's config, which a host may have set to any type
      */
     public static function fromConfig(mixed $configured): self
     {

@@ -17,7 +17,7 @@ use Pushery\SQLens\Exceptions\InvalidRuleEvidence;
  * PostgreSQL-driver name, even in a doc comment): the bundled data artifacts share the "a
  * shipped data file could not be read as written" contract ({@see InvalidRuleEvidence}), and
  * a malformed file is an ERROR, never an empty result that would quietly weaken every rule
- * that reads it. An UNKNOWN field is rejected, not ignored,
+ * that reads it. An unknown field is rejected, not ignored,
  * so a typo cannot smuggle a silently-dropped fact into a shipped artifact, and an entry
  * without a source is refused — provenance is enforced by the reader, not only the schema.
  */

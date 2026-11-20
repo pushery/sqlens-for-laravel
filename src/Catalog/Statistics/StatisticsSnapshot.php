@@ -84,7 +84,7 @@ final readonly class StatisticsSnapshot
         // here rather than left to each driver to remember.
         //
         // The list alone was not enough, and the case that showed it is MySQL's: `information_schema`
-        // narrows PER OBJECT, so a role holding SELECT on one table and not its neighbor sees
+        // narrows per object, so a role holding SELECT on one table and not its neighbor sees
         // exactly one of them — no error, no empty result, nothing to be suspicious of. Measured.
         // A consumer looking at `gaps()` to answer "why is this partial?" would have been told
         // nothing about the table that vanished.

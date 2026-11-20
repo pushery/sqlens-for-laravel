@@ -55,7 +55,7 @@ final class GrantOptionRule extends AbstractGrantOptionRule
     {
         return [
             'reads the catalog, not the connections: a privilege held by an account nothing ever authenticates as is the same rows as one in daily use',
-            'reports the ability to hand the privilege on, not any use of it: whether anything HAS been granted onward is a second question, and the catalog answers it only for grants that already happened',
+            'reports the ability to hand the privilege on, not any use of it: whether anything has been granted onward is a second question, and the catalog answers it only for grants that already happened',
         ];
     }
 }

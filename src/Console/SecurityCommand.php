@@ -94,7 +94,7 @@ final class SecurityCommand extends Command
         {--strict-tools : Treat a missing external tool as an error, not a degradation (overrides the configured strict_tools)}
         {--no-strict-tools : Treat a missing external tool as a degradation (overrides the configured strict_tools)}
         {--refresh-advisories : Fetch the end-of-life data from the configured source and write it where this package reads it. The ONLY thing here that touches the network, and never a side effect of a check}
-        {--host= : The ONE read host to address when the connection configures a choice; refuses a host it does not offer}
+        {--host= : The one read host to address when the connection configures a choice; refuses a host it does not offer}
         {--min-severity= : The security severity floor for this run (info|low|medium|high|critical, or none to report without blocking); beats the profile and the config}
         {--format= : The report format — console, json, github, sarif, or agent (defaults to the configured format)}
         {--output= : Write the report to this file instead of STDOUT}';

@@ -135,7 +135,48 @@ final readonly class StaleRawSqlReasonRule implements Rule
             }
         }
 
+        foreach ($this->staleTraitReasons($node, $scopes) as $annotation) {
+            $errors[] = $this->finding($annotation['file'], $annotation['line'], sprintf('on %s', $annotation['label']));
+        }
+
         return $errors;
+    }
+
+    /**
+     * The reasons in a trait's annotations that cover no call site in any class using it.
+     *
+     * The collector records an annotation once per using class, under that class's names. It is live
+     * as soon as one of them covers a call site, and reported once, at the trait's own file and line:
+     * a reason does not go stale for one class and stay live for another, because it is one line in
+     * one file.
+     *
+     * @param  list<string>  $scopes
+     * @return list<array{file: string, line: int, label: string}>
+     */
+    private function staleTraitReasons(CollectedDataNode $node, array $scopes): array
+    {
+        $live = [];
+        $annotations = [];
+
+        foreach ($node->get(TraitJustificationCollector::class) as $perFile) {
+            foreach ($perFile as $entry) {
+                [$file, $written] = is_array($entry) && $this->config->covers($entry['file']) ? [$entry['file'], $entry['annotations']] : ['', []];
+
+                foreach ($written as $annotation) {
+                    // `rawSql` only, as for a span: an `interpolation:` answer is no policy reason.
+                    if ($annotation['rawSql']) {
+                        $key = $file.':'.$annotation['line'];
+                        $annotations[$key] = ['file' => $file, 'line' => $annotation['line'], 'label' => $annotation['label']];
+                        $live[$key] = ($live[$key] ?? false) || array_any(
+                            $annotation['names'],
+                            fn (string $name): bool => $this->nameCoversSomething($name, $scopes),
+                        );
+                    }
+                }
+            }
+        }
+
+        return array_values(array_filter($annotations, static fn (string $key): bool => ! ($live[$key] ?? false), ARRAY_FILTER_USE_KEY));
     }
 
     /**
@@ -227,7 +268,7 @@ final readonly class StaleRawSqlReasonRule implements Rule
             ->line($line)
             ->identifier(self::IDENTIFIER)
             ->tip(sprintf(
-                'Counted against EVERY raw-SQL call site this suite collects, not only the ones the '
+                'Counted against every raw-SQL call site this suite collects, not only the ones the '
                 .'policy rule reports — a reason covering a DB::raw() fragment is doing its job. '
                 .'Policy mode: %s. %s',
                 $this->config->policy->value,

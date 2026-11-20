@@ -30,7 +30,7 @@ use Pushery\SQLens\Drivers\Pgsql\Canonical\PgsqlCanonicalization;
 final readonly class PgsqlSchemaDump
 {
     /** The command line that opens a block of rows, as `pg_dump` writes it. */
-    private const string COPY_FROM_STDIN = '/^COPY\s.+\sFROM\s+stdin;\s*$/i';
+    private const string COPY_FROM_STDIN = '/^COPY\s.+\sFROM\s+stdin;\s*$/iD';
 
     public function __construct(private StatementSplitter $splitter = new StatementSplitter) {}
 

@@ -127,7 +127,7 @@ final class TypeNarrowingRule extends AbstractPgsqlSafetyRule implements Provide
 
     protected function judge(MigrationStatementView $statement): ?string
     {
-        // ALTER COLUMN <col> TYPE <target>, read ONCE — by the same object the remediation reads,
+        // ALTER COLUMN <col> TYPE <target>, read once — by the same object the remediation reads,
         // so the finding and its fix material can never disagree about which column this is.
         $change = ColumnTypeChange::of($statement);
 

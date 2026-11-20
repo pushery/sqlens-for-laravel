@@ -47,7 +47,7 @@ final readonly class SquawkTool implements Tool
      * pre-release (`2.62.0-rc.1`) fails it too, and that is the intended direction: an
      * unreleased build is precisely one whose output nobody has measured.
      */
-    private const string VERSION_LINE = '/^squawk (\d+\.\d+\.\d+)$/';
+    private const string VERSION_LINE = '/^squawk (\d+\.\d+\.\d+)$/D';
 
     /**
      * @param  string  $osFamily  the platform to judge against. A parameter only so both arms of

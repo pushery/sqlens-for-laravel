@@ -90,9 +90,10 @@ final readonly class BaselineSerializer
             throw UnreadableBaseline::invalidJson($path, $failure->getMessage());
         }
 
+        $entries = BaselineSchema::readEntries($decoded, $path);
+
         return BaselineFile::of(array_map(
-            fn (mixed $raw, int $index): BaselineEntry => $this->decodeEntry($raw, $index, $path),
-            $entries = BaselineSchema::readEntries($decoded, $path),
+            fn (int $index): BaselineEntry => $this->decodeEntry($entries[$index], $index, $path),
             array_keys($entries),
         ));
     }
@@ -106,7 +107,11 @@ final readonly class BaselineSerializer
         return json_encode($entry->toArray(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     }
 
-    /** @throws UnreadableBaseline */
+    /**
+     * @param  mixed  $raw  an entry of the baseline as its JSON decoded it
+     *
+     * @throws UnreadableBaseline
+     */
     private function decodeEntry(mixed $raw, int $index, string $path): BaselineEntry
     {
         if (! is_array($raw) || array_is_list($raw)) {
@@ -145,6 +150,8 @@ final readonly class BaselineSerializer
      * match it, and that suite would report it as stale on every run: the line somebody then
      * deletes is one the other suite still needs.
      *
+     * @param  mixed  $value  a field of a baseline entry as its JSON decoded it
+     *
      * @throws UnreadableBaseline
      */
     private function kind(mixed $value, int $index, string $path): LocationKind
@@ -170,6 +177,8 @@ final readonly class BaselineSerializer
      * A default here would be the quiet kind of wrong: an unrecognized category would become
      * `safety`, and a security entry would then be judged on the level axis — which is exactly the
      * confusion the two axes exist to prevent, arriving through a typo in a file somebody hand-edited.
+     *
+     * @param  mixed  $value  a field of a baseline entry as its JSON decoded it
      *
      * @throws UnreadableBaseline
      */
@@ -197,6 +206,8 @@ final readonly class BaselineSerializer
      * written as null rather than omitted. That makes null legal and a wrong string illegal, which
      * is the distinction a hand-edited file needs.
      *
+     * @param  mixed  $value  a field of a baseline entry as its JSON decoded it
+     *
      * @throws UnreadableBaseline
      */
     private function severity(mixed $value, int $index, string $path): ?Severity
@@ -220,7 +231,11 @@ final readonly class BaselineSerializer
         return $severity;
     }
 
-    /** @throws UnreadableBaseline */
+    /**
+     * @param  mixed  $value  a field of a baseline entry as its JSON decoded it
+     *
+     * @throws UnreadableBaseline
+     */
     private function fingerprint(mixed $value, int $index, string $path): FindingFingerprint
     {
         // A truncated or hand-edited fingerprint would match nothing, which reads
@@ -236,7 +251,11 @@ final readonly class BaselineSerializer
         );
     }
 
-    /** @throws UnreadableBaseline */
+    /**
+     * @param  mixed  $value  a field of a baseline entry as its JSON decoded it
+     *
+     * @throws UnreadableBaseline
+     */
     private function ordinal(mixed $value, int $index, string $path): int
     {
         return is_int($value) && $value >= 0
@@ -244,7 +263,11 @@ final readonly class BaselineSerializer
             : throw UnreadableBaseline::entryFieldOutOfShape($path, $index, 'ordinal', 'a non-negative integer', get_debug_type($value));
     }
 
-    /** @throws UnreadableBaseline */
+    /**
+     * @param  mixed  $value  a field of a baseline entry as its JSON decoded it
+     *
+     * @throws UnreadableBaseline
+     */
     private function text(mixed $value, string $field, int $index, string $path): string
     {
         return is_string($value) && $value !== ''

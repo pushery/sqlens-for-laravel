@@ -2106,6 +2106,7 @@ final readonly class AuditRunner implements AuditRuns
      * server this report is not about, and one showing only the real version would hide that every
      * lint run on the same project reasons from a different number.
      *
+     * @param  mixed  $pinned  the server version the config pins, which a host may have set to any type
      * @return list<ReportedServerVersion>
      */
     private function reportedVersions(InstanceTarget $target, ?string $detected, mixed $pinned): array

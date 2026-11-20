@@ -52,14 +52,16 @@ final readonly class RemediationStep
      */
     public function toArray(): array
     {
-        return array_filter([
+        $projection = [
             'order' => $this->order,
             'kind' => $this->kind->value,
             'note_key' => $this->noteKey,
             'sql_template' => $this->sqlTemplate,
             'laravel_snippet' => $this->laravelSnippet,
             'within_transaction' => $this->withinTransaction,
-        ], static fn (mixed $value): bool => $value !== null);
+        ];
+
+        return array_diff_key($projection, array_filter($projection, is_null(...)));
     }
 
     /**

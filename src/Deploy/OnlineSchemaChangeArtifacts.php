@@ -49,11 +49,11 @@ final readonly class OnlineSchemaChangeArtifacts
      * @var list<string>
      */
     public const array TABLES = [
-        '/^_.+_gho$/',
-        '/^_.+_ghc$/',
-        '/^_.+_del$/',
-        '/^_.+_new$/',
-        '/^_.+_old$/',
+        '/^_.+_gho$/D',
+        '/^_.+_ghc$/D',
+        '/^_.+_del$/D',
+        '/^_.+_new$/D',
+        '/^_.+_old$/D',
         // InnoDB's own temporary tables. The `#` makes them unquotable in ordinary SQL, which is why
         // no project creates one on purpose and why this pattern needs no further narrowing.
         '/^#sql/',
@@ -65,7 +65,7 @@ final readonly class OnlineSchemaChangeArtifacts
      * @var list<string>
      */
     public const array TRIGGERS = [
-        '/^pt_osc_.+_(ins|upd|del)$/',
+        '/^pt_osc_.+_(ins|upd|del)$/D',
     ];
 
     /** Whether this bare table name is one an online-schema-change tool generates. */
@@ -93,7 +93,7 @@ final readonly class OnlineSchemaChangeArtifacts
             return 'InnoDB';
         }
 
-        if (preg_match('/_(gho|ghc|del)$/', $bareName) === 1) {
+        if (preg_match('/_(gho|ghc|del)$/D', $bareName) === 1) {
             return 'gh-ost';
         }
 

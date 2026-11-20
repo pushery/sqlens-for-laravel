@@ -356,6 +356,8 @@ final class LintCommand extends Command
      * `capture.shadow.connection` or `capture.shadow.direct_connection` set, the throwaway database is
      * created and dropped there, not on the connection being linted, and the resolver the provisioner
      * is built from says which.
+     *
+     * @param  mixed  $connection  the connection the option names, as the console hands it over
      */
     private function guardDecision(ShadowClearance $clearance, DriverManager $drivers, Repository $config, mixed $connection): GuardDecision
     {

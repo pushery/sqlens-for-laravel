@@ -531,7 +531,7 @@ final readonly class PgsqlSecurityReader implements SecurityReader
             $command = RlsCommand::fromCatalog($this->text($row, 'polcmd'));
             $name = $this->text($row, 'polname');
             // One decision, not two: this row is not a policy this build can judge. It is reached on
-            // every table that HAS no policy — the LEFT JOIN yields a row with an empty name, which is
+            // every table that has no policy — the LEFT JOIN yields a row with an empty name, which is
             // the fail-closed state and not a row to drop — and it would also catch a `polcmd` a later
             // PostgreSQL adds. Splitting it in two put the second half on a line nothing can execute,
             // which the coverage floor was right to call out.
@@ -739,7 +739,7 @@ final readonly class PgsqlSecurityReader implements SecurityReader
         $tables = $mode === 'listed' ? $this->config->get('sqlens.security.rls.tables') : null;
 
         return is_array($tables)
-            ? array_values(array_filter(array_map(static fn (mixed $t): string => is_string($t) ? trim($t) : '', $tables), static fn (string $t): bool => $t !== ''))
+            ? array_values(array_filter(array_map(trim(...), array_filter($tables, is_string(...))), static fn (string $t): bool => $t !== ''))
             : [];
     }
 

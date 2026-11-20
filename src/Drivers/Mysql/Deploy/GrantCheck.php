@@ -436,8 +436,8 @@ final readonly class GrantCheck implements PreflightCheck
 
                 if (is_string($database) && is_array($privileges)) {
                     $taken[$database] = array_values(array_map(
-                        static fn (mixed $privilege): string => strtoupper(is_scalar($privilege) ? (string) $privilege : ''),
-                        $privileges,
+                        static fn (bool|float|int|string $privilege): string => strtoupper((string) $privilege),
+                        array_filter($privileges, is_scalar(...)),
                     ));
                 }
             }

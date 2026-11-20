@@ -74,7 +74,7 @@ final readonly class PathBinding
 
         $resolved = $this->resolve($sourceFile);
 
-        // A path that does not exist on disk is UNKNOWN rather than not-a-migration. The two cases
+        // A path that does not exist on disk is unknown rather than not-a-migration. The two cases
         // it covers are a file that was deleted between capture and judgment, and a synthetic
         // subject built by a test or a tool — and calling either of them "not a migration" would
         // silence a path-bound rule on evidence nobody has.

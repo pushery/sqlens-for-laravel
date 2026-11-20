@@ -29,7 +29,7 @@ use Pushery\SQLens\Rules\RuleEvidenceEntry;
  * release that reads the new column finds every row filled. The other order leaves the rows that an
  * old release writes behind the job without a value, and nothing later in the plan fills them.
  *
- * It is PostgreSQL's because the PROBLEM is: whether a given type change rewrites the table is a
+ * It is PostgreSQL's because the problem is: whether a given type change rewrites the table is a
  * PostgreSQL question answered by a PostgreSQL matrix, and a `USING` expression forces the rewrite
  * whatever the types are.
  *

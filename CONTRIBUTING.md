@@ -360,8 +360,9 @@ stability and `deprecated_since`.
 The two sides of the diff are:
 
 - **now** — `resources/data/rule-registry.json`, the generated catalog. It is
-  regenerated in the same change that touches a rule (`RuleRegistryExportTest`
-  fails otherwise), so it always describes this tree.
+  regenerated in the same change that touches a rule (the suite fails while the
+  committed file differs from what the code produces), so it always describes
+  this tree.
 - **the last release** — `.github/governance/rule-contracts.json`, a snapshot with
   a different lifecycle: it changes **only at a release**. That difference is the
   whole mechanism. A gate that diffed the registry against the code would compare
@@ -522,9 +523,18 @@ red.
 
 ## Quality bar
 
-This package holds itself to a strict quality bar — Laravel Pint, Larastan at `max`,
+This package holds itself to a strict quality bar — Laravel Pint, Larastan at level 10,
 Rector, and Pest with 100% line and type coverage, plus mutation testing, a
 real-browser end-to-end suite, and cross-engine tests against real PostgreSQL and
-MySQL 8.4 (the engines it runs on in production). The maintainers run the full gate
-locally before every release, so a pull request that keeps the public API stable and
-ships tests for its change is easy to accept.
+MySQL 8.4 (the engines it runs on in production).
+
+**That bar runs in the development repository, not here.** This repository is a
+read-only mirror of the released tree: it carries the package itself, which is what
+Composer installs, and deliberately not the test suite, the task runner or the CI
+configuration. So the bar cannot run in a clone of this repository: there is nothing
+here for it to run against.
+
+What that means in practice: send the change with a clear description and a minimal
+reproduction. It is rerun against the full bar on the way in, and the tests for it are
+written there. Saying plainly what you could not verify is more useful than a claim that
+sounds checked.

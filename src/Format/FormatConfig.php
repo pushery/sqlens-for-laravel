@@ -69,7 +69,11 @@ final readonly class FormatConfig
         );
     }
 
-    /** A configured path, or null to look on the search path. */
+    /**
+     * A configured path, or null to look on the search path.
+     *
+     * @param  mixed  $value  a value of the package's config, which a host may have set to any type
+     */
     private static function path(mixed $value): ?string
     {
         return is_string($value) && $value !== '' ? $value : null;

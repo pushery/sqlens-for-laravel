@@ -75,7 +75,7 @@ final readonly class LockBlockerCheck implements PreflightCheck
      * than cosmetic.
      *
      * `DEPLOY.*` is the driver-NEUTRAL family, and its metadata lives in the core catalog. The core
-     * may not carry engine vocabulary — `CorePurityArchTest` forbids the literal `CONCURRENTLY`
+     * may not carry engine vocabulary — an architecture test forbids the literal `CONCURRENTLY`
      * outside the two driver namespaces — so an id embedding that keyword could never be cataloged
      * there. It stayed uncataloged for exactly that reason and shipped a documentation link to
      * nothing.

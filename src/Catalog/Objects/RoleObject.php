@@ -306,7 +306,7 @@ final readonly class RoleObject
         }
 
         // Digits, dots and wildcards are an IPv4 pattern, and only an IPv6 address carries a colon.
-        return preg_match('/^[0-9.%_]+$/', $this->host) !== 1 && ! str_contains($this->host, ':');
+        return preg_match('/^[0-9.%_]+$/D', $this->host) !== 1 && ! str_contains($this->host, ':');
     }
 
     public function has(RoleAttribute $attribute): bool

@@ -211,7 +211,7 @@
                 "type": "doc",
                 "url": "https://dev.mysql.com/doc/refman/8.4/en/enum.html",
                 "applies_to": "MySQL 8.4",
-                "note": "MySQL stores an ENUM value as its ORDINAL position in the member list, not as the string. That single fact is what makes an equivalent RESPELLING the cheapest and most dangerous change available here: the engine compares member names positionally under the column's collation, so a change the collation calls equal leaves the stored ordinals untouched, rewrites nothing and takes no lock, while the application reads a different string back. A rename to a DIFFERENT word is not that case: it changes the type, so it is a table copy, and the copy truncates every row still holding the old member -- measured on 8.4.10, ALGORITHM=INSTANT is refused with 1846 and the default algorithm fails with 1265 under the default sql_mode, while every row that read the old name now reads the new one. It is also why inserting or removing a member in the middle shifts every later ordinal and forces a rewrite."
+                "note": "MySQL stores an ENUM value as its ORDINAL position in the member list, not as the string. That single fact is what makes an equivalent RESPELLING the cheapest and most dangerous change available here: the engine compares member names positionally under the column's collation, so a change the collation calls equal leaves the stored ordinals untouched, rewrites nothing and takes no lock, while the application reads a different string back. A rename to a different word is not that case: it changes the type, so it is a table copy, and the copy truncates every row still holding the old member -- measured on 8.4.10, ALGORITHM=INSTANT is refused with 1846 and the default algorithm fails with 1265 under the default sql_mode, while every row that read the old name now reads the new one. It is also why inserting or removing a member in the middle shifts every later ordinal and forces a rewrite."
             },
             {
                 "type": "doc",
@@ -1799,7 +1799,7 @@
                 "type": "doc",
                 "url": "https://owasp.org/www-community/attacks/SQL_Injection",
                 "applies_to": "PostgreSQL 18 and MySQL 8.4",
-                "note": "A fragment concatenated into a statement is read by the server as grammar, not as data. That is why the defect is a change to what the statement DOES rather than a wrong result: the attacker is not supplying a value the query compares against, they are supplying part of the query. A bound value travels beside the statement text and can never join it, whatever it contains."
+                "note": "A fragment concatenated into a statement is read by the server as grammar, not as data. That is why the defect is a change to what the statement does rather than a wrong result: the attacker is not supplying a value the query compares against, they are supplying part of the query. A bound value travels beside the statement text and can never join it, whatever it contains."
             },
             {
                 "type": "doc",

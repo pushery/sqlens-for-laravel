@@ -30,7 +30,7 @@ final readonly class SessionTimeoutValue
 
         $raw = trim((string) $value);
 
-        if (preg_match('/^(\d+)\s*(ms|s|min|h|d)?$/', $raw, $match) !== 1) {
+        if (preg_match('/^(\d+)\s*(ms|s|min|h|d)?$/D', $raw, $match) !== 1) {
             return null;
         }
 

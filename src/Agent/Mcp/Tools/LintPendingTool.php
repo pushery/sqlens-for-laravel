@@ -157,7 +157,7 @@ final class LintPendingTool extends SqlensTool
             // belongs to the engine's own single-file resolver, which resolves the path and refuses
             // anything outside the configured migration paths, so `..`, an absolute foreign path and
             // a symlink that leaves are all already refused with a named reason. A second fence here
-            // was measured to be both redundant and WRONG: it compared against the project root, so a
+            // was measured to be both redundant and wrong: it compared against the project root, so a
             // monorepo whose migration paths sit outside it got an answer from the command and a
             // refusal from the tool — two answers about one file, which is the divergence this whole
             // layer exists to prevent.

@@ -351,8 +351,8 @@ final readonly class SarifDocument
             ...SeverityMapper::kind($finding),
             'message' => ['text' => $this->locations->message($finding)],
             // Never empty, for any finding. A result SARIF would reject for want of a location is a
-            // finding that vanished between the run and the report, and the count arm in
-            // SarifLocationTest holds findings-in against results-out for exactly that.
+            // finding that vanished between the run and the report, and a test counts findings in
+            // against results out for exactly that.
             'locations' => $this->locations->locations($finding),
             // What lets GitHub recognize one problem across runs instead of opening a new alert
             // every night. The same fingerprint the baseline matches on, deliberately: a project

@@ -95,6 +95,8 @@ trait ValidatesConfig
      * parse passes it, and the container reads that file only when the privacy rule first needs it.
      * Asked here, a broken file is one more violation: every command refuses it with the
      * misconfiguration exit, and doctor reports it beside the rest.
+     *
+     * @param  mixed  $config  the package's config as a host wrote it, of any type
      */
     private function inspected(mixed $config): ConfigInspection
     {

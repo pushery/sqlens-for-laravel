@@ -18,7 +18,7 @@ use Throwable;
  *
  * Shipping an endpoint would be this package endorsing somebody else's terms of use on behalf of
  * every consumer — their rate limits, their attribution, their license, none of which this package
- * can accept for anyone. So `sqlens.security.advisories.source` is null out of the box and the
+ * can accept for anyone. So `sqlens.security.advisories.source` is null by default and the
  * refresh says exactly that when it is asked to run without one.
  *
  * The source must serve a document in this package's advisory format. That is not a limitation

@@ -17,7 +17,7 @@ use Pushery\SQLens\Contracts\Rule;
  *   - a known version (detected on a live server, or pinned via assume_server_version):
  *     a rule whose window matches runs; a rule whose window does not match produces no
  *     finding — "not written for this version" is silence, correctly.
- *   - An UNKNOWN version (the fast path with no pin, an unreachable server): a
+ *   - An unknown version (the fast path with no pin, an unreachable server): a
  *     version-INDEPENDENT rule still runs unrestricted, while a version-DEPENDENT rule
  *     cannot be judged and is surfaced as an undetermined finding by the caller — never
  *     a silent skip, and never a guess against a default version (pitfall 5).

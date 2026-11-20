@@ -101,7 +101,7 @@ final readonly class PgsqlTargetlessPrivileges implements TargetlessPrivileges
     /** @return list<PrivilegeRequirement>|null */
     private function sessionSetting(string $sql): ?array
     {
-        if (preg_match('/^RESET\b\s*(.*?)\s*;?$/is', $sql, $reset) === 1) {
+        if (preg_match('/^RESET\b\s*(.*?)\s*;?$/isD', $sql, $reset) === 1) {
             return $this->reset($reset[1]);
         }
 
@@ -134,11 +134,11 @@ final readonly class PgsqlTargetlessPrivileges implements TargetlessPrivileges
      */
     private function reset(string $setting): ?array
     {
-        if (preg_match('/^(?:ALL|ROLE|SESSION\s+AUTHORIZATION|TIME\s+ZONE|TRANSACTION\s+ISOLATION\s+LEVEL)$/i', $setting) === 1) {
+        if (preg_match('/^(?:ALL|ROLE|SESSION\s+AUTHORIZATION|TIME\s+ZONE|TRANSACTION\s+ISOLATION\s+LEVEL)$/iD', $setting) === 1) {
             return [];
         }
 
-        if (preg_match('/^("?)([A-Za-z_][A-Za-z0-9_]*)\1$/', $setting, $parameter) !== 1) {
+        if (preg_match('/^("?)([A-Za-z_][A-Za-z0-9_]*)\1$/D', $setting, $parameter) !== 1) {
             return null;
         }
 
@@ -189,7 +189,7 @@ final readonly class PgsqlTargetlessPrivileges implements TargetlessPrivileges
             return $this->ownershipOf($trigger[1]);
         }
 
-        if (preg_match('/^DROP\s+(?:FUNCTION|PROCEDURE|ROUTINE)\s+(?:IF\s+EXISTS\s+)?(.+?)\s*(?:\b(?:CASCADE|RESTRICT)\b\s*)?;?$/is', $sql, $routines) === 1) {
+        if (preg_match('/^DROP\s+(?:FUNCTION|PROCEDURE|ROUTINE)\s+(?:IF\s+EXISTS\s+)?(.+?)\s*(?:\b(?:CASCADE|RESTRICT)\b\s*)?;?$/isD', $sql, $routines) === 1) {
             return $this->routineOwnershipOf($routines[1]);
         }
 
@@ -242,7 +242,7 @@ final readonly class PgsqlTargetlessPrivileges implements TargetlessPrivileges
         $requirements = [];
 
         foreach ($this->topLevelParts($list) as $part) {
-            if (preg_match('/^('.self::NAME.')\s*(\(.*\))?$/s', trim($part), $routine) !== 1) {
+            if (preg_match('/^('.self::NAME.')\s*(\(.*\))?$/sD', trim($part), $routine) !== 1) {
                 return null;
             }
 

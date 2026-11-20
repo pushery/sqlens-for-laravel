@@ -51,8 +51,8 @@ final readonly class MissingToolNotice
         // MACHINE surface — JSON, SARIF, the baseline fingerprint, what an agent parses — and a
         // translated finding makes that surface depend on `app.locale`: the same tree reported
         // in German on a laptop and in English in CI, with the baseline unable to recognize its
-        // own entries across the two. `LintDeterminismTest` states the contract in its own name
-        // ("the machine surface is locale-free") and it caught exactly this.
+        // own entries across the two. A test holds a run's JSON byte-identical when the locale
+        // changes ("the machine surface is locale-free"), and it caught exactly this.
         //
         // So they follow the convention every one of the ~105 rule messages already follows:
         // built here, in English, from the rule's own knowledge. `lang/` keeps what it is for —

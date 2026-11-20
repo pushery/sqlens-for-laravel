@@ -16,6 +16,14 @@ namespace Pushery\SQLens\Support;
  * something off and on are named here, trimmed and in any case. Anything else keeps the value the
  * package ships: a missing line, an empty line as copying a template of a .env leaves one, and a
  * spelling that names neither.
+ *
+ * Internal: the configuration file this package publishes reads no switch through this class, so
+ * no file a host publishes refers to it, and it may change in any release. The first switch the
+ * configuration reads goes through it, and that switch makes it public API, because a published
+ * configuration runs in the host's own namespace and a host that analyzes it would read a call into
+ * an internal class as an error it cannot fix without editing a published file.
+ *
+ * @internal
  */
 final class EnvSwitch
 {

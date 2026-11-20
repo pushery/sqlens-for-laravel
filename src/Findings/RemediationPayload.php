@@ -73,10 +73,10 @@ final readonly class RemediationPayload
     // payloads claim to be version 1, which is the one thing a version field exists to prevent.
     //
     // So version 1 is frozen at the bytes v0.3.0 published and kept in the tree beside this one.
-    // `PublishedSchemaTest` holds every published version's contract-bearing content by digest, so
-    // the next change to the field set cannot be argued through again — it goes red until a new
-    // file and a new number exist. Descriptions are normalized out of that digest: fixing a
-    // sentence is not a contract change and must not cost a version.
+    // A test holds every published version's contract-bearing content by digest, so the next
+    // change to the field set cannot be argued through again — it goes red until a new file and a
+    // new number exist. Descriptions are normalized out of that digest: fixing a sentence is not a
+    // contract change and must not cost a version.
 
     /**
      * The single source of truth for the payload's maturity — constant `preview`
@@ -176,6 +176,6 @@ final readonly class RemediationPayload
             'references' => $this->references === [] ? null : $this->references,
         ];
 
-        return array_filter($projection, static fn (mixed $value): bool => $value !== null);
+        return array_diff_key($projection, array_filter($projection, is_null(...)));
     }
 }

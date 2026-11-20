@@ -46,14 +46,14 @@ final readonly class MysqlInstanceIdentityReader implements InstanceIdentityRead
             // answered with a row. A branch for the impossible case would be a guard that guards
             // nothing — and if a driver ever did return nothing, the property access raises and the
             // catch turns it into the same named undetermined, which is the right answer anyway.
-            $row = $this->session->read(static fn (Connection $db): mixed => $db->selectOne(
+            [$row] = $this->session->read(static fn (Connection $db): array => [$db->selectOne(
                 'select @@hostname as host,'
                 .' @@port as port,'
                 .' database() as db,'
                 .' version() as version,'
                 .' @@read_only as read_only,'
                 .' @@super_read_only as super_read_only'
-            ));
+            )]);
 
             $host = $this->text($row, 'host');
             $port = $this->int($row, 'port');

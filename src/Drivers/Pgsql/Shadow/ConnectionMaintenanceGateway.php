@@ -114,7 +114,7 @@ final readonly class ConnectionMaintenanceGateway implements MaintenanceGateway,
         return is_numeric($total) ? (int) $total : 0;
     }
 
-    #[RawSql(reason: 'names who is connected, so the refusal above says WHO is in the way instead of only that somebody is')]
+    #[RawSql(reason: 'names who is connected, so the refusal above says who is in the way instead of only that somebody is')]
     public function describeActiveConnections(string $database): array
     {
         // The same population the count reads, so the two can never disagree about who is

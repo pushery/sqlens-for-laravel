@@ -33,12 +33,12 @@ use Pushery\SQLens\Exceptions\InvalidPreScanCatalog;
  */
 final readonly class CatalogTarget
 {
-    private const string CLASS_PATTERN = '/^[A-Za-z_]\w*(?:\\\\[A-Za-z_]\w*)*$/';
+    private const string CLASS_PATTERN = '/^[A-Za-z_]\w*(?:\\\\[A-Za-z_]\w*)*$/D';
 
-    private const string MEMBER_PATTERN = '/^[A-Za-z_]\w*$/';
+    private const string MEMBER_PATTERN = '/^[A-Za-z_]\w*$/D';
 
     /** `app('key')`: a container key of dotted names or a class name, quoted once. */
-    private const string CONTAINER_PATTERN = '/^app\(\'([A-Za-z_]\w*(?:[.\\\\][A-Za-z_]\w*)*)\'\)$/';
+    private const string CONTAINER_PATTERN = '/^app\(\'([A-Za-z_]\w*(?:[.\\\\][A-Za-z_]\w*)*)\'\)$/D';
 
     /**
      * @param  string|null  $class  the exact class, or null for a receiver-agnostic

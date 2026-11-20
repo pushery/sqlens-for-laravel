@@ -274,13 +274,13 @@ final readonly class PendingMigrationResolver implements PendingResolver
     /** A PostgreSQL identifier as it has to be written: bare when it folds to itself, quoted otherwise. */
     private function pgIdentifier(string $name): string
     {
-        return preg_match('/^[a-z_][a-z0-9_$]*$/', $name) === 1 ? $name : '"'.str_replace('"', '""', $name).'"';
+        return preg_match('/^[a-z_][a-z0-9_$]*$/D', $name) === 1 ? $name : '"'.str_replace('"', '""', $name).'"';
     }
 
     /** A MySQL identifier, bare when it holds only the characters MySQL reads unquoted. */
     private function mysqlIdentifier(string $name): string
     {
-        return preg_match('/^[A-Za-z0-9_$]+$/', $name) === 1 ? $name : '`'.str_replace('`', '``', $name).'`';
+        return preg_match('/^[A-Za-z0-9_$]+$/D', $name) === 1 ? $name : '`'.str_replace('`', '``', $name).'`';
     }
 
     /** `CURRENT_USER()` answers `user@host`; a grant names the account as `'user'@'host'`. */
@@ -318,7 +318,7 @@ final readonly class PendingMigrationResolver implements PendingResolver
      * caller decides that and it arrives here as `$includeVendorMigrations`.
      *
      * `sqlens:predeploy` passes true as well, and that one is not a preference: a package's
-     * migration RUNS during a deploy and can take an ACCESS EXCLUSIVE lock like any other. Hiding it
+     * migration runs during a deploy and can take an ACCESS EXCLUSIVE lock like any other. Hiding it
      * from the run that exists to see what the deploy is about to walk into would answer that
      * question wrongly.
      *

@@ -52,7 +52,7 @@ trait SelectsStatementTargets
      * because it cannot tell them apart and picking a side silently is the failure it exists to
      * avoid. This one can, because the grammar declared it (see {@see TargetRole}).
      *
-     * Kept SEPARATE rather than folded into `soleTarget()`: thirty-odd readers call that method
+     * Kept separate rather than folded into `soleTarget()`: thirty-odd readers call that method
      * today and every one of them is silent on foreign-key statements. Teaching it to answer would
      * hand all of them a table they have never seen and change what they report — a decision for
      * each of those readers, not a side effect of this one.

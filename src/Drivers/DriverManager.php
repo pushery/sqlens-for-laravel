@@ -134,6 +134,7 @@ final readonly class DriverManager
      * will actually run against. Laravel's own ConnectionFactory merges the `write`
      * block over the base for exactly this reason, so the same merge happens here.
      *
+     * @param  mixed  $config  a connection's config as the host wrote it, of any type
      * @return array<string, mixed>
      */
     private function writeSideConfig(mixed $config): array

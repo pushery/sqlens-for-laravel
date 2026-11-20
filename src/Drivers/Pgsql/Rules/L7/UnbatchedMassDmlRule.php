@@ -204,7 +204,7 @@ final class UnbatchedMassDmlRule extends AbstractPgsqlSafetyRule implements Decl
 
     private function updateMessage(): string
     {
-        return 'This write has a predicate but nothing that bounds it, so it runs as ONE statement over every row '
+        return 'This write has a predicate but nothing that bounds it, so it runs as one statement over every row '
             .'the predicate matches — holding row locks and keeping a transaction open for as long as that takes, '
             .'while the migration blocks the deploy and autovacuum cannot clean up behind it. This is a HEURISTIC: '
             .'SQLens can see that the statement is unbounded, not how many rows that means, and it never asks the '

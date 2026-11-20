@@ -45,6 +45,7 @@ final readonly class EffectiveConnectionConfig
      * rather than a throw: "this connection is not configured" is a state every caller already
      * has an answer for, and a crash here would replace that answer with a stack trace.
      *
+     * @param  mixed  $config  a connection's config as the host wrote it, of any type
      * @return array<string, mixed>
      */
     public static function for(mixed $config): array
@@ -92,7 +93,12 @@ final readonly class EffectiveConnectionConfig
 
         foreach (array_unique(array_merge(...array_map(array_keys(...), $entries))) as $key) {
             // An entry without the key inherits the connection's own value, as the merge does.
-            $values = array_map(static fn (array $entry): mixed => array_key_exists($key, $entry) ? $entry[$key] : ($base[$key] ?? null), $entries);
+            $values = [];
+
+            foreach ($entries as $entry) {
+                $values[] = array_key_exists($key, $entry) ? $entry[$key] : ($base[$key] ?? null);
+            }
+
             $distinct = array_values(array_unique(array_map(serialize(...), $values)));
 
             if (count($distinct) === 1) {
@@ -114,6 +120,7 @@ final readonly class EffectiveConnectionConfig
      * roles. Without such a block, or on a framework that has no direct connection, migrations run
      * on the write side, which is {@see self::for()}.
      *
+     * @param  mixed  $config  a connection's config as the host wrote it, of any type
      * @return array<string, mixed>
      */
     public static function forMigrations(mixed $config): array
@@ -145,6 +152,8 @@ final readonly class EffectiveConnectionConfig
      * Then one connection name carries two accounts: the one requests are served by and the one the
      * block names. Whether those are two identities is a question of the credentials, not of the
      * name, which is why a rule that compares connection names has to ask this first.
+     *
+     * @param  mixed  $config  a connection's config as the host wrote it, of any type
      */
     public static function migratesThroughDirect(mixed $config): bool
     {
@@ -183,6 +192,7 @@ final readonly class EffectiveConnectionConfig
      * laid over the keys they replace, and the `url` itself is gone. A caller that goes on to change
      * one of those keys therefore changes what the connection reaches.
      *
+     * @param  mixed  $config  a connection's config as the host wrote it, of any type
      * @return array<string, mixed>
      */
     public static function withoutUrl(mixed $config): array
@@ -218,6 +228,7 @@ final readonly class EffectiveConnectionConfig
      * with it, and an external tool that judges the same database must be pointed at the same server,
      * or its findings sit beside the audit's about a database nobody named.
      *
+     * @param  mixed  $config  a connection's config as the host wrote it, of any type
      * @return array<string, mixed>
      */
     public static function forReading(mixed $config, ?string $pinnedHost = null): array
@@ -242,6 +253,7 @@ final readonly class EffectiveConnectionConfig
      * is reached through a connection built here, so the URL is resolved first and the database set
      * last, and the name given is the database the connection reaches.
      *
+     * @param  mixed  $config  a connection's config as the host wrote it, of any type
      * @return array<string, mixed>
      */
     public static function onDatabase(mixed $config, string $database): array
@@ -265,7 +277,11 @@ final readonly class EffectiveConnectionConfig
         return self::driverFor($config->get('database.connections.'.$connection));
     }
 
-    /** The driver this connection resolves to, or null when it names none. */
+    /**
+     * The driver this connection resolves to, or null when it names none.
+     *
+     * @param  mixed  $config  a connection's config as the host wrote it, of any type
+     */
     public static function driverFor(mixed $config): ?string
     {
         $driver = self::for($config)['driver'] ?? null;

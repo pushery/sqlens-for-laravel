@@ -182,14 +182,14 @@ final readonly class MetadataLockStatements
         $found = null;
 
         foreach (explode(';', $masked) as $statement) {
-            if (preg_match('/^\s*SET\s+(.*)$/is', $statement, $set) !== 1) {
+            if (preg_match('/^\s*SET\s+(.*)$/isD', $statement, $set) !== 1) {
                 continue;
             }
 
             $scope = 'SESSION';
 
             foreach (self::assignments($set[1]) as $assignment) {
-                if (preg_match('/^(?:(?<keyword>GLOBAL|SESSION|LOCAL|PERSIST|PERSIST_ONLY)\s+)?(?<at>@@(?:(?<qualifier>GLOBAL|SESSION|LOCAL|PERSIST|PERSIST_ONLY)\.)?)?(?<name>[a-z_][a-z0-9_]*)\s*(?::=|=)\s*(?<value>.*)$/is', $assignment, $part) !== 1) {
+                if (preg_match('/^(?:(?<keyword>GLOBAL|SESSION|LOCAL|PERSIST|PERSIST_ONLY)\s+)?(?<at>@@(?:(?<qualifier>GLOBAL|SESSION|LOCAL|PERSIST|PERSIST_ONLY)\.)?)?(?<name>[a-z_][a-z0-9_]*)\s*(?::=|=)\s*(?<value>.*)$/isD', $assignment, $part) !== 1) {
                     continue;
                 }
 

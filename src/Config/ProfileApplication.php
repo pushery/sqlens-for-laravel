@@ -95,7 +95,9 @@ final readonly class ProfileApplication
      * @template T
      *
      * @param  Closure(): T  $run
-     * @return T
+     * @return mixed what $run returns, whatever its type
+     *
+     * @phpstan-return T
      */
     public function during(ProfileSelection $selection, Closure $run): mixed
     {

@@ -17,10 +17,10 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  * the regex into an empty list, and an empty list here means every encrypted column reads as
  * unprotected — a false-positive storm on the loudest rule in the suite, arriving silently.
  *
- * So the operational list is a constant, and the DRIFT is a test: `EncryptedCastDiscoveryTest`
- * compares this constant against what the framework actually implements and goes red when they
- * part company. The failure then lands at build time, on the person who upgraded Laravel, instead
- * of at audit time on somebody's schema.
+ * So the operational list is a constant, and the DRIFT is a test: it compares this constant against
+ * what the framework actually implements and goes red when they part company. The failure then
+ * lands at build time, on the person who upgraded Laravel, instead of at audit time on somebody's
+ * schema.
  *
  * ## Five forms, not three
  *

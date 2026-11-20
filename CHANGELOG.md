@@ -2,6 +2,38 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.35.0] - 2026-11-20
+
+### 🔧 Changed
+
+- **`Support\EnvSwitch` is marked internal.** It shipped in 0.34.0 without the mark, while nothing the package publishes refers to it: the configuration file reads no switch through it. It may now change in any release.
+
+  **Upgrade:** nothing to do for a host that does not call the class. One that calls it from its own code copies the few lines it holds instead.
+
+- **The texts the package shows say what they mean without a word in capitals for emphasis.** That covers the findings, remedies and notices, the rule data the reference pages are made from, the comments in `config/sqlens.php` (among them `allow_destructive` and `deploy.predeploy.allow_undetermined`), the README and the Boost skill. Most of the changes are letter case only, so a project that matches a message by its exact text, case-sensitively, adjusts that match. A copy of the configuration published before keeps its old comments.
+
+### 🐛 Fixed
+
+- **A value that ends in a line feed is refused where it used to pass as the value without it.** A fingerprint in the baseline file, the `capture.shadow.database_prefix` setting, the rule id of an `ignore` entry and a date of the end-of-life data were each checked with a pattern that also matched before a final line feed. Such a value passed the check and then matched nothing, or read as another day. Each is refused now, with the message any other malformed value of its kind gets.
+
+  **Upgrade:** nothing to do unless a configuration, a baseline file or an end-of-life source holds such a value; the run then names it.
+
+- **A pretend lint on MySQL reads a migration that declares a date, year or geometry column or renames a column.** Laravel's MySQL grammar asks the connection for the server's version to write those statements, and a run without a connection, such as `sqlens:lint --file`, reported the migration as `CAP.L0.PRETEND_ERROR` instead of reading it. The capture now names the version the run reasons about, the one `--assume-server-version` pins or the one the run detected, and still opens no connection.
+
+  **Upgrade:** nothing to do. A run that has no connection and names no version reports these migrations as before.
+
+- **A `#[RawSql]` reason written in a trait covers the trait's methods in every class that uses it.** PHPStan reads a trait's methods in each class that uses the trait and reports a call there under that class, so `sqlens.rawSql.unjustified` asked for a reason once per class even though the trait's method carried one. A reason on the trait's method, or on the trait itself, now counts in each of those classes, also under a second name a class gives the method. A method a class writes itself under the same name still needs a reason of its own. `sqlens.rawSql.staleReason` reports a dead reason in a trait once, on its own line.
+
+  **Upgrade:** a reason that stood on a using class only to cover the trait's call can go; nothing else changes.
+- **A schema with an identifier made of digits is judged instead of ending the run.** Laravel quotes every identifier, so a migration may name a column or an index `2024`, and PHP keeps such a name as an integer key. The naming rule on both engines, the reading of polymorphic pairs and the index advice handed it to a function that takes a string, and the run ended with a type error. The naming rule names such a column now, and the other two read it like any other name.
+
+### 📚 Documentation
+
+- **The README and two documentation pages drop a stock phrase that named no fact.** The page on advisory data says the source is null by default, the page of `SEC.PRIV.GRANT_ALL` says that MySQL's `mysql.session` holds most of the administrative privileges on a fresh install, and the README introduces WireKit without a claim about it.
+- **The start page shows the package at work.** `sqlens:lint` on the file fast path reports two findings in one migration: an `UPDATE` without a `WHERE` clause and a dropped column, each with its downtime class, its reason, the page of its rule and the remediation on offer. The same run stands as text under the picture, for a reader who zooms, searches or copies.
+- **The descriptions of the documentation pages fit a search result.** Each page that described itself in more than about 160 characters says first what it answers, within that length, so a search result shows the description whole.
+- **The PHP examples import every class they name.** An example that opens with `use` lines is the head of a file a reader copies, and a class those lines leave out resolves in the namespace of that file instead: `DB::select()` in a class under `namespace App\Reports;` asks for `App\Reports\DB`. Six examples named the `DB` facade or Laravel's `Migration` class without importing it: on the `analyse` page, on the pages of `CAP.L0.NOT_CAPTURABLE`, `DEPLOY.PREFLIGHT.MISSING_PRIVILEGE` and `SEC.INJ.RAW_SQL_WITHOUT_REASON`, and two in the Boost skill. Each imports it now.
+
 ## [0.34.0] - 2026-11-11
 
 ### 🔧 Changed
@@ -1779,7 +1811,8 @@ The package connects to production databases and shells out to external binaries
 
 Everything above is the first release, so there is nothing for it to be a change *from*. The development history that produced it — several hundred entries, each arguing a decision through — lives in the git log, where it belongs. From 0.2.0 on, this file records changes.
 
-[Unreleased]: https://github.com/pushery/sqlens-for-laravel/compare/v0.34.0...HEAD
+[Unreleased]: https://github.com/pushery/sqlens-for-laravel/compare/v0.35.0...HEAD
+[0.35.0]: https://github.com/pushery/sqlens-for-laravel/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/pushery/sqlens-for-laravel/compare/v0.33.1...v0.34.0
 [0.33.1]: https://github.com/pushery/sqlens-for-laravel/compare/v0.33.0...v0.33.1
 [0.33.0]: https://github.com/pushery/sqlens-for-laravel/compare/v0.32.2...v0.33.0

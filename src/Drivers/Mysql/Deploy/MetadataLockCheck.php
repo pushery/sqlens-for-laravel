@@ -44,7 +44,7 @@ use Throwable;
  * instrument that would have told me is switched off" arrive as the same answer.
  *
  * Neither ships switched off: since 8.0, measured on 8.4.10, `wait/lock/metadata/sql/mdl` is
- * `ENABLED=YES` out of the box, with 480 of 1259 instruments off — so the query does see disabled
+ * `ENABLED=YES` by default, with 480 of 1259 instruments off — so the query does see disabled
  * ones and the reading is not an artifact. The load-bearing reason is that both can be turned off,
  * and the distinction matters in the direction that costs: a reader who measures the default and
  * finds `YES` could conclude that silence is trustworthy and simplify the check away.

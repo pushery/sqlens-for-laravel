@@ -15,7 +15,9 @@ use Pushery\SQLens\Attributes\RawSql;
  * - **By NAME.** A call inside `App\Report::build()` is covered by an annotation on the method or
  *   on its class, so both names are tried. An anonymous class counts: it is a class, PHPStan gives
  *   it a synthetic name both sides of the join agree on, and it is the shape every Laravel
- *   migration takes — which is where raw DDL lives.
+ *   migration takes — which is where raw DDL lives. So does a trait: a call in one of its methods
+ *   reports itself under the class that uses it, and {@see TraitJustificationCollector} records the
+ *   trait's annotation under exactly those names.
  * - **By POSITION.** A free function, a closure and an arrow function report no scope name at all,
  *   so there is nothing for an equality join to compare. `#[RawSql]` has declared `TARGET_FUNCTION`
  *   since it was written, and for a long time nothing read it there — which made the duty
@@ -87,6 +89,18 @@ final readonly class JustificationCoverage
                 if (is_array($entry)) {
                     foreach ($interpolationChannel ? $entry['interpolationNames'] : $entry['names'] as $name) {
                         $names[] = $name;
+                    }
+                }
+            }
+        }
+
+        // An annotation on a trait, already under the names its methods carry in each using class,
+        // so it joins exactly as one written in the class does.
+        foreach ($node->get(TraitJustificationCollector::class) as $perFile) {
+            foreach ($perFile as $entry) {
+                foreach (is_array($entry) ? $entry['annotations'] : [] as $annotation) {
+                    if ($interpolationChannel ? $annotation['interpolation'] : $annotation['rawSql']) {
+                        $names = [...$names, ...$annotation['names']];
                     }
                 }
             }

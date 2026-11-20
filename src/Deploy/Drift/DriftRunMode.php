@@ -31,6 +31,8 @@ enum DriftRunMode: string
      * without having named it, and no flag here that turns a configured gate back off. A project
      * that configured `gate` decided that once, deliberately; letting a command-line switch undo it
      * would make the strictest setting the easiest one to lose.
+     *
+     * @param  mixed  $configured  a value of the package's config, which a host may have set to any type
      */
     public static function resolve(bool $failOnDrift, mixed $configured): self
     {

@@ -13,7 +13,7 @@ use Pushery\SQLens\Deploy\DebtMode;
  *
  * Two commands can record now — `sqlens:lint` from the migrations it reads, `sqlens:audit` from the
  * catalog it reads — and the second one arrived because a debt only the catalog knows about could
- * never be dated. What must not arrive with it is a second opinion about what the flag MEANS: a
+ * never be dated. What must not arrive with it is a second opinion about what the flag means: a
  * typo refused in one command and quietly treated as `check` in the other is exactly the kind of
  * difference nobody notices until an operator believes they recorded something and did not.
  *

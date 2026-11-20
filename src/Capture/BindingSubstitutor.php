@@ -147,7 +147,11 @@ final readonly class BindingSubstitutor
         return $marks;
     }
 
-    /** The SQL literal for one binding, or a named failure. */
+    /**
+     * The SQL literal for one binding, or a named failure.
+     *
+     * @param  mixed  $value  a binding as the query carried it, of any type
+     */
     private function literalFor(mixed $value, int $position): string|SubstitutionFailure
     {
         if ($value instanceof BackedEnum) {

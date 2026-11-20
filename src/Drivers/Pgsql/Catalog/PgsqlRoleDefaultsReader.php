@@ -37,7 +37,7 @@ final readonly class PgsqlRoleDefaultsReader
                 .' where s.setdatabase in (0, (select d.oid from pg_catalog.pg_database d where d.datname = pg_catalog.current_database()))'
             ));
 
-            $reader = $this->session->read(static fn (Connection $db): mixed => $db->selectOne('select session_user as name'));
+            [$reader] = $this->session->read(static fn (Connection $db): array => [$db->selectOne('select session_user as name')]);
         } catch (Throwable) {
             return RoleDefaults::unread();
         }

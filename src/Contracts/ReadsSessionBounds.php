@@ -18,7 +18,7 @@ use Throwable;
  *
  * That shared call needs a failure path, because the read can fail: under transaction pooling a
  * `SET` is accepted and quietly stops applying, and a dropped connection answers nothing at all.
- * When it does, the header must go SILENT rather than fall back to what was asked for.
+ * When it does, the header must go silent rather than fall back to what was asked for.
  *
  * The seam exists so that path can be proved. Constructed inline, the only route into it was a real
  * connection dying mid-run — which no suite can stage, and which made the branch an untested claim

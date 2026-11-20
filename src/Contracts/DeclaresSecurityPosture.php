@@ -55,7 +55,7 @@ interface DeclaresSecurityPosture
      * The honesty slot, and it earns its place by being answerable rather than aspirational: a
      * security rule that reports a clean result over a surface it never examined is the one failure
      * this package cannot tolerate, because the reassuring answer and the correct one look identical
-     * from outside. A rule naming its own blind spots turns "found nothing" into "found nothing HERE",
+     * from outside. A rule naming its own blind spots turns "found nothing" into "found nothing here",
      * which is a different sentence.
      *
      * Empty is a legitimate answer and means "nothing this rule claims to cover escapes it" — not

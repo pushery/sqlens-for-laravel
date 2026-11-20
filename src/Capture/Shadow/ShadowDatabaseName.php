@@ -84,6 +84,8 @@ final class ShadowDatabaseName
      * The time a server reported as a `YmdHis` stamp in UTC, the form both
      * maintenance gateways ask their server for.
      *
+     * @param  mixed  $stamp  the server's time as the driver returned it, of any type
+     *
      * @throws UnreadableServerTime when the answer is anything else: a sweep that guessed
      *                              the time could take a database in use for a stale one
      */

@@ -26,6 +26,7 @@ final readonly class ReportedServerVersion
      * The pin is stated even when it agrees with the server. "The pin matches" and "there is no pin"
      * are different facts about a project, and only one of them was somebody's decision.
      *
+     * @param  mixed  $pinned  the server version the config pins, which a host may have set to any type
      * @return list<self>
      */
     public static function detectedAndPinned(string $connection, ?string $detected, mixed $pinned): array

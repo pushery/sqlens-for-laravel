@@ -476,7 +476,7 @@ final readonly class ConsoleReporter implements Reporter
                 continue;
             }
 
-            if (preg_match('/\(([a-z]+)\)$/', $hidden->suppression->reason, $matches) === 1) {
+            if (preg_match('/\(([a-z]+)\)$/D', $hidden->suppression->reason, $matches) === 1) {
                 $counts[$matches[1]] = ($counts[$matches[1]] ?? 0) + 1;
             }
         }
@@ -732,7 +732,7 @@ final readonly class ConsoleReporter implements Reporter
             ReportText::line($out, $this->label('stale').': '.$result->staleSuppressionCount());
         }
 
-        // The two gates are shown on SEPARATE lines with their thresholds, never a
+        // The two gates are shown on separate lines with their thresholds, never a
         // merged total — a reader can see which gate a run breached, and that
         // security/privacy is gated by severity, not by the level.
         $axes = AxisSummary::for($result, $context);

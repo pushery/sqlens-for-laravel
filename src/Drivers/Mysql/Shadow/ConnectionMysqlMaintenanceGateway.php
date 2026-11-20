@@ -229,7 +229,7 @@ final readonly class ConnectionMysqlMaintenanceGateway implements MysqlMaintenan
     /** Whether a value is a bare identifier safe to interpolate into DDL. */
     private function validIdentifier(string $value): bool
     {
-        return $value !== '' && preg_match('/^\w+$/', $value) === 1;
+        return $value !== '' && preg_match('/^\w+$/D', $value) === 1;
     }
 
     /** Backtick-quote an identifier, doubling any embedded backtick. */
@@ -238,7 +238,11 @@ final readonly class ConnectionMysqlMaintenanceGateway implements MysqlMaintenan
         return '`'.str_replace('`', '``', $identifier).'`';
     }
 
-    /** A scalar catalog value as a string; anything non-scalar becomes empty. */
+    /**
+     * A scalar catalog value as a string; anything non-scalar becomes empty.
+     *
+     * @param  mixed  $value  a column of the row the server returned, as the driver hands it over
+     */
     private function stringValue(mixed $value): string
     {
         return is_scalar($value) ? (string) $value : '';

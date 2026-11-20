@@ -201,7 +201,7 @@ final class InvalidIndexRule extends AbstractCatalogRule implements DeclaresJudg
 
         $plan = [[RemediationStepKind::SeparateMigration, 'drop_invalid', 'DROP INDEX CONCURRENTLY '.$parts['schema'].'.'.$parts['name']]];
 
-        if (preg_match('/_cc(?:new|old)\d*"?$/', $parts['name']) === 1) {
+        if (preg_match('/_cc(?:new|old)\d*"?$/D', $parts['name']) === 1) {
             $plan[] = [RemediationStepKind::ManualGate, 'reindex_again', null];
         } else {
             if ($parts['unique'] !== '') {

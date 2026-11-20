@@ -143,7 +143,7 @@ final class RiskyOpsSingleTransactionRule extends AbstractPgsqlSafetyRule implem
             .'until the whole migration commits — so the total lock time is the sum of the operations, '
             .'and traffic to any of those tables queues up behind the slowest. Split this into one '
             .'migration per table, so each takes its lock, commits, and releases it before the next '
-            .'begins. Several ALTER clauses on the SAME table in one statement are fine — that is one '
+            .'begins. Several ALTER clauses on the same table in one statement are fine — that is one '
             .'lock, not a bundle.';
     }
 }

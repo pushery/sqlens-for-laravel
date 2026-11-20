@@ -200,7 +200,7 @@ final readonly class ReplicationLagCheck implements PreflightCheck
             ruleId: self::ID,
             messagePrefix: DeployNotice::MESSAGE_PREFIX,
             message: 'no_replication_configured: this instance reports no replicas streaming from '
-                .'it, so there is no lag for the deploy to add to. That is a statement about THIS '
+                .'it, so there is no lag for the deploy to add to. That is a statement about this '
                 .'instance, not a clean bill of health for a cluster — a replica that is not '
                 .'connected at all does not appear here either, and the connection state is what '
                 .'the finding above would judge if there were one.',

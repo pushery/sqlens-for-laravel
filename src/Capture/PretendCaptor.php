@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Pushery\SQLens\Capture;
 
+use Closure;
 use Illuminate\Container\Container;
 use Illuminate\Database\Connection;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Migrations\Migration;
 use LogicException;
+use PDO;
 use Pushery\SQLens\Contracts\Captor;
 use Pushery\SQLens\Findings\UndeterminedReason;
 use Pushery\SQLens\Subjects\CaptureMode;
@@ -71,8 +73,11 @@ final readonly class PretendCaptor implements Captor
      * The manager is the one the `Schema` and `DB` facades resolve through, and the fence keeps the
      * method on the capture connection. See {@see self::captureOne()} for both. The tap is shared
      * for the same reason the fence is: it hooks each connection once.
+     *
+     * The server version is the one the run reasons about, a pinned or a detected one, and null where
+     * the run knows none. The capture names it to the grammar where the connection never connected.
      */
-    public function __construct(private Connection $connection, ?MigrationLoader $loader = null, ?DatabaseManager $database = null, ?CaptureConnectionFence $fence = null, ?PretendStatementTap $tap = null)
+    public function __construct(private Connection $connection, ?MigrationLoader $loader = null, ?DatabaseManager $database = null, ?CaptureConnectionFence $fence = null, ?PretendStatementTap $tap = null, private ?string $serverVersion = null)
     {
         $this->loader = $loader ?? new MigrationLoader;
         $this->database = $database ?? Container::getInstance()->make(DatabaseManager::class);
@@ -128,8 +133,22 @@ final readonly class PretendCaptor implements Captor
             // handle's `quote()`, and resolving that handle connects: a migration writing one string
             // value would dial the database. The replacement quotes as the driver's own handle
             // does, so the log is the same whether or not a server answers.
+            //
+            // The write handle is swapped as well where the run knows the server's version and the
+            // connection has never connected. Laravel's MySQL grammar asks the write handle for the
+            // version to declare a date, year or geometry column and to rename a column, and
+            // resolving that handle dials the database, which a run without a connection cannot
+            // answer. The replacement names the version the run reasons about, so the statements
+            // are the ones that server would be sent. A live handle stays, and so does every handle
+            // where no version is known: there the grammar asks the server, as it always has. Only
+            // a handle that never connected is swapped, because setting a handle resets the
+            // connection's transaction count, and a connection that never connected has none open.
             $readHandle = $this->connection->getRawReadPdo();
-            $this->connection->setReadPdo(new OfflineQuotingPdo($this->connection->getDriverName()));
+            $writeHandle = $this->connection->getRawPdo();
+            $offline = new OfflineQuotingPdo($this->connection->getDriverName(), $this->serverVersion);
+            $swapsWriteHandle = $this->serverVersion !== null && ! $writeHandle instanceof PDO;
+            $this->connection->setReadPdo($offline);
+            $this->setWriteHandle($swapsWriteHandle, $offline);
 
             $elsewhere = null;
 
@@ -154,6 +173,7 @@ final readonly class PretendCaptor implements Captor
                 });
             } finally {
                 $this->connection->setReadPdo($readHandle);
+                $this->setWriteHandle($swapsWriteHandle, $writeHandle);
             }
         } catch (ForeignConnectionRefused $refused) {
             // Not a fault in the migration: it sends a query to a connection this capture does not
@@ -250,6 +270,21 @@ final readonly class PretendCaptor implements Captor
             $this->mode(),
             $annotationClass,
         );
+    }
+
+    /**
+     * Sets the write handle of the capture connection where the capture swaps it, and leaves the
+     * connection alone where it does not: setting a handle resets the transaction count.
+     *
+     * A method of its own because the frame of {@see self::captureOne()} is a `try`, and line coverage
+     * reports a line inside a `try` as covered even where its branch never ran. Here the branch is
+     * measured.
+     */
+    private function setWriteHandle(bool $swaps, PDO|Closure|null $handle): void
+    {
+        if ($swaps) {
+            $this->connection->setPdo($handle);
+        }
     }
 
     /**

@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://github.com/pushery/sqlens-for-laravel">
-    <img src="art/header.png" alt="SQLens for Laravel" width="100%">
+    <img src="https://raw.githubusercontent.com/pushery/sqlens-for-laravel/main/art/header.png" alt="SQLens for Laravel" width="100%">
   </a>
 </p>
 
@@ -11,12 +11,12 @@
 [![Laravel Versions](https://badge.laravel.cloud/badge/pushery/sqlens-for-laravel?style=flat)](https://packagist.org/packages/pushery/sqlens-for-laravel)
 [![License](https://img.shields.io/packagist/l/pushery/sqlens-for-laravel.svg)](LICENSE)
 
-[![Tests](https://img.shields.io/badge/tests-Pest%205-8BC34A.svg)](https://pestphp.com)
-![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)
-![Type Coverage](https://img.shields.io/badge/types-100%25-brightgreen.svg)
-[![PHPStan](https://img.shields.io/badge/PHPStan-max-blue.svg)](https://phpstan.org)
-[![Code Style](https://img.shields.io/badge/code%20style-pint-orange.svg)](https://laravel.com/docs/pint)
-![Databases](https://img.shields.io/badge/tested%20on-PostgreSQL%20%2B%20MySQL-336791.svg)
+[![Tests: Pest 5](https://img.shields.io/badge/tests-Pest%205-8BC34A.svg)](https://pestphp.com)
+![Coverage: 100%](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)
+![Type coverage: 100%](https://img.shields.io/badge/types-100%25-brightgreen.svg)
+[![PHPStan: level 10](https://img.shields.io/badge/PHPStan-10-blue.svg)](https://phpstan.org)
+[![Code style: Pint](https://img.shields.io/badge/code%20style-pint-orange.svg)](https://laravel.com/docs/pint)
+![Tested on: PostgreSQL + MySQL](https://img.shields.io/badge/tested%20on-PostgreSQL%20%2B%20MySQL-336791.svg)
 
 SQLens — database safety toolkit for Laravel. It lints pending migrations for lock and downtime risk and audits the live schema, on PostgreSQL and MySQL.
 
@@ -263,7 +263,7 @@ breaking and waits. A rule id is never removed at all — a superseded rule is d
 on answering the suppressions that name it, so a committed baseline stays readable across majors.
 From 1.0, new rules arrive as `preview` and opt-in rather than in a minor's defaults. Before 1.0
 a new rule ships `stable` in a minor release, which a `^0.N` constraint does not install on its own;
-[GOVERNANCE.md](GOVERNANCE.md) is the full contract.
+[GOVERNANCE.md](https://github.com/pushery/sqlens-for-laravel/blob/main/GOVERNANCE.md) is the full contract.
 
 ## The security suite
 
@@ -291,7 +291,7 @@ profile presets it. Nothing about the security suite bypasses it.
 ### The privacy pack is opt-in, and off by default
 
 Personal-data findings are a different question from security ones — they depend on what a column
-MEANS, which is a judgment about the project rather than about the database. So they are their own
+means, which is a judgment about the project rather than about the database. So they are their own
 category and their own switch:
 
 ```php
@@ -366,7 +366,7 @@ actually deploy against: `--connection=pgsql`. SQLens has no rules for SQLite, s
 so and writes nothing rather than producing an empty catalog.
 
 `sqlens:agent-rules` writes only files in your repository — no database is opened, so it runs in a
-fresh clone and offline. It writes what your project ACTUALLY enforces at its configured level,
+fresh clone and offline. It writes what your project actually enforces at its configured level,
 driver and version pin, not the full catalog: preventive guidance that named checks your pipeline
 does not run would be wrong in the direction nobody notices.
 
@@ -453,13 +453,13 @@ This package is built and maintained by [Pushery](https://www.pushery.com) — a
 Berlin-based studio building Laravel applications, SaaS products, and open-source
 tools.
 
-Building a Laravel UI? [WireKit](https://wirekit.app), Pushery's open-source
-Livewire component kit, gives you a polished component library out of the box.
+Building a Laravel UI? [WireKit](https://wirekit.app) is Pushery's open-source
+Livewire component kit.
 Browse the rest of our work at [pushery.com](https://www.pushery.com).
 
 ## Governance
 
-[GOVERNANCE.md](GOVERNANCE.md) is the contract behind the rules: what counts as
+[GOVERNANCE.md](https://github.com/pushery/sqlens-for-laravel/blob/main/GOVERNANCE.md) is the contract behind the rules: what counts as
 public API from 1.0, why from 1.0 a new rule arrives as `preview` rather than in a
 minor's defaults, and the list of things SQLens never does.
 

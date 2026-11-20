@@ -149,7 +149,7 @@ final readonly class MysqlSessionDefense implements SessionDefense
 
                 foreach ($grant->privileges as $privilege) {
                     // A column list says where a privilege applies, not what it allows.
-                    $name = strtoupper(trim((string) preg_replace('/\s*\(.*$/s', '', $privilege)));
+                    $name = strtoupper(trim((string) preg_replace('/\s*\(.*$/sD', '', $privilege)));
 
                     if (! in_array($name, self::READING_PRIVILEGES, true)) {
                         return false;

@@ -67,6 +67,8 @@ final readonly class UndeterminedWaiver
      * Lenient here is not permissive: every unreadable shape narrows the waiver rather than
      * widening it, so a typo in a reason name costs a blocked deploy and never a waved-through one.
      * The validator names the typo; this method must not be the place that decides it was fine.
+     *
+     * @param  mixed  $configured  a value of the package's config, which a host may have set to any type
      */
     public static function fromConfig(mixed $configured): self
     {

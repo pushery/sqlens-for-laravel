@@ -59,7 +59,7 @@ final class AuditCommand extends Command
     /** @var string */
     protected $signature = 'sqlens:audit
         {--connection= : The database connection to audit; defaults to the resolved sqlens/default connection}
-        {--host= : The ONE read host to address when the connection configures a choice; refuses a host it does not offer}
+        {--host= : The one read host to address when the connection configures a choice; refuses a host it does not offer}
         {--profile= : The environment profile — local, ci, or predeploy. Overrides SQLENS_PROFILE and the configured profile}
         {--level= : The cumulative strictness level 0–9 (defaults to the configured level); security rules run at any level}
         {--category=* : Scope the run to these categories; repeatable and comma-separable (defaults to the configured set; empty = all)}

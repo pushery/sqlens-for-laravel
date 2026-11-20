@@ -87,7 +87,7 @@ final readonly class CaseFoldedKey
      */
     public static function parse(string $keyPosition): ?self
     {
-        $pattern = '/^(lower|upper)\(\s*('.self::IDENTIFIER.')(?:::text)?\s*\)$/';
+        $pattern = '/^(lower|upper)\(\s*('.self::IDENTIFIER.')(?:::text)?\s*\)$/D';
 
         if (preg_match($pattern, trim($keyPosition), $matched) !== 1) {
             return null;

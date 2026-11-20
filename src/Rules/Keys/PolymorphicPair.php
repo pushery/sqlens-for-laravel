@@ -83,7 +83,10 @@ final readonly class PolymorphicPair
         $types = ForeignKeyIndexCoverage::parse($table->getString('column_types') ?? '');
         $pairs = [];
 
-        foreach ($types as $column => $declared) {
+        foreach ($types as $key => $declared) {
+            // A column named only by digits, which a quoted identifier may be, comes back as an int key.
+            $column = (string) $key;
+
             if (! str_ends_with($column, '_type') || ! self::holdsCharacters($declared[0] ?? '')) {
                 continue;
             }

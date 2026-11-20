@@ -226,10 +226,9 @@ final readonly class RunContext
          * earned or waved through. This field narrows the line a PERSON reads, where "waved
          * through, and here is exactly what for" is the difference worth having.
          *
-         * Because the envelope does not carry it, the serialization-comparing arm in
-         * `UndeterminedWaiverIsOnTheRecordTest` cannot see it. The arm beside that one walks the
-         * four derivations that only pass it along, which is where a hand-written copy loses a
-         * field.
+         * Because the envelope does not carry it, the test that holds the waiver on the record by
+         * comparing serializations cannot see it. The arm beside that one walks the four
+         * derivations that only pass it along, which is where a hand-written copy loses a field.
          *
          * @var list<string>|null
          */
@@ -524,7 +523,8 @@ final readonly class RunContext
      *
      * There used to be exactly one `with…` method and therefore exactly one copy. A second arrived
      * with the drift policy, and two copies of twenty-two arguments is two places for a new field to
-     * be forgotten — while `UndeterminedWaiverIsOnTheRecordTest` only ever compares one of them.
+     * be forgotten — while the test that holds the waiver on the record only ever compares one of
+     * them.
      *
      * @param  list<string>|null  $undeterminedWaiverReasons
      * @param  list<string>|null  $comparedObjectTypes

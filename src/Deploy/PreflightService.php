@@ -239,7 +239,7 @@ final readonly class PreflightService implements PreflightRuns
             // A check that could not answer stands in the result as an undetermined finding of its
             // own, beside what the checks found, or the document has no trace of what held it.
             Result::of([...$escalation->weighed, ...$report->findings(), ...$report->undeterminedGaps($context->driver, $context->connection, $context->profile), ...$escalation->unweighed], $lint->result->suppressed, $lint->result->staleBaselineEntries),
-            // `pretend`, because that is what this run DID: it lints the pending migrations with
+            // `pretend`, because that is what this run did: it lints the pending migrations with
             // Laravel's --pretend and then reads the catalog. The header used to say whatever
             // `sqlens.mode` held, for a run that never consulted it.
             // The seal as the session's last probe proved it, which the timeout read above has just

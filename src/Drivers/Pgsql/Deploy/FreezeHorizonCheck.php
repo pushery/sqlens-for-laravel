@@ -224,7 +224,7 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
                 self::ID,
                 UndeterminedReason::VacuumActivityNotVisible,
                 'none of the tables this deploy locks is near its freeze horizon, and that half is '
-                .'answered. Whether an anti-wraparound autovacuum is ALREADY running on one of them '
+                .'answered. Whether an anti-wraparound autovacuum is already running on one of them '
                 .'is not: this role does not hold pg_read_all_stats, so PostgreSQL masks other '
                 .'sessions in pg_stat_activity and the reading comes back empty rather than '
                 .'refused. Grant pg_read_all_stats to the role this check runs as, or read the '
@@ -270,7 +270,13 @@ final readonly class FreezeHorizonCheck implements PreflightCheck
             [...$targets, ...$targets],
         ));
 
-        return array_values(array_map(static fn (mixed $row): object => (object) $row, $rows));
+        $objects = [];
+
+        foreach ($rows as $row) {
+            $objects[] = (object) $row;
+        }
+
+        return $objects;
     }
 
     /**

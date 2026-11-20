@@ -507,7 +507,7 @@ final readonly class ConfigSchema
             'audit.documentation' => 'an array with the keys: require_table_comments, require_column_comments, exempt',
             'audit.documentation.require_table_comments' => 'a boolean — whether a table without a comment is a finding. FALSE by default: level 9 is already an opt-in, and a project that raised its level to see the pedantic band should not be told in the same breath that every table it owns is undocumented',
             'audit.documentation.require_column_comments' => 'a boolean — whether a column without a comment is a finding. Separate from the table switch because it is a different amount of work, and folding the two together would make the cheaper half unreachable',
-            'audit.documentation.exempt' => 'a list of bare table names this rule does not judge, or null to use the shipped framework list. It REPLACES that list rather than adding to it, so a project naming its own set is not silently still carrying ours. Names are matched WHOLE: a project\'s own job_applications is not the framework\'s jobs',
+            'audit.documentation.exempt' => 'a list of bare table names this rule does not judge, or null to use the shipped framework list. It replaces that list rather than adding to it, so a project naming its own set is not silently still carrying ours. Names are matched whole: a project\'s own job_applications is not the framework\'s jobs',
             'audit.documentation.exempt-item' => 'a bare table name (a non-empty string)',
             'audit.unused_index.min_observation_days' => 'a whole number of days (0 or more) the statistics must have been running before an unused index is reported',
             'audit.key_ceiling.min_percent_used' => 'a whole number from 1 to 100: the share of its ceiling an integer primary key may have used before the level-5 near-ceiling rule reports it',
@@ -560,7 +560,7 @@ final readonly class ConfigSchema
             'preflight.long_running_ms' => "a positive integer number of milliseconds a session must have been running before the preflight treats it as something a deploy could collide with — zero is refused rather than read as 'report everything', because a preflight listing every session on a busy server is one nobody reads twice",
             'preflight.replication_lag_ms' => 'a positive integer number of milliseconds of replica lag at which the preflight reports. Measured on the TIME axis (`replay_lag`), which is deliberately not the byte one: a quiet primary keeps the time small however much WAL is outstanding, and both are reported',
             'preflight.thresholds' => 'an array keyed by operation — rewrite, index_build, constraint_validation, backfill — replacing that operation\'s escalation steps entirely. An operation the shipped artifact does not define is REFUSED rather than ignored, because a typo would otherwise mean the escalation somebody configured silently never happens. These numbers only RAISE a severity and can neither create a finding nor remove one: a row estimate depends on when ANALYZE last ran, and a number that could silence a finding would make the same migration pass on Monday and fail on Friday',
-            'preflight.budget_ms' => "a positive integer number of milliseconds the WHOLE preflight run may take before the checks it did not reach are reported undetermined — zero would mean 'no bound', and a gate that can delay a deploy indefinitely is the one that gets switched off",
+            'preflight.budget_ms' => "a positive integer number of milliseconds the whole preflight run may take before the checks it did not reach are reported undetermined — zero would mean 'no bound', and a gate that can delay a deploy indefinitely is the one that gets switched off",
             'preflight.connection' => 'a connection name from config/database.php for the deploy readers to use, or null. Null does NOT fall through to the default connection: that is the one running your migrations, and a preflight reading through it holds ALTER and DROP it never needs',
             'format' => 'an array with the keys: paths, exclude, extensions, backend, dialect, binaries, timeout, style',
             'format.paths' => "a list of repo-relative roots to scan for SQL files; empty means the application's registered migration paths",
@@ -608,7 +608,7 @@ final readonly class ConfigSchema
             'guard.profiles.*.connections' => 'a list of connection names this profile applies to, or an empty list for every connection. A name database.connections does not define is an ERROR: the guardrail would otherwise be silently off for the connection somebody meant',
             'deploy' => 'an array with the keys: drift, debt, predeploy, postdeploy',
             'deploy.postdeploy' => 'an array with the keys: budget_ms, transition_patterns',
-            'deploy.postdeploy.budget_ms' => "a positive integer number of milliseconds the WHOLE post-deploy run may take before it reports DEPLOY.RUN.TIME_BUDGET_EXCEEDED — its own number rather than the pre-deploy gate's, because two commands making two promises must not move together, and milliseconds like every other budget here so nobody reads a five-second allowance as five milliseconds",
+            'deploy.postdeploy.budget_ms' => "a positive integer number of milliseconds the whole post-deploy run may take before it reports DEPLOY.RUN.TIME_BUDGET_EXCEEDED — its own number rather than the pre-deploy gate's, because two commands making two promises must not move together, and milliseconds like every other budget here so nobody reads a five-second allowance as five milliseconds",
             'deploy.postdeploy.transition_patterns' => 'a list of PCRE patterns naming objects that look like unfinished-migration leftovers, or null for the shipped list. It REPLACES the shipped one rather than adding to it, and an empty list falls back to the shipped one, because an empty list would silence the check and let a project read "no findings" as "nothing left behind". A pattern PCRE cannot compile is refused here',
             'deploy.postdeploy.transition_patterns-item' => 'a PCRE pattern PHP can compile, delimiters included, such as /_old$/',
             'deploy.predeploy' => 'an array with the keys: allow_undetermined, available_disk_bytes',
@@ -616,7 +616,7 @@ final readonly class ConfigSchema
             'deploy.drift.exclude_file' => 'a non-empty, repository-relative path — where the differences this project has accepted are recorded. Never null and never absolute: the file is a decision log, and one outside the repository is one nobody reviews. Every entry needs a reason, and an entry that matches nothing ends the run',
             'deploy.drift.mode' => 'one of: report, gate — whether sqlens:drift prints what it found and exits clean, or ends the run with the gate exit code. Report is the shipped state and the one that gets the feature adopted: the first run on a grown production database finds a decade of hand-made objects, and a gate that turns red there is switched off rather than fixed. Raise it after the intentional differences are in the exclude file',
             'deploy.predeploy.available_disk_bytes' => 'a positive integer number of free BYTES on the volume this database writes to, or null to ask the instance. Free filesystem space is not readable from inside a database and never will be on a managed one, so without this the headroom check reports its estimate and stays undetermined. It is a CLAIM rather than a reading — nothing can verify it, and a stale value tells the gate that a full disk is empty, so feed it from the monitoring you would otherwise have checked by hand',
-            'deploy.predeploy.allow_undetermined' => "true, false, or a list of undetermined reasons — whether a predeploy blocked ONLY by checks that could not answer still exits clean. False is the shipped state and the safe one: a gate that waves through what it could not read is the silent green this package exists to refuse. True is the same decision as passing --allow-undetermined on every run. A LIST is the narrow form: the gate proceeds only when EVERY answer it could not get names a reason on the list, so a project can deploy past a formatter it does not install without also waiving a privilege table it could not read. All three are recorded the same way — the report's run header carries undetermined_waiver so a waved-through green can never be mistaken for an earned one",
+            'deploy.predeploy.allow_undetermined' => "true, false, or a list of undetermined reasons — whether a predeploy blocked ONLY by checks that could not answer still exits clean. False is the shipped state and the safe one: a gate that waves through what it could not read is the silent green this package exists to refuse. True is the same decision as passing --allow-undetermined on every run. A LIST is the narrow form: the gate proceeds only when every answer it could not get names a reason on the list, so a project can deploy past a formatter it does not install without also waiving a privilege table it could not read. All three are recorded the same way — the report's run header carries undetermined_waiver so a waved-through green can never be mistaken for an earned one",
             'deploy.predeploy.allow_undetermined-item' => 'one of: '.$this->enumValues(UndeterminedReason::class),
             'deploy.debt' => 'an array with the keys: enabled, path, thresholds, fail_at',
             'deploy.debt.path' => 'a non-empty, repository-relative path — where the migration debt account file lives. Never null: the ledger is a repo file and always has a location',
@@ -662,6 +662,7 @@ final readonly class ConfigSchema
     /**
      * Validate a leaf value against its schema path.
      *
+     * @param  mixed  $value  a value of the package's config, which a host may have set to any type
      * @return list<ConfigViolation>
      */
     public function leafViolations(string $relativePath, mixed $value): array
@@ -910,7 +911,7 @@ final readonly class ConfigSchema
                     ? ConfigViolation::outOfRange($path, $expected, $value)
                     : ConfigViolation::wrongType($path, $expected, $value)],
             'capture.shadow.database_prefix' => is_string($value)
-                ? ($value !== '' && strlen($value) <= ShadowDatabaseName::MAX_PREFIX_LENGTH && preg_match('/^[a-z0-9_]+$/', $value) === 1 ? [] : [ConfigViolation::outOfRange($path, $expected, $value)])
+                ? ($value !== '' && strlen($value) <= ShadowDatabaseName::MAX_PREFIX_LENGTH && preg_match('/^[a-z0-9_]+\z/', $value) === 1 ? [] : [ConfigViolation::outOfRange($path, $expected, $value)])
                 : [ConfigViolation::wrongType($path, $expected, $value)],
             'capture.shadow.allowed_environments' => $this->listOfStrings(
                 $path,
@@ -1359,6 +1360,7 @@ final readonly class ConfigSchema
      * path of the field (e.g. `sqlens.ignore.0.rule`) so a violation names the
      * exact entry, not just "somewhere in ignore".
      *
+     * @param  mixed  $value  a value of the package's config, which a host may have set to any type
      * @return list<ConfigViolation>
      */
     public function ignoreFieldViolations(string $path, string $field, mixed $value): array
@@ -1381,6 +1383,7 @@ final readonly class ConfigSchema
      * a string the given check accepts. Every bad item is reported, not just the
      * first — a fix-rerun loop is the thing this validator exists to avoid.
      *
+     * @param  mixed  $value  a value of the package's config, which a host may have set to any type
      * @param  callable(string): bool  $itemIsValid
      * @return list<ConfigViolation>
      */
@@ -1417,6 +1420,7 @@ final readonly class ConfigSchema
      * that is not a readable pair, a misspelled key or an empty object list among them, is out of
      * range. Every bad entry is reported under its own index.
      *
+     * @param  mixed  $value  a value of the package's config, which a host may have set to any type
      * @return list<ConfigViolation>
      */
     private function ignorePairs(string $path, mixed $value, string $fieldSpec): array
@@ -1469,6 +1473,7 @@ final readonly class ConfigSchema
      * outside the enum's values is out of range.
      *
      * @param  class-string<BackedEnum>  $enum
+     * @param  mixed  $value  a value of the package's config, which a host may have set to any type
      * @return list<ConfigViolation>
      */
     private function enumLeaf(string $path, string $expected, string $enum, mixed $value): array

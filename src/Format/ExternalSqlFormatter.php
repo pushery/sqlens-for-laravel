@@ -54,8 +54,8 @@ abstract readonly class ExternalSqlFormatter implements SqlFormatter
      *
      * Located first: probing a path that does not exist would spend a process to learn what
      * `locate()` already knows. Both calls go through the memoizing runner, so asking N times across
-     * a repository costs one lookup and one probe -- the cap ExternalFormatterProcessBudgetTest
-     * holds for `format()` covers this for the same reason, because it is the same runner.
+     * a repository costs one lookup and one probe -- the cap a test holds for `format()` covers this
+     * for the same reason, because it is the same runner.
      */
     public function version(): ?string
     {

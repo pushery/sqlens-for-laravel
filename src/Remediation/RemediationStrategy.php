@@ -98,9 +98,9 @@ enum RemediationStrategy: string
      *
      * Added after the enumeration was written, and it costs a SCHEMA VERSION rather than nothing:
      * `strategy` is a closed enum in the published document, so a consumer validating against the
-     * previous version rejects a payload carrying this value. That is the coupling the digest freeze
-     * in PublishedSchemaTest now enforces mechanically -- this value could not be added without a
-     * new document and a new number, and it did not have to be remembered.
+     * previous version rejects a payload carrying this value. That is the coupling the suite's digest
+     * freeze over every published document now enforces mechanically -- this value could not be
+     * added without a new document and a new number, and it did not have to be remembered.
      *
      * It duplicates none of the others. `drift_correction` is the nearest, and its own description
      * names the drift comparison as what found the difference; this one is found by reading a

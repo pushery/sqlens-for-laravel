@@ -216,7 +216,7 @@ final readonly class Identifier
 
     private static function isBareIdentifier(string $name): bool
     {
-        return preg_match('/^[\p{L}_][\p{L}\p{N}_$]*$/u', $name) === 1;
+        return preg_match('/^[\p{L}_][\p{L}\p{N}_$]*$/uD', $name) === 1;
     }
 
     /**

@@ -194,7 +194,17 @@ final readonly class ViolationLogger
      */
     private function shapes(array $bindings): array
     {
-        return array_map(static fn (mixed $value): string => match (true) {
+        return array_map($this->shapeOf(...), $bindings);
+    }
+
+    /**
+     * The shape of one binding: its type and size, never its value.
+     *
+     * @param  mixed  $value  a binding as the query carried it, of any type
+     */
+    private function shapeOf(mixed $value): string
+    {
+        return match (true) {
             is_string($value) => sprintf('string(%d)', mb_strlen($value)),
             // Booleans and null are printed outright: neither can carry a secret, and knowing which
             // of `false`, `null` and `0` was bound is the whole question in a WHERE clause that
@@ -203,7 +213,7 @@ final readonly class ViolationLogger
             $value === null => 'null',
             is_int($value), is_float($value) => get_debug_type($value),
             default => get_debug_type($value),
-        }, $bindings);
+        };
     }
 
     /**
@@ -234,7 +244,7 @@ final readonly class ViolationLogger
     /**
      * The SQL, cut to the profile's length, with the cut MARKED.
      *
-     * Named `clipped` rather than `truncate` on purpose: `NoDatabaseWriteArchTest` scans the shipped
+     * Named `clipped` rather than `truncate` on purpose: an architecture test scans the shipped
      * tree for writing verbs, and `->truncate()` is one — `TRUNCATE TABLE` is the most destructive
      * statement there is. A guard that had to learn an exception for this method would be a guard
      * with a hole in it, and the method does not need that name.

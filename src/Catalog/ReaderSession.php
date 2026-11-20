@@ -123,7 +123,9 @@ final class ReaderSession
      * @template T
      *
      * @param  callable(Connection): T  $read
-     * @return T
+     * @return mixed what $read returns, whatever its type
+     *
+     * @phpstan-return T
      *
      * @throws UnsealedReaderSession when the write probe was not refused
      */

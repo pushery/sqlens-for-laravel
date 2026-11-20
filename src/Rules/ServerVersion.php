@@ -29,7 +29,7 @@ final readonly class ServerVersion
     ) {}
 
     /**
-     * Parse a server's own version BANNER — `18.0 (Debian 18.0-1.pgdg13+3)` and its
+     * Parse a server's own version banner — `18.0 (Debian 18.0-1.pgdg13+3)` and its
      * many vendor variations. Returns UndeterminedReason::UnknownServerVersion when no
      * numeric version can be read at all — never a silent default.
      *
@@ -61,7 +61,7 @@ final readonly class ServerVersion
      */
     public static function parsePin(string $raw, string $driver): self|UndeterminedReason
     {
-        if (preg_match('/^\d+(?:\.\d+){0,2}$/', trim($raw)) !== 1) {
+        if (preg_match('/^\d+(?:\.\d+){0,2}$/D', trim($raw)) !== 1) {
             return UndeterminedReason::UnreadableServerVersionPin;
         }
 

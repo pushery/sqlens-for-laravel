@@ -38,9 +38,9 @@ use Pushery\SQLens\Agent\Remediation\RemediationValidator;
  * never granted. And `subject` went into `required`, so the refusal runs the other way too.
  *
  * So the payload is version 2, version 1 is frozen at the bytes three tags published, and the
- * quoted sentence is gone from both documents. `PublishedSchemaTest` now holds every published
- * version's field set by digest, which is the check that would have caught this without anyone
- * having to reason about it.
+ * quoted sentence is gone from both documents. A test now holds every published version's field
+ * set by digest, which is the check that would have caught this without anyone having to reason
+ * about it.
  *
  * ## The discriminator alone is not enough, and that is the other half
  *

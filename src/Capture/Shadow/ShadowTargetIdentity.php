@@ -140,7 +140,7 @@ final readonly class ShadowTargetIdentity
         // that protects the most dangerous operation the package has. Say it in words instead.
         return 'sqlens.capture.shadow.direct_connection addresses a different server ('
             .self::instanceOf($direct).') than the connection under examination ('
-            .self::instanceOf($source).'). It exists to reach the SAME server around a transaction '
+            .self::instanceOf($source).'). It exists to reach the same server around a transaction '
             .'pooler, so a different one would provision and tear down throwaway databases on an '
             .'instance this run never named. Point it at the same host and port, bypassing the '
             .'pooler.';

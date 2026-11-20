@@ -30,7 +30,8 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * Nothing. By the time an object reaches this class its defaults and collations have already been
  * through {@see CatalogCanonicalizer} — the reader runs them as it reads. A second normalization at
- * this layer would be the parallel path `OneCanonicalizationPathTest` exists to forbid.
+ * this layer would be the parallel path a test exists to forbid: no class but the canonicalizer
+ * declares its own answer to a question the canonicalizer answers.
  */
 final readonly class CatalogObjectFingerprint
 {
@@ -125,7 +126,7 @@ final readonly class CatalogObjectFingerprint
         return hash('sha256', implode(self::RECORD, $fields));
     }
 
-    /** One attribute value, with its THREE-valued nature intact. */
+    /** One attribute value, with its three-valued nature intact. */
     private static function render(bool|int|float|string|null $value): string
     {
         return match (true) {

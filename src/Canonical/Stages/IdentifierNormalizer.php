@@ -42,6 +42,9 @@ final readonly class IdentifierNormalizer implements CanonicalizationStage
 {
     public function __construct(private DriverCanonicalization $driver) {}
 
+    /**
+     * @return mixed the statement to go on with, a canonical statement to finish early, or a failure; the Canonicalizer checks the answer at runtime
+     */
     public function __invoke(RawStatement $statement, SubjectContext $context): mixed
     {
         $result = $this->normalize($statement->sql);

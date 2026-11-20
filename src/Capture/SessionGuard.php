@@ -138,7 +138,9 @@ final readonly class SessionGuard
      * @template TResult
      *
      * @param  Closure(): TResult  $work
-     * @return TResult
+     * @return mixed what $work returns, whatever its type
+     *
+     * @phpstan-return TResult
      */
     public function within(Connection $connection, Closure $work): mixed
     {
@@ -165,7 +167,9 @@ final readonly class SessionGuard
      * @template TResult
      *
      * @param  Closure(): TResult  $work
-     * @return TResult
+     * @return mixed what $work returns, whatever its type
+     *
+     * @phpstan-return TResult
      */
     private function withinTransaction(Connection $connection, Closure $work): mixed
     {

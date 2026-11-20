@@ -41,7 +41,9 @@ final class ExpectedSchemaChanges
      *
      * @param  string  $reason  why the work changes the schema, written for whoever reads the code that declares it
      * @param  Closure(): TResult  $work
-     * @return TResult
+     * @return mixed what $work returns, whatever its type
+     *
+     * @phpstan-return TResult
      *
      * @throws InvalidArgumentException when the reason is empty
      */

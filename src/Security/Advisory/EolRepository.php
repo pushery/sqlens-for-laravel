@@ -315,7 +315,9 @@ final class EolRepository
      */
     private function isIsoDate(string $value): bool
     {
-        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) !== 1) {
+        // `\z`, not `$`, which also matches before a final line feed: a date with one would pass,
+        // and every comparison in EolCycle would then read it as a later day than the same date.
+        if (preg_match('/^\d{4}-\d{2}-\d{2}\z/', $value) !== 1) {
             return false;
         }
 

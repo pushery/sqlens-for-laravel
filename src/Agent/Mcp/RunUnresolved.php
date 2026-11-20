@@ -28,7 +28,7 @@ namespace Pushery\SQLens\Agent\Mcp;
  * A run that never happened belongs to {@see RunRefusal}, whose reason is more exact than a count. A
  * run that happened and left questions open belongs here. Only a run with neither may answer `ok`.
  * Every tool that starts a lint run asks both, in that order, and nothing in PHP makes a new tool do
- * so. `RunRefusalTest` does: it reads every such tool and fails for one that leaves either out.
+ * so. The suite does: it reads every such tool and fails for one that leaves either out.
  */
 final readonly class RunUnresolved
 {

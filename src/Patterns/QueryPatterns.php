@@ -264,7 +264,7 @@ final readonly class QueryPatterns
         $last = $tokens[count($tokens) - 1] ?? null;
         $before = $tokens[count($tokens) - 2] ?? null;
 
-        if (! $spaced && $last !== null && (in_array($last[0], self::LITERAL_PREFIXES, true) || preg_match('/^_[a-z0-9_]+$/', $last[0]) === 1)) {
+        if (! $spaced && $last !== null && (in_array($last[0], self::LITERAL_PREFIXES, true) || preg_match('/^_[a-z0-9_]+$/D', $last[0]) === 1)) {
             $spaced = $last[1];
             $tokens = array_slice($tokens, 0, -1);
         } elseif (! $spaced && $last !== null && $before !== null && $last[0] === '&' && ! $last[1] && $before[0] === 'u') {

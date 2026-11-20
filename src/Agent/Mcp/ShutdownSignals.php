@@ -32,12 +32,15 @@ final readonly class ShutdownSignals
     /**
      * Listen, if this build can.
      *
-     * @param  resource  $diagnostics
+     * @param  mixed  $diagnostics  the stream diagnostics go to, a resource, which PHP has no type for
      * @param  bool|null  $available  whether this build can listen at all; null asks the runtime.
      *                                It is a parameter rather than a fact because the branch that
      *                                matters most — the one where the extension is MISSING — is
      *                                unreachable on a machine that has it, and a guarantee nobody
      *                                can exercise is a sentence in a docblock.
+     *
+     * @phpstan-param  resource  $diagnostics
+     *
      * @return bool whether signal handling is actually in place
      */
     public static function install(ShutdownRequest $request, mixed $diagnostics, ?bool $available = null): bool

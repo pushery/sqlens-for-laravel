@@ -113,7 +113,10 @@ final readonly class SuppressionResolver
         private CrossSourceDedupeSuppressionSource $crossSourceDedupe = new CrossSourceDedupeSuppressionSource,
     ) {}
 
-    /** @param  list<UndeterminedReason>  $allowUndetermined */
+    /**
+     * @param  mixed  $ignore  a value of the package's config, which a host may have set to any type
+     * @param  list<UndeterminedReason>  $allowUndetermined
+     */
     public static function for(
         BaselineFile $baseline,
         mixed $ignore,
@@ -142,6 +145,7 @@ final readonly class SuppressionResolver
      * One reader for both suites. The lint suite read the key on its own and the audit never did, so
      * a reason a project allowed was allowed in one half of `sqlens:security` and not in the other.
      *
+     * @param  mixed  $configured  a value of the package's config, which a host may have set to any type
      * @return list<UndeterminedReason>
      */
     public static function allowedUndetermined(mixed $configured): array
@@ -151,7 +155,7 @@ final readonly class SuppressionResolver
         }
 
         return array_values(array_filter(
-            array_map(static fn (mixed $value): ?UndeterminedReason => is_string($value) ? UndeterminedReason::tryFrom($value) : null, $configured),
+            array_map(UndeterminedReason::tryFrom(...), array_filter($configured, is_string(...))),
         ));
     }
 

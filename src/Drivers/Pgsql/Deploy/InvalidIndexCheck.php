@@ -84,7 +84,7 @@ final readonly class InvalidIndexCheck implements PreflightCheck
     public const string COLLISION_ID = 'DEPLOY.LEGACY.INVALID_INDEX_NAME_COLLISION';
 
     /** What a half-built partitioned index adds when a pending migration re-creates its name. */
-    private const string PARTITIONED_COLLISION = ' A migration in THIS deploy creates an index by that same name, and '
+    private const string PARTITIONED_COLLISION = ' A migration in this deploy creates an index by that same name, and '
         .'`CREATE INDEX` refuses a name that already exists, so the deploy will stop at that statement.';
 
     public function id(): string
@@ -147,7 +147,10 @@ final readonly class InvalidIndexCheck implements PreflightCheck
         // invalid indexes cost a hundred passes over the same statements.
         $pendingIndexNames = $this->pendingIndexNames($context);
 
-        foreach (array_map(static fn (mixed $row): object => (object) $row, $rows) as $row) {
+        foreach ($rows as $raw) {
+
+            $row = (object) $raw;
+
             $schema = $this->text($row, 'schema_name');
             $index = $this->text($row, 'index_name');
 
@@ -257,7 +260,7 @@ final readonly class InvalidIndexCheck implements PreflightCheck
             messagePrefix: DeployNotice::MESSAGE_PREFIX,
             message: sprintf(
                 'The index `%s` on `%s` is INVALID — left behind by a `CREATE INDEX CONCURRENTLY` '
-                .'that did not finish — and a migration in THIS deploy creates an index by that same '
+                .'that did not finish — and a migration in this deploy creates an index by that same '
                 .'name. `CREATE INDEX` refuses a name that already exists, invalid or not, so this '
                 .'deploy will stop at that statement with an error that reads like a bug in the '
                 .'migration. Drop the leftover first: `DROP INDEX CONCURRENTLY %s;` — outside a '

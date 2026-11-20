@@ -36,7 +36,11 @@ final class InvalidPreScanCatalog extends LogicException
         return new self(sprintf('The pre-scan catalog "%s" must decode to a JSON object.', $origin));
     }
 
-    /** The artifact declares a schema version this loader does not implement. */
+    /**
+     * The artifact declares a schema version this loader does not implement.
+     *
+     * @param  mixed  $declared  the schema version the catalog declared, of whatever type its JSON holds
+     */
     public static function unsupportedSchemaVersion(string $origin, mixed $declared, int $supported): self
     {
         return new self(sprintf(

@@ -149,6 +149,8 @@ final readonly class BreakingChangeDetector
      * classifiers had already disagreed about the same category change, one passing it and one
      * refusing it, so which verdict held depended on which command somebody typed.
      *
+     * @param  mixed  $from  the field's value in the released surface, of whatever type the field holds
+     * @param  mixed  $to  the field's value in the candidate, of whatever type the field holds
      * @param  array<string, mixed>  $after  the candidate's own entry, for fields that read a sibling
      */
     public static function ruleFieldChange(string $id, string $field, mixed $from, mixed $to, array $after): SurfaceChange
@@ -233,6 +235,8 @@ final readonly class BreakingChangeDetector
      * changes what every unconfigured project sees. Which is why this sits here rather than in the
      * catch-all below, where it lived until a measurement said otherwise.
      *
+     * @param  mixed  $from  the field's value in the released surface, of whatever type the field holds
+     * @param  mixed  $to  the field's value in the candidate, of whatever type the field holds
      * @param  array<string, mixed>  $after  the candidate's own entry, read for its deprecation
      */
     private static function stabilityChange(string $id, mixed $from, mixed $to, array $after): SurfaceChange
@@ -308,6 +312,8 @@ final readonly class BreakingChangeDetector
      * off for them, which is the same event as a silent retirement unless the rule is announced as
      * deprecated. For a rule nobody runs without opting in, both moves reach only those who asked.
      *
+     * @param  mixed  $from  the field's value in the released surface, of whatever type the field holds
+     * @param  mixed  $to  the field's value in the candidate, of whatever type the field holds
      * @param  array<string, mixed>  $after  the candidate's own entry, read for its tier and deprecation
      */
     private static function levelChange(string $id, mixed $from, mixed $to, array $after): SurfaceChange
@@ -350,7 +356,11 @@ final readonly class BreakingChangeDetector
         );
     }
 
-    /** Whether a recorded tier is the one a run admits without being asked. */
+    /**
+     * Whether a recorded tier is the one a run admits without being asked.
+     *
+     * @param  mixed  $stability  a stability as the surface entry holds it, of any type
+     */
     private static function isDefaultTier(mixed $stability): bool
     {
         if (! is_string($stability)) {
@@ -580,7 +590,11 @@ final readonly class BreakingChangeDetector
         return $byId;
     }
 
-    /** Where a severity sits, with `null` (no severity) at the bottom. */
+    /**
+     * Where a severity sits, with `null` (no severity) at the bottom.
+     *
+     * @param  mixed  $severity  a severity as the surface entry holds it, of any type
+     */
     private static function severityRank(mixed $severity): int
     {
         if (! is_string($severity)) {
@@ -593,7 +607,12 @@ final readonly class BreakingChangeDetector
         return $position === false ? 0 : $position + 1;
     }
 
-    /** Whether a version number went UP — compared as integers, never as text, and never when either side is missing. */
+    /**
+     * Whether a version number went UP — compared as integers, never as text, and never when either side is missing.
+     *
+     * @param  mixed  $from  the field's value in the released surface, of whatever type the field holds
+     * @param  mixed  $to  the field's value in the candidate, of whatever type the field holds
+     */
     private static function rose(mixed $from, mixed $to): bool
     {
         return is_int($from) && is_int($to) && $to > $from;

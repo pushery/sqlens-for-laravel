@@ -23,7 +23,7 @@ use Pushery\SQLens\Exceptions\InvalidAnalyseConfiguration;
  * exposure rather than a missing sentence, and severity is not level-gated in this package.
  * A configuration line that could silence them would let one line of neon disable half the security
  * surface — which is why this enum is read by the policy rule and by the justification collector,
- * and by nothing else. `PolicyGateSparesSecurityTest` holds that boundary against a real run.
+ * and by nothing else. A test holds that boundary against a real run.
  */
 enum AnalysePolicy: string
 {

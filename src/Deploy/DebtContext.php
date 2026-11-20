@@ -82,6 +82,6 @@ final readonly class DebtContext
             'first_seen' => $this->firstSeen,
             'age_days' => $this->ageDays,
             'debt_state' => $this->state->value,
-        ], static fn (mixed $value): bool => $value !== null);
+        ], static fn (int|string|null $value): bool => $value !== null);
     }
 }

@@ -39,6 +39,8 @@ final readonly class MigrationsTable
      * number, a list. That is the honest reading: the table exists under the default name whatever
      * a malformed setting would prefer, and inventing a name from a malformed value would send
      * every reader to a table nobody has.
+     *
+     * @param  mixed  $configured  a value of the package's config, which a host may have set to any type
      */
     public static function from(mixed $configured): string
     {

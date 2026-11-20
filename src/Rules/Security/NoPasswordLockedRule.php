@@ -53,8 +53,8 @@ final class NoPasswordLockedRule extends AbstractNoPasswordRule
     {
         return [
             'reads the account catalog, not the connections: an account that exists and nothing ever authenticates as is the same rows as one in daily use, and which is which is a deployment fact',
-            'the locked/unlocked split is the whole reason this id is separate from its sibling, and it rests on the server\'s own flag. An account locked by something OUTSIDE the server — a network rule, a proxy refusing it — reads as usable here',
-            'unlocking restores the account exactly as it is — with no password. The finding is about what the account WOULD be, which is the only useful thing to say about a state somebody can undo with one statement',
+            'the locked/unlocked split is the whole reason this id is separate from its sibling, and it rests on the server\'s own flag. An account locked by something outside the server — a network rule, a proxy refusing it — reads as usable here',
+            'unlocking restores the account exactly as it is — with no password. The finding is about what the account would be, which is the only useful thing to say about a state somebody can undo with one statement',
         ];
     }
 }

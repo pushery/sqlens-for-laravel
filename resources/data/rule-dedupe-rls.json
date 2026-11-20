@@ -28,7 +28,7 @@
                     "url": "https://github.com/supabase-community/postgres-language-server"
                 }
             ],
-            "note": "Both sides answer 'row-level security is not in force on this table'. Splinter's 0007, which PGLS reports as `policyExistsRlsDisabled`, names the sharpest form of it, a table whose policies apply to nobody because row-level security is off. Ours stays authoritative because it also knows WHICH tables the project called tenant tables — configured, not guessed — and says so when it does not know rather than assuming."
+            "note": "Both sides answer 'row-level security is not in force on this table'. Splinter's 0007, which PGLS reports as `policyExistsRlsDisabled`, names the sharpest form of it, a table whose policies apply to nobody because row-level security is off. Ours stays authoritative because it also knows which tables the project called tenant tables — configured, not guessed — and says so when it does not know rather than assuming."
         },
         "SEC.RLS.NOT_FORCED": {
             "pattern": "rls_enabled_not_forced",

@@ -60,11 +60,11 @@ use PHPStan\Type\ObjectType;
  *
  * ## Static, and that is a constraint rather than a convenience
  *
- * `ParameterizationAnalyzerTest` holds the classifier to having no constructor, so that its two
- * consumers — a security rule and a driver-neutral policy rule — share one configuration-free
- * instance and neither inherits the other's configuration. Injecting this class would have grown
- * that constructor. These are pure predicates over a node and a scope with no state to configure,
- * so a static call says the same thing without weakening the guard.
+ * A test holds the classifier to having no constructor, so that its two consumers — a security
+ * rule and a driver-neutral policy rule — share one configuration-free instance and neither
+ * inherits the other's configuration. Injecting this class would have grown that constructor.
+ * These are pure predicates over a node and a scope with no state to configure, so a static call
+ * says the same thing without weakening the guard.
  *
  * ## The direction this class may be wrong in
  *

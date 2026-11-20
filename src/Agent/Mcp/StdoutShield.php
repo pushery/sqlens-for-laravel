@@ -93,7 +93,11 @@ final class StdoutShield
     /** @var resource */
     private $diagnostics;
 
-    /** @param resource|null $diagnostics where diverted output and PHP messages go; STDERR by default */
+    /**
+     * @param  mixed  $diagnostics  the stream diverted output and PHP messages go to, a resource, which PHP has no type for
+     *
+     * @phpstan-param  resource|null  $diagnostics  where diverted output and PHP messages go; STDERR by default
+     */
     public function __construct(mixed $diagnostics = null)
     {
         $this->diagnostics = is_resource($diagnostics) ? $diagnostics : STDERR;
@@ -280,7 +284,11 @@ final class StdoutShield
         return $this->engaged;
     }
 
-    /** A dump, rendered without colors and reported like any other foreign output. */
+    /**
+     * A dump, rendered without colors and reported like any other foreign output.
+     *
+     * @param  mixed  $value  the value a dump call was handed, of any type
+     */
     private function divertDump(mixed $value, ?string $label = null): void
     {
         $dumper = new CliDumper;

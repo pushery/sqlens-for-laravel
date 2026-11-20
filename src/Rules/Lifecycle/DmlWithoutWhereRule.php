@@ -130,7 +130,7 @@ final class DmlWithoutWhereRule extends AbstractLifecycleRule implements Provide
             ? StringLiteralMask::forDriver($this->syntax)->apply($statement->canonical)
             : $statement->canonical;
 
-        if (preg_match('/\bWHERE\b(.*)$/s', $searched, $where) === 1) {
+        if (preg_match('/\bWHERE\b(.*)$/sD', $searched, $where) === 1) {
             if (! $this->scopesNothing($where[1])) {
                 return null;
             }
@@ -173,10 +173,10 @@ final class DmlWithoutWhereRule extends AbstractLifecycleRule implements Provide
 
         // One layer of parentheses is idiomatic enough to be worth folding; deeper nesting
         // is not a shape anybody writes by hand for a constant.
-        if (preg_match('/^\((.*)\)$/s', $predicate, $inner) === 1) {
+        if (preg_match('/^\((.*)\)$/sD', $predicate, $inner) === 1) {
             $predicate = trim($inner[1]);
         }
 
-        return preg_match('/^(?:TRUE|1\s*=\s*1)$/i', $predicate) === 1;
+        return preg_match('/^(?:TRUE|1\s*=\s*1)$/iD', $predicate) === 1;
     }
 }

@@ -103,7 +103,7 @@ final class RuleIdFormat
      *
      * SEC is absent from the leveled alternative on purpose; see the class note.
      */
-    public const string PATTERN = '/^(?:(?:PG|MY|GEN|CAP)\.L\d\.[A-Z][A-Z0-9_]*|SEC\.(?:CFG|AUTH|PRIV|RLS|INJ|PII)\.[A-Z][A-Z0-9_]*|SEC\.SKIPPED\.[A-Z][A-Z0-9_]*|CAP\.PRESCAN\.[A-Z][A-Z0-9_]*)$/';
+    public const string PATTERN = '/^(?:(?:PG|MY|GEN|CAP)\.L\d\.[A-Z][A-Z0-9_]*|SEC\.(?:CFG|AUTH|PRIV|RLS|INJ|PII)\.[A-Z][A-Z0-9_]*|SEC\.SKIPPED\.[A-Z][A-Z0-9_]*|CAP\.PRESCAN\.[A-Z][A-Z0-9_]*)$/D';
 
     /** Whether the rule id matches the scheme. */
     public static function matches(string $ruleId): bool
@@ -139,7 +139,11 @@ final class RuleIdFormat
      */
     public static function matchesSuppressionTarget(string $ruleId): bool
     {
-        return self::matches($ruleId) || preg_match('/^[A-Z][A-Z0-9_]*\.[^\s]+$/', $ruleId) === 1;
+        // The `$` of PATTERN also matches before a final line feed, which a value read from the
+        // environment or written in a double-quoted string can carry. Such an id names no rule, and
+        // the entry it stands in would silence nothing while it reads as set.
+        return ! str_ends_with($ruleId, "\n")
+            && (self::matches($ruleId) || preg_match('/^[A-Z][A-Z0-9_]*\.[^\s]+\z/', $ruleId) === 1);
     }
 
     /**

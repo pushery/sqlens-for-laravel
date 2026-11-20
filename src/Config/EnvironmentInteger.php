@@ -13,7 +13,11 @@ namespace Pushery\SQLens\Config;
  */
 final readonly class EnvironmentInteger
 {
-    /** The value as a whole number when it is one of at least one, the default otherwise. */
+    /**
+     * The value as a whole number when it is one of at least one, the default otherwise.
+     *
+     * @param  mixed  $value  a value as the environment delivers it, a string, or what a host set
+     */
     public static function atLeastOne(mixed $value, int $default): int
     {
         return is_numeric($value) && (int) $value >= 1 ? (int) $value : $default;
