@@ -46,6 +46,8 @@ final readonly class PglsRawFinding
      * matched to a rule, and one missing its severity cannot be ranked. Either way there is
      * nothing to report except that the report was not readable, and the caller turns that into
      * {@see PglsFailureReason::OutputUnreadable}.
+     *
+     * @param  mixed  $entry  an entry of the pgls report as its JSON decoded it
      */
     public static function fromReportEntry(mixed $entry): ?self
     {

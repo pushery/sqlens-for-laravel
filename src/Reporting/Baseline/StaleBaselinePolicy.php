@@ -37,6 +37,8 @@ enum StaleBaselinePolicy: string
      * `report` or `error` was refused before it opened a connection. What reaches this method is
      * therefore either a legal value or a run that is already over — and falling back to the
      * stricter policy here would fail a build for a key whose real complaint was reported elsewhere.
+     *
+     * @param  mixed  $configured  a value of the package's config, which a host may have set to any type
      */
     public static function fromConfig(mixed $configured): self
     {

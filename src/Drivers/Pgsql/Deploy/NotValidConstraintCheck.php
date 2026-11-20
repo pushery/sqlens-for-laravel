@@ -31,7 +31,7 @@ use Throwable;
 /**
  * Constraints added `NOT VALID` where the `VALIDATE CONSTRAINT` never followed.
  *
- * `ADD CONSTRAINT … NOT VALID` is the SAFE way to add a foreign key or a check to a large table: it
+ * `ADD CONSTRAINT … NOT VALID` is the safe way to add a foreign key or a check to a large table: it
  * takes a brief lock, applies to new rows immediately, and skips the full scan. The scan is then
  * done separately by `VALIDATE CONSTRAINT`, which takes a weaker lock and can run outside the deploy
  * window.
@@ -114,7 +114,10 @@ final readonly class NotValidConstraintCheck implements PreflightCheck
         // one people learn to click past.
         $beingValidated = $this->validatedByPendingWork($context);
 
-        foreach (array_map(static fn (mixed $row): object => (object) $row, $rows) as $row) {
+        foreach ($rows as $raw) {
+
+            $row = (object) $raw;
+
             $constraint = $this->text($row, 'constraint_name');
 
             if (in_array($this->canonicalName($constraint), $beingValidated, true)) {
@@ -244,7 +247,7 @@ final readonly class NotValidConstraintCheck implements PreflightCheck
                 .'about this is broken or slow today, which is exactly why it survives, and nothing '
                 .'finishes it by itself: even a rewrite of the table carries it over unvalidated, with '
                 .'every row it never checked. Finish it as its own short step '
-                .'OUTSIDE the deploy: `ALTER TABLE %s VALIDATE CONSTRAINT %s;` — it takes a SHARE '
+                .'outside the deploy: `ALTER TABLE %s VALIDATE CONSTRAINT %s;` — it takes a SHARE '
                 .'UPDATE EXCLUSIVE lock and scans the table, which is why this command will not run '
                 .'it for you.',
                 $constraint,

@@ -166,6 +166,8 @@ final readonly class UnboundRawSqlGuard implements QueryInspector
      * Taken as `mixed` on purpose. The framework's docblock declares the getter non-null, while the
      * property behind it starts as null and stays null until something asks for the schema builder;
      * a statement on such a connection was not compiled by the builder.
+     *
+     * @param  mixed  $grammar  the grammar a connection hands over, of whatever class the driver chose
      */
     private function schemaGrammarOf(mixed $grammar): ?SchemaGrammar
     {

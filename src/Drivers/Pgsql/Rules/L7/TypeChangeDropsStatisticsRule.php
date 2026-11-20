@@ -140,7 +140,7 @@ final class TypeChangeDropsStatisticsRule extends AbstractPgsqlSafetyRule implem
     {
         $sql = strtolower(str_replace('"', '', trim($canonical)));
 
-        if (preg_match('/^(analyze|vacuum)\b(.*)$/s', $sql, $statement) !== 1) {
+        if (preg_match('/^(analyze|vacuum)\b(.*)$/sD', $sql, $statement) !== 1) {
             return false;
         }
 

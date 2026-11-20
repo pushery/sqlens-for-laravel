@@ -10,7 +10,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
 /**
  * A schema object a canonical statement acts on: its object type and the
  * normalized Identifier from identifier normalization — so the schema and the name
- * stay SEPARATE and the qualified/unqualified information is preserved, never
+ * stay separate and the qualified/unqualified information is preserved, never
  * flattened to a bare string. A `CREATE INDEX … ON …` yields two targets (the
  * index and its table); an `ADD CONSTRAINT … REFERENCES …` yields the altered
  * table and the referenced one.

@@ -112,7 +112,10 @@ final readonly class OrphanTransitionObjectCheck implements PostdeployCheck
 
         $findings = [];
 
-        foreach (array_map(static fn (mixed $row): object => (object) $row, $tables) as $row) {
+        foreach ($tables as $raw) {
+
+            $row = (object) $raw;
+
             $name = $this->text($row, 'object_name');
 
             if ($name !== '' && OnlineSchemaChangeArtifacts::isTable($name)) {
@@ -124,7 +127,10 @@ final readonly class OrphanTransitionObjectCheck implements PostdeployCheck
             $findings[] = $this->tableFinding($context, $schema, $name);
         }
 
-        foreach (array_map(static fn (mixed $row): object => (object) $row, $triggers) as $row) {
+        foreach ($triggers as $raw) {
+
+            $row = (object) $raw;
+
             $name = $this->text($row, 'object_name');
 
             if ($name !== '' && OnlineSchemaChangeArtifacts::isTrigger($name)) {
@@ -171,7 +177,10 @@ final readonly class OrphanTransitionObjectCheck implements PostdeployCheck
 
         $tables = [];
 
-        foreach (array_map(static fn (mixed $row): object => (object) $row, $rows) as $row) {
+        foreach ($rows as $raw) {
+
+            $row = (object) $raw;
+
             // `database/table`, both parts as InnoDB encodes them (a slash in a name becomes `@002f`),
             // so the first slash is the separator.
             $name = $this->text($row, 'innodb_name');
@@ -196,7 +205,7 @@ final readonly class OrphanTransitionObjectCheck implements PostdeployCheck
             message: sprintf(
                 'The table `%s` is an artifact %s generates — no project writes a name in that '
                 .'scheme by hand. If the run that made it finished, it is dead weight: storage and '
-                .'backup time paid for indefinitely. If a run is STILL IN FLIGHT it is doing its '
+                .'backup time paid for indefinitely. If a run is still in flight it is doing its '
                 .'job, and the two look identical from here, which is why this is reported and not '
                 .'decided. Confirm nothing is running, then remove it in a change of its own — '
                 .'`` DROP TABLE %s; `` — as a proposal rather than an instruction: a drop cannot be '

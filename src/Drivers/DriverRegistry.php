@@ -114,25 +114,16 @@ final class DriverRegistry implements DebtStandingResolvers, SessionDefenses
      *                               their rules render repo-relative finding locations. The
      *                               empty default keeps a bare `new DriverRegistry()`
      *                               constructible where only key resolution is exercised.
-     * @param  mixed  $pgsqlExpectedTimeouts  the raw `sqlens.pgsql.expected_timeouts` config
-     *                                        value, narrowed to an {@see ExpectedTimeouts} here
-     *                                        — this is the composition root, the one place
-     *                                        allowed to name a concrete driver and hand it its
-     *                                        engine-specific config. Null (the test default)
-     *                                        means the shipped strict default of both timeouts.
-     * @param  mixed  $pgsqlMaxLocksPerTransaction  the raw `sqlens.pgsql.max_locks_per_transaction`
-     *                                              config value; a positive int, defaulting to the
-     *                                              shipped 1 when absent or not an int (the config
-     *                                              schema has already rejected a bad value by here).
-     * @param  mixed  $auditExpect  the raw `sqlens.audit.expect` array — what the project states it
-     *                              wants for the settings SQLens declines to have an opinion about.
-     *                              Absent or malformed reads as "stated nothing", which is the
-     *                              shipped default and silences only the expectation-based trigger.
-     * @param  mixed  $uuidGeneratedBy  the raw `sqlens.audit.uuid_generated_by` value — `app`,
-     *                                  `server`, or anything else, which reads as "not said".
-     * @param  mixed  $keyCeiling  the raw `sqlens.audit.key_ceiling` array. A share outside 1 to 100,
-     *                             or anything that is not a whole number, reads as "not said", and
-     *                             the near-ceiling rules then use the shipped default.
+     * @param  mixed  $pgsqlExpectedTimeouts  a value of the package's config, which a host may have set to any type
+     * @param  mixed  $pgsqlMaxLocksPerTransaction  a value of the package's config, which a host may have set to any type
+     * @param  mixed  $auditExpect  a value of the package's config, which a host may have set to any type
+     * @param  mixed  $uuidGeneratedBy  a value of the package's config, which a host may have set to any type
+     * @param  mixed  $moneyColumns  a value of the package's config, which a host may have set to any type
+     * @param  mixed  $unusedIndex  a value of the package's config, which a host may have set to any type
+     * @param  mixed  $naming  a value of the package's config, which a host may have set to any type
+     * @param  mixed  $documentationConfig  a value of the package's config, which a host may have set to any type
+     * @param  mixed  $migrationsTable  a value of the package's config, which a host may have set to any type
+     * @param  mixed  $keyCeiling  a value of the package's config, which a host may have set to any type
      */
     public function __construct(private readonly string $projectRoot = '', mixed $pgsqlExpectedTimeouts = null, mixed $pgsqlMaxLocksPerTransaction = null, mixed $auditExpect = null, mixed $uuidGeneratedBy = null, mixed $moneyColumns = null, mixed $unusedIndex = null, mixed $naming = null, mixed $documentationConfig = null, private readonly ?EolRepository $advisories = null, private readonly ?Today $today = null, private readonly ?UnencryptedColumnEvaluator $privacyColumns = null, private readonly ?RunEnvironment $environment = null, mixed $migrationsTable = null, mixed $keyCeiling = null)
     {
@@ -259,6 +250,7 @@ final class DriverRegistry implements DebtStandingResolvers, SessionDefenses
      * than cast: the config validator has already refused a malformed shape by the time this runs,
      * and casting here would invent a term nobody wrote.
      *
+     * @param  mixed  $value  a value of the package's config, which a host may have set to any type
      * @return list<string>
      */
     private function stringList(mixed $value): array
@@ -362,6 +354,8 @@ final class DriverRegistry implements DebtStandingResolvers, SessionDefenses
      * The two are the same name and not the same statement. A rule that exempts the framework's
      * ledger must not exempt a table the application never named — and a configuration that is
      * absent, a number or a list named nothing at all.
+     *
+     * @param  mixed  $configured  a value of the package's config, which a host may have set to any type
      */
     private function namesDefaultLedger(mixed $configured): bool
     {

@@ -12,7 +12,6 @@ use Pushery\SQLens\Contracts\SecurityReader;
 use Pushery\SQLens\Contracts\ServerSettingsReader;
 use Pushery\SQLens\Contracts\SettingCrossFactCollector;
 use Pushery\SQLens\Contracts\StatisticsReader;
-use Pushery\SQLens\Tests\Feature\Catalog\ReaderSurfaceCensusTest;
 
 /**
  * The readers an audit needs, over one session.
@@ -92,10 +91,10 @@ final readonly class CatalogReaders
          * What the server is doing right now, or null when this driver reads no activity.
          *
          * It travels beside the statistics reader for the same reason that one does: the
-         * registration is the census entry. A reader resolved by a second mechanism would be
-         * invisible to {@see ReaderSurfaceCensusTest},
-         * and its statements would go unchecked — which is the one thing a reader that promises to
-         * take no locks must not be.
+         * registration is the census entry. The suite drives every reader registered here and
+         * audits the statements each one sends, so a reader resolved by a second mechanism would be
+         * invisible to that census, and its statements would go unchecked — which is the one thing
+         * a reader that promises to take no locks must not be.
          *
          * The shared session matters most of all here. Live activity is a property of the moment
          * and of the connection: a reading on a second connection would describe a different

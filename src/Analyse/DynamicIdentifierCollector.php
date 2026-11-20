@@ -64,9 +64,8 @@ final readonly class DynamicIdentifierCollector implements Collector
      * Builder methods whose first argument is a column name.
      *
      * `latest()` and `oldest()` default to `created_at` and take a column when given one, which is
-     * exactly the shape a sortable listing uses. Verified present on `Query\Builder` by
-     * `DynamicIdentifierCollectorTest`, for the same reason the raw-SQL sinks are: a remembered
-     * method list fails silently.
+     * exactly the shape a sortable listing uses. Verified present on `Query\Builder` by a test, for
+     * the same reason the raw-SQL sinks are: a remembered method list fails silently.
      *
      * @var list<string>
      */

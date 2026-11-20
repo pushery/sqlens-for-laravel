@@ -155,7 +155,7 @@ final class UnusedIndexRule extends AbstractCatalogRule implements DeclaresJudge
             'On %s, %s never been scanned since the statistics were reset at %s: %s. An index nobody reads is '
             .'still written on every insert and on every update touching its columns, and occupies its own pages '
             .'in the buffer pool. Before dropping it, check the two things this '
-            .'counter cannot see: statistics are PER INSTANCE, so an index read only on a replica looks unused '
+            .'counter cannot see: statistics are per instance, so an index read only on a replica looks unused '
             .'here, and a query that runs monthly has not run yet if the window is shorter than a month. This '
             .'run required at least %d day(s) of window. Drop with DROP INDEX name ON table ALGORITHM=INPLACE '
             .'LOCK=NONE when you are satisfied — but check first whether the index carries a foreign key, because InnoDB '

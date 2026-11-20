@@ -26,7 +26,7 @@ use Pushery\SQLens\Severity\SeverityGate;
  *   contract that cannot distinguish them is not stable, only unchanged.
  * - `run` is the reproducibility header, straight from RunContext — one source, so
  *   the console and JSON headers can never drift.
- * - `summary` keeps the level and severity axes in SEPARATE count maps, plus the
+ * - `summary` keeps the level and severity axes in separate count maps, plus the
  *   three-valued status counts and the undetermined-reason breakdown.
  *
  *   The reason breakdown is an OPEN enumeration and its growth does not bump the
@@ -485,7 +485,7 @@ final readonly class JsonEnvelope
         // one object would make a consumer ask which fields are optional in which sense — and the
         // schema version is what says whether a field exists at all, so absence needs no second
         // spelling.
-        return array_filter($projection, static fn (mixed $value): bool => $value !== null);
+        return array_diff_key($projection, array_filter($projection, is_null(...)));
     }
 
     /**
@@ -549,7 +549,7 @@ final readonly class JsonEnvelope
                 // Recorded suppressions that matched nothing this run — a rotting
                 // suppression list is surfaced, never left silent.
                 'stale' => $this->result->staleSuppressionCount(),
-                // The two gates as SEPARATE objects, each with its threshold and its
+                // The two gates as separate objects, each with its threshold and its
                 // breach count — never a merged total that hides which gate broke.
                 ...AxisSummary::for($this->result, $this->context)->toArray(),
             ],

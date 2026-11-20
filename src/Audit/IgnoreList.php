@@ -106,6 +106,8 @@ final readonly class IgnoreList
      * validator's job and it runs before this does. What must never happen here is the opposite
      * failure: a value this class could not read must not silence more than it says. Every
      * narrowing below therefore drops toward the empty list, never toward a wildcard.
+     *
+     * @param  mixed  $config  a value of the package's config, which a host may have set to any type
      */
     public static function fromConfig(mixed $config, string $tablePrefix = ''): self
     {
@@ -285,7 +287,7 @@ final readonly class IgnoreList
      */
     private function matchesWholePath(string $pattern, string $path): bool
     {
-        return preg_match('/^'.str_replace('\*', '.*', preg_quote($pattern, '/')).'$/', $path) === 1;
+        return preg_match('/^'.str_replace('\*', '.*', preg_quote($pattern, '/')).'$/D', $path) === 1;
     }
 
     /** One segment against one segment: a literal, or a literal followed by `*`. */
@@ -307,6 +309,7 @@ final readonly class IgnoreList
     }
 
     /**
+     * @param  mixed  $value  a value of the package's config, which a host may have set to any type
      * @return list<string>
      */
     private static function strings(mixed $value): array
@@ -327,6 +330,8 @@ final readonly class IgnoreList
      * would turn a half-written line into a project-wide silence.
      *
      * @phpstan-assert-if-true array{rule: string, objects: list<string>} $entry
+     *
+     * @param  mixed  $entry  an entry of the ignore list as the config holds it, of any type
      */
     public static function isReadablePair(mixed $entry): bool
     {
@@ -342,7 +347,17 @@ final readonly class IgnoreList
         return $keys === ['objects', 'rule']
             && is_string($rule) && trim($rule) !== ''
             && is_array($objects) && array_is_list($objects) && $objects !== []
-            && array_all($objects, static fn (mixed $object): bool => is_string($object) && trim($object) !== '');
+            && array_all($objects, self::namesAnObject(...));
+    }
+
+    /**
+     * Whether an entry of a pair's objects names one: a string with more than blanks in it.
+     *
+     * @param  mixed  $object  an entry of the list as the config holds it, of any type
+     */
+    private static function namesAnObject(mixed $object): bool
+    {
+        return is_string($object) && trim($object) !== '';
     }
 
     /**
@@ -350,6 +365,7 @@ final readonly class IgnoreList
      * out to be unknown is reported at the line it was written on even when an entry before it was
      * dropped.
      *
+     * @param  mixed  $value  a value of the package's config, which a host may have set to any type
      * @return array<int, array{rule: string, objects: list<string>}>
      */
     private static function pairs(mixed $value): array

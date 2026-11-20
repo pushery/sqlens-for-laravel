@@ -34,8 +34,9 @@ use Pushery\SQLens\Severity\Severity;
  *
  * ## Why the AXIS decides, not the presence of a severity
  *
- * A safety rule is explicitly allowed to declare a severity — `RuleMetadataAuditTest` has an arm for
- * it — and that severity does nothing, on purpose: the level gate is what measures a safety finding.
+ * A safety rule is explicitly allowed to declare a severity — the suite's audit of the rule metadata
+ * accepts it in so many words — and that severity does nothing, on purpose: the level gate is what
+ * measures a safety finding.
  * Reading `$finding->severity !== null` here would quietly hand such a rule a GitHub weight it was
  * never meant to carry, and put it above real security findings in a security tab.
  *
@@ -97,9 +98,9 @@ final readonly class SeverityMapper
         }
 
         // Reached by a security rule that declares no severity as well as by every level-gated
-        // finding. That first case is one `RuleMetadataAuditTest` forbids outright, so it cannot
-        // ship — but a mapper that silently guessed a weight for it would make the audit's job
-        // harder rather than easier. Falling to the level gate states what is known.
+        // finding. That first case is one the suite's audit of the rule metadata forbids outright,
+        // so it cannot ship — but a mapper that silently guessed a weight for it would make the
+        // audit's job harder rather than easier. Falling to the level gate states what is known.
         return $decision->blockedBy === GateAxis::Level ? 'error' : 'warning';
     }
 

@@ -658,6 +658,8 @@ final class PostdeployCommand extends Command
      * An age this build could not read never breaks one either. A threshold compared against an
      * unknown number is a coin toss with a policy's name on it, and the unreadable date is already
      * reported on its own.
+     *
+     * @param  mixed  $failAt  the threshold the option or the config names, of any type
      */
     private function breaches(CollectedDebt $debt, mixed $failAt): bool
     {

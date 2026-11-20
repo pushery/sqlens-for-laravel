@@ -27,7 +27,7 @@ final class DurationValue
     /** How many milliseconds one of each unit is. */
     private const array UNITS = ['us' => 0.001, 'ms' => 1, 's' => 1_000, 'min' => 60_000, 'h' => 3_600_000, 'd' => 86_400_000];
 
-    private const string DURATION = '/^\s*(?<sign>[+-]?)(?:0[xX](?<hex>[0-9a-fA-F]+)|(?<octal>0[0-7]+)(?![0-9.eE])|(?<decimal>(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?))\s*(?<unit>us|ms|s|min|h|d)?\s*$/';
+    private const string DURATION = '/^\s*(?<sign>[+-]?)(?:0[xX](?<hex>[0-9a-fA-F]+)|(?<octal>0[0-7]+)(?![0-9.eE])|(?<decimal>(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?))\s*(?<unit>us|ms|s|min|h|d)?\s*$/D';
 
     /** The whole milliseconds the text stands for, or null when it is not a duration in this grammar. */
     public static function milliseconds(string $value): ?int

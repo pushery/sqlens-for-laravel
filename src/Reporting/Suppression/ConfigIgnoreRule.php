@@ -96,6 +96,7 @@ final readonly class ConfigIgnoreRule
     }
 
     /**
+     * @param  mixed  $value  a value of the package's config, which a host may have set to any type
      * @return list<string>
      */
     private static function strings(mixed $value): array

@@ -8,7 +8,7 @@ use Pushery\SQLens\Canonical\StatementKind;
 use Pushery\SQLens\Subjects\MigrationStatementView;
 
 /**
- * The column, the target type and the whole tail of an `ALTER COLUMN … TYPE` — parsed ONCE, for
+ * The column, the target type and the whole tail of an `ALTER COLUMN … TYPE` — parsed once, for
  * every rule and template that has a question about it.
  *
  * ## Two questions, one parse
@@ -131,7 +131,7 @@ final readonly class ColumnTypeChange
      */
     public static function inCanonical(string $canonical): ?self
     {
-        if (preg_match('/\bALTER COLUMN\s+(\S+)\s+TYPE\s+(.+)$/', $canonical, $matches) !== 1) {
+        if (preg_match('/\bALTER COLUMN\s+(\S+)\s+TYPE\s+(.+)$/D', $canonical, $matches) !== 1) {
             return null;
         }
 
@@ -151,7 +151,7 @@ final readonly class ColumnTypeChange
      */
     public static function ofColumnIn(string $canonical, string $column): ?self
     {
-        $pattern = '/\bALTER\s+(?:COLUMN\s+)?"?'.preg_quote($column, '/').'"?\s+(?:SET\s+DATA\s+)?TYPE\s+(.+)$/';
+        $pattern = '/\bALTER\s+(?:COLUMN\s+)?"?'.preg_quote($column, '/').'"?\s+(?:SET\s+DATA\s+)?TYPE\s+(.+)$/D';
 
         if (preg_match($pattern, $canonical, $matches) !== 1) {
             return null;

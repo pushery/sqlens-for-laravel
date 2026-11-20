@@ -39,6 +39,9 @@ final readonly class ProfileResolver
      * absent — the CLI has no way to say "explicitly null", so null is unambiguous
      * here, which is exactly why the profile layer needs the richer
      * has-it/does-not-have-it test below and this layer does not.
+     *
+     * @param  mixed  $cliValue  the option's value on the command line, of whatever type the option holds
+     * @return mixed the value of the path, of whatever type the config holds there
      */
     public function value(string $path, mixed $cliValue = null): mixed
     {
@@ -118,6 +121,7 @@ final readonly class ProfileResolver
      *
      * @param  array<array-key, mixed>  $profile
      * @param  list<string>  $segments
+     * @return mixed the value at the path, of whatever type the profile holds there
      */
     private function dig(array $profile, array $segments): mixed
     {

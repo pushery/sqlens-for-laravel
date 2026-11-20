@@ -144,6 +144,7 @@ final readonly class CatalogRequest
      * and `ConfigSchema` reports it under its own key. Casting one here would turn a stated mistake
      * into a scope or an allowance nobody wrote.
      *
+     * @param  mixed  $value  a value as the request was given it, of any type
      * @return list<string>
      */
     private static function stringsIn(mixed $value): array

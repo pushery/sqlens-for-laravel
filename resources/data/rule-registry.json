@@ -3134,8 +3134,8 @@
                 "lint"
             ],
             "limitations": [
-                "reads the migration's OWN statements. A project that sets `lock_wait_timeout` outside the migration — in the connection options, a server default, or a listener — is bounded and still reported here, because a static reader cannot see any of those",
-                "says nothing about how long the statement RUNS once it has the lock. MySQL has no DDL counterpart to a statement timeout: `max_execution_time` is milliseconds and applies to read-only SELECTs, measured — the same work ran 612 seconds uninterrupted as a non-SELECT under a 200 ms limit. So a bounded wait is not a bounded operation, and this rule only claims the first",
+                "reads the migration's own statements. A project that sets `lock_wait_timeout` outside the migration — in the connection options, a server default, or a listener — is bounded and still reported here, because a static reader cannot see any of those",
+                "says nothing about how long the statement runs once it has the lock. MySQL has no DDL counterpart to a statement timeout: `max_execution_time` is milliseconds and applies to read-only SELECTs, measured — the same work ran 612 seconds uninterrupted as a non-SELECT under a 200 ms limit. So a bounded wait is not a bounded operation, and this rule only claims the first",
                 "does not accept `innodb_lock_wait_timeout` in place of `lock_wait_timeout`. They bound different locks — row versus metadata — and a migration that set only the former has not bounded what its DDL waits for"
             ]
         },
@@ -6424,7 +6424,7 @@
             ],
             "limitations": [
                 "reads the account catalog, not the connections: an account that exists and nothing ever authenticates as is the same rows as one in daily use, and which is which is a deployment fact",
-                "the locked/unlocked split is the whole reason this id is separate from its sibling, and it rests on the server's own flag. An account locked by something OUTSIDE the server — a network rule, a proxy refusing it — reads as usable here",
+                "the locked/unlocked split is the whole reason this id is separate from its sibling, and it rests on the server's own flag. An account locked by something outside the server — a network rule, a proxy refusing it — reads as usable here",
                 "a locked account keeps its verifier, so unlocking it later restores exactly the weakness reported here — which is why this is a finding at all rather than a state to ignore"
             ]
         },
@@ -6491,8 +6491,8 @@
             ],
             "limitations": [
                 "reads the account catalog, not the connections: an account that exists and nothing ever authenticates as is the same rows as one in daily use, and which is which is a deployment fact",
-                "the locked/unlocked split is the whole reason this id is separate from its sibling, and it rests on the server's own flag. An account locked by something OUTSIDE the server — a network rule, a proxy refusing it — reads as usable here",
-                "unlocking restores the account exactly as it is — with no password. The finding is about what the account WOULD be, which is the only useful thing to say about a state somebody can undo with one statement"
+                "the locked/unlocked split is the whole reason this id is separate from its sibling, and it rests on the server's own flag. An account locked by something outside the server — a network rule, a proxy refusing it — reads as usable here",
+                "unlocking restores the account exactly as it is — with no password. The finding is about what the account would be, which is the only useful thing to say about a state somebody can undo with one statement"
             ]
         },
         {
@@ -7331,7 +7331,7 @@
             ],
             "limitations": [
                 "reads the catalog, not the connections: a privilege held by an account nothing ever authenticates as is the same rows as one in daily use",
-                "reports the ability to hand the privilege on, not any use of it: whether anything HAS been granted onward is a second question, and the catalog answers it only for grants that already happened"
+                "reports the ability to hand the privilege on, not any use of it: whether anything has been granted onward is a second question, and the catalog answers it only for grants that already happened"
             ]
         },
         {
@@ -7736,7 +7736,7 @@
             ],
             "limitations": [
                 "reads the routine's SIGNATURE and its declared path, never its body. A routine whose every reference is already schema-qualified is safe in practice and is still reported, because whether the next edit stays qualified is not something the catalog can promise",
-                "reports a routine that is CORRECT, on purpose: a definer routine is a deliberate escalation boundary, and the finding exists so somebody confirms it was deliberate. Silencing it with a reason is the expected outcome rather than a failure"
+                "reports a routine that is correct, on purpose: a definer routine is a deliberate escalation boundary, and the finding exists so somebody confirms it was deliberate. Silencing it with a reason is the expected outcome rather than a failure"
             ]
         },
         {
@@ -7870,7 +7870,7 @@
             ],
             "limitations": [
                 "compares the project's configured runtime connection against the catalog: a project that has not told SQLens which connection is the runtime one gets no answer here rather than a guessed one",
-                "reads the privilege, not its use. A runtime role that CAN create objects and never does is reported the same way, because the finding is about what a compromise of that role would reach"
+                "reads the privilege, not its use. A runtime role that can create objects and never does is reported the same way, because the finding is about what a compromise of that role would reach"
             ]
         },
         {
@@ -8034,7 +8034,7 @@
                 "audit"
             ],
             "limitations": [
-                "the exposure depends on WHO connects, and the catalog does not record that. An owner-unrestricted table is only reachable if something actually connects as the owner — which is a deployment fact, not a schema fact",
+                "the exposure depends on who connects, and the catalog does not record that. An owner-unrestricted table is only reachable if something actually connects as the owner — which is a deployment fact, not a schema fact",
                 "cannot see a role's memberships in full: a role that inherits ownership through a group is the owner for this purpose, and following that chain is the audit suite's separate question"
             ]
         },

@@ -90,7 +90,7 @@ final readonly class MysqlSchemaDumpReader
         '/^(?:LOCK|UNLOCK)\s+TABLES\b/i',
         '/^SET\b/i',
         '/^START\s+TRANSACTION\b/i',
-        '/^(?:BEGIN|COMMIT)(?:\s+WORK)?$/i',
+        '/^(?:BEGIN|COMMIT)(?:\s+WORK)?$/iD',
     ];
 
     /**
@@ -234,7 +234,7 @@ final readonly class MysqlSchemaDumpReader
         $words = [];
 
         foreach (array_slice(explode(' ', $head), 0, 2) as $word) {
-            if (preg_match('/^[A-Za-z_]+$/', $word) !== 1) {
+            if (preg_match('/^[A-Za-z_]+$/D', $word) !== 1) {
                 break;
             }
 

@@ -134,7 +134,7 @@ final class PatternShapes
         return match (true) {
             str_starts_with($token, '"') => str_replace('""', '"', substr($token, 1, -1)),
             str_starts_with($token, '`') => str_replace('``', '`', substr($token, 1, -1)),
-            preg_match('/^[a-z_][a-z0-9_$]*$/', $token) === 1 && ! in_array($token, [...self::CLAUSES, 'as', 'and', 'or', 'not', 'is', 'in', 'null', 'between', 'like'], true) => $token,
+            preg_match('/^[a-z_][a-z0-9_$]*$/D', $token) === 1 && ! in_array($token, [...self::CLAUSES, 'as', 'and', 'or', 'not', 'is', 'in', 'null', 'between', 'like'], true) => $token,
             default => null,
         };
     }

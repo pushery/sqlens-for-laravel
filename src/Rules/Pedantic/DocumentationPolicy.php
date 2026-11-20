@@ -67,7 +67,7 @@ final readonly class DocumentationPolicy
             // back to the framework names — including null, which is the shipped default and means
             // exactly that.
             is_array($exempt)
-                ? array_values(array_filter($exempt, static fn (mixed $entry): bool => is_string($entry) && $entry !== ''))
+                ? array_values(array_filter(array_filter($exempt, is_string(...)), static fn (string $entry): bool => $entry !== ''))
                 : MissingComment::FRAMEWORK_TABLES,
         );
     }

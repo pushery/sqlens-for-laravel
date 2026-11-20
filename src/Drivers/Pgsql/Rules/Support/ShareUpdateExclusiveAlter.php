@@ -36,7 +36,7 @@ final class ShareUpdateExclusiveAlter
         .'|RESET \(\s*'.self::PARAMETER.'(?:\s*,\s*'.self::PARAMETER.')*\s*\))';
 
     private const string ONLY = '/^ALTER TABLE (?:IF EXISTS )?(?:ONLY )?'.self::NAME.'(?:\.'.self::NAME.')? '
-        .self::ACTION.'(?:\s*,\s*'.self::ACTION.')*$/i';
+        .self::ACTION.'(?:\s*,\s*'.self::ACTION.')*$/iD';
 
     /** Whether this statement takes nothing stronger than SHARE UPDATE EXCLUSIVE. */
     public static function only(?StatementKind $kind, string $canonical): bool

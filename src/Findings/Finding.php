@@ -542,6 +542,6 @@ final readonly class Finding
         // not have to descend for two of them. Absent entirely when nothing escalated.
         $projection = [...$projection, ...($this->escalation?->toArray() ?? [])];
 
-        return array_filter($projection, static fn (mixed $value): bool => $value !== null);
+        return array_diff_key($projection, array_filter($projection, is_null(...)));
     }
 }

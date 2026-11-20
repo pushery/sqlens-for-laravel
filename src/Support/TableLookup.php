@@ -17,6 +17,9 @@ use Pushery\SQLens\Attributes\RawSql;
  * query reads, and no columns or indexes for it either. Every other driver already answers the
  * way its queries do.
  *
+ * Internal: this package ships no migration and looks up no table of its own, and the first code of
+ * it that does calls this class from its own namespace.
+ *
  * @internal
  */
 final class TableLookup

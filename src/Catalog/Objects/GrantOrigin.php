@@ -9,9 +9,9 @@ namespace Pushery\SQLens\Catalog\Objects;
  *
  * Without it the most obvious security rule in the suite is unusable. Every PostgreSQL database
  * carries `CONNECT`/`TEMPORARY` to PUBLIC on itself and `EXECUTE` to PUBLIC on a hundred-odd system
- * functions, out of the box, on every install that has ever existed. A rule that reported "grants to
- * PUBLIC" without this field would open with a hundred findings nobody caused and nobody can fix,
- * which is how a security tool gets switched off in its first week.
+ * functions from the moment it is created, on every install that has ever existed. A rule that
+ * reported "grants to PUBLIC" without this field would open with a hundred findings nobody caused
+ * and nobody can fix, which is how a security tool gets switched off in its first week.
  *
  * PostgreSQL records the answer itself, in `pg_init_privs`: the ACL an object had when initdb
  * finished or when the extension that owns it was installed. So this is read rather than guessed.
@@ -40,7 +40,7 @@ enum GrantOrigin: string
      * The object's OWNER, whose full-privilege entry PostgreSQL materializes on the first grant.
      *
      * `pg_init_privs` does not cover it, so it arrived here as a project decision — and it is the
-     * opposite of one. `relacl` is NULL until somebody grants ANYTHING; at that moment PostgreSQL
+     * opposite of one. `relacl` is NULL until somebody grants anything; at that moment PostgreSQL
      * writes the owner's own entry into it as well, and that entry is `acldefault()` by definition:
      * every privilege the object type permits.
      *

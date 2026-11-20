@@ -82,7 +82,7 @@ final class LocalInfileRule extends AbstractSettingSecurityRule
             'local_infile is %s, so this server accepts LOAD DATA LOCAL INFILE, and the direction is '
             .'the opposite of what the name suggests: the statement does not read a file on the '
             .'server. The server sends the client a request naming a path, and a compliant client '
-            .'reads that path off its OWN disk and uploads it. The client does not choose the path, '
+            .'reads that path off its own disk and uploads it. The client does not choose the path, '
             .'it is told one. With the setting on, a statement injected into the application\'s '
             .'connection can therefore load an .env or a key file from the APPLICATION host into a '
             .'table, without the application running any LOAD DATA statement of its own. The FILE '

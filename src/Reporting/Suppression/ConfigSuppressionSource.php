@@ -31,7 +31,11 @@ final readonly class ConfigSuppressionSource
     /** @param  list<ConfigIgnoreRule>  $rules */
     public function __construct(public array $rules) {}
 
-    /** Build from the validated `sqlens.ignore` config value. */
+    /**
+     * Build from the validated `sqlens.ignore` config value.
+     *
+     * @param  mixed  $ignore  a value of the package's config, which a host may have set to any type
+     */
     public static function fromConfig(mixed $ignore): self
     {
         if (! is_array($ignore)) {

@@ -96,10 +96,10 @@ final readonly class ApiSurface
      *
      * Declared here, because this list is the promise and it should be read as a decision every
      * time it changes — the same reasoning as {@see self::RULE_FIELDS} above. And held honest by a
-     * DERIVED arm: `ExtensionContractsTest` reads which interfaces under `src/Contracts/` a rule
-     * class actually implements and requires the two sets to agree. A hand list alone would rot the
-     * day somebody added a capability interface; a derivation alone would silently promise every
-     * internal seam a driver happens to reach through.
+     * DERIVED arm: a test reads which interfaces under `src/Contracts/` a rule class actually
+     * implements and requires the two sets to agree. A hand list alone would rot the day somebody
+     * added a capability interface; a derivation alone would silently promise every internal seam a
+     * driver happens to reach through.
      *
      * Not every interface in `src/Contracts/`. That namespace also holds the seams a driver
      * implements — a catalog reader, a pooler probe, an activity reader. Promising those would make

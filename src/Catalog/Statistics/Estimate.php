@@ -62,7 +62,7 @@ final readonly class Estimate
          */
         public ?DateTimeImmutable $measuredAt,
         /**
-         * How many rows the server has seen inserted, updated or deleted SINCE that refresh.
+         * How many rows the server has seen inserted, updated or deleted since that refresh.
          *
          * The fact an age cannot give. A statistic from a year ago on a table nobody has written to
          * is exactly right; one from an hour ago on a table that doubled since is out by a factor of

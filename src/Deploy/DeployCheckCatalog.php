@@ -98,7 +98,7 @@ final readonly class DeployCheckCatalog
             Severity::Medium,
             self::deploy(),
             [
-                'reports that no migration describes the object; it cannot say WHO created it, or when',
+                'reports that no migration describes the object; it cannot say who created it, or when',
                 'reads only the object types both catalog readings covered — a type one side could '
                 .'not read is a named blind spot rather than an absence',
             ],
@@ -278,7 +278,7 @@ final readonly class DeployCheckCatalog
             Severity::High,
             self::deploy(),
             [
-                'reports that SQLens\' own session bounds are not in effect for THIS run; it says '
+                'reports that SQLens\' own session bounds are not in effect for this run; it says '
                 .'nothing about the timeouts the migration itself sets',
                 'a session setting can be overridden after this check ran, so the finding describes '
                 .'the state at the moment it looked',
@@ -437,7 +437,7 @@ final readonly class DeployCheckCatalog
                 'reads a FACT the catalog states outright — `ENFORCED = NO` — so unlike the two '
                 .'name-based checks beside it this one FAILS rather than reporting undetermined; '
                 .'there is no second reading needed and no in-flight state that looks the same',
-                'says nothing about WHY the constraint is unenforced or how long it has been. The '
+                'says nothing about why the constraint is unenforced or how long it has been. The '
                 .'likely answer is that the data did not satisfy it, which makes turning it back on '
                 .'a data decision rather than a schema one — and makes the age a question for the '
                 .'debt reconciliation rather than for this reading',

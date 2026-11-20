@@ -170,6 +170,7 @@ final readonly class FormatDiscovery
     }
 
     /**
+     * @param  mixed  $value  a value of the package's config, which a host may have set to any type
      * @param  list<string>  $default
      * @return list<string>
      */

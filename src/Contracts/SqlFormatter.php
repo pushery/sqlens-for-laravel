@@ -48,7 +48,7 @@ interface SqlFormatter
     /**
      * Whether this backend can actually run right now.
      *
-     * SEPARATE from `supports()`, and the separation is the whole reason this method exists.
+     * Separate from `supports()`, and the separation is the whole reason this method exists.
      * `supports()` is about the DIALECT — a property of the backend that never changes — and this is
      * about the MACHINE: is the binary installed, is it executable, is its version one this adapter
      * was measured against.

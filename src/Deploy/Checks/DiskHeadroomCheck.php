@@ -183,7 +183,7 @@ final readonly class DiskHeadroomCheck implements PreflightCheck
                 UndeterminedReason::FilesystemHeadroomUnreadable,
                 sprintf(
                     'this instance does not report free space — on a '
-                    .'managed database it never does, and no privilege changes that. What CAN be '
+                    .'managed database it never does, and no privilege changes that. What can be '
                     .'said: the pending rewrite touches %d object(s) totaling about %s, and a '
                     .'rewrite needs that much AGAIN while it runs because the old copy stays '
                     .'readable until the new one is complete. Hold that number against your own '

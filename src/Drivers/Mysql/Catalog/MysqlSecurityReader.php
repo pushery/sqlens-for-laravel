@@ -505,7 +505,7 @@ final readonly class MysqlSecurityReader implements SecurityReader
     private function readableAccount(string $quoted): string
     {
         // SHOW GRANTS writes every account this way: both parts in backticks, a backtick inside doubled.
-        preg_match('/^`((?:[^`]|``)*)`@`((?:[^`]|``)*)`$/', $quoted, $parts);
+        preg_match('/^`((?:[^`]|``)*)`@`((?:[^`]|``)*)`$/D', $quoted, $parts);
 
         return RoleObject::of(
             str_replace('``', '`', $parts[1] ?? ''),
@@ -640,7 +640,7 @@ final readonly class MysqlSecurityReader implements SecurityReader
         $identities = [];
 
         foreach (explode(',', $value) as $item) {
-            if (preg_match('/^\s*(`[^`]+`|\'[^\']+\'|"[^"]+"|[^@\s]+)\s*(?:@\s*(`[^`]+`|\'[^\']+\'|"[^"]+"|\S+))?\s*$/', $item, $parts) === 1) {
+            if (preg_match('/^\s*(`[^`]+`|\'[^\']+\'|"[^"]+"|[^@\s]+)\s*(?:@\s*(`[^`]+`|\'[^\']+\'|"[^"]+"|\S+))?\s*$/D', $item, $parts) === 1) {
                 $identities[] = $this->withoutIdentifierQuotes($parts[1]).'@'.$this->withoutIdentifierQuotes($parts[2] ?? '%');
             }
         }
@@ -650,7 +650,7 @@ final readonly class MysqlSecurityReader implements SecurityReader
 
     private function withoutIdentifierQuotes(string $part): string
     {
-        return (string) preg_replace('/^([`\'"])(.*)\1$/s', '$2', $part);
+        return (string) preg_replace('/^([`\'"])(.*)\1$/sD', '$2', $part);
     }
 
     /**
@@ -855,10 +855,10 @@ final readonly class MysqlSecurityReader implements SecurityReader
             // `mysql.db`, `mysql.role_edges`. The view that actually refused is named in the DETAIL,
             // where the exact identifier belongs.
             //
-            // It also keeps the Core skip-area map free of `information_schema`, which
-            // CorePurityArchTest bans there — correctly: a translation table in Core reaching for an
-            // engine's vocabulary is the coupling that guard exists to catch, and the answer is to
-            // label from the driver rather than to widen the ban list.
+            // It also keeps the Core skip-area map free of `information_schema`, which the
+            // architecture guard bans there — correctly: a translation table in Core reaching for
+            // an engine's vocabulary is the coupling that guard exists to catch, and the answer is
+            // to label from the driver rather than to widen the ban list.
             'mysql.routines',
             $skips,
         );
@@ -927,8 +927,8 @@ final readonly class MysqlSecurityReader implements SecurityReader
             // row, so a per-value `is_scalar` branch is a line nothing can reach — and an unreachable
             // branch under a 100% floor is a line that has to be either exercised or removed.
             $grant = strtoupper(implode(' ', array_map(
-                static fn (mixed $value): string => is_scalar($value) ? (string) $value : '',
-                get_object_vars((object) $row),
+                strval(...),
+                array_filter(get_object_vars((object) $row), is_scalar(...)),
             )));
 
             // `SHOW_ROUTINE` is checked first because it is the right answer, not a fallback. It is

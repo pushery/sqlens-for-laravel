@@ -18,7 +18,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * Two rules ask the identical question for opposite reasons. {@see Drivers\Pgsql\Rules\L2\ConstraintNotValidatedRule}
  * asks what MATTERS: a constraint added to a table born in this migration locks nothing anyone can
  * observe, so the whole statement is beneath notice when every table it names is new.
- * {@see Drivers\Pgsql\Rules\L5\ForeignKeyWithoutIndexRule} asks what can be KNOWN: only a migration
+ * {@see Drivers\Pgsql\Rules\L5\ForeignKeyWithoutIndexRule} asks what can be known: only a migration
  * that creates the table carries that table's index history, and a foreign key names two tables of
  * which either could be the one carrying the key.
  *
@@ -37,7 +37,7 @@ final readonly class TouchedTables
     private const string QUERY_START = '/\G\b(?:AS(?:\s+(?:SELECT|TABLE|VALUES|WITH|EXECUTE)\b|\s*\()|SELECT\b)/i';
 
     /** The clause that runs no query: the table gets the query's columns and no rows. */
-    private const string NO_DATA = '/\bWITH\s+NO\s+DATA\s*;?\s*$/i';
+    private const string NO_DATA = '/\bWITH\s+NO\s+DATA\s*;?\s*$/iD';
 
     /**
      * The table targets this statement names, in the classifier's deterministic order.

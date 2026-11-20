@@ -96,7 +96,7 @@
             "scope": "cluster",
             "changeable": "initdb",
             "source_url": "https://dev.mysql.com/doc/refman/8.4/en/server-system-variables.html",
-            "note": "No expectation on purpose: the right value depends on the deployment's filesystem, and it CANNOT be changed after initialization — a rule about it can only report a mismatch between environments, never a fix."
+            "note": "No expectation on purpose: the right value depends on the deployment's filesystem, and it cannot be changed after initialization — a rule about it can only report a mismatch between environments, never a fix."
         },
         {
             "variable": "require_secure_transport",
@@ -324,7 +324,7 @@
             "scope": "instance",
             "changeable": "session",
             "source_url": "https://www.postgresql.org/docs/18/runtime-config-compatible.html",
-            "note": "Off makes a backslash an escape character inside ordinary string literals, which changes what a stored value MEANS and is a classic injection surface."
+            "note": "Off makes a backslash an escape character inside ordinary string literals, which changes what a stored value means and is a classic injection surface."
         },
         {
             "variable": "track_counts",

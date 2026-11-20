@@ -50,6 +50,8 @@ final readonly class SquawkRawFinding
      * Null rather than an exception: an unreadable report is a fact about the run, and the
      * caller turns it into a named undetermined. A throw here would make an optional amplifier
      * able to end the lint run that merely asked it a question.
+     *
+     * @param  mixed  $entry  an entry of the squawk report as its JSON decoded it
      */
     public static function fromReportEntry(mixed $entry): ?self
     {

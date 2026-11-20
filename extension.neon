@@ -119,6 +119,12 @@ services:
         class: Pushery\SQLens\Analyse\JustificationSpanCollector
         tags:
             - phpstan.collector
+    # An annotation on a trait, recorded under the names its methods carry in each class that uses
+    # it: PHPStan reads a trait's methods in that class, and a call site there reports the class.
+    -
+        class: Pushery\SQLens\Analyse\TraitJustificationCollector
+        tags:
+            - phpstan.collector
     -
         class: Pushery\SQLens\Analyse\RawSqlFragmentCollector
         tags:

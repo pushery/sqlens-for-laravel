@@ -100,8 +100,8 @@ final class FormatCommand extends Command
         {path?* : A path to format; repeatable. The same thing as --path=, in the form an editor or a pre-commit hook passes}
         {--path=* : A path to format; repeatable. Defaults to the application\'s registered migration paths}
         {--format=console : The report format — console, json or github. Yes, `--format` on `sqlens:format`; see the class docblock}
-        {--check : Report whether anything WOULD be reformatted and exit non-zero if so, changing nothing}
-        {--diff : Print a unified diff of what WOULD change and write nothing. Informational: it does not set the exit code — combine with --check for that}
+        {--check : Report whether anything would be reformatted and exit non-zero if so, changing nothing}
+        {--diff : Print a unified diff of what would change and write nothing. Informational: it does not set the exit code — combine with --check for that}
         {--strict-tools : Treat a backend this run could not use as an error, not a degradation (overrides the configured strict_tools)}
         {--no-strict-tools : Treat a backend this run could not use as a degradation (overrides the configured strict_tools)}
         {--profile= : The environment profile — local, ci or predeploy. Overrides SQLENS_PROFILE and the configured profile, and sets strict_tools for a run that names neither strict flag}

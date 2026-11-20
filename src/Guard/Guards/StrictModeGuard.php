@@ -94,7 +94,7 @@ final readonly class StrictModeGuard implements RuntimeGuard
                 type: 'lazy_loading',
                 category: Category::Performance,
                 message: 'a lazy load happened where the profile forbids one',
-                sql: sprintf('%s::$%s', $model::class, $relation),
+                sql: sprintf('%s::$%sD', $model::class, $relation),
                 context: ['model' => $model::class, 'relation' => $relation],
             ));
         });
@@ -117,7 +117,7 @@ final readonly class StrictModeGuard implements RuntimeGuard
                 type: 'missing_attributes',
                 category: Category::Safety,
                 message: 'an attribute that was never retrieved was read',
-                sql: sprintf('%s::$%s', $model::class, $key),
+                sql: sprintf('%s::$%sD', $model::class, $key),
                 context: ['model' => $model::class, 'attribute' => $key],
             ));
         });

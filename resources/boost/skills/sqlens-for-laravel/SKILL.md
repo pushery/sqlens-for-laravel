@@ -272,7 +272,7 @@ without code scanning.
 
 #### The privacy pack is opt-in
 
-Personal-data findings depend on what a column MEANS, which is a judgment about your project rather
+Personal-data findings depend on what a column means, which is a judgment about your project rather
 than about your database. So they are off until you say otherwise:
 
 ```php
@@ -325,6 +325,7 @@ rather than baselining it. Both attributes take a mandatory `reason`, so the
 acceptance is never silent:
 
 ```php
+use Illuminate\Database\Migrations\Migration;
 use Pushery\SQLens\Attributes\SqlensAllowDestructive;
 use Pushery\SQLens\Attributes\SqlensIgnore;
 
@@ -344,6 +345,7 @@ A third attribute answers the static-analysis rules instead of suppressing them,
 takes two separate reasons because they are two separate questions:
 
 ```php
+use Illuminate\Support\Facades\DB;
 use Pushery\SQLens\Attributes\RawSql;
 
 #[RawSql(
@@ -648,7 +650,7 @@ If the project's default connection is SQLite, name the one you deploy against w
 `--connection=pgsql`. SQLens ships no rules for SQLite, so the command refuses with that reason
 instead of writing an empty catalog.
 
-**It writes what YOUR project enforces, not the whole catalog.** Raise the level, add an ignore
+**It writes what your project enforces, not the whole catalog.** Raise the level, add an ignore
 entry or pin `assume_server_version`, and the files change with it. Guidance that named checks your
 pipeline does not run would be wrong in the direction nobody notices — an agent would follow a rule
 that never fires and skip one that does.

@@ -111,7 +111,10 @@ final readonly class UnenforcedConstraintCheck implements PostdeployCheck
 
         $findings = [];
 
-        foreach (array_map(static fn (mixed $row): object => (object) $row, $rows) as $row) {
+        foreach ($rows as $raw) {
+
+            $row = (object) $raw;
+
             $constraint = $this->text($row, 'constraint_name');
 
             if ($constraint === '') {

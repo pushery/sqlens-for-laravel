@@ -10,7 +10,7 @@ use Pushery\SQLens\Guard\GuardProfile;
 /**
  * A guardrail that judges executed queries, rather than one that flips a switch at boot.
  *
- * It is a SEPARATE contract from {@see RuntimeGuard} because the two are activated differently: a
+ * It is a separate contract from {@see RuntimeGuard} because the two are activated differently: a
  * strictness switch is set once and forgotten, while everything here shares one query listener. A
  * listener per guardrail would put N closures on the hot path of every query an application runs —
  * a runtime cost that grows with the feature, on a package whose whole promise is that it reads.

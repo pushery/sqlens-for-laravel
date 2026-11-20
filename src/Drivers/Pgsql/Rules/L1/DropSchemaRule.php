@@ -149,7 +149,7 @@ final class DropSchemaRule extends AbstractPgsqlSafetyRule implements DeclaresLi
     private function reachClause(string $canonical): string
     {
         if (preg_match('/\bCASCADE\b/i', $canonical) === 1) {
-            return ' It uses CASCADE, so every table, view, sequence and routine in the schema goes with it — and so does every object OUTSIDE the schema that depends on one of them.';
+            return ' It uses CASCADE, so every table, view, sequence and routine in the schema goes with it — and so does every object outside the schema that depends on one of them.';
         }
 
         return ' Without CASCADE PostgreSQL refuses a schema that still contains anything, so this succeeds only on an already-empty namespace.';

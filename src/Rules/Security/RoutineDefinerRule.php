@@ -18,7 +18,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * ## Why a correct construction is still a finding
  *
- * Because of what it does to every OTHER judgment about the database. `EXECUTE` on this routine is
+ * Because of what it does to every other judgment about the database. `EXECUTE` on this routine is
  * not an ordinary privilege — it is a bounded loan of the owner's rights, and a reviewer looking at a
  * grant list has no way to see that from the grant. Nor does the least-privilege rule: a runtime role
  * holding only `EXECUTE` looks minimal and may reach further than any of its other grants allow.
@@ -87,7 +87,7 @@ final class RoutineDefinerRule extends AbstractRoutineRule
     {
         return [
             'reads the routine\'s SIGNATURE and its declared path, never its body. A routine whose every reference is already schema-qualified is safe in practice and is still reported, because whether the next edit stays qualified is not something the catalog can promise',
-            'reports a routine that is CORRECT, on purpose: a definer routine is a deliberate escalation boundary, and the finding exists so somebody confirms it was deliberate. Silencing it with a reason is the expected outcome rather than a failure',
+            'reports a routine that is correct, on purpose: a definer routine is a deliberate escalation boundary, and the finding exists so somebody confirms it was deliberate. Silencing it with a reason is the expected outcome rather than a failure',
         ];
     }
 }

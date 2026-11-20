@@ -119,7 +119,10 @@ final readonly class OrphanTransitionObjectCheck implements PostdeployCheck
         $patterns = $this->patterns ?? TransitionObjectPatterns::shipped();
         $findings = [];
 
-        foreach (array_map(static fn (mixed $row): object => (object) $row, $rows) as $row) {
+        foreach ($rows as $raw) {
+
+            $row = (object) $raw;
+
             $schema = $this->text($row, 'schema_name');
             $name = $this->text($row, 'object_name');
 

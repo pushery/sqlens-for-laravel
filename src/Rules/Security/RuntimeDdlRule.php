@@ -148,7 +148,7 @@ final class RuntimeDdlRule extends AbstractSchemaObjectSecurityRule implements D
      * connection.
      *
      * So it requires the run to have established that it is looking at the runtime connection.
-     * `undetermined` there is deliberately SILENT rather than a second undetermined finding: the
+     * `undetermined` there is deliberately silent rather than a second undetermined finding: the
      * project not having said which connection serves requests is already reported once, by
      * {@see UnseparatedConnectionsRule}, and saying it twice would make a reader chase two entries
      * to one missing config key.
@@ -259,7 +259,7 @@ final class RuntimeDdlRule extends AbstractSchemaObjectSecurityRule implements D
     {
         return [
             'compares the project\'s configured runtime connection against the catalog: a project that has not told SQLens which connection is the runtime one gets no answer here rather than a guessed one',
-            'reads the privilege, not its use. A runtime role that CAN create objects and never does is reported the same way, because the finding is about what a compromise of that role would reach',
+            'reads the privilege, not its use. A runtime role that can create objects and never does is reported the same way, because the finding is about what a compromise of that role would reach',
         ];
     }
 }

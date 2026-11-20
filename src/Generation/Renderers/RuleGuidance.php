@@ -35,7 +35,7 @@ final readonly class RuleGuidance
         $lines = [
             'These are the database rules this project has configured. They were generated from its '
                 .'own SQLens configuration, so the list is this project\'s rather than a general one. What any '
-                .'ONE run checks is a subset of it: the suite counts below say how many each carries, and a '
+                .'one run checks is a subset of it: the suite counts below say how many each carries, and a '
                 .'rule its own configuration has switched off says so where it appears.',
             '',
             ...self::context($snapshot),

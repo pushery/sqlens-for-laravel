@@ -48,7 +48,7 @@ final readonly class PgsqlInstanceIdentityReader implements InstanceIdentityRead
             // answered with a row. A branch for the impossible case would be a guard that guards
             // nothing — and if a driver ever did return nothing, the property access raises and the
             // catch turns it into the same named undetermined, which is the right answer anyway.
-            $row = $this->session->read(static fn (Connection $db): mixed => $db->selectOne(
+            [$row] = $this->session->read(static fn (Connection $db): array => [$db->selectOne(
                 // host(), not `::text`. Measured on PostgreSQL 18: the cast renders the inet type
                 // WITH its netmask — `127.0.0.1/32`, `::1/128` — which is a network, not a host. It
                 // would reach the report header as the server's identity and would fail every
@@ -58,7 +58,7 @@ final readonly class PgsqlInstanceIdentityReader implements InstanceIdentityRead
             .' pg_catalog.current_database() as db,'
             .' pg_catalog.current_setting(\'server_version\') as version,'
                 .' pg_catalog.pg_is_in_recovery() as in_recovery'
-            ));
+            )]);
 
             $host = $this->text($row, 'host');
             $port = $this->int($row, 'port');
@@ -139,6 +139,8 @@ final readonly class PgsqlInstanceIdentityReader implements InstanceIdentityRead
      * reaches, and if some future driver did return a string, null is the honest answer: "the role
      * could not be read" is reported as an undetermined field, where a mis-parsed `'f'` read as
      * truthy would silently call a replica writable.
+     *
+     * @param  mixed  $row  the row the server returned, as the driver hands it over
      */
     private function bool(mixed $row, string $key): ?bool
     {

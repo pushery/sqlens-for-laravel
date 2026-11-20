@@ -39,6 +39,7 @@ final class ConfigValidator
      * The narrower of the two doors, kept because most callers only ever ask the fatal question.
      * It delegates rather than walking again — see {@see ConfigInspection}.
      *
+     * @param  mixed  $config  the package's config as a host wrote it, of any type
      * @return list<ConfigViolation>
      */
     public function validate(mixed $config): array
@@ -63,12 +64,14 @@ final class ConfigValidator
      * says so, once per key, in the notice list — which is this package's usual move when it
      * cannot decide something for you: report it, do not pretend it did not happen.
      *
-     * The half that was actually load-bearing is untouched. An UNKNOWN key is still fatal,
+     * The half that was actually load-bearing is untouched. An unknown key is still fatal,
      * because a typo that silently enables nothing is the failure this validator exists for.
      *
      * A retired key is not unknown and is not treated as one: it was written correctly against a
      * schema that has since moved, so it is named and ignored — see
      * {@see ConfigSchema::RETIRED_TOP_LEVEL_KEYS}.
+     *
+     * @param  mixed  $config  the package's config as a host wrote it, of any type
      */
     public function inspect(mixed $config): ConfigInspection
     {
@@ -114,7 +117,10 @@ final class ConfigValidator
         return new ConfigInspection($violations, $this->notices, $retired);
     }
 
-    /** @return list<ConfigViolation> */
+    /**
+     * @param  mixed  $value  a value of the package's config, which a host may have set to any type
+     * @return list<ConfigViolation>
+     */
     private function keyViolations(string $key, mixed $value): array
     {
         if (array_key_exists(ConfigSchema::template($key), ConfigSchema::SECTION_KEYS)) {
@@ -145,6 +151,7 @@ final class ConfigValidator
      * base-config counterpart — so a profile can never accept a value the root
      * would reject.
      *
+     * @param  mixed  $value  a value of the package's config, which a host may have set to any type
      * @return list<ConfigViolation>
      */
     private function profilesViolations(mixed $value): array
@@ -241,7 +248,10 @@ final class ConfigValidator
         );
     }
 
-    /** @return list<ConfigViolation> */
+    /**
+     * @param  mixed  $value  a value of the package's config, which a host may have set to any type
+     * @return list<ConfigViolation>
+     */
     private function sectionViolations(string $section, mixed $value): array
     {
         if (! is_array($value)) {
@@ -398,7 +408,10 @@ final class ConfigValidator
         return $violations;
     }
 
-    /** @return list<ConfigViolation> */
+    /**
+     * @param  mixed  $value  a value of the package's config, which a host may have set to any type
+     * @return list<ConfigViolation>
+     */
     private function ignoreViolations(mixed $value): array
     {
         if (! is_array($value) || ! array_is_list($value)) {

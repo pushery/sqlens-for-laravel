@@ -146,7 +146,10 @@ final readonly class ReplicationSlotCheck implements PreflightCheck
 
         $findings = [];
 
-        foreach (array_map(static fn (mixed $row): object => (object) $row, $rows) as $row) {
+        foreach ($rows as $raw) {
+
+            $row = (object) $raw;
+
             $findings[] = $this->finding(
                 $context,
                 $this->text($row, 'slot_name'),

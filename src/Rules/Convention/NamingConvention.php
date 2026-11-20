@@ -107,6 +107,7 @@ final readonly class NamingConvention
      * for a reason no reader could see. The config validator has already refused both shapes by the
      * time this runs; this is the second line for a registry built outside it.
      *
+     * @param  mixed  $exempt  a value of the package's config, which a host may have set to any type
      * @return list<string>
      */
     private static function usablePatterns(mixed $exempt): array
@@ -116,8 +117,8 @@ final readonly class NamingConvention
         }
 
         return array_values(array_filter(
-            $exempt,
-            static fn (mixed $entry): bool => is_string($entry) && @preg_match($entry, '') !== false,
+            array_filter($exempt, is_string(...)),
+            static fn (string $entry): bool => @preg_match($entry, '') !== false,
         ));
     }
 }

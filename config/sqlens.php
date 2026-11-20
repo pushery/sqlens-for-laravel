@@ -168,7 +168,7 @@ return [
     | the SQL it reasons about". No code path ever consulted it for that choice:
     | `sqlens:lint` reads --shadow, `sqlens:drift` replays into a throwaway
     | database, and the catalog suites read a catalog. Its one reader was the run
-    | header, where it LABELED every run with whatever this file said — including
+    | header, where it labeled every run with whatever this file said — including
     | the runs whose real mode was something else.
     |
     | Each command now reports the mode it actually used. A published config that
@@ -240,7 +240,7 @@ return [
     |
     | The project-wide opt-in for the destructive rules on both engines — the level-1
     | family (DROP SCHEMA, DROP TABLE, DROP COLUMN, TRUNCATE, and a mass UPDATE/DELETE
-    | with no WHERE) and the level-4 deploy-window rule. It NEVER hides a destructive
+    | with no WHERE) and the level-4 deploy-window rule. It never hides a destructive
     | operation: when it is on, the finding still appears in the run, moved to the
     | suppressed list with a named reason ("allowed project-wide by
     | sqlens.allow_destructive"), so the report keeps showing that the migration
@@ -293,7 +293,7 @@ return [
     | read exactly or refused with a named reason — never approximated. `18.x`
     | would otherwise be read as exactly 18.0, quietly narrower than the "any 18"
     | it means, and a rule written for 18.2 would then stop firing with no message
-    | at all. A server BANNER is still parsed leniently, because the server writes
+    | at all. A server banner is still parsed leniently, because the server writes
     | that one and we only get to cope with it; this you typed on purpose. The
     | configuration check refuses a pin in any other format before the run starts,
     | and `sqlens:lint` refuses `--assume-server-version` the same way.
@@ -797,7 +797,7 @@ return [
         |
         */
         'naming' => [
-            'pattern' => '/^[a-z][a-z0-9_]*$/',
+            'pattern' => '/^[a-z][a-z0-9_]*$/D',
             'exempt' => [],
             // What a single-column foreign key's column is expected to end with. An EMPTY value is
             // refused by the configuration check before any command runs: every name ends with the
@@ -858,7 +858,7 @@ return [
     | bundling operations on several tables lengthens the total lock time and grows
     | the queue behind them. The default of 1 flags a transaction that locks more
     | than one table; raise it to allow more, or the rule is dropped by narrowing it.
-    | A positive integer — several ALTER clauses in ONE statement are one lock on one
+    | A positive integer — several ALTER clauses in one statement are one lock on one
     | table and never count.
     |
     */
@@ -1457,15 +1457,15 @@ return [
          * a gate that waves through what it could not read is worth nothing.
          *
          * `--allow-undetermined` is the per-run way out. This is the same decision taken once, for
-         * a project whose deploy pipeline genuinely cannot depend on the gate — and it is `false`
-         * here because a hatch nobody remembers opening is the failure mode worth designing
-         * against.
+         * a project whose deploy pipeline cannot depend on the gate. It is `false` by default, so a
+         * deploy goes past a check that could not answer only where somebody chose that.
          *
-         * Either way the waiver is on the RECORD: the report's run header carries
-         * `undetermined_waiver`, so a green that was waved through can never be read as an earned
-         * one. A real finding still blocks whatever this says — the hatch is one door.
+         * Either way the waiver is recorded: the report's run header carries
+         * `undetermined_waiver`, so a run that passed because of it reads differently from one that
+         * passed on its own. A finding still blocks the deploy whatever this says; the setting
+         * waives only the checks that could not answer.
          *
-         * It also takes a LIST, and that is the form worth reaching for. `true` waives whatever
+         * It also takes a list, and that is the form worth reaching for. `true` waives whatever
          * could not answer; a list waives only the reasons named on it, and the gate proceeds only
          * when every answer it could not get is one of them:
          *
@@ -1639,7 +1639,7 @@ return [
              * over the protocol there is no prompt at all: without this set, `lint_shadow` answers
              * `undetermined` with the reason and points at the CLI. Silence is never taken as yes.
              *
-             * It is deliberately SEPARATE from enabling the tool. Enabling says an agent may ask;
+             * It is deliberately separate from enabling the tool. Enabling says an agent may ask;
              * this says a run may actually happen. Two switches, because they are two decisions.
              *
              * It is also the weakest thing the guard can be told. It never overrides the allowed

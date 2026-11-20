@@ -93,7 +93,8 @@ final readonly class IndexAdvisor
 
         foreach ($usable as $name => $index) {
             if (self::serves($index, $columns, count($equality))) {
-                return IndexAdvice::covered($name, $columns, 'served by '.$name.', which leads with '.implode(', ', $columns));
+                // An index named only by digits is an int key of the members, the way PHP stores it.
+                return IndexAdvice::covered((string) $name, $columns, 'served by '.$name.', which leads with '.implode(', ', $columns));
             }
         }
 

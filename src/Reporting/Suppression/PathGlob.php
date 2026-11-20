@@ -48,7 +48,7 @@ final readonly class PathGlob
             };
         }
 
-        return '#^'.$regex.'$#';
+        return '#^'.$regex.'$#D';
     }
 
     private static function forwardSlash(string $value): string

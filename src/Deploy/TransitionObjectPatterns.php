@@ -41,17 +41,17 @@ final readonly class TransitionObjectPatterns
      * @var list<string>
      */
     public const array SHIPPED = [
-        '/_old$/',
-        '/_new$/',
-        '/_tmp$/',
-        '/_temp$/',
-        '/_bak$/',
-        '/_backup$/',
-        '/_copy$/',
-        '/_migration$/',
+        '/_old$/D',
+        '/_new$/D',
+        '/_tmp$/D',
+        '/_temp$/D',
+        '/_bak$/D',
+        '/_backup$/D',
+        '/_copy$/D',
+        '/_migration$/D',
         // A dated suffix: `orders_20260721`. Eight digits, because six would also match a version
         // number and four would match a year somebody put in a real table name on purpose.
-        '/_\d{8}$/',
+        '/_\d{8}$/D',
         '/^tmp_/',
     ];
 
@@ -79,9 +79,8 @@ final readonly class TransitionObjectPatterns
         }
 
         $usable = array_values(array_filter(
-            $configured,
-            static fn (mixed $pattern): bool => is_string($pattern)
-                && $pattern !== ''
+            array_filter($configured, is_string(...)),
+            static fn (string $pattern): bool => $pattern !== ''
                 && @preg_match($pattern, '') !== false,
         ));
 

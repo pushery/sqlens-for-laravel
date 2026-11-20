@@ -45,6 +45,8 @@ final readonly class McpConnection
     /**
      * The connection a tool runs against: the one the client named, else the configured one, else
      * null for the application's default.
+     *
+     * @param  mixed  $requested  the connection a client asked for, as its request decoded it
      */
     public function chosen(mixed $requested): ?string
     {

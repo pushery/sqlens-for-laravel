@@ -165,7 +165,7 @@ final class UnusedIndexRule extends AbstractCatalogRule implements DeclaresJudge
             'On %s, %s never been scanned since the statistics were reset at %s: %s. An index nobody reads is '
             .'still written on every insert and on every update touching its columns, occupies its own pages in '
             .'cache, and is one more relation for vacuum to walk. Before dropping it, check the two things this '
-            .'counter cannot see: statistics are PER INSTANCE, so an index read only on a replica looks unused '
+            .'counter cannot see: statistics are per instance, so an index read only on a replica looks unused '
             .'here, and a query that runs monthly has not run yet if the window is shorter than a month. This '
             .'run required at least %d day(s) of window. Drop with DROP INDEX CONCURRENTLY when you are '
             .'satisfied; SQLens never runs it.',

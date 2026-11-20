@@ -53,7 +53,7 @@ final class DeprecatedPasswordHashLockedRule extends AbstractDeprecatedPasswordH
     {
         return [
             'reads the account catalog, not the connections: an account that exists and nothing ever authenticates as is the same rows as one in daily use, and which is which is a deployment fact',
-            'the locked/unlocked split is the whole reason this id is separate from its sibling, and it rests on the server\'s own flag. An account locked by something OUTSIDE the server — a network rule, a proxy refusing it — reads as usable here',
+            'the locked/unlocked split is the whole reason this id is separate from its sibling, and it rests on the server\'s own flag. An account locked by something outside the server — a network rule, a proxy refusing it — reads as usable here',
             'a locked account keeps its verifier, so unlocking it later restores exactly the weakness reported here — which is why this is a finding at all rather than a state to ignore',
         ];
     }

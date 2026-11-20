@@ -272,7 +272,7 @@ final readonly class GrantCheck implements PreflightCheck
     #[RawSql(reason: 'reads pg_extension, pg_roles and pg_available_extension_versions and asks has_database_privilege(); whether an extension is trusted and who may create it have no other representation')]
     private function mayCreateExtension(PreflightContext $context, string $role, string $extension): bool
     {
-        $name = preg_match('/^"(.*)"$/s', $extension, $quoted) === 1 ? str_replace('""', '"', $quoted[1]) : $extension;
+        $name = preg_match('/^"(.*)"$/sD', $extension, $quoted) === 1 ? str_replace('""', '"', $quoted[1]) : $extension;
 
         $row = $context->session->read(static fn (Connection $db): array => $db->select(
             'select exists (select 1 from pg_catalog.pg_extension where extname = ?)'
@@ -534,7 +534,7 @@ final readonly class GrantCheck implements PreflightCheck
                 $role,
             ),
             $ownership => sprintf(
-                'must OWN `%s`, and ownership cannot be granted — `ALTER TABLE` requires the TABLE '
+                'must own `%s`, and ownership cannot be granted — `ALTER TABLE` requires the TABLE '
                 .'itself, which owning the schema does not give, and no `GRANT` produces it. Either '
                 .'`ALTER TABLE %s OWNER TO %s`, or make %s a member of the role that owns it',
                 $requirement->object,

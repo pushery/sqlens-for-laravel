@@ -58,7 +58,7 @@ final readonly class SubjectContext
          *
          * `primary`, `replica`, `undetermined` — or null when the question does not arise, which
          * is the ordinary case for a migration read off disk. The distinction matters because it
-         * is not a decoration on the finding, it is part of what the finding MEANS: a settings
+         * is not a decoration on the finding, it is part of what the finding means: a settings
          * value that is wrong on the primary is a production problem, while the same value on a
          * replica describes a machine that serves no writes and may be sized that way on purpose.
          * A reader without it has to guess, and the safe guess is the pessimistic one.

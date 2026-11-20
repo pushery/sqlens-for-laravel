@@ -26,7 +26,7 @@ use Pushery\SQLens\Capture\CaptureSection;
  * contents after — the boundary between migrations is the reset, not a count or a
  * heuristic, so attribution is exact.
  *
- * The raw SQL and the bindings are kept SEPARATE, exactly as `DB::listen` reports
+ * The raw SQL and the bindings are kept separate, exactly as `DB::listen` reports
  * them and exactly as the pretend log's are carried, because turning them into one
  * canonical string is the shared substitution and canonicalization layer's job —
  * the shadow path grows no second inliner.

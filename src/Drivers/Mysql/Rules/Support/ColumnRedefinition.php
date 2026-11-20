@@ -89,7 +89,7 @@ final readonly class ColumnRedefinition
     {
         // The leading `ALTER TABLE <table>` is matched but not captured — which table this is
         // belongs to the classified targets, not to a text match.
-        if (preg_match('/^ALTER TABLE \S+ (?<actions>\S.*)$/', $canonical, $statement) !== 1) {
+        if (preg_match('/^ALTER TABLE \S+ (?<actions>\S.*)$/D', $canonical, $statement) !== 1) {
             return null;
         }
 
@@ -106,7 +106,7 @@ final readonly class ColumnRedefinition
             // behaviors. `COLUMN` is the manual's optional word, and it cannot be a column's name
             // here: a column named `column` keeps its quotes in the canonical form.
             $matched = preg_match(
-                '/^(?:MODIFY (?:COLUMN )?(?<modified>\S+)|CHANGE (?:COLUMN )?(?<old>\S+) (?<renamed>\S+)) (?<definition>\S.*)$/',
+                '/^(?:MODIFY (?:COLUMN )?(?<modified>\S+)|CHANGE (?:COLUMN )?(?<old>\S+) (?<renamed>\S+)) (?<definition>\S.*)$/D',
                 $action,
                 $matches,
             );
@@ -208,6 +208,6 @@ final readonly class ColumnRedefinition
      */
     private static function hasPositionClause(string $definition): bool
     {
-        return preg_match('/\s(?:AFTER\s+\S+|FIRST)\s*$/', $definition) === 1;
+        return preg_match('/\s(?:AFTER\s+\S+|FIRST)\s*$/D', $definition) === 1;
     }
 }

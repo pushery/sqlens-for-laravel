@@ -93,8 +93,11 @@ final readonly class DriverCaptorFactory
      * The pretend-mode captor for a connection, or the named reason the driver
      * cannot be captured. Pretend collects the migration's SQL via Laravel's
      * `--pretend` without executing it — the default, do-no-harm mode.
+     *
+     * `$serverVersion` is the version the run reasons about, so a capture without a
+     * connection compiles what that server would be sent. See PretendCaptor.
      */
-    public function pretend(string $connectionName): Captor|DriverResolutionFailure
+    public function pretend(string $connectionName, ?string $serverVersion = null): Captor|DriverResolutionFailure
     {
         $driver = $this->drivers->resolve($connectionName);
 
@@ -119,12 +122,13 @@ final readonly class DriverCaptorFactory
         $loader = new MigrationLoader;
 
         return $this->gateOver(
-            $this->pretendChain($connectionName, $canonicalization, $formatter, $key, $loader),
+            $this->pretendChain($connectionName, $canonicalization, $formatter, $key, $loader, $serverVersion),
             $connectionName,
             $canonicalization,
             $formatter,
             $key,
             $loader,
+            $serverVersion,
         );
     }
 
@@ -254,9 +258,10 @@ final readonly class DriverCaptorFactory
         BindingFormatter $formatter,
         string $key,
         MigrationLoader $loader,
+        ?string $serverVersion,
     ): Captor {
         return CanonicalizingCaptorDecorator::forDriver(
-            new PretendCaptor($this->database->connection($connectionName), $loader, $this->database, $this->app->make(CaptureConnectionFence::class), $this->app->make(PretendStatementTap::class)),
+            new PretendCaptor($this->database->connection($connectionName), $loader, $this->database, $this->app->make(CaptureConnectionFence::class), $this->app->make(PretendStatementTap::class), $serverVersion),
             $canonicalization,
             $formatter,
             $this->subjectContextFor($key),
@@ -280,12 +285,13 @@ final readonly class DriverCaptorFactory
         BindingFormatter $formatter,
         string $key,
         MigrationLoader $loader,
+        ?string $serverVersion = null,
     ): PreScanGate {
         return PreScanGate::withDefaultDetectors(
             $inner,
             $this->stringList('sqlens.capture.prescan.side_effects.additional'),
             $this->stringList('sqlens.capture.prescan.indirect_calls.allowlist'),
-            $this->pretendChain($connectionName, $canonicalization, $formatter, $key, $loader),
+            $this->pretendChain($connectionName, $canonicalization, $formatter, $key, $loader, $serverVersion),
             // The same gate the rule registry goes through, read from the same key. Passed rather
             // than applied downstream so there is one filter: a second one beside the first would
             // be the same bet taken twice.

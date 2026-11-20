@@ -55,6 +55,7 @@ final readonly class UndeterminedCaptureRule implements CaptureRule
                     // A binding the substitution layer cannot represent, or a statement
                     // the canonicalization rejects, leaves the capture undetermined — the
                     // run could not check this migration, and says so rather than passing it.
+                    $unrepresentable = config('legacy.column_type'); // known only to the running application
                     DB::statement('create table t (c '.$unrepresentable.')');
                 }
                 PHP,

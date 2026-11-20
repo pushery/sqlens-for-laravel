@@ -80,7 +80,7 @@ final class RequireSecureTransportRule extends AbstractSettingSecurityRule
             .'TLS setup silently failed, connects exactly as before, in the clear, with nothing '
             .'raised anywhere. The state this reports is "nothing enforces it", which is how a '
             .'misconfigured client goes unnoticed for years. Note the limit: several managed '
-            .'providers enforce transport at a proxy OUTSIDE the server configuration, and this '
+            .'providers enforce transport at a proxy outside the server configuration, and this '
             .'variable reads OFF on such a server even though no connection can be made in the '
             .'clear. This says the SERVER does not require it. %s',
             $serverValue,

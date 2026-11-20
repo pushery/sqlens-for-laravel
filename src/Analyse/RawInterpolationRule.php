@@ -85,7 +85,7 @@ final class RawInterpolationRule implements Rule
         // The expression collector is deliberately not read by the policy rule beside this one —
         // see its class docblock. Requiring a written justification for every `DB::raw('count(*)')`
         // is how an analyse suite gets switched off in its first week.
-        // The hatch, and it is a SEPARATE channel from the policy rule's — `#[RawSql(interpolation:
+        // The hatch, and it is a separate channel from the policy rule's — `#[RawSql(interpolation:
         // '…')]`, never `reason:`. A method reasoned "we need a window function" has said nothing
         // about an interpolated value inside it, and reading one as the other would switch this rule
         // off wherever the policy annotation is on.
@@ -146,7 +146,7 @@ final class RawInterpolationRule implements Rule
         // it is which objects the value is allowed to name, and that is answerable.
         if ($identifierQuoted) {
             return 'The value goes through the connection\'s grammar, so it cannot break out of the '
-                .'identifier quoting — but it still chooses WHICH object the statement addresses, and '
+                .'identifier quoting — but it still chooses which object the statement addresses, and '
                 .'a value carrying a dot reaches across schemas. Constrain it to a set you wrote '
                 .'(an enum, a match, a constant map) rather than passing it through; no engine binds '
                 .'an identifier, so a list is the only place that decision can live.';

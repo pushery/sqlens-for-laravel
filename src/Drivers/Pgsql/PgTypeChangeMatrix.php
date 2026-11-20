@@ -283,6 +283,7 @@ final readonly class PgTypeChangeMatrix
     }
 
     /**
+     * @param  mixed  $value  a field of the matrix as its JSON decoded it
      * @return list<string>
      */
     private static function stringList(mixed $value, string $origin, string $field): array
@@ -305,6 +306,7 @@ final readonly class PgTypeChangeMatrix
     }
 
     /**
+     * @param  mixed  $value  a field of the matrix as its JSON decoded it
      * @return array<string, string>
      */
     private static function stringMap(mixed $value, string $origin): array

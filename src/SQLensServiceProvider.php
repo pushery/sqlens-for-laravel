@@ -733,7 +733,7 @@ final class SQLensServiceProvider extends ServiceProvider
         );
 
         $this->app->singleton(ProcessRunner::class, SystemProcessRunner::class);
-        // The tool is registered NOW, and not a commit earlier, because registration is what makes
+        // The tool is registered now, and not a commit earlier, because registration is what makes
         // a run on a machine without it report a missing tool — naming, in whatItEnables(), the
         // rules it would add. Until the chain below existed, that report named rules that did not
         // exist: a promise with nothing behind it.
@@ -807,7 +807,7 @@ final class SQLensServiceProvider extends ServiceProvider
             $this->app->bind(ServesMcp::class, StdioServerLoop::class);
             $this->app->bind(McpSdkVersion::class, static fn (): McpSdkVersion => McpSdkVersion::fromComposer());
 
-            // One shield per process, and it goes up NOW when this run is the MCP server.
+            // One shield per process, and it goes up now when this run is the MCP server.
             //
             // Reading argv rather than waiting for the command to run, because a foreign service
             // provider's `boot()` is exactly the output this exists to catch and it happens before

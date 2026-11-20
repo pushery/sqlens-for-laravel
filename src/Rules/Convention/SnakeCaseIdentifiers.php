@@ -46,7 +46,7 @@ final readonly class SnakeCaseIdentifiers
      * an identifier that starts with one is the very case this rule exists for rather than a
      * stylistic quibble.
      */
-    public const string DEFAULT_PATTERN = '/^[a-z][a-z0-9_]*$/';
+    public const string DEFAULT_PATTERN = '/^[a-z][a-z0-9_]*$/D';
 
     /**
      * The identifier quote characters of the two engines this judgment serves.
@@ -127,9 +127,10 @@ final readonly class SnakeCaseIdentifiers
      *
      * Keyed by name so a column and an index that happen to share one are reported once — and
      * sorted, because the order a reader sees must not depend on which attribute the catalog
-     * happened to fill first.
+     * happened to fill first. A name made of digits, which a quoted identifier may be, comes back
+     * as an int key, the way PHP stores it.
      *
-     * @return array<string, string>
+     * @return array<array-key, string>
      */
     public static function offendingMembers(SchemaObject $object, string $pattern = self::DEFAULT_PATTERN): array
     {

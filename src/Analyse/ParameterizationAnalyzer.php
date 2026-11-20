@@ -22,7 +22,7 @@ use Pushery\SQLens\Subjects\ParametrizationSignal;
  *
  * This is the noise control the injection rules stand on. Without it every `whereRaw('status = ?',
  * [$status])` in a codebase is a finding, the suite gets switched off inside a week, and the real
- * findings go with it. So the classifier's job is as much about staying SILENT on ordinary Laravel
+ * findings go with it. So the classifier's job is as much about staying silent on ordinary Laravel
  * code as it is about noticing the dangerous shapes.
  *
  * ## One component, one owner
@@ -283,7 +283,7 @@ final class ParameterizationAnalyzer
      * is also where the answer is meaningful: a builder is safe exactly when everything it was given
      * is.
      *
-     * INTEGER arguments are skipped on purpose. `count($ids)` decides how MANY placeholders there
+     * INTEGER arguments are skipped on purpose. `count($ids)` decides how many placeholders there
      * are, never what they say, and a length cannot smuggle a value into SQL.
      *
      * Anything else answers false and the previous verdict stands. That direction is the design:

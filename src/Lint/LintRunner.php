@@ -409,7 +409,7 @@ final readonly class LintRunner implements LintRuns
         $toolGate = new ToolFindingGate($gate, $categoryFilter);
 
         // The version axis, last and three-valued: a rule outside a known version's
-        // window produces no finding; under an UNKNOWN version a version-independent rule
+        // window produces no finding; under an unknown version a version-independent rule
         // still runs, while a version-dependent one becomes an undetermined finding
         // (emitted below) — never a silent skip and never a guess against a default.
         $versionGate = new VersionRuleGate($resolvedVersion->version);
@@ -469,9 +469,13 @@ final readonly class LintRunner implements LintRuns
         // the capture run it returns has passed through decorators that build new runs.
         $sweepRecorder = new ShadowSweepRecorder;
         $noteRecorder = new ShadowNoteRecorder;
+
+        // A pretend capture is handed the version the run reasons about. Laravel's MySQL grammar
+        // asks the connection for it to declare some columns, and a run without a connection has
+        // nothing else to answer with.
         $captor = $mode === CaptureMode::Shadow && $guard instanceof GuardDecision
             ? $this->captors->shadow($connectionName, $guard, $roundtrip, $sweepRecorder, $noteRecorder)
-            : $this->captors->pretend($connectionName);
+            : $this->captors->pretend($connectionName, $resolvedVersion->version?->toString());
 
         // A driver the manager supports but the factory has no capture wiring for
         // (a registered third-party without a formatter) is the same named stop.
@@ -1746,7 +1750,7 @@ final readonly class LintRunner implements LintRuns
      * Whether the project has opted in project-wide to destructive operations, from
      * `sqlens.allow_destructive`. Read leniently — the config validator owns a malformed
      * value, loudly — so a non-boolean never throws mid-run; only a literal `true`
-     * grants it. It never HIDES a destructive finding: the reporting layer turns it into
+     * grants it. It never hides a destructive finding: the reporting layer turns it into
      * a named, visible suppression.
      */
     private function allowsDestructiveProjectWide(): bool
@@ -2189,7 +2193,7 @@ final readonly class LintRunner implements LintRuns
 
         return sprintf(
             'SQLens supports %s and above; %s reports %s. The findings below were still produced, and they '
-            .'may be wrong in BOTH directions — a rule may flag behavior this server does not have, and may '
+            .'may be wrong in both directions — a rule may flag behavior this server does not have, and may '
             .'stay silent about behavior it does. Upgrade the server, or raise the assume_server_version pin '
             .'to a supported version, before treating this report as authoritative.',
             $required,

@@ -401,8 +401,8 @@ final readonly class PgsqlStatisticsReader implements StatisticsReader
     private function analyzedAt(object $row): ?DateTimeImmutable
     {
         $stamps = array_values(array_filter(
-            [$row->last_analyze ?? null, $row->last_autoanalyze ?? null],
-            static fn (mixed $stamp): bool => is_string($stamp) && $stamp !== '',
+            array_filter([$row->last_analyze ?? null, $row->last_autoanalyze ?? null], is_string(...)),
+            static fn (string $stamp): bool => $stamp !== '',
         ));
 
         if ($stamps === []) {

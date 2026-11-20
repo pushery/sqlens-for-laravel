@@ -39,8 +39,8 @@ final readonly class SessionBudget
      * reaches it. Something has to answer for an absent key, and "whatever the shipped config
      * file says" is not available at that point — the reader has the app's copy, not ours.
      *
-     * `SessionBudgetDefaultsTest` pins these against the shipped config file, so the two cannot
-     * drift into disagreeing about what an unconfigured project gets.
+     * A test pins these against the shipped config file, so the two cannot drift into disagreeing
+     * about what an unconfigured project gets.
      */
     public const int DEFAULT_STATEMENT_TIMEOUT_MS = 5000;
 
@@ -73,7 +73,7 @@ final readonly class SessionBudget
      * The deploy suite's reason for existing: a `predeploy` run promises a bounded turnaround, and
      * the audit budget is deliberately generous — five seconds for the whole reading, because it is
      * a coarse upper bound rather than a regression brake. Handing the deploy readers that same
-     * number would make the gate's own promise unenforceable, and it would break QUIETLY: the run
+     * number would make the gate's own promise unenforceable, and it would break quietly: the run
      * would simply take longer than the number written in the documentation.
      *
      * Only ever tightens. A caller asking for more than the audit budget gets the audit budget,

@@ -104,7 +104,7 @@ final readonly class CatalogVerdicts
         // `sqlens:predeploy` until a consumer followed it into a deploy script: that command evaluates
         // no `SEC.*` rule at all, so the server was checked nowhere while the report said where. Every
         // server-bound rule sits in the audit suite, which `sqlens:security` and `sqlens:audit` both
-        // run, and DisposableServerTest holds that, so the sentence cannot drift from the rule set.
+        // run, and a test holds that, so the sentence cannot drift from the rule set.
         return array_map(
             static fn (RuleVerdict $verdict): RuleVerdict => self::isFlag($verdict)
                 ? RuleVerdict::notApplicable(

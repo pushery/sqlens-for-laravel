@@ -113,6 +113,6 @@ final class TimeZoneTablesEmptyRule extends AbstractServerSettingRule
 
         return $trimmed !== ''
             && strcasecmp($trimmed, 'SYSTEM') !== 0
-            && preg_match('/^[+-]\d{1,2}:\d{2}$/', $trimmed) !== 1;
+            && preg_match('/^[+-]\d{1,2}:\d{2}$/D', $trimmed) !== 1;
     }
 }

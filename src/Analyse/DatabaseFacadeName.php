@@ -45,7 +45,7 @@ final readonly class DatabaseFacadeName
         // Laravel registers `DB` as a root alias in `config/app.php`, so `\DB::statement(…)` is
         // ordinary application code — and `resolveName()` answers the alias, `DB`, not the facade's
         // fully qualified name. The comparison above therefore misses every call written that way,
-        // and the miss is SILENT: with Larastan loaded the alias resolves, PHPStan is content, and
+        // and the miss is silent: with Larastan loaded the alias resolves, PHPStan is content, and
         // an obvious interpolation in an UPDATE produces no finding from anybody.
         //
         // The repair that suggests itself — accept the bare name too — would report a project's own

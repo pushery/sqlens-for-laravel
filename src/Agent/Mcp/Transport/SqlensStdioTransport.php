@@ -63,8 +63,11 @@ final class SqlensStdioTransport implements Transport
     private ?Closure $handler = null;
 
     /**
-     * @param  resource  $input
-     * @param  resource  $output
+     * @param  mixed  $input  the stream the client writes to, a resource, which PHP has no type for
+     * @param  mixed  $output  the stream the client reads from, a resource, which PHP has no type for
+     *
+     * @phpstan-param  resource  $input
+     * @phpstan-param  resource  $output
      */
     public function __construct(
         // `mixed` natively, `resource` in the docblock above. PHP has no `resource` type

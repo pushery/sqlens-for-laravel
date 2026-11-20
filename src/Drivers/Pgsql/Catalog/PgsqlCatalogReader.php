@@ -695,6 +695,8 @@ final readonly class PgsqlCatalogReader implements CatalogReader, ReadsKeyCounte
      * Narrowed rather than cast: a non-numeric value here would mean the query returned something
      * this reader does not understand, and turning that into `0` would say "the window is brand
      * new" — the one answer that makes a rule report nothing while looking like it checked.
+     *
+     * @param  mixed  $value  a column of the catalog row, as the driver hands it over
      */
     private function wholeDays(mixed $value): ?int
     {
@@ -998,7 +1000,7 @@ final readonly class PgsqlCatalogReader implements CatalogReader, ReadsKeyCounte
                    -- the author who fixed it.
                    x.indnullsnotdistinct                  AS nulls_not_distinct,
                    -- Whether the index carries an INCLUDE payload. Measured, and it decides a
-                   -- redundancy verdict outright: `(a) INCLUDE (b)` and `(a)` report the SAME key
+                   -- redundancy verdict outright: `(a) INCLUDE (b)` and `(a)` report the same key
                    -- columns, because indnkeyatts deliberately excludes the payload. Without this
                    -- flag a redundancy rule would tell somebody to drop the index that carries the
                    -- payload, in favor of the one that does not.

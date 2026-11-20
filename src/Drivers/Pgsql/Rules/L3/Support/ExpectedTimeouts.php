@@ -54,6 +54,8 @@ final readonly class ExpectedTimeouts
      * reaches here, so this is a defensive narrowing, never the validation itself: a
      * non-list, or a value that somehow slipped through, degrades to the known subset
      * rather than letting a stray entry mean a rule silently stops enforcing.
+     *
+     * @param  mixed  $value  a value of the package's config, which a host may have set to any type
      */
     public static function fromConfig(mixed $value): self
     {
@@ -62,8 +64,8 @@ final readonly class ExpectedTimeouts
         }
 
         $required = array_values(array_filter(
-            $value,
-            static fn (mixed $item): bool => is_string($item) && in_array($item, self::KNOWN, true),
+            array_filter($value, is_string(...)),
+            static fn (string $item): bool => in_array($item, self::KNOWN, true),
         ));
 
         return new self($required);

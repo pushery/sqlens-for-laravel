@@ -372,7 +372,7 @@ final readonly class AuditNotices
         return self::notice(
             AuditNotice::PinnedHostUnverified->id(),
             sprintf(
-                'The host "%s" was pinned and the server %s, so the two cannot be compared. The pin DID '
+                'The host "%s" was pinned and the server %s, so the two cannot be compared. The pin did '
                 .'take effect — it was written onto the connection this run built — but SQLens will not '
                 .'resolve a name to check it, because a DNS lookup would put a second source of truth and '
                 .'a network call inside a run that promises the same result for the same state. Pin a '
@@ -647,7 +647,7 @@ final readonly class AuditNotices
             AuditNotice::ServerBelowFloor->id(),
             sprintf(
                 'SQLens supports %s and above; this instance reports %s. The audit ran and the findings below '
-                .'are real, but they may be wrong in BOTH directions — a rule may flag behavior this server '
+                .'are real, but they may be wrong in both directions — a rule may flag behavior this server '
                 .'does not have, and may stay silent about behavior it does, because no rule was written for a '
                 .'version below the floor. A clean result here is not clearance. Upgrade the instance before '
                 .'treating this report as authoritative.',

@@ -81,10 +81,10 @@ final class MissingLockWaitTimeoutRule extends AbstractMysqlRule implements Decl
     public function limitations(): array
     {
         return [
-            'reads the migration\'s OWN statements. A project that sets `lock_wait_timeout` outside '
+            'reads the migration\'s own statements. A project that sets `lock_wait_timeout` outside '
             .'the migration — in the connection options, a server default, or a listener — is bounded '
             .'and still reported here, because a static reader cannot see any of those',
-            'says nothing about how long the statement RUNS once it has the lock. MySQL has no DDL '
+            'says nothing about how long the statement runs once it has the lock. MySQL has no DDL '
             .'counterpart to a statement timeout: `max_execution_time` is milliseconds and applies to '
             .'read-only SELECTs, measured — the same work ran 612 seconds uninterrupted as a '
             .'non-SELECT under a 200 ms limit. So a bounded wait is not a bounded operation, and this '

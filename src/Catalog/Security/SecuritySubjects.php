@@ -36,7 +36,7 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * - **`system`** — the accounts the ENGINE ships (`mysql.*`, the `pg_` predefined roles). Without it
  *   every role rule opens with findings nobody caused on a fresh server.
  * - **`origin`** — who made a grant. Every PostgreSQL database carries `CONNECT`/`TEMPORARY` to PUBLIC
- *   and `EXECUTE` to PUBLIC on a hundred-odd system functions out of the box; a rule that reported
+ *   and `EXECUTE` to PUBLIC on a hundred-odd system functions from its creation on; a rule that reported
  *   those would be switched off in its first week.
  *
  * ## Readability travels too, and it is not decoration

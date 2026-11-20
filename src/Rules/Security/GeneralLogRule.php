@@ -178,7 +178,7 @@ final class GeneralLogRule extends AbstractSettingSecurityRule
         return sprintf(
             'they are written to %s (`log_output`). A TABLE is readable by whoever holds SELECT on '
             .'it; a FILE usually sits outside whatever protects the database and is routinely swept '
-            .'into log shipping. WHO can read either is a question about the host, which this does '
+            .'into log shipping. Who can read either is a question about the host, which this does '
             .'not read and does not claim. The path is deliberately not repeated here.',
             $output,
         );

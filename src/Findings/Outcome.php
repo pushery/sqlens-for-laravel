@@ -11,7 +11,7 @@ namespace Pushery\SQLens\Findings;
  * This is the raw vocabulary; FindingStatus wraps it to enforce that neither
  * Undetermined nor NotApplicable is ever anonymous — each carries its reason.
  *
- * Three of these describe a check that RAN against something. The fourth says
+ * Three of these describe a check that ran against something. The fourth says
  * there was nothing to run against, and it is separate for one concrete reason:
  * `--strict` escalates Undetermined and must not escalate NotApplicable. Folded
  * together, that distinction would be a convention rather than a property, and

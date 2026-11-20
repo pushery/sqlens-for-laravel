@@ -46,7 +46,9 @@ final class CaptureConnectionFence
      * @template TResult
      *
      * @param  Closure(): TResult  $run
-     * @return TResult
+     * @return mixed what $run returns, whatever its type
+     *
+     * @phpstan-return TResult
      */
     public function around(Connection $owner, Closure $run): mixed
     {

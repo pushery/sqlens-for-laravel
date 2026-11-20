@@ -127,7 +127,7 @@
                     "retrieved": "2026-07-26"
                 }
             ],
-            "notes": "Changing ONE column's character set is markedly cheaper than converting the whole table: measured on 8.4.10, utf8mb3 to utf8mb4 leaves the tablespace id unchanged — no rebuild at all — where CONVERT TO on the same table does rebuild it, because CONVERT TO touches every column. The condition is the same one: a pair that changes the stored encoding is refused in place and becomes a COPY. A column widened this way may also exceed an index prefix limit, which the statement does not show. See also MySQL's chapter on converting between 3-byte and 4-byte Unicode character sets.",
+            "notes": "Changing one column's character set is markedly cheaper than converting the whole table: measured on 8.4.10, utf8mb3 to utf8mb4 leaves the tablespace id unchanged — no rebuild at all — where CONVERT TO on the same table does rebuild it, because CONVERT TO touches every column. The condition is the same one: a pair that changes the stored encoding is refused in place and becomes a COPY. A column widened this way may also exceed an index prefix limit, which the statement does not show. See also MySQL's chapter on converting between 3-byte and 4-byte Unicode character sets.",
             "stability": "stable"
         },
         {
@@ -376,7 +376,7 @@
                     "retrieved": "2026-07-24"
                 }
             ],
-            "notes": "Changing the value list of an ENUM or SET column is metadata-only under two conditions, and a full table copy otherwise. Both conditions turn on the list the column ALREADY has, and a migration carries only the new one — so a static reader cannot tell the free case from the expensive one and gets an honest undetermined. This is the single most common MySQL enum trap in a Laravel project: appending one status value is usually free, and the same statement becomes a rewrite the moment the list crosses a storage boundary or the value is placed anywhere but last.",
+            "notes": "Changing the value list of an ENUM or SET column is metadata-only under two conditions, and a full table copy otherwise. Both conditions turn on the list the column already has, and a migration carries only the new one — so a static reader cannot tell the free case from the expensive one and gets an honest undetermined. This is the single most common MySQL enum trap in a Laravel project: appending one status value is usually free, and the same statement becomes a rewrite the moment the list crosses a storage boundary or the value is placed anywhere but last.",
             "stability": "stable"
         },
         {
@@ -691,7 +691,7 @@
                     "retrieved": "2026-07-24"
                 }
             ],
-            "notes": "Dropping a primary key on its own copies the whole table and blocks writes for the duration, because the physical row order it defined has to be replaced. It is markedly more expensive than adding one, which stays in place — the asymmetry is the surprise. Dropping and adding a key in the SAME statement is a different, cheaper operation and is classified separately.",
+            "notes": "Dropping a primary key on its own copies the whole table and blocks writes for the duration, because the physical row order it defined has to be replaced. It is markedly more expensive than adding one, which stays in place — the asymmetry is the surprise. Dropping and adding a key in the same statement is a different, cheaper operation and is classified separately.",
             "stability": "stable"
         },
         {
@@ -711,7 +711,7 @@
                     "retrieved": "2026-07-24"
                 }
             ],
-            "notes": "Dropping and adding a primary key in ONE statement rewrites the table in place and keeps it readable and writable throughout — far cheaper than the same two changes as separate migrations, where the drop alone blocks writes. The one-statement form is the safe way to change a primary key, and splitting it across two migrations is the mistake worth catching.",
+            "notes": "Dropping and adding a primary key in one statement rewrites the table in place and keeps it readable and writable throughout — far cheaper than the same two changes as separate migrations, where the drop alone blocks writes. The one-statement form is the safe way to change a primary key, and splitting it across two migrations is the mistake worth catching.",
             "stability": "stable"
         },
         {
@@ -831,7 +831,7 @@
                     "retrieved": "2026-07-24"
                 }
             ],
-            "notes": "Optimizing a partition rebuilds it, and this entry previously read that off an ALGORITHM the statement never evaluates: it accepts ALGORITHM=COPY together with LOCK=NONE, the contradictory pair that DROP PARTITION -- the control -- rejects with 1846. So the clause is parsed and discarded here, and both the copy claim and the shared lock that came with it were inferred from a value the server ignores. Measured instead: the statement takes time proportional to the data (2.25 s over a 700k-row partition), and a write issued from a second session into THAT partition mid-statement landed immediately. It is a rewrite whose availability is intact -- expensive in time and disk, free in writes. The statement names one partition and the rebuild is that partition's.",
+            "notes": "Optimizing a partition rebuilds it, and this entry previously read that off an ALGORITHM the statement never evaluates: it accepts ALGORITHM=COPY together with LOCK=NONE, the contradictory pair that DROP PARTITION -- the control -- rejects with 1846. So the clause is parsed and discarded here, and both the copy claim and the shared lock that came with it were inferred from a value the server ignores. Measured instead: the statement takes time proportional to the data (2.25 s over a 700k-row partition), and a write issued from a second session into that partition mid-statement landed immediately. It is a rewrite whose availability is intact -- expensive in time and disk, free in writes. The statement names one partition and the rebuild is that partition's.",
             "stability": "stable"
         },
         {

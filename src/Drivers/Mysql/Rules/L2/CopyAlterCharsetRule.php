@@ -51,8 +51,8 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * pairs: only utf8mb3 to utf8mb4 is accepted in place; latin1, ascii and the narrowing back to
  * utf8mb3 are all refused with error 1846 and fall back to a copy. And the one pair only while no
  * string column carries an index: an index on one grows from three to four bytes a character, and the
- * conversion is then refused with 1846 as well, measured on 8.0.36 and held for the suite's server by
- * `ConvertCharsetAxesTest`.
+ * conversion is then refused with 1846 as well, measured on 8.0.36 and held by a test against the
+ * server the suite runs on.
  *
  * **This rule cannot tell which case a reader is in**, and that is not a gap to be closed: it lints a
  * migration statement, and the source charset lives in the catalog. So the message names both and gives

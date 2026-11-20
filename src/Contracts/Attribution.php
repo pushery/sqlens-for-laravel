@@ -38,7 +38,7 @@ enum Attribution: string
     /**
      * The finding names something in the reader's own migration, schema or source.
      *
-     * A bad/good pair is owed, and `RuleDocumentationCompletenessTest` requires it.
+     * A bad/good pair is owed, and the suite fails for an authored id that lacks one.
      */
     case Authored = 'authored';
 

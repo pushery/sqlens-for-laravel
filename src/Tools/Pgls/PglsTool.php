@@ -83,7 +83,7 @@ final readonly class PglsTool implements Tool
      * A pre-release (`0.27.0-rc.1`) fails it, and that is the intended direction: an unreleased
      * build is precisely the one whose output nobody has measured.
      */
-    private const string VERSION_LINE = '/^Version: (\d+\.\d+\.\d+)$/';
+    private const string VERSION_LINE = '/^Version: (\d+\.\d+\.\d+)$/D';
 
     /** The prefix every finding from this tool carries in its rule id. */
     public const string FINDING_ID_PREFIX = 'PGLS.';

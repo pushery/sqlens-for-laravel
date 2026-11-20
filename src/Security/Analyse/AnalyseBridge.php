@@ -164,7 +164,7 @@ final readonly class AnalyseBridge
         $generic = $decoded['errors'] ?? [];
         $unfinished = array_values(array_filter(
             is_array($generic) ? $generic : [$generic],
-            static fn (mixed $error): bool => ! is_string($error) || ! str_ends_with(trim($error), self::UNMATCHED_IGNORE),
+            $this->isUnfinished(...),
         ));
 
         if ($unfinished !== []) {
@@ -182,7 +182,22 @@ final readonly class AnalyseBridge
         return AnalyseReading::of($this->mapped($decoded['files'], $context));
     }
 
-    /** One internal error as a clause: its first line, which is where PHPStan puts the message. */
+    /**
+     * Whether an entry of PHPStan's generic errors leaves the run unfinished: anything but the notice
+     * that an ignore pattern matched nothing.
+     *
+     * @param  mixed  $error  an entry of the report's `errors` as its JSON decoded it
+     */
+    private function isUnfinished(mixed $error): bool
+    {
+        return ! is_string($error) || ! str_ends_with(trim($error), self::UNMATCHED_IGNORE);
+    }
+
+    /**
+     * One internal error as a clause: its first line, which is where PHPStan puts the message.
+     *
+     * @param  mixed  $message  a message of PHPStan's report as its JSON decoded it
+     */
     private function firstLine(mixed $message): string
     {
         if (! is_string($message) || trim($message) === '') {

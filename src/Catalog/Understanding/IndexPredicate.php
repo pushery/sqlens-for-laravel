@@ -158,7 +158,7 @@ final readonly class IndexPredicate
 
         // The NULL test first: it carries no operator the other arms look for, and testing it later
         // would mean each of them had to exclude the word NULL by hand.
-        if (preg_match('/^\(?('.$ident.')\s+IS\s+(NOT\s+)?NULL\)?$/i', $bare, $m) === 1) {
+        if (preg_match('/^\(?('.$ident.')\s+IS\s+(NOT\s+)?NULL\)?$/iD', $bare, $m) === 1) {
             $not = ($m[2] ?? '') !== '' ? ' NOT' : '';
 
             return new self($m[1].' IS'.$not.' NULL', 'null', $m[1]);
@@ -166,7 +166,7 @@ final readonly class IndexPredicate
 
         // `WHERE is_active` and `WHERE NOT is_active` — a boolean column used as the condition
         // itself. Normalized onto the `= true` / `= false` spelling so the two reach one form.
-        if (preg_match('/^\(?(NOT\s+)?('.$ident.')\)?$/i', $bare, $m) === 1) {
+        if (preg_match('/^\(?(NOT\s+)?('.$ident.')\)?$/iD', $bare, $m) === 1) {
             // No `??` on this group although the arm above needs one: an optional group that is
             // FOLLOWED by a participating group is filled with the empty string, while a trailing
             // one is simply omitted. Same syntax, two behaviors — and PHPStan reads the difference.
@@ -175,14 +175,14 @@ final readonly class IndexPredicate
             return new self($m[2].' = '.$value, 'boolean', $m[2]);
         }
 
-        if (preg_match('/^\(?('.$ident.')\s*=\s*(true|false)\)?$/i', $bare, $m) === 1) {
+        if (preg_match('/^\(?('.$ident.')\s*=\s*(true|false)\)?$/iD', $bare, $m) === 1) {
             return new self($m[1].' = '.strtolower($m[2]), 'boolean', $m[1]);
         }
 
         // `\(+` and `\)+` rather than one each: `IN (…)` prints an extra parenthesis layer around
         // the array that `= ANY (ARRAY[…])` does not, and the two mean the same thing. `NOT IN (…)`
         // prints as `<> ALL` with the same layer, so one pattern reads both directions.
-        if (preg_match('/^\(?\s*('.$ident.')\s*(=\s*ANY|<>\s*ALL)\s*\(+\s*ARRAY\[(.+?)\]\s*\)+$/is', $bare, $m) === 1) {
+        if (preg_match('/^\(?\s*('.$ident.')\s*(=\s*ANY|<>\s*ALL)\s*\(+\s*ARRAY\[(.+?)\]\s*\)+$/isD', $bare, $m) === 1) {
             return self::fromSet($m[1], stripos($m[2], 'ALL') !== false, $m[3]);
         }
 
@@ -190,7 +190,7 @@ final readonly class IndexPredicate
         // cost a reader a second of wondering whether `=` could shadow `= ANY` or `= true`.
         // Either kind of literal. A quoted one was always read; a number was not, and nothing about the
         // reading differs -- `(tenant_id = 1)` is as unambiguous as `((status)::text = 'live'::text)`.
-        if (preg_match('/^\(?('.$ident.')\s*(=|<>)\s*('.self::VALUE.')\)?$/i', $bare, $m) === 1) {
+        if (preg_match('/^\(?('.$ident.')\s*(=|<>)\s*('.self::VALUE.')\)?$/iD', $bare, $m) === 1) {
             return self::compared($m[1], $m[2], $m[3]);
         }
 
@@ -448,7 +448,7 @@ final readonly class IndexPredicate
             // prints as `= ANY (ARRAY[(1)::bigint, (2)::bigint])`, and refusing it left a multi-tenant
             // index unread. The sort below stays a STRING sort and that is deliberate -- it only has to
             // be deterministic, so that two spellings of one set land on one normal form.
-            if (preg_match('/^'.self::VALUE.'$/', $part) !== 1) {
+            if (preg_match('/^'.self::VALUE.'$/D', $part) !== 1) {
                 return null;
             }
 

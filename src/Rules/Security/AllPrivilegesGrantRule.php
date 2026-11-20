@@ -85,7 +85,7 @@ final class AllPrivilegesGrantRule extends AbstractSchemaObjectSecurityRule impl
         }
 
         // A grant the ENGINE ships is not a decision anybody made. MySQL's own `mysql.session` holds
-        // most of the administrative vocabulary out of the box, and reporting it would open the suite
+        // most of the administrative vocabulary on a fresh install, and reporting it would open the suite
         // with a finding on every server that nobody caused and nobody may revoke.
         if ($object->getBool('judgeable') !== true) {
             return [];
@@ -101,7 +101,7 @@ final class AllPrivilegesGrantRule extends AbstractSchemaObjectSecurityRule impl
     private function message(SchemaObject $object): string
     {
         return sprintf(
-            '%s holds EVERY privilege this engine has on the %s %s — the state a grant reaches when '
+            '%s holds every privilege this engine has on the %s %s — the state a grant reaches when '
             .'it is written as ALL PRIVILEGES, whether or not those words were used. There is no '
             .'privilege escalation left to perform against this account: anything that reaches the '
             .'connection already has everything. %s Grant only what the account uses; on an account '

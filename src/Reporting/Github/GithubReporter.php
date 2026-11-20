@@ -168,9 +168,9 @@ final class GithubReporter implements Reporter
             // No severity escalation here, and its absence is the point.
             //
             // A finding reaches this branch when its category is not security or privacy. No rule
-            // outside those two carries a severity at all — pinned in GithubReporterTest, against
-            // the shipped registry — so for rules an escalation would be unreachable code stating
-            // the opposite of what this file decided twenty lines above.
+            // outside those two carries a severity at all — a test pins that against the shipped
+            // registry — so for rules an escalation would be unreachable code stating the opposite
+            // of what this file decided twenty lines above.
             //
             // The DEPLOY family does carry one, and it still belongs on this path. A severity moves
             // an annotation because `security.min_severity` GATES on it; there is no

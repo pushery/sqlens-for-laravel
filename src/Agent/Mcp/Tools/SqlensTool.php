@@ -16,9 +16,9 @@ use Override;
  * `mutating()` is abstract, so a tool cannot be written without answering. The answer is stated
  * twice on purpose: here, by the tool that knows, and in `ConfigSchema::MCP_MUTATING_TOOLS`, which
  * the policy and the configuration read, because which tools are dangerous must not depend on
- * loading the tool classes. `ToolRegistryTest` holds the two together. A flag that could be
- * inferred — from a name, from a base class — would be a guess about the one property that decides
- * whether an agent can reach a database a project did not hand it.
+ * loading the tool classes. A test holds the two together. A flag that could be inferred — from a
+ * name, from a base class — would be a guess about the one property that decides whether an agent
+ * can reach a database a project did not hand it.
  *
  * What a tool does to its world reaches the client separately, as the MCP annotations each tool
  * class carries: read-only for every tool that writes nothing, destructive for the one that
@@ -213,6 +213,6 @@ abstract class SqlensTool extends Tool
      */
     private function schemaPattern(string $regex): ?string
     {
-        return preg_match('#^/(.+)/$#s', $regex, $body) === 1 ? $body[1] : null;
+        return preg_match('#^/(.+)/$#sD', $regex, $body) === 1 ? $body[1] : null;
     }
 }

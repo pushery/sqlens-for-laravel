@@ -102,7 +102,7 @@ final class RlsOwnerUnrestrictedRule extends AbstractSchemaObjectSecurityRule im
     public function limitations(): array
     {
         return [
-            'the exposure depends on WHO connects, and the catalog does not record that. An owner-unrestricted table is only reachable if something actually connects as the owner — which is a deployment fact, not a schema fact',
+            'the exposure depends on who connects, and the catalog does not record that. An owner-unrestricted table is only reachable if something actually connects as the owner — which is a deployment fact, not a schema fact',
             'cannot see a role\'s memberships in full: a role that inherits ownership through a group is the owner for this purpose, and following that chain is the audit suite\'s separate question',
         ];
     }

@@ -134,7 +134,7 @@ final readonly class UniqueKeyIndex
             // A column definition: its name, then the type and the attributes, where `PRIMARY KEY`
             // or `UNIQUE` makes the column a key of its own. Parentheses hold the type's arguments,
             // a default or a generation expression, never a key attribute.
-            if (preg_match('/^(\S+)\s+(.+)$/s', $entry, $column) === 1
+            if (preg_match('/^(\S+)\s+(.+)$/sD', $entry, $column) === 1
                 && preg_match('/\b(?:PRIMARY KEY|UNIQUE)\b/', (string) preg_replace('/\([^()]*\)/', '', $column[2])) === 1) {
                 $keys[] = self::columnList($column[1]);
             }

@@ -193,6 +193,6 @@ final class CredentialRedactor
 
         $text = preg_replace('#^([a-z][a-z0-9+.\-]*://)[^/?\#@\s]*@#i', '$1'.self::REDACTED.'@', $text) ?? $text;
 
-        return preg_replace('/\?.*$/s', '?'.self::REDACTED, $text) ?? $text;
+        return preg_replace('/\?.*$/sD', '?'.self::REDACTED, $text) ?? $text;
     }
 }

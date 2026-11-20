@@ -423,7 +423,7 @@ final readonly class TableMembers
      * ## One builder, two facts, one flag
      *
      * Collations and types travel through the same edges — same pairing by position, same encoding,
-     * same meaning for a missing far side. What differs is what an UNKNOWN LOCAL value means, and it
+     * same meaning for a missing far side. What differs is what an unknown local value means, and it
      * differs completely: a column with no collation holds no text, so no collation comparison can
      * happen on it and the pair belongs absent. Every column has a type, so a missing one means the
      * reading lost it — and dropping that pair would answer the type question with silence, which a
@@ -551,7 +551,7 @@ final readonly class TableMembers
             return null;
         }
 
-        return preg_match("/^nextval\\((?:'[^']*'|\"[^\"]*\")(?:::[a-z_. \"]+)?\\)$/i", $trimmed) === 1
+        return preg_match("/^nextval\\((?:'[^']*'|\"[^\"]*\")(?:::[a-z_. \"]+)?\\)$/iD", $trimmed) === 1
             ? 'macro'
             : 'wrapped';
     }
@@ -614,11 +614,11 @@ final readonly class TableMembers
         // The schema in front of it is the reading's, not the column's: `pg_get_expr` writes it for a
         // function outside the reading session's search path, so `extensions.uuid_generate_v4()`
         // and `uuid_generate_v4()` are the same default read two ways. The function is the answer.
-        if (preg_match('/^(?:(?:[a-z_][a-z0-9_]*|"[^"]+")\.)?([a-z_][a-z0-9_]*)\(\)$/i', $trimmed, $matches) === 1) {
+        if (preg_match('/^(?:(?:[a-z_][a-z0-9_]*|"[^"]+")\.)?([a-z_][a-z0-9_]*)\(\)$/iD', $trimmed, $matches) === 1) {
             return mb_strtolower($matches[1]);
         }
 
-        if (preg_match('/^([a-z_][a-z0-9_]*)(?:\(\s*\d+\s*\))?$/i', $trimmed, $matches) !== 1) {
+        if (preg_match('/^([a-z_][a-z0-9_]*)(?:\(\s*\d+\s*\))?$/iD', $trimmed, $matches) !== 1) {
             return null;
         }
 

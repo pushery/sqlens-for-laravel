@@ -151,6 +151,8 @@ final readonly class ConfigViolation
      *
      * The found value is described like any other, because a project deleting the line wants to be
      * sure it is deleting the one it thinks it is.
+     *
+     * @param  mixed  $found  the value the retired key still holds, of any type
      */
     public static function retiredKey(string $path, string $since, mixed $found): self
     {
@@ -214,6 +216,8 @@ final readonly class ConfigViolation
      * A URL is shown without its user information and its query. Every command
      * that validates the config prints this line, into a CI log among others,
      * and a private source refused for its scheme carries its token there.
+     *
+     * @param  mixed  $value  a value of the config, of any type, as the violation names it
      */
     private static function describe(mixed $value): string
     {

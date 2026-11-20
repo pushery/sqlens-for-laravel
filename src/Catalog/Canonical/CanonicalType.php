@@ -113,7 +113,7 @@ final readonly class CanonicalType
         // and the parenthesized precision. What is left is the type's own name.
         $bare = preg_replace('/\s+(unsigned|zerofill)\b/', '', $normalized) ?? $normalized;
         $bare = preg_replace('/\s*\([^)]*\)/', '', $bare) ?? $bare;
-        $bare = trim(preg_replace('/\[\]$/', '', $bare) ?? $bare);
+        $bare = trim(preg_replace('/\[\]$/D', '', $bare) ?? $bare);
 
         return new self(
             self::ALIASES[$bare] ?? $bare,

@@ -296,7 +296,11 @@ final readonly class DebtLedger
         return null;
     }
 
-    /** Whether a value is a calendar day in the one form the ledger writes, read by the package's one strict reader. */
+    /**
+     * Whether a value is a calendar day in the one form the ledger writes, read by the package's one strict reader.
+     *
+     * @param  mixed  $value  a field of a ledger entry as its JSON decoded it
+     */
     private static function isDay(mixed $value): bool
     {
         if (! is_string($value)) {

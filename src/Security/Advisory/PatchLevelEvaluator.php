@@ -129,6 +129,6 @@ final readonly class PatchLevelEvaluator
      */
     private function behind(int $patch, string $latest): bool
     {
-        return preg_match('/(\d+)$/', $latest, $m) === 1 && $patch < (int) $m[1];
+        return preg_match('/(\d+)$/D', $latest, $m) === 1 && $patch < (int) $m[1];
     }
 }

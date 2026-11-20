@@ -22,8 +22,8 @@ namespace Pushery\SQLens\Analyse;
  * The first reading of this list walked the framework for methods with `raw` in their name, and it
  * was blind to twelve that take SQL text under another name: `fromSub("select … {$tenant}", 'o')`
  * hands its string to the statement exactly as `fromRaw()` does. What makes a sink is where the
- * text GOES, so that is what `RawSqlSinksTest` now derives the lists from — the framework's own
- * source, followed from each public method to the place a string becomes SQL.
+ * text GOES, so that is what the test now derives the lists from — the framework's own source,
+ * followed from each public method to the place a string becomes SQL.
  *
  * ## Two kinds of sink, and the difference decides which rule may use which
  *
@@ -78,8 +78,8 @@ final readonly class RawSqlSinks
      *
      * It exists because the same twelve names mean two different things depending on the receiver,
      * and only some of them are ambiguous. Measured against the installed framework rather than
-     * remembered — `RawSqlSinksTest` derives this set from `Query\Builder`, `Eloquent\Builder`,
-     * `Relation` and `Model` and fails if the two disagree:
+     * remembered — a test derives this set from `Query\Builder`, `Eloquent\Builder`, `Relation`
+     * and `Model` and fails if the two disagree:
      *
      *     cursor  delete  insert  select  update      also declared on a builder or the model
      *     the other seven                             a connection and nothing else
