@@ -164,7 +164,7 @@ final readonly class CatalogCanonicalizer
     }
 
     /**
-     * A collation name, or null when the column simply uses its database's.
+     * A collation name, or null when the column uses its database's.
      *
      * Lower-cased because that is how both engines spell them in practice and how a comparison has
      * to treat them; an explicitly-set collation that happens to match the default is still kept,

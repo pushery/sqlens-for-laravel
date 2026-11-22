@@ -715,7 +715,7 @@ final readonly class ConfigSchema
                 'categories-item',
             ),
             // A typo here would silently admit nothing extra and read as a project that
-            // simply never opted in — the same class of silent no-op an unknown category is
+            // never opted in — the same class of silent no-op an unknown category is
             // refused for.
             'stability' => $this->listOfStrings(
                 $path,

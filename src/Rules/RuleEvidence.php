@@ -18,7 +18,7 @@ use Pushery\SQLens\Exceptions\InvalidRuleEvidence;
  *
  * Every entry names the version it applies to. That is not bookkeeping: PostgreSQL has
  * changed which operations rewrite a table more than once, and an anchor from an older
- * major would justify a rule that is simply wrong on this baseline — confidently, and
+ * major would justify a rule that is wrong on this baseline — confidently, and
  * with a citation.
  *
  * A malformed register is an error rather than an empty result. Read leniently, a typo

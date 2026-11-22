@@ -28,7 +28,7 @@ use Throwable;
 /**
  * A CHECK constraint that is in the catalog and is not enforced — a guarantee that is not one.
  *
- * ## Why this is worse than a constraint that is simply absent
+ * ## Why this is worse than a constraint that is absent
  *
  * An absent constraint is visibly absent. `ENFORCED = NO` is a constraint that appears in
  * `SHOW CREATE TABLE`, appears in the migration that added it, appears in code review — and admits
@@ -60,7 +60,7 @@ use Throwable;
  * ## Why the remedy is not a formality
  *
  * `ALTER TABLE t ALTER CHECK c ENFORCED` re-validates against the rows already in the table, and on
- * a table that has been running unenforced it can simply fail. That is the honest reason it is a
+ * a table that has been running unenforced it can fail. That is the honest reason it is a
  * proposal: the constraint was probably switched off because the data did not satisfy it, and
  * turning it back on is a data decision rather than a schema one.
  */
@@ -155,7 +155,7 @@ final readonly class UnenforcedConstraintCheck implements PostdeployCheck
                 .'information_schema.CHECK_CONSTRAINTS shows an enforced and an unenforced '
                 .'constraint identically. Turning it on is `` ALTER TABLE %s ALTER CHECK %s ENFORCED; `` '
                 .'— a PROPOSAL, not an instruction, and not a formality: that statement re-validates '
-                .'against the rows already there and can simply fail, because the likely reason it '
+                .'against the rows already there and can fail, because the likely reason it '
                 .'was switched off is that the data did not satisfy it. SQLens never runs it.',
                 $constraint,
                 $qualifiedTable === '' ? 'its table' : $qualifiedTable,

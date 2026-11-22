@@ -64,7 +64,7 @@ final readonly class JustificationCollector implements Collector
      * The one unit that decides what counts as a reason — the run's policy lives inside it.
      *
      * Read at COLLECTION time rather than in the rule, and the placement is the whole design: a
-     * reason the mode refuses is simply not collected, so the rule downstream needs no second notion
+     * reason the mode refuses is not collected, so the rule downstream needs no second notion
      * of "reasoned" and cannot drift from this one. It is a shared unit rather than a method here
      * because {@see JustificationSpanCollector} asks the identical question, and two answers to it
      * would let an annotation justify a call site through one channel and not the other.
@@ -107,7 +107,7 @@ final readonly class JustificationCollector implements Collector
         // `namespacedName` (`BetterReflectionProvider::getAnonymousClassReflection()`). The
         // identifier it writes — `AnonymousClass<hash>` — is exactly the string
         // `ClassReflection::getName()` answers for code inside that class, which is what every
-        // call-site collector records as its scope. So the two sides do join; this collector simply
+        // call-site collector records as its scope. So the two sides do join; this collector
         // returned before it looked.
         //
         // The consequence was not marginal. Every Laravel migration since Laravel 9 is

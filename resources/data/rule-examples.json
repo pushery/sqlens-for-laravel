@@ -208,7 +208,7 @@
             "bad": "SET GLOBAL default_storage_engine = MyISAM;",
             "good": "SET GLOBAL default_storage_engine = InnoDB;",
             "language": "sql",
-            "note": "A table created without an explicit ENGINE takes the server default. Under MyISAM it has no transactions, no foreign keys and no crash recovery — and none of those absences raise anything: a migration wrapped in a transaction simply does not roll back, a foreign key is silently not enforced, and an unclean shutdown leaves the table needing repair. Laravel's schema builder emits ENGINE only when database.connections.mysql.engine is configured, which is not the default, so the server value usually decides.",
+            "note": "A table created without an explicit ENGINE takes the server default. Under MyISAM it has no transactions, no foreign keys and no crash recovery — and none of those absences raise anything: a migration wrapped in a transaction does not roll back, a foreign key is silently not enforced, and an unclean shutdown leaves the table needing repair. Laravel's schema builder emits ENGINE only when database.connections.mysql.engine is configured, which is not the default, so the server value usually decides.",
             "false_positives": "A deliberately mixed engine landscape is rare and belongs on the ignore list with the reason recorded there. There is also a case that is neither a finding nor silence: a server whose default is MyISAM while disabled_storage_engines refuses MyISAM outright. The setting looks wrong and cannot take effect, so the rule reports a PASS with that reason — reporting nothing would be indistinguishable from a rule that never ran, and reporting a failure would send somebody to change a setting that is already harmless."
         },
         "MY.L6.EXPLICIT_DEFAULTS_FOR_TIMESTAMP_OFF": {
@@ -330,7 +330,7 @@
             "bad": "DB::statement('DROP SCHEMA reporting CASCADE');",
             "good": "// Retire the contents first, then let RESTRICT (PostgreSQL's default) be a real safety check\n// instead of a waived one, in a migration annotated #[SqlensAllowDestructive]:\nDB::statement('ALTER TABLE reporting.daily_rollups SET SCHEMA archive');\nDB::statement('DROP SCHEMA reporting RESTRICT');",
             "note": "DROP SCHEMA is not scoped to one object: it takes every table, view, sequence and routine in the namespace, and CASCADE also takes dependent objects outside it. Laravel's schema builder cannot emit this, so it arrives through a hand-written DB::statement() that nothing reviews.",
-            "false_positives": "A schema this same migration created is reported like any other. CREATE SCHEMA is not captured as its own statement kind, so the migration context cannot tell a scratch namespace from a live one — the same carve-out DROP TABLE has is simply not available here. And because this is a statement-level rule, the finding names the REACH of the statement rather than the rows actually lost: an empty schema is reported with the same words as a full one."
+            "false_positives": "A schema this same migration created is reported like any other. CREATE SCHEMA is not captured as its own statement kind, so the migration context cannot tell a scratch namespace from a live one — the same carve-out DROP TABLE has is not available here. And because this is a statement-level rule, the finding names the REACH of the statement rather than the rows actually lost: an empty schema is reported with the same words as a full one."
         },
         "PG.L1.DROP_TABLE": {
             "bad": "Schema::drop('legacy_events');",
@@ -586,7 +586,7 @@
             "bad": "ALTER SYSTEM SET standard_conforming_strings = off;\nSELECT pg_reload_conf();",
             "good": "ALTER SYSTEM SET standard_conforming_strings = on;\nSELECT pg_reload_conf();",
             "language": "sql",
-            "note": "Like the other server-baseline checks the example is configuration rather than a migration, because that is where the value lives. What it changes is the meaning of every ordinary literal that contains a backslash: with it off, a two-character sequence written as a backslash and an n becomes a newline, and a Windows path loses whatever its next letter escapes to. Nothing raises an error — the row simply holds something other than what the migration said, which means the same file applied to two servers produces two different databases.",
+            "note": "Like the other server-baseline checks the example is configuration rather than a migration, because that is where the value lives. What it changes is the meaning of every ordinary literal that contains a backslash: with it off, a two-character sequence written as a backslash and an n becomes a newline, and a Windows path loses whatever its next letter escapes to. Nothing raises an error — the row holds something other than what the migration said, which means the same file applied to two servers produces two different databases.",
             "false_positives": "The setting is session-settable, and an older tool or a legacy connection may turn it off for itself. That is not a server finding and is not reported: the check reads what the server hands a new connection, never what this one happens to be running with. A server correctly set to on must stay silent even when the audit's own session has it off."
         },
         "PG.L6.TIMESTAMP_NO_TZ": {
@@ -882,7 +882,7 @@
             "bad": "# postgresql.conf: every statement, and every value in it, into the log.\nlog_statement = 'all'",
             "good": "# Schema changes keep an audit trail without row values. A schema change is\n# still logged verbatim, so role passwords are set with psql's \\password.\nlog_statement = 'ddl'",
             "language": "ini",
-            "note": "The hardening half of the switch its privacy sibling SEC.CFG.STATEMENT_LOGGING reads, and the half that was missing until 2026-08-13: MySQL had a secrets view of general_log and PostgreSQL only a privacy view of log_statement, so a team filtering on --category=security never saw that CREATE ROLE ... LOGIN PASSWORD writes the password into the log. Nothing was red; the report simply had no finding in it.",
+            "note": "The hardening half of the switch its privacy sibling SEC.CFG.STATEMENT_LOGGING reads, and the half that was missing until 2026-08-13: MySQL had a secrets view of general_log and PostgreSQL only a privacy view of log_statement, so a team filtering on --category=security never saw that CREATE ROLE ... LOGIN PASSWORD writes the password into the log. Nothing was red; the report had no finding in it.",
             "false_positives": "mod rather than all narrows it to writes, which is a real mitigation and still logs every value a migration or job writes. ddl carries no row values and is not reported, although it still writes every schema change verbatim, a password typed into CREATE ROLE or ALTER ROLE included; none logs nothing and is not reported either. A short debugging window is legitimate and indistinguishable from a forgotten switch, which is the point: the cost is silent and grows with uptime."
         },
         "SEC.CFG.TLS_DISABLED": {
@@ -1108,7 +1108,7 @@
             "bad": "ALTER TABLE orders ENABLE ROW LEVEL SECURITY;\n-- …and no CREATE POLICY, ever",
             "good": "ALTER TABLE orders ENABLE ROW LEVEL SECURITY;\n\nCREATE POLICY tenant_isolation ON orders\n    USING (tenant_id = current_setting('app.tenant')::uuid);",
             "language": "sql",
-            "note": "Row-level security enabled with no policy at all denies every row — PostgreSQL's default is to admit nothing. Nothing is exposed; the data is simply unavailable, which is why this shape reaches production so often. Whoever created the table is its owner and sees it working, the migration passes, and the application connects as a different role and gets empty result sets with no error anywhere. Add the policy. Switching row-level security off instead would leave a table the project lists as holding tenant data readable by every role with SELECT.",
+            "note": "Row-level security enabled with no policy at all denies every row — PostgreSQL's default is to admit nothing. Nothing is exposed; the data is unavailable, which is why this shape reaches production so often. Whoever created the table is its owner and sees it working, the migration passes, and the application connects as a different role and gets empty result sets with no error anywhere. Add the policy. Switching row-level security off instead would leave a table the project lists as holding tenant data readable by every role with SELECT.",
             "false_positives": "A table switched on ahead of the policy that is about to land in the same deploy is the benign case, and it is still worth seeing: between the two migrations the table answers nothing."
         },
         "SEC.RLS.OWNER_UNRESTRICTED": {

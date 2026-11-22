@@ -209,7 +209,7 @@ final class RuntimeDdlRule extends AbstractSchemaObjectSecurityRule implements D
             .'— the fix is a second connection for migrations, not a REVOKE that would break the next deploy.';
     }
 
-    /** What to do when the connections are already separate: the runtime role simply has too much. */
+    /** What to do when the connections are already separate: the runtime role has too much. */
     private function separateConnectionAdvice(SchemaObject $object): string
     {
         return sprintf(

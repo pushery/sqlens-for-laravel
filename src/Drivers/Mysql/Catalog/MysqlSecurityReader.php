@@ -270,7 +270,7 @@ final readonly class MysqlSecurityReader implements SecurityReader
                 // artifact, not from this string, and that is the whole lesson of this query's
                 // history. Written out by hand it carried ten of `mysql.db`'s eighteen privilege
                 // columns and none of `mysql.user`'s thirty, so an account holding
-                // `ALL PRIVILEGES ON *.*` reached the rules with nothing at all. Nothing went red: a
+                // `ALL PRIVILEGES ON *.*` reached the rules with nothing at all, and no finding said so: a
                 // privilege nobody reads is indistinguishable from a privilege nobody holds, which
                 // is the silent green this package exists to refuse.
                 //

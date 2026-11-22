@@ -111,7 +111,7 @@ final readonly class BaselineSuppressionSource
      * name and kept in the file.
      *
      * The entries this run cannot match are not listed here either: nothing failed to answer, this
-     * run simply never asks for them.
+     * run never asks for them.
      *
      * @param  list<string>  $matchedKeys
      * @param  list<string>  $unverifiablePrefixes  rule-id prefixes whose source did not answer

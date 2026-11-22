@@ -88,15 +88,21 @@ final readonly class QueryWatcher implements RuntimeGuard
      *
      * Without these the cumulative budget is dead from the second job onward in any long-lived
      * process — and dead in the way that looks healthiest: the log reports once and then goes quiet
-     * forever, which reads like an application that got faster. The same three events end a pause of
-     * the migrator that never ended ({@see PausesDuringMigrations}), for an inspector that does not follow
-     * the units of work.
+     * forever, which reads like an application that got faster. The same events end a pause of the
+     * migrator that never ended ({@see PausesDuringMigrations}), for an inspector that does not follow the
+     * units of work.
+     *
+     * `Looping` is the poll of a queue worker for its next job, fired before each one. Without it the polls
+     * of an idle worker sum up in the window of the job before, or of the process start, until an idle
+     * worker crosses the cumulative budget and is reported as a slow request. It begins no unit: waiting
+     * is no work.
      *
      * @var list<string>
      */
     private const array WINDOW_ENDS = [
         'Illuminate\Foundation\Http\Events\RequestHandled',
         'Illuminate\Queue\Events\JobProcessing',
+        'Illuminate\Queue\Events\Looping',
         'Illuminate\Console\Events\CommandStarting',
     ];
 

@@ -27,7 +27,7 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  * level up.
  *
  * That direction is a property of the comparison rather than a guard in front of it, which is why
- * there is no arm here for "no reason at all": an answer whose reason is absent simply matches
+ * there is no arm here for "no reason at all": an answer whose reason is absent matches
  * nothing on the list. {@see CheckResult} makes the case unreachable anyway — its constructor is
  * private and the only factory that produces an undetermined answer requires both halves.
  */

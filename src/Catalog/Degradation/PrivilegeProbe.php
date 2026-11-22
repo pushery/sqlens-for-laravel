@@ -25,7 +25,7 @@ use Throwable;
  *   the single most dangerous shape in this package's problem space, and nothing but a probe finds
  *   it: the reading itself succeeded.
  * - **PostgreSQL mostly answers, and hides the rest a row at a time.** `pg_class` and `pg_index` are
- *   world-readable, so the core reading works even on a managed instance — but `pg_settings` simply
+ *   world-readable, so the core reading works even on a managed instance — but `pg_settings`
  *   OMITS a superuser-only setting rather than refusing it, and `pg_hba_file_rules` refuses outright
  *   with `42501`. One silent, one loud, from the same server.
  *

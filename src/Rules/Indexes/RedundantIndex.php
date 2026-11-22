@@ -124,7 +124,7 @@ final readonly class RedundantIndex
      * A universe is a set of indexes that cover the same rows as each other — every unconditional
      * comparable index, or one group of partial indexes carrying the same condition. Whether the
      * membership was earned by having no predicate or by sharing one is settled before this runs;
-     * here they are simply column lists.
+     * here they are column lists.
      *
      * Every member of such a universe is a b-tree, which is what makes the prefix relation a
      * statement about coverage rather than about ordering. {@see self::identicalWithin()} is the

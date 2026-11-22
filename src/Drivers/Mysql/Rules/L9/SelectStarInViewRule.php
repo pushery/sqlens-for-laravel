@@ -37,7 +37,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *   the way in. The audit half therefore reports `undetermined` for every view, naming
  *   {@see UndeterminedReason::ServerExpandedDefinition} and pointing at the suite that can answer.
  *
- * The audit half is not decoration. A rule that simply left the audit suite would let a run over a
+ * The audit half is not decoration. A rule that left the audit suite would let a run over a
  * schema full of views report nothing at all about them, and a reader would take the silence for a
  * clean result. This package's first principle is that a check which cannot run says so.
  */

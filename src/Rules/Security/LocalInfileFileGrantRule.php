@@ -29,7 +29,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * ## Why the unreadable case is the reason this rule exists at all
  *
  * The grant tables are refusable, and on a managed MySQL a refused read is the ORDINARY case rather
- * than the exception. An escalation that simply did not fire there would be indistinguishable from
+ * than the exception. An escalation that did not fire there would be indistinguishable from
  * one that correctly found no such account — the same silence, two opposite meanings, and the one a
  * reader assumes is the reassuring one.
  *

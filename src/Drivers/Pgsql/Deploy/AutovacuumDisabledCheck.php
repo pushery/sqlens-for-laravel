@@ -162,7 +162,7 @@ final readonly class AutovacuumDisabledCheck implements PreflightCheck
      * The per-table read is three-valued: `false` is the finding, `true` is somebody being
      * deliberate the other way, and ABSENT, the ordinary case, means the table runs under the server
      * setting. The EXISTS keeps the third state from needing a representation here: a table without
-     * the option is simply not off by it. The server setting is read in the same statement, so one
+     * the option is not off by it. The server setting is read in the same statement, so one
      * round trip answers both, and `pg_settings` shows it to a role without privileges.
      *
      * @param  list<string>  $targets

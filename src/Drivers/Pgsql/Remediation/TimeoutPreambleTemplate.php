@@ -90,7 +90,7 @@ final readonly class TimeoutPreambleTemplate
      *
      *                                   **No default, deliberately.** A default would have to be
      *                                   `true`, since that is the common case — and then a caller that
-     *                                   simply forgot would get the form that does nothing, silently,
+     *                                   forgot would get the form that does nothing, silently,
      *                                   which is the defect this parameter exists to close.
      */
     public function forTimeout(

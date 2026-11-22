@@ -13,7 +13,7 @@ use Pushery\SQLens\Exceptions\UnreadableShippedArtifact;
  * ## Why one class instead of the same eight lines in each loader
  *
  * Three bundled registers answered a read error with an EMPTY base set while seven answered with a
- * named exception, so the policy existed and was simply not followed. Eight lines copied into each
+ * named exception, so the policy existed and was not followed. Eight lines copied into each
  * loader would leave the same thing true of the ninth: the reason those three drifted is that every
  * loader got to decide for itself, and a decision made ten times is a decision made differently.
  *

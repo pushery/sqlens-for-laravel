@@ -18,7 +18,7 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  * On the live side it is not enough, because "not reported" hides two opposite situations. The
  * constraint exists and is validated — the project settled its debt. Or the object is not in the
  * catalog at all, and nobody can say whether the debt was paid, the table was dropped, or this run
- * simply could not see that schema. Collapsing those into one answer reports a settled debt on the
+ * could not see that schema. Collapsing those into one answer reports a settled debt on the
  * strength of an absence, which is the shape of "no silent green" this package refuses everywhere.
  */
 enum DebtStanding: string

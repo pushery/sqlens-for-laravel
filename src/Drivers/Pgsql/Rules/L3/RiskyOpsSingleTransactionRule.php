@@ -73,7 +73,7 @@ final class RiskyOpsSingleTransactionRule extends AbstractPgsqlSafetyRule implem
     {
         // Splitting a transaction describes a migration that has strong locks to split. The
         // threshold below is not repeated here on purpose: how many locked tables are too many is
-        // the judgment's business, while a migration with none at all is simply not what this
+        // the judgment's business, while a migration with none at all is not what this
         // sequence is about.
         if ($this->transactionLocks($statement) === []) {
             return null;

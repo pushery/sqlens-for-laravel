@@ -20,7 +20,7 @@ use Pushery\SQLens\Catalog\Columns\ColumnNameSegments;
  * other way: SQLens ships exactly one locale, `en`, and a second `lang/` directory turns a test red.
  * That rule is about what this package says. This artifact is about what a schema is CALLED — a
  * German shop names a column `geburtsdatum` whatever language the report comes back in, and a
- * dictionary that only knew English would simply not see it.
+ * dictionary that only knew English would not see it.
  *
  * So there is no contradiction to resolve here, and nothing about this file argues for translating
  * any output.

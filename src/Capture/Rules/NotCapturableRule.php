@@ -21,7 +21,7 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * builder, or one whose every statement the canonicalization layer rejected —
  * comes out of the capture as a clean pass with an empty statement list. The
  * capture is right to call that honest (it captured successfully; there was
- * simply nothing), but at level 0 the lint suite does not let it pass silently:
+ * nothing), but at level 0 the lint suite does not let it pass silently:
  * a migration that contributes no SQL to a lint run is a migration the run never
  * actually checked, and "no silent green" means saying so.
  *

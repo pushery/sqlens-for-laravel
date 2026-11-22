@@ -50,7 +50,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  * ## The case `--check` exists for is the MISSING file
  *
  * It is the commonest state in a consuming project's CI — a fresh clone, or a target nobody ever
- * generated — and the easiest to answer wrongly, because the write path would simply create it. A
+ * generated — and the easiest to answer wrongly, because the write path would create it. A
  * missing file and a file without the marked block are both DEVIATIONS, and in both cases nothing
  * is written. A `--check` that quietly created what it was asked to verify would make the
  * consistency promise worthless exactly where it is supposed to hold.

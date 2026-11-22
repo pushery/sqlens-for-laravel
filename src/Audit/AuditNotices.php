@@ -29,7 +29,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
 use Pushery\SQLens\Subjects\SubjectContext;
 
 /**
- * The things an audit reports that no RULE found — every one of them a reason the run is not simply
+ * The things an audit reports that no RULE found — every one of them a reason the run is not
  * clean.
  *
  * They are findings rather than log lines on purpose. A deploy pipeline reads the JSON and branches
@@ -427,7 +427,7 @@ final readonly class AuditNotices
             sprintf(
                 'The rule %s was not applied: it has been deprecated since %s%s. It stays resolvable '
                 .'in a baseline, an ignore list and a suppression, so nothing you configured breaks '
-                .'— but it checks nothing any more, and this run says so rather than simply getting '
+                .'— but it checks nothing any more, and this run says so rather than getting '
                 .'shorter.',
                 $rule->id(),
                 $deprecation->since,
@@ -442,7 +442,7 @@ final readonly class AuditNotices
     }
 
     /**
-     * A rule the version gate held back — reported rather than simply absent.
+     * A rule the version gate held back — reported rather than absent.
      *
      * The whole point of a version window is that the rule set shrinks against an older server. A
      * shrinking set that says nothing is the silent green in its purest form: the report is shorter,
@@ -748,8 +748,8 @@ final readonly class AuditNotices
      *
      * At level 0, which is what makes it level-INDEPENDENT rather than merely low. A diagnosis
      * hung off a high level would be filtered out of every realistic run — profile `local` or
-     * `ci`, effective level 6 or 7 — and the guard would be an arm that never fires, reading as
-     * green. Level 0 is in every cumulative gate there is.
+     * `ci`, effective level 6 or 7 — and the diagnosis would never fire, so the run would read as
+     * clean. Level 0 is in every cumulative gate there is.
      *
      * @param  list<string>  $patterns
      */

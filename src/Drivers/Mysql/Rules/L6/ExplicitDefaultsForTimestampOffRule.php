@@ -120,7 +120,7 @@ final class ExplicitDefaultsForTimestampOffRule extends AbstractServerSettingRul
      *
      * An empty list is stated out loud rather than left as silence. "No column is affected yet" is a
      * genuinely different situation from a table full of them — it means the setting is a hazard for
-     * the next migration rather than a bug in today's data — and a finding that simply omitted the
+     * the next migration rather than a bug in today's data — and a finding that omitted the
      * sentence would leave a reader unable to tell which of the two they are in.
      */
     private function affectedColumns(SchemaObject $object): string

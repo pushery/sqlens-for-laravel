@@ -121,7 +121,7 @@ final class EnumValueRemovedRule extends AbstractPgsqlSafetyRule implements Prov
      *
      * The verdict and the fix material must never disagree about what they are looking at, and two
      * copies of these patterns would be exactly how they came to. The type-name capture is the
-     * reason the two branches cannot simply be booleans: each shape is excused by a different
+     * reason the two branches cannot be booleans: each shape is excused by a different
      * question about the same name — a rename of a type born here breaks no old version, and a drop
      * of a type born here is the migration cleaning up after itself.
      *

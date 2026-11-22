@@ -267,7 +267,7 @@ final class ReaderSession
      * Attempt a write and require the refusal — inside a SAVEPOINT, which is not a detail.
      *
      * On PostgreSQL a failed statement ABORTS the whole transaction: every command after it is
-     * refused with `25P02` until the block ends. So a probe that simply failed would poison the very
+     * refused with `25P02` until the block ends. So a probe that failed would poison the very
      * transaction the read was about to happen in — the seal would be proven and the reading would
      * then be impossible. Found by the effectiveness test against a real server, which is what that
      * test is for; the unit tests could not have shown it, because the failure is a property of the

@@ -98,7 +98,7 @@ final readonly class PreScanGate implements Captor
         // second time downstream. Two of these five are `preview`, and the gate never saw them: it
         // was applied to the rule registry only, so the promise the tier makes ("a new check runs
         // only on request, so a minor release cannot start failing a build over code nobody
-        // touched") simply did not hold for the pre-scan layer. Both preview detectors fired in the
+        // touched") did not hold for the pre-scan layer. Both preview detectors fired in the
         // shipped default.
         //
         // It goes unnoticed because both produce useful findings — a user sees no error, just

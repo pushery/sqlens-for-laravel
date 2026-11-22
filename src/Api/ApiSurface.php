@@ -44,7 +44,7 @@ use ReflectionParameter;
  * join a second suite, a slug can change: none of that costs a major release.
  *
  * This file holds what a major release is. The difference between the two lists is the contract,
- * and a snapshot that simply copied the registry would make every documentation edit look like a
+ * and a snapshot that copied the registry would make every documentation edit look like a
  * breaking change — which is how a breaking-change gate gets switched off in its first month.
  *
  * ## Non-rule facts

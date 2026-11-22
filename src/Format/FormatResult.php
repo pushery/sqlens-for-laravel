@@ -19,7 +19,7 @@ namespace Pushery\SQLens\Format;
  * Formatted output is only reproducible if what produced it is known. Three runs can disagree for
  * three unrelated reasons — a different backend, a different tool version, a different style — and a
  * result that carried none of them would leave a team diffing output to work out which. Every one
- * of the three is in the result, so the report can simply say.
+ * of the three is in the result, so the report can say.
  */
 final readonly class FormatResult
 {

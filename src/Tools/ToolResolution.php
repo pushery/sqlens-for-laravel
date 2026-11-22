@@ -51,7 +51,7 @@ enum ToolResolution: string
     /**
      * The binary said which version it is, and it is outside the window that was measured.
      *
-     * The most dangerous of the absences, and the reason it is not simply allowed: a tool
+     * The most dangerous of the absences, and the reason it counts as one rather than being allowed: a tool
      * one major ahead still runs, still exits 0, still prints JSON — with a renamed rule or
      * a renumbered field. That is the shape of a green run that checked something else.
      */

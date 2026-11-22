@@ -30,7 +30,7 @@ namespace Pushery\SQLens\Canonical;
  * A `SchemaObjectType::ReferencedTable` was the obvious alternative and is the wrong axis. That enum
  * says what a thing is in the catalog, and it is the primary sort key and the fingerprint's payload;
  * a referenced table is a table. Worse, it would silently change readers that are correct today —
- * `TouchedTables::of()` filters on `type === Table` and would simply stop seeing the referenced side
+ * `TouchedTables::of()` filters on `type === Table` and would stop seeing the referenced side
  * rather than start distinguishing it.
  *
  * ## What it deliberately does not do

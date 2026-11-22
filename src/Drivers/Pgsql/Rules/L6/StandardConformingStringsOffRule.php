@@ -17,7 +17,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * With it off, a backslash inside an ordinary single-quoted literal is an escape character rather
  * than a backslash. `'a\nb'` stops being three characters and a backslash and becomes `a`, a
- * newline, `b`; `'C:\temp'` loses its tab. Nothing errors — the literal simply means something else
+ * newline, `b`; `'C:\temp'` loses its tab. Nothing errors — the literal means something else
  * than the person who wrote it intended, and the difference only shows up in the data.
  *
  * The reason this is worth a rule rather than a footnote is that the same migration file produces
@@ -71,7 +71,7 @@ final class StandardConformingStringsOffRule extends AbstractServerSettingRule
         return sprintf(
             'the server has standard_conforming_strings = %s, so a backslash inside an ordinary '.
             "single-quoted literal is an escape character: '\\\\n' is a newline rather than the two ".
-            'characters written. Nothing errors — the literal simply means something other than '.
+            'characters written. Nothing errors — the literal means something other than '.
             'intended, and the same migration then produces different rows on this server than on one '.
             'with the standard behavior. %s',
             $serverValue,

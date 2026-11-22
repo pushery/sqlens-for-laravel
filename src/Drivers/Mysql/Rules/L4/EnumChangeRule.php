@@ -51,7 +51,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  *
  * The second error is an abort, not a silent reinterpretation. A real rename is a COPY, and during
  * the copy the old member is no longer in the definition, so every row still holding it truncates —
- * under `STRICT_TRANS_TABLES`, which is in the default `sql_mode`, the `ALTER` simply fails.
+ * under `STRICT_TRANS_TABLES`, which is in the default `sql_mode`, the `ALTER` fails.
  *
  * The respelling row is the one nobody expects, and it is where the silent danger really lives:
  * the stored values are ordinals, so `'b'`→`'B'` rewrites nothing and takes no lock — and every

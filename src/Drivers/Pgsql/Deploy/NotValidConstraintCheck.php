@@ -37,7 +37,7 @@ use Throwable;
  * window.
  *
  * That is the whole design, and it has one failure mode: the second half never happens. Nothing
- * breaks, nothing is slow, and no error is raised — the constraint simply does not hold for the rows
+ * breaks, nothing is slow, and no error is raised — the constraint does not hold for the rows
  * that were already there. A foreign key that everybody believes is enforced is not, and the day
  * somebody relies on it is much later than the day it stopped being true.
  *

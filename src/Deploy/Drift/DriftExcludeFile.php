@@ -29,7 +29,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * The version is explicit and mandatory. A file this build only half understands decides which
  * findings a project stops seeing, and reading the recognizable half of it is the worst available
  * answer: the run succeeds, the report looks clean, and the entries this build could not parse are
- * simply not applied.
+ * not applied.
  */
 final readonly class DriftExcludeFile
 {

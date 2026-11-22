@@ -22,7 +22,7 @@ use Pushery\SQLens\Config\ConfigSchema;
  *
  * ## Why the two are told apart
  *
- * Without this, a disabled tool and a misspelt one give the same answer: "not found". That is a
+ * Without this, a disabled tool and a misspelled one give the same answer: "not found". That is a
  * quiet lie in both directions. An agent that asked for `predeploy` on a project which has not
  * enabled it would conclude the capability does not exist and stop asking — and the person reading
  * the log would go looking for a typo that is not there. Obscuring a real capability is a form of

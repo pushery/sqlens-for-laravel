@@ -23,7 +23,7 @@ use Pushery\SQLens\Contracts\DriverCanonicalization;
  * Then `ALTER TABLE t ADD COLUMN c` — and both re-read the same way: still `a, b`. The view does
  * not grow. It has to be REPLACED, and nothing about the added column says so. That is why this is
  * a rule and not a style note: the failure arrives months after the migration that caused it, in a
- * report whose new column is simply absent.
+ * report whose new column is absent.
  *
  * ## Why this reads the SELECT LIST and nothing else
  *
@@ -301,12 +301,12 @@ final readonly class SelectStarInView
             if ($char === '(') {
                 // The one parenthesis that is not a nesting level: `CREATE VIEW v AS (SELECT …)`
                 // wraps the definition itself, so counting it would put the definition's own SELECT
-                // at depth 1 and hide it — measured, this arm was red before the exception existed.
+                // at depth 1 and hide it.
                 //
                 // It must immediately follow the `AS`, and that is the second measurement: a `WITH`
                 // clause spells `recent AS (SELECT …)`, whose parenthesis also stands after an `AS`
-                // and is a real nesting level. Accepting any post-`AS` parenthesis turned the CTE
-                // arm red, which is how the rule would have started reporting a subquery's star.
+                // and is a real nesting level. Accepting any post-`AS` parenthesis would make the rule
+                // report a subquery's star.
                 if ($afterAs !== null && trim(substr($canonical, $afterAs, $offset - $afterAs)) === '') {
                     $afterAs = null;
                     $offset++;

@@ -486,7 +486,7 @@ final readonly class ReaderConnectionFactory
      * Absent and wrong are different, and treating them alike would crash a run.
      *
      * The budget refuses a 0 by name, so returning 0 for an absent key would end a run whose
-     * config simply does not mention `statement_timeout` with an uncaught `InvalidSessionBudget`
+     * config does not mention `statement_timeout` with an uncaught `InvalidSessionBudget`
      * — a stack trace instead of the misconfiguration exit code, naming a value the user never
      * wrote: "0 would mean wait forever".
      *

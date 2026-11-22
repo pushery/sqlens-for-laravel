@@ -119,7 +119,7 @@ final readonly class SecuritySubjects
      * Whether the audited connection is the table's owner, or can become it.
      *
      * Membership counts, and it is not a refinement: a role that is a member of the owner reaches
-     * every object the owner holds by simply being a member — PostgreSQL applies an owner's exemption
+     * every object the owner holds by being a member — PostgreSQL applies an owner's exemption
      * to any role that has the owner's rights through membership, so a comparison on the name alone
      * would answer no for the arrangement most deploys actually have (`app` a member of `app_owner`).
      */
@@ -348,7 +348,7 @@ final readonly class SecuritySubjects
      * `definer` says the routine runs with its OWNER's privileges. `pins_search_path` says it fixes
      * the namespace its unqualified names resolve in. Neither is a finding alone: a definer routine
      * that pins its path is the ordinary, recommended construction, and a routine that pins nothing
-     * while running as its caller is simply a routine.
+     * while running as its caller is a routine.
      *
      * It is the COMBINATION that is exploitable, and carrying both separately is what lets two rules
      * of different severity say two different true things about it rather than one rule guessing.

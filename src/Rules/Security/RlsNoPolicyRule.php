@@ -112,7 +112,7 @@ final class RlsNoPolicyRule extends AbstractSchemaObjectSecurityRule implements 
 
         return [RuleVerdict::flag(sprintf(
             'row-level security is enabled on %s and the table has no policy at all, so PostgreSQL '
-            .'denies every row %s. Nothing is exposed here — the data is simply unavailable, which is '
+            .'denies every row %s. Nothing is exposed here — the data is unavailable, which is '
             .'why this shape reaches production so often: whoever created the table sees it working, '
             .'the migration passes, and the application connects as a different role and gets empty '
             .'result sets with no error anywhere. Add the policy the table was switched on for. '

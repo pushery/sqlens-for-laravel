@@ -21,7 +21,7 @@ use Pushery\SQLens\Severity\Severity;
  *
  * It raises a severity. It never creates a finding, never removes one, and never changes a rule id.
  * The debt reported on day 1 and the debt reported on day 400 are the same finding about the same
- * object — the older one is simply louder. A threshold that minted its own rule id would give one
+ * object — the older one is louder. A threshold that minted its own rule id would give one
  * problem two names in a project's history and break every baseline entry on the day it crossed.
  *
  * ## Why the exit code is somewhere else

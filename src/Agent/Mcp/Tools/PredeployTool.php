@@ -169,7 +169,7 @@ final class PredeployTool extends SqlensTool
 
         // Carried on the context rather than assembled here, so `run.undetermined_waiver` says the
         // same thing over the protocol as it does on the command line. Left off, it stayed null —
-        // "this producer has no gate at all", which on this path is simply untrue.
+        // "this producer has no gate at all", which on this path is untrue.
         $envelope = JsonEnvelope::for(
             $outcome->result,
             $outcome->context->withUndeterminedWaiver($verdict->waived(), $verdict->waivedReasons),

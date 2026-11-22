@@ -250,7 +250,7 @@ final readonly class ViolationLogger
      * with a hole in it, and the method does not need that name.
      *
      * An unmarked truncation is worse than a long line: somebody reading the log sees a statement
-     * that appears to end where it does not, and reasons about a `WHERE` clause that is simply not
+     * that appears to end where it does not, and reasons about a `WHERE` clause that is not
      * shown.
      */
     private function clipped(string $sql, int $max): string

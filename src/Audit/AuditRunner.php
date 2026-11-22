@@ -435,7 +435,7 @@ final readonly class AuditRunner implements AuditRuns
         // The server's own configuration, read over the same session and turned into subjects the
         // rule engine already dispatches. Without this the server-baseline rules are registered,
         // level-gated and reported in the registry — and never handed a subject, so they would
-        // answer nothing on every real run while their unit tests stayed green. A rule the pipeline
+        // answer nothing on every real run. A rule the pipeline
         // cannot reach is a rule that does not exist, however complete it looks from the inside.
         $settings = $readers->settings->read();
 
@@ -1179,7 +1179,7 @@ final readonly class AuditRunner implements AuditRuns
      *
      * Not flagged as misconfigured, and that is a judgment rather than an omission: a connection
      * that will not open is a wrong host, a rotated password, a firewall, or a server that is
-     * simply down, and this package cannot tell those apart. Calling all four a misconfiguration
+     * down, and this package cannot tell those apart. Calling all four a misconfiguration
      * would tell an operator whose database is restarting to go and fix their config file.
      *
      * So it goes out as undetermined and takes the exit code the contract already assigns to that:
@@ -1815,7 +1815,7 @@ final readonly class AuditRunner implements AuditRuns
         //
         // Resolved by CONTRACT, never by an `instanceof` on a tool class: a runner that names one tool
         // has to be edited for the second, and the edit that gets forgotten is invisible — nothing
-        // fails, the tool is simply never asked.
+        // fails, the tool is never asked.
         //
         // A tool's verdicts pass the run's level and category gates like a rule's. The ids those
         // gates leave out were not asked, so their baseline entries are not this run's to judge.
@@ -2012,7 +2012,7 @@ final readonly class AuditRunner implements AuditRuns
             level: $level,
             // The security severity floor, which this suite used to drop on the floor. It travels
             // into the lint suite through ConfigRunContextCollector; the audit builds its context by
-            // hand and simply never passed it, so the gate was permanently off here whatever the
+            // hand and never passed it, so the gate was permanently off here whatever the
             // config or an active profile said.
             //
             // The gate not firing was only half the harm. The header PRINTS this value, so every

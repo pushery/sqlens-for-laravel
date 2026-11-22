@@ -28,7 +28,7 @@ enum SchemaObjectType: string
      * — adding a value to one is the change that cannot be rolled back — so the audit side has to
      * be able to see which enums a database actually holds, or the two halves of that rule would be
      * looking at different worlds. MySQL has no counterpart: its `ENUM` is a column type rather
-     * than a schema object, which is a difference the model states by simply never producing this
+     * than a schema object, which is a difference the model states by never producing this
      * type on that driver.
      */
     case Type = 'type';

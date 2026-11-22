@@ -152,7 +152,7 @@ final readonly class PglsTool implements Tool
     }
 
     /**
-     * How many checks are simply absent without it — the size of the measured security catalog.
+     * How many checks are absent without it — the size of the measured security catalog.
      *
      * Read from the shipped map, never from the binary: asking the binary would make the answer
      * depend on whether it happens to be installed, and a machine without it would report a loss

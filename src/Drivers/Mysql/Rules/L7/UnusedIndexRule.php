@@ -37,7 +37,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * ## The window is the whole difficulty
  *
  * MySQL is HARDER here than PostgreSQL, and the rule says so rather than pretending otherwise.
- * `performance_schema` is a server setting that can simply be off, in which case there is nothing
+ * `performance_schema` is a server setting that can be off, in which case there is nothing
  * to read at all. And there is no counterpart to `pg_stat_database.stats_reset`: the counters run
  * from server start and MySQL records no reset point of its own, so the window's length is
  * permanently unknown.

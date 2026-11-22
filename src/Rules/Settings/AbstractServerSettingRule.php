@@ -223,7 +223,7 @@ abstract class AbstractServerSettingRule extends AbstractCatalogRule implements 
     {
         if ($object->type !== SchemaObjectType::Setting || $object->qualifiedName !== $this->settingVariable()) {
             // Not this rule's subject. No finding, no noise — "not applicable" is not a skip to
-            // report, it is simply another rule's business.
+            // report, it is another rule's business.
             return [];
         }
 

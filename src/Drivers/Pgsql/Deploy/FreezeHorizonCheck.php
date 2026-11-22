@@ -41,7 +41,7 @@ use Throwable;
  * TABLE` behind it proceeds. **An autovacuum running to prevent wraparound does not.** It holds its
  * lock to the end, because the alternative is a cluster that stops accepting writes. On a large
  * table that is hours, and from the outside it looks like a lock nobody holds: `pg_locks` shows the
- * waiter, the holder is a background worker, and the deploy simply does not move.
+ * waiter, the holder is a background worker, and the deploy does not move.
  *
  * "Can this DDL run right now" is the question the preflight exists to answer, and the freeze
  * horizon is one of the few answers to it that the instance can give in advance.

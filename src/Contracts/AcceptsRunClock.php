@@ -33,7 +33,7 @@ use Pushery\SQLens\Today;
  *
  * The documented fallback: `SecurityRuleSet::forProjectRoot()` resolves the day itself when none is
  * handed over, once per `rules()` call. So a third-party driver keeps working unchanged and is not
- * silently degraded — it simply reads its own day, one reading per run of its own rules.
+ * silently degraded — it reads its own day, one reading per run of its own rules.
  *
  * A third-party driver does not fail here at all. Under a required parameter it would fail loudly,
  * which is better than silence and still a failure.

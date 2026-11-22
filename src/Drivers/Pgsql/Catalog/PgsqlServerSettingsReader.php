@@ -23,7 +23,7 @@ use Throwable;
  * ## The row that is not there
  *
  * `pg_settings` filters by privilege **silently**: a role without `pg_read_all_settings` does not
- * see a superuser-only row, and the query succeeds with that row simply missing. Measured — no
+ * see a superuser-only row, and the query succeeds with that row missing. Measured — no
  * error, no warning, nothing in the result to say a row was withheld.
  *
  * That is why this returns a MAP and never a default. A reader that filled in "the documented
@@ -91,7 +91,7 @@ final readonly class PgsqlServerSettingsReader implements ServerSettingsReader
                 $this->nullableText($row, 'reset_val'),
                 $this->nullableText($row, 'unit'),
                 // Superuser-restricted, so null here is ordinary rather than exceptional — on a
-                // managed database it is simply not available.
+                // managed database it is not available.
                 $this->nullableText($row, 'sourcefile'),
                 $this->nullableText($row, 'context'),
                 // The server's own value, named as such. `setting` above is what this session is

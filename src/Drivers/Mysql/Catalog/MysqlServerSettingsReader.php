@@ -72,7 +72,7 @@ final class MysqlServerSettingsReader implements ServerSettingsReader
                 $name,
                 // What this connection is running with — the same meaning the field carries on
                 // PostgreSQL. A GLOBAL-only variable has no session view, and there the value in
-                // effect for the session simply is the global one, so the fallback states a fact
+                // effect for the session is the global one, so the fallback states a fact
                 // rather than papering over a gap.
                 $session[$name] ?? $value,
                 SettingScope::Global,

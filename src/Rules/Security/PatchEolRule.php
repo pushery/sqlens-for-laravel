@@ -81,7 +81,7 @@ final class PatchEolRule extends AbstractPatchLevelRule
 
         return sprintf(
             'the server reports %s, and support for the %s series ended on %s. What that costs is not '
-            .'visible today: the server is not newly broken, it is simply no longer on the list that '
+            .'visible today: the server is not newly broken, it is no longer on the list that '
             .'receives the fix for the next vulnerability found in it — and the gap between a patch '
             .'existing for supported versions and an exploit existing for the rest is days, not '
             .'quarters. Plan the major upgrade; there is no configuration change that substitutes for '

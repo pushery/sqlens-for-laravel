@@ -779,7 +779,7 @@ final readonly class MysqlCatalogReader implements CatalogReader, ReadsKeyCounte
      * ## Three columns are read and deliberately not compared
      *
      * `CREATED` and `LAST_ALTERED` are timestamps, so they differ between the live database and a
-     * replay by construction. They are not listed under `VOLATILE_ATTRIBUTES`, they are simply never
+     * replay by construction. They are not listed under `VOLATILE_ATTRIBUTES`, they are never
      * selected — a value that never enters an attribute map cannot leak out of one, and the volatile
      * list is for fields a rule genuinely wants to read.
      *

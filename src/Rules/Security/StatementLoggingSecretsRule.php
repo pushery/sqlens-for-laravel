@@ -25,7 +25,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * The consequence was invisible in the way this package cares about. A team hardening a PostgreSQL
  * server filters on `--category=security`, and `log_statement = all` never reached them — although
  * `CREATE ROLE app LOGIN PASSWORD 'hunter2'` goes into that log with the password, the same as it
- * does on MySQL. Nothing was red. The report simply did not contain a finding, which reads as a
+ * does on MySQL. Nothing was red. The report did not contain a finding, which reads as a
  * clean server.
  *
  * ## Why a second rule rather than a second category on the first

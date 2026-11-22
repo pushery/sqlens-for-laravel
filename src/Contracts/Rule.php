@@ -69,7 +69,7 @@ interface Rule
      * It is a method on the contract rather than an opt-in marker (the shape
      * {@see StatisticsDependent} uses) because confidence is
      * a property every rule has, not a rare capability a few rules add. A marker would
-     * let a heuristic rule stay silent by simply not implementing it — and silence
+     * let a heuristic rule stay silent by not implementing it — and silence
      * would read as certainty, which is exactly the claim a heuristic must not make.
      * Stating it is the point.
      *

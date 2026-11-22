@@ -431,9 +431,9 @@ final class SQLensServiceProvider extends ServiceProvider
         // The injection half, and it is bound explicitly rather than left to autowiring — which is
         // the whole reason this binding exists. `SecurityRunner` takes it as `?AnalyseBridge = null`,
         // and the container answers an unresolvable optional dependency with the default instead of
-        // an error: without this line the bridge would never be built, the half would report "nothing
-        // wired me", and every arm would stay green. A silent `null` is exactly the failure this
-        // package refuses everywhere else.
+        // an error: without this line the bridge would never be built, and the half would report
+        // "nothing wired me". A silent `null` is exactly the failure this package refuses everywhere
+        // else.
         $this->app->bind(AnalyseBridge::class, static function (Application $app): AnalyseBridge {
             /** @var Repository $config */
             $config = $app->make('config');
@@ -834,7 +834,7 @@ final class SQLensServiceProvider extends ServiceProvider
             // is the only thing that fills a tool's Request with the arguments a client sent.
             // Without it every `tools/call` reaches its tool with an EMPTY request — measured, and
             // the shape of the failure is the worst kind: a perfectly good call comes back
-            // "rule_id is required", and a tool that did not validate would simply run with no
+            // "rule_id is required", and a tool that did not validate would run with no
             // parameters at all.
             //
             // In an ordinary application Laravel's package discovery has already registered it and

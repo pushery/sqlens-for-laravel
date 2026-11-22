@@ -391,7 +391,7 @@ final readonly class BreakingChangeDetector
         }
 
         // Lowering is the direction nobody notices. A consumer whose severity gate sits above the
-        // new value simply stops being told — a finding they chose to see, gone, with a green build.
+        // new value stops being told — a finding they chose to see, gone, with a green build.
         return new SurfaceChange(
             SurfaceChangeClass::ForbiddenWithoutMajor,
             $id,

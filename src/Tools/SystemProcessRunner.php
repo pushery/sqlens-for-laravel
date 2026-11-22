@@ -343,7 +343,7 @@ final readonly class SystemProcessRunner implements ProcessRunner
 
     /**
      * The ABSOLUTE `$PATH` entries. An unset PATH coerces to an empty string and yields no
-     * directories, so a locate simply finds nothing.
+     * directories, so a locate finds nothing.
      *
      * **A relative entry is dropped, and that is a credential boundary rather than tidiness.**
      * Joined like any other directory, `.`, `node_modules/.bin` and `vendor/bin` would be CWE-427,

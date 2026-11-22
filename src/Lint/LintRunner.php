@@ -640,7 +640,7 @@ final readonly class LintRunner implements LintRuns
 
         // A pin that could not be read is a configuration fault, and it is reported
         // whether or not any rule happened to need the version. Without this the run
-        // simply says "unknown" — the same thing it says when nothing was pinned — so a
+        // says "unknown" — the same thing it says when nothing was pinned — so a
         // project could keep believing it audits against a fixed version for as long as
         // nobody reads the header closely.
         if ($resolvedVersion->unreadablePin !== null) {

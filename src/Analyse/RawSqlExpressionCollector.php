@@ -73,7 +73,7 @@ final readonly class RawSqlExpressionCollector implements Collector
         // second expression producer added to FRAGMENT_SINKS is picked up here without a second
         // edit — and so this collector cannot come to disagree with the list about what counts.
         // The intersection with what is reachable STATICALLY is what `isDatabaseFacade` decides:
-        // the builder-only members of the family are simply never written this way.
+        // the builder-only members of the family are never written this way.
         if (! in_array($node->name->toString(), RawSqlSinks::FRAGMENT_SINKS, true)) {
             return null;
         }

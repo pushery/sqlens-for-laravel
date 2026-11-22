@@ -19,7 +19,7 @@ use Pushery\SQLens\Contracts\CatalogPrivileges;
  * The two shapes the same server uses to withhold, both measured:
  *
  * - **Loud.** `pg_hba_file_rules` refuses with `42501`. A reader meets an exception.
- * - **Silent.** `pg_settings` simply OMITS a superuser-only row — `data_directory` returns zero rows
+ * - **Silent.** `pg_settings` OMITS a superuser-only row — `data_directory` returns zero rows
  *   for an ordinary role and one row for a superuser, with no error either way. Nothing in the
  *   reading distinguishes that from a setting the server does not have, which is exactly why the
  *   question is asked in advance instead of inferred from an empty result afterwards.

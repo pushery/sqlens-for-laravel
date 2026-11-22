@@ -19,7 +19,7 @@ use Pushery\SQLens\Tools\Squawk\SquawkRuleIds;
  * refuses valid input: a project can accept a `CAP.L0.NOT_CAPTURABLE`, an
  * `AUDIT.CATALOG.UNREAD.INSUFFICIENT_PRIVILEGE` or a `SEC.SKIPPED.PG.AUTHID` just as deliberately
  * as it accepts a rule finding — none of those is a `Rule`, and every one of them is a finding
- * somebody looked at and decided to live with. Measured: four suites went red on ids their own
+ * somebody looked at and decided to live with. Refusing them would reject ids the package's own
  * baseline commands had written moments earlier.
  *
  * So the set comes from the shipped registry artifact, whose whole contract is "everything this

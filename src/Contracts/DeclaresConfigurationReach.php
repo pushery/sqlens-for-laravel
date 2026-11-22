@@ -10,7 +10,7 @@ namespace Pushery\SQLens\Contracts;
  * ## The gap this closes, and why no other layer could
  *
  * The four selection axes — level, category, stability, version window — decide whether a rule is
- * in the catalog at all, and a rule they drop is simply absent. This is a fifth state they cannot
+ * in the catalog at all, and a rule they drop is absent. This is a fifth state they cannot
  * express: the rule is admitted, it will be constructed, it will be asked, and it will answer
  * nothing under every input, because a switch inside its own configuration is off.
  *

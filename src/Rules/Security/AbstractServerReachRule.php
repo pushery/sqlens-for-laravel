@@ -34,7 +34,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * The privilege is looked for among the engine-named ones. `FILE` and `PROCESS` have no PostgreSQL
  * equivalent, so canonicalization maps both to the unmapped case — asking the canonical list would
  * ask a question the mapping has already erased. This is also what makes the pair silent on
- * PostgreSQL without a driver check: that engine simply never produces these names.
+ * PostgreSQL without a driver check: that engine never produces these names.
  *
  * And the account SQLens itself connected as is excluded, which is the sharpest of the three. This
  * package's own setup guidance asks for a read-only audit account, and a monitoring account needs

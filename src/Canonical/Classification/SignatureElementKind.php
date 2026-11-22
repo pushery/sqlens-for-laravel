@@ -64,7 +64,7 @@ enum SignatureElementKind
      * A list with anything besides a comma between its members is not a column list this layer can
      * hand to a coverage question: an operator class swept in as a second column makes a
      * non-comparable index answer for a key it does not serve. Declining leaves the statement to
-     * the column-less signature behind it, so it still classifies and simply carries no columns —
+     * the column-less signature behind it, so it still classifies and carries no columns —
      * which every reader turns into "I cannot conclude", never into a wrong conclusion.
      */
     case ColumnList;
@@ -114,7 +114,7 @@ enum SignatureElementKind
      *
      * Declines by producing nothing rather than by failing the match: `ALTER TABLE t ADD COLUMN c`
      * is not valid SQL, but a form this reader cannot make a type out of leaves the statement
-     * classified and simply carries no definition — the same trade every element here makes.
+     * classified and carries no definition — the same trade every element here makes.
      */
     case TrailingColumnType;
 

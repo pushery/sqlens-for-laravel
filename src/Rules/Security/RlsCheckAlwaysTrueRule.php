@@ -17,7 +17,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * The read path is guarded and the WRITE path is not: an explicit `WITH CHECK (true)`.
  *
  * A tenant can only see its own rows and can write a row belonging to anyone. Nothing in the
- * application notices, because the write succeeds; the row simply lands under another tenant's id and
+ * application notices, because the write succeeds; the row lands under another tenant's id and
  * is invisible to the one that created it. It surfaces later as data that nobody can account for.
  *
  * ## Why this is a rule of its own rather than a second finding

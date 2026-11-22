@@ -149,7 +149,7 @@ final class TableWithoutPrimaryKeyRule extends AbstractMysqlRule implements Decl
      * table. A `CREATE TABLE` gets none, and that absence is a statement of its own: creating a
      * table blocks nobody, so the class here is inapplicable rather than unknown. Attaching
      * `rewrite` because the eventual FIX rebuilds the table would tell a release gate that this
-     * deploy needs a maintenance window, which is simply not true.
+     * deploy needs a maintenance window, which is not true.
      */
     public function downtimeClassFor(MigrationStatementView $statement): DowntimeClass|DowntimeUndetermined|null
     {

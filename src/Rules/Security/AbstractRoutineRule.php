@@ -25,7 +25,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * - **A routine that came back half-read.** A verdict about a field nobody could read is the silent
  *   green in miniature, so it is `undetermined` with the reason instead.
  * - **A routine that runs as its CALLER.** `SECURITY INVOKER` is the default and the safe case; it is
- *   simply not what either rule is about, and neither may speak about it.
+ *   not what either rule is about, and neither may speak about it.
  * - **An engine with no stored routines.** MySQL has them, so unlike the HBA family this is not an
  *   engine question — but a reading that returned none produces no subjects, and both rules are then
  *   silent by construction. That silence is correct: a schema with no routines has no routine

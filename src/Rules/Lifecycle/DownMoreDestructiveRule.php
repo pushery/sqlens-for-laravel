@@ -40,7 +40,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * ## Why this is a level-1 rule and its sibling is level 4
  *
  * {@see DownMissingRule} is about a rollback path that does not exist: nothing is destroyed, the
- * way back is simply absent, and that is the deploy-window question level 4 asks. This one is
+ * way back is absent, and that is the deploy-window question level 4 asks. This one is
  * destruction — a `DROP TABLE` nobody asked for, sitting in a method that will be run under
  * pressure. It belongs in the destructive band with the other rules that flag data loss, and it
  * fires as early as level 1 because that is the level a project turns on when it wants to be

@@ -53,8 +53,7 @@ use RuntimeException;
  * That reference is deliberately PROSE rather than a `{@see}` with a class name. This namespace is
  * held to the A→C split by an architecture arm — `Exceptions` may not reach a driver — and a
  * fully-qualified `{@see}` does not stay a comment: the formatter rewrites it into a real `use`
- * statement, which is exactly what the arm forbids. Measured, in the pull request that added this
- * paragraph: the import appeared without being typed, and the arm went red on a docblock.
+ * statement, which is exactly what the arm forbids.
  */
 final class ShadowProvisioningUndetermined extends RuntimeException
 {

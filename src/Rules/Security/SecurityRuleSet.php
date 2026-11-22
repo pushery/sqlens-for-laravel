@@ -27,7 +27,7 @@ use Pushery\SQLens\Security\Privacy\UnencryptedColumnEvaluator;
  *
  * They judge the subjects the security readers produce, and both engines produce the same ones. A rule
  * that has nothing to say on an engine says nothing there without a driver check: MySQL has no PUBLIC
- * pseudo-role, so a grant subject read from MySQL simply never carries `to_public`. That is a stronger
+ * pseudo-role, so a grant subject read from MySQL never carries `to_public`. That is a stronger
  * arrangement than a per-driver list, because "this rule is silent on that engine" becomes a property
  * of the data rather than a line somebody has to remember to write.
  */
