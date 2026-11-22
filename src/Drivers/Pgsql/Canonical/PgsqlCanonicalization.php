@@ -344,7 +344,7 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                 //
                 // Tried before the column-less variant below, which stays as the fallback: a shape
                 // whose list cannot be read still classifies as an index rather than falling
-                // through to unknown, it simply carries no columns. Degrading to "no columns" is
+                // through to unknown, it carries no columns. Degrading to "no columns" is
                 // safe for every reader — a rule asking about coverage sees nothing it can conclude
                 // from and says nothing.
                 //
@@ -377,7 +377,7 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                 // column TYPE was structurally audit-only — the catalog reports it once the table
                 // already stands, and the migration that introduces it is the cheapest moment to
                 // fix it. The element declines as a whole rather than answering partially; a
-                // `CREATE TABLE … AS SELECT` names no body and simply carries none.
+                // `CREATE TABLE … AS SELECT` names no body and carries none.
                 new StatementSignature(StatementKind::CreateTable, [
                     SignatureElement::keyword('CREATE'), SignatureElement::optionalModifiers(),
                     SignatureElement::keyword('TABLE'), SignatureElement::optionalModifiers(),
@@ -575,7 +575,7 @@ final class PgsqlCanonicalization implements DeclaresReservedWords, DriverCanoni
                 //
                 // A clause this element cannot read whole — `SET a = (SELECT …), b = 2` — declines
                 // and falls through to the plain signature, so the statement still classifies as
-                // `Dml` and simply carries no columns. Every reader turns that into "I cannot
+                // `Dml` and carries no columns. Every reader turns that into "I cannot
                 // conclude", never into a wrong conclusion.
                 new StatementSignature(StatementKind::Dml, [
                     SignatureElement::keyword('UPDATE'), SignatureElement::target($table),

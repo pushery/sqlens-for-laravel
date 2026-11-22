@@ -29,7 +29,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * MySQL — a green run over the most common irreversible mistake a migration can make, on an engine
  * the README promises without qualification.
  *
- * Nothing was suppressing it and nothing was undetermined. There was simply no rule to fire.
+ * Nothing was suppressing it and nothing was undetermined. There was no rule to fire.
  *
  * ## Why it is its own rule rather than the PostgreSQL one registered twice
  *

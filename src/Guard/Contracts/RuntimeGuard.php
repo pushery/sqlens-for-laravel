@@ -10,7 +10,7 @@ use Pushery\SQLens\Guard\GuardProfile;
  * One runtime guardrail: it says whether a profile asks for it, and it turns itself on.
  *
  * Two methods and no third, deliberately. There is no `deactivate()`, because nothing here is ever
- * turned off — a request that wanted the guardrail off simply never activated it, and a suite that
+ * turned off — a request that wanted the guardrail off never activated it, and a suite that
  * could toggle guardrails mid-process would be holding state across a request boundary that Octane
  * compatibility forbids.
  *

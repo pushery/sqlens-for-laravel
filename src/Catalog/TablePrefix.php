@@ -164,7 +164,7 @@ final readonly class TablePrefix
         }
 
         if ($covered === 0) {
-            // The likeliest real cause is a prefix that is simply wrong — copied from another
+            // The likeliest real cause is a prefix that is wrong — copied from another
             // project, or read from a connection the app does not use. An empty audit must not read
             // like a clean schema, so the reading says so and counts as partial.
             $skips[] = CatalogSkip::for(

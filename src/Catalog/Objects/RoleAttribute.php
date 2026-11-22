@@ -31,7 +31,7 @@ enum RoleAttribute: string
      * technically correct and practically void.
      *
      * MySQL has no equivalent, and the absence is a real difference rather than a gap: a MySQL role
-     * simply never carries it, so a rule asking for it gets `false` on MySQL because the engine has
+     * never carries it, so a rule asking for it gets `false` on MySQL because the engine has
      * no such power to hold, not because nobody read it.
      */
     case BypassRls = 'bypass_rls';

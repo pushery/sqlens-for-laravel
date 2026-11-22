@@ -120,7 +120,7 @@ final class TableWithoutPrimaryKeyRule extends AbstractCatalogRule implements De
         }
 
         // A partition's key is its parent's; an extension's tables are its own design. Both are
-        // read and present in the snapshot — they are simply not this rule's business, which is a
+        // read and present in the snapshot — they are not this rule's business, which is a
         // different thing from not being there.
         if ($object->isPartition || $object->fromExtension) {
             return [];

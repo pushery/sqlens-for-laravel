@@ -15,7 +15,7 @@ namespace Pushery\SQLens\Drivers\Mysql\Shadow;
  * One that builds nothing of the dumped schema, such as a `DROP DATABASE`, is
  * skipped the same way, with a reason of its own.
  * "No silent green" applies to the dump layer too: a directive dropped without a
- * word is indistinguishable from one the splitter simply missed, so each carries
+ * word is indistinguishable from one the splitter missed, so each carries
  * the reason it was skipped.
  */
 final readonly class SkippedDumpDirective

@@ -30,7 +30,7 @@ namespace Pushery\SQLens\Agent\Mcp;
  *
  * Because a version skew is real: a project can run a build whose engine names a reason this class
  * has never heard of. A crash there would turn a refusal — a correct, safe outcome — into a broken
- * tool. So an unknown check still refuses, still names itself, and simply cannot advise.
+ * tool. So an unknown check still refuses, still names itself, and cannot advise.
  */
 final readonly class ShadowRefusalAdvice
 {

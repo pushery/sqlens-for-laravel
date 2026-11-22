@@ -26,7 +26,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * The expand half of an expand/contract deploy, with the contract half nowhere in the run.
  *
  * A column is added and filled from the data that is already there; the column it replaces is never
- * dropped. Nothing breaks and nothing is slow — the table simply carries both forever, one of them
+ * dropped. Nothing breaks and nothing is slow — the table carries both forever, one of them
  * silently stale, and the next reader cannot tell which is authoritative. That is the debt this
  * rule accounts for.
  *

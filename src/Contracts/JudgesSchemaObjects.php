@@ -18,7 +18,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * {@see AbstractSafetyRule} has `appliesTo()` and `evaluate()` `final`, and
  * that is worth keeping: it is what makes the dispatch of every lint rule impossible to get wrong.
- * A rule that also reads a catalog therefore cannot simply override them. Nor should the base grow
+ * A rule that also reads a catalog therefore cannot override them. Nor should the base grow
  * a catalog branch every lint rule must implement and almost none would use — machinery reachable
  * only from a test written to reach it is the shape of a guard that guards nothing.
  *

@@ -1375,7 +1375,7 @@ return [
              * lines look exactly like four that are still true.
              *
              * `sqlens:drift --update-excludes` writes the file from a run's own findings, with a placeholder
-             * reason the next run refuses, so the obligation cannot be committed and forgotten. A missing file simply means nothing is accepted yet —
+             * reason the next run refuses, so the obligation cannot be committed and forgotten. A missing file means nothing is accepted yet —
              * which is every project's first run, and not an error.
              *
              * Repository-relative, like the debt account's path and for the same reason: an absolute
@@ -1412,7 +1412,7 @@ return [
              *
              * A band only ever RAISES a finding's severity — it never creates one, never removes
              * one, and never changes a rule id. The debt reported on day 1 and the debt reported on
-             * day 400 are the same finding about the same object; the older one is simply harder to
+             * day 400 are the same finding about the same object; the older one is harder to
              * keep ignoring. Whether an age breaks the run is a separate setting, because "tell me
              * loudly but do not stop the deploy at 3am" is what most projects actually want.
              *
@@ -1515,9 +1515,9 @@ return [
              * A run that hangs off the end of every deploy has one survival condition: it must not
              * be something people wait for. A gate that visibly delays a deploy gets configured
              * away in the first sprint, and a gate nobody runs has helped nobody -- so this number
-             * is held by a timing test in the package's own suite rather than by an intention.
+             * is held by a timing test rather than by an intention.
              *
-             * That suite is not in your vendor tree -- the package's test directory never ships --
+             * That test is not in your vendor tree -- the package's test directory never ships --
              * which is why no file is named here. A path you cannot open reads as a promise you
              * could check, and this one you cannot.
              *

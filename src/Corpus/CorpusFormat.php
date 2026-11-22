@@ -141,7 +141,7 @@ final readonly class CorpusFormat
             if (! isset($entry['rule_id']) || ! is_string($entry['rule_id']) || trim($entry['rule_id']) === '') {
                 // Named on its own, because it is the one that produces a silent
                 // pass: an expectation with no rule id matches nothing, so the finding it was
-                // supposed to describe is simply never compared.
+                // supposed to describe is never compared.
                 $violations[] = "{$where} carries no `rule_id`, so it can never be matched against a finding and the case measures nothing";
             }
 

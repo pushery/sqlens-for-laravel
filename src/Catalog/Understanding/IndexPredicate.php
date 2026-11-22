@@ -169,7 +169,7 @@ final readonly class IndexPredicate
         if (preg_match('/^\(?(NOT\s+)?('.$ident.')\)?$/iD', $bare, $m) === 1) {
             // No `??` on this group although the arm above needs one: an optional group that is
             // FOLLOWED by a participating group is filled with the empty string, while a trailing
-            // one is simply omitted. Same syntax, two behaviors — and PHPStan reads the difference.
+            // one is omitted. Same syntax, two behaviors — and PHPStan reads the difference.
             $value = $m[1] !== '' ? 'false' : 'true';
 
             return new self($m[2].' = '.$value, 'boolean', $m[2]);

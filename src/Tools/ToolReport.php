@@ -38,7 +38,7 @@ final readonly class ToolReport
                 // to nothing would read as "it is here", which is the opposite of the finding.
                 'path' => $diagnostic->isAvailable() ? $diagnostic->path : null,
                 'adds' => $diagnostic->tool->whatItEnables(),
-                // How many checks are simply absent without it. A count is what makes an absence
+                // How many checks are absent without it. A count is what makes an absence
                 // arguable: "not installed" invites a shrug, "17 checks nobody is running" does not.
                 'missing_checks' => $diagnostic->isAvailable() ? 0 : $diagnostic->tool->uncoveredCheckCount(),
             ],

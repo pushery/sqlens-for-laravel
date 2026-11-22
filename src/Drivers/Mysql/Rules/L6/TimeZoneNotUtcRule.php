@@ -93,7 +93,7 @@ final class TimeZoneNotUtcRule extends AbstractServerSettingRule
         return sprintf(
             '%s. Every conversion that crosses the boundary — CONVERT_TZ, a TIMESTAMP read back, '.
             'NOW() compared against a stored value — then depends on that setting, and nothing fails '.
-            'when it is wrong: the value is simply shifted. Prefer the offset form %s, which works on '.
+            'when it is wrong: the value is shifted. Prefer the offset form %s, which works on '.
             'every server; the named spellings UTC and Etc/UTC need the timezone tables loaded and '.
             'return NULL from CONVERT_TZ when they are not. %s',
             $problem,

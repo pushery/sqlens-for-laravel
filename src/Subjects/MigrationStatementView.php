@@ -27,7 +27,7 @@ use Pushery\SQLens\Security\OriginBinding;
  *
  * The classification is nullable because a statement the driver could not classify
  * reaches a rule unclassified rather than being dropped — a rule that needs the kind
- * or a target simply finds none and stays silent, which is the correct three-valued
+ * or a target finds none and stays silent, which is the correct three-valued
  * behavior, never a guess.
  */
 final readonly class MigrationStatementView

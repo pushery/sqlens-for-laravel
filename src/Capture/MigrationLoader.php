@@ -16,7 +16,7 @@ use ReflectionClass;
  * ## Why this is not just `require`
  *
  * A Laravel 13 migration is an anonymous class, so the file returns the instance and requiring it
- * twice simply produces two of them. A migration written before Laravel 8 is a named class, and
+ * twice produces two of them. A migration written before Laravel 8 is a named class, and
  * requiring that file twice is a `Cannot redeclare class` fatal — E_ERROR, uncatchable, the process
  * is gone. Not an exception a captor could turn into a finding: no output, no report, exit 1.
  *

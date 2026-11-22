@@ -113,7 +113,7 @@ has migrations, and wiring CI and the deploy gate.
   calls that produced it — so a raw `DB::statement` is judged the same way a
   `Schema::table` is.
 - **Answers in three values.** `pass`, `fail`, or `undetermined` with a named reason —
-  and on a managed database, where much of the catalog is simply not exposed to any role
+  and on a managed database, where much of the catalog is not exposed to any role
   you can hold, the third value is the normal answer rather than an edge case.
 - **Never harms the database it inspects.** Catalog reads only, its own session
   timeouts, no locks of its own, and no writes at all — the debt ledger is a file in
@@ -447,13 +447,13 @@ the test suite — so a number that goes stale turns the suite red instead of st
 Please review the [security policy](SECURITY.md) and report vulnerabilities
 privately rather than opening a public issue.
 
-## Built by Pushery
+## Built by PUSHERY
 
-This package is built and maintained by [Pushery](https://www.pushery.com) — a
+This package is built and maintained by [PUSHERY](https://www.pushery.com) — a
 Berlin-based studio building Laravel applications, SaaS products, and open-source
 tools.
 
-Building a Laravel UI? [WireKit](https://wirekit.app) is Pushery's open-source
+Building a Laravel UI? [WireKit](https://wirekit.app) is PUSHERY's open-source
 Livewire component kit.
 Browse the rest of our work at [pushery.com](https://www.pushery.com).
 

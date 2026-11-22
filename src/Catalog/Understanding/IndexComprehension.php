@@ -154,7 +154,7 @@ final readonly class IndexComprehension
         // Found by the negative corpus rather than reasoned out in advance: the rule reported a
         // prefix key as redundant to a full-column key on a real 8.4 catalog, which is exactly the
         // false positive that corpus exists to catch. PostgreSQL has no counterpart, so the flag is
-        // simply absent there and this arm never fires.
+        // absent there and this arm never fires.
         if ($index->getBool('prefixed_columns') === true) {
             return new self(false, 'prefix-length key — it indexes the first characters of a column, not the column', SkipReason::NotComparable);
         }

@@ -337,8 +337,7 @@ use Pushery\SQLens\Attributes\SqlensIgnore;
 // intended. The finding is not hidden: it is reported as a named suppression with your
 // reason. A project that is destructive by design can set `sqlens.allow_destructive`
 // in config instead of annotating each migration.
-#[SqlensAllowDestructive(reason: 'legacy table superseded and confirmed empty')]
-class MyMigration extends Migration { /* … */ }
+return new #[SqlensAllowDestructive(reason: 'legacy table superseded and confirmed empty')] class extends Migration { /* … */ };
 ```
 
 A third attribute answers the static-analysis rules instead of suppressing them, and it

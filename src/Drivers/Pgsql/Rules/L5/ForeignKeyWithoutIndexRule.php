@@ -95,7 +95,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
  * never do is COUNT one: an operator class swept into the column run would report a scanning table
  * as covered, silently and permanently.
  *
- * An index this branch cannot read is not simply uncounted, it stops the finding for that table.
+ * An index this branch cannot read is not left uncounted: it stops the finding for that table.
  * The claim rests on holding the table's complete index history, and a `CREATE INDEX` whose columns
  * could not be read is a hole in it — the run creates an index and nobody knows what it is over.
  * The alternative (report anyway) would fire on shapes the catalog calls perfectly comparable, such
@@ -150,7 +150,7 @@ final class ForeignKeyWithoutIndexRule extends AbstractCatalogRule implements De
     }
 
     /**
-     * Performance, not safety: nothing is lost or corrupted, the parent delete is simply slow — and
+     * Performance, not safety: nothing is lost or corrupted, the parent delete is slow — and
      * classifying it as safety would put it in the band a project gates its deploys on.
      */
     public function category(): Category
@@ -385,7 +385,7 @@ final class ForeignKeyWithoutIndexRule extends AbstractCatalogRule implements De
             $keys[] = sprintf('%s (%s)', $name, implode(', ', $columns));
         }
 
-        // When the table has indexes that simply cannot be compared, say so. "No index covers this"
+        // When the table has indexes that cannot be compared, say so. "No index covers this"
         // and "the only index here is one I must not reason about" send a reader to different
         // places, and the second one is where a wrong fix gets made.
         $incomparable = count($all) > count($comparable);

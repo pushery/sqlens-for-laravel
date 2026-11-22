@@ -42,7 +42,7 @@ final readonly class PreflightService implements PreflightRuns
      *
      * The key reaching `Repository::get()` is built (`'sqlens.preflight.'.$key`), so a typo in it is
      * invisible to every static check and to the config validator: an unknown key would be refused,
-     * but a MISREAD one simply never matches and falls through to the shipped default. The gate would
+     * but a MISREAD one never matches and falls through to the shipped default. The gate would
      * keep working, quietly ignoring what the project configured.
      *
      * Named here so the test that reconciles them against `config/sqlens.php` and `ConfigSchema` has

@@ -63,7 +63,7 @@ final class PolymorphicPairWithoutIndexRule extends AbstractCatalogRule implemen
 
     /**
      * Performance, not safety: nothing is lost or corrupted, every read through the relation is
-     * simply a scan — and classifying it as safety would put it in the band a project gates its
+     * a scan — and classifying it as safety would put it in the band a project gates its
      * deploys on.
      */
     public function category(): Category

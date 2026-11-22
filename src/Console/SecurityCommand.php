@@ -52,7 +52,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  *
  * It moves the exit code only under `strict_undetermined`, and that is the project's decision
  * rather than this command's. On a managed database a large share of what this suite reads is
- * simply not exposed to any role a customer can hold, so a suite that failed outright on every
+ * not exposed to any role a customer can hold, so a suite that failed outright on every
  * unanswerable question would be unusable exactly where it is most needed. The report says what
  * happened; the strict flag decides what it costs. `--allow-undetermined` overrides it for one
  * run and hides nothing — every undetermined stays in the report, counted and with its reason.

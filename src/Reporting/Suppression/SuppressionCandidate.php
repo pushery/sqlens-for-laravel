@@ -19,7 +19,7 @@ use Pushery\SQLens\Subjects\MigrationSql;
  * no business with either.
  *
  * A candidate that carries neither a fingerprint nor a subject is still valid: it
- * simply cannot be covered by the layers that need them, and the config layer can
+ * cannot be covered by the layers that need them, and the config layer can
  * still answer.
  */
 final readonly class SuppressionCandidate

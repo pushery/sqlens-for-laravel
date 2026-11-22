@@ -66,7 +66,7 @@ final class SlowQueryGuard implements AccumulatesPerWindow, QueryInspector
      * Without this the cumulative check is dead from the second job onward, and dead in the way
      * that looks healthiest: a queue worker or an Octane server is one process handling thousands of
      * requests, so a latch that never resets reports the first one that crosses the budget and then
-     * stays silent forever. Nothing goes red. The log simply never mentions it again, which reads
+     * stays silent forever. Nothing goes red. The log never mentions it again, which reads
      * exactly like an application that got faster.
      *
      * The totals reset too, not just the latch. Carrying them across requests would make the budget

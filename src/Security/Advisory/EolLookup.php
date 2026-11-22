@@ -7,7 +7,7 @@ namespace Pushery\SQLens\Security\Advisory;
 /**
  * What a lookup of the end-of-life data produced: the data, or a named reason it is unavailable.
  *
- * Three-valued at the boundary, which is why this exists at all rather than the repository simply
+ * Three-valued at the boundary, which is why this exists at all rather than the repository
  * returning `?EolData`. A null would collapse four distinct situations — no file anywhere, a
  * configured path that does not exist, a file that is not readable, a file whose shape or schema
  * version this build does not understand — into one, and each of those is fixed somewhere else.

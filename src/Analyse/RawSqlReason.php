@@ -39,7 +39,7 @@ final readonly class RawSqlReason
      * The run's policy, because what counts as a reason is a configured question.
      *
      * Read here rather than in the rule, and the placement is the whole design: a reason the mode
-     * refuses is simply not collected, so the rule downstream needs no second notion of "reasoned"
+     * refuses is not collected, so the rule downstream needs no second notion of "reasoned"
      * and cannot drift from this one. The default instance means an unconfigured run behaves
      * identically to one that spelled the defaults out.
      */

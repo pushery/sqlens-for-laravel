@@ -190,7 +190,7 @@ final class SchemaSubjectCollector extends NodeVisitorAbstract
 
         // Every builder method whose first argument is a literal string names something the catalog
         // can carry: a column, an index, a constraint. Which kind it is does not matter here — the
-        // map is asked about a NAME, and a name that turns out to belong to nothing is simply never
+        // map is asked about a NAME, and a name that turns out to belong to nothing is never
         // looked up.
         $this->introduce($this->insideTable.'.'.$first->value->value, $node->getStartLine());
     }

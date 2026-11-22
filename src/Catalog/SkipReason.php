@@ -106,7 +106,7 @@ enum SkipReason: string
      * A table prefix is configured and nothing in the audited schemas carries it.
      *
      * Reported rather than returned as an empty reading, because the likeliest real cause is a
-     * prefix that is simply wrong — copied from another project, or read from a connection the
+     * prefix that is wrong — copied from another project, or read from a connection the
      * application does not use. An audit of nothing must never read like an audit of a clean schema.
      */
     case PrefixMatchedNothing = 'prefix_matched_nothing';
@@ -150,7 +150,7 @@ enum SkipReason: string
      * MySQL's `@@performance_schema` answers 0 or 1 on every server, so a value that is no number is
      * a reading nobody can vouch for. Read as off, it would send an operator to restart a server that
      * may be recording perfectly well. Read as on, an empty lock view would pass for a quiet server.
-     * Named as unknown, the silence is simply not trusted, which is the one conclusion the answer
+     * Named as unknown, the silence is not trusted, which is the one conclusion the answer
      * supports.
      */
     case InstrumentationUnknown = 'instrumentation_unknown';

@@ -89,7 +89,7 @@ interface Tool
     public function findingIdPrefix(): string;
 
     /**
-     * How many checks are simply absent without this tool.
+     * How many checks are absent without this tool.
      *
      * A count rather than a boolean, because that is what makes an absence arguable. "Not
      * installed" invites a shrug; "seventeen checks nobody is running" is a decision somebody

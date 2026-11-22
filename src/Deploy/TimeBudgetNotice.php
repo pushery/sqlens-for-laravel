@@ -61,7 +61,7 @@ final readonly class TimeBudgetNotice
      * arm came back `count=1`, because that one interpolates a variable and therefore needs a real
      * CONCAT.
      *
-     * Nothing about the old form was wrong. It was simply unmeasurable, and an unmeasurable line
+     * Nothing about the old form was wrong. It was unmeasurable, and an unmeasurable line
      * under a 100% floor is a floor that cannot be met. It is not the only shape that does this:
      * a line-based driver also reports an `if` body inside a `try` as covered when it never ran,
      * because both opcodes land on one line.

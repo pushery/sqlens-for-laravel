@@ -320,7 +320,7 @@ enum UndeterminedReason: string
      * The column stores raw bytes, and raw bytes are what server-side encryption leaves behind.
      *
      * Measured on PostgreSQL: a column pgcrypto wrote and a column holding an avatar are both
-     * `bytea`, and nothing in the catalog separates them — the type is simply what the engine uses
+     * `bytea`, and nothing in the catalog separates them — the type is what the engine uses
      * for bytes. MySQL's `blob` family says exactly as little.
      *
      * So encryption applied at the SERVER is something this package can let SUPPRESS a finding and
@@ -699,7 +699,7 @@ enum UndeterminedReason: string
      * A question that spans two objects could not be answered, because the second
      * one is outside the audited scope. A foreign key pointing at a table in a
      * schema this run was not asked to read is the ordinary shape: the edge is
-     * real, the near side is known, and the far side is simply not there to
+     * real, the near side is known, and the far side is not there to
      * compare against. Reported rather than skipped, because an edge nobody
      * followed and an edge that matched look identical from inside the schema
      * that was read — and widening the scope is a fix somebody can act on.
@@ -1352,7 +1352,7 @@ enum UndeterminedReason: string
             self::AutovacuumSettingUnreadable => 'Whether these tables carry a per-table autovacuum override could not be read, and the instance default does not answer for a table that overrides it.',
             self::FilesystemHeadroomUnreadable => 'This instance does not report free space, so disk headroom could not be judged.',
             self::FreezeHorizonUnreadable => 'How close these tables are to their freeze horizon could not be read.',
-            self::VacuumActivityNotVisible => 'This role does not see other sessions in the server\'s activity view, so a running anti-wraparound vacuum could not be ruled out — the reading succeeded, it simply masked the rows it would have judged.',
+            self::VacuumActivityNotVisible => 'This role does not see other sessions in the server\'s activity view, so a running anti-wraparound vacuum could not be ruled out — the reading succeeded, it masked the rows it would have judged.',
             self::ReplicationSlotsUnreadable => 'Whether a retired consumer is holding WAL could not be read.',
             self::ReplicationViewsUnreadable => 'The replication views could not be read, so how far a replica has fallen behind is unknown.',
             self::GrantsUnreadable => 'The privilege tables could not be read, so what the migration user may do is unknown.',
@@ -1382,7 +1382,7 @@ enum UndeterminedReason: string
             self::DebtLedgerUnreadable => 'The debt ledger file exists but is not a ledger, so what the project owes could not be read; repair it from version control or delete it deliberately.',
             self::BaselineAbsent => 'A baseline is configured and no file is there, so nothing was accepted; every finding the baseline held is in this report until sqlens:baseline creates it.',
             self::DebtAgeUnknown => 'The debt records a first-seen date this build cannot read, or one that lies after the instant measured against, so how long it has been outstanding is unknown.',
-            self::DebtObjectNotFound => 'A recorded debt names an object the catalog does not show, so whether it was settled, dropped, or simply out of this run\'s scope cannot be said.',
+            self::DebtObjectNotFound => 'A recorded debt names an object the catalog does not show, so whether it was settled, dropped, or out of this run\'s scope cannot be said.',
             self::DebtStandingNotInCatalog => 'The catalog holds no fact that settles this recorded debt, so its standing was not asked; the object is not reported missing, because nobody looked for it.',
             self::DebtLedgerMissing => 'The debt account was expected on this machine and is not there, so whether the project has open debts is unknown — not answered with "none".',
             self::ModelNotFound => 'No Eloquent model in this application maps to that table, so whether the column is encrypted could not be read — not answered with "unprotected".',
@@ -1461,7 +1461,7 @@ enum UndeterminedReason: string
             self::ToolRuleUnmapped => 'An external tool reported a rule this build does not know, so no category, level or severity of ours applies to it.',
             self::ToolPositionUnmappable => 'An external tool reported a position that could not be traced back to a statement of a migration.',
             self::ManagedDatabaseRestriction => 'A managed database blocks the catalog or setting the check reads.',
-            self::LocalSocketConnection => 'The connection runs over a Unix-domain socket, so the server reports no address — nothing is blocked, there is simply nothing to report.',
+            self::LocalSocketConnection => 'The connection runs over a Unix-domain socket, so the server reports no address — nothing is blocked, there is nothing to report.',
             self::StructurallyNotApplicable => 'The object the check targets does not exist in this schema.',
             self::UnclassifiedOnlineDdlOperation => 'The migration performs a DDL operation the online-DDL matrix does not classify, so its downtime class is unknown.',
             self::UnclassifiedConstraintShape => 'The statement adds a constraint whose kind SQLens does not classify, so whether it validates existing rows under a lock is unknown.',

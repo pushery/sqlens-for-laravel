@@ -197,7 +197,7 @@ abstract class AbstractPatchLevelRule extends AbstractSchemaObjectSecurityRule i
     private function reasonFor(PatchVerdict $verdict): UndeterminedReason
     {
         return match ($verdict) {
-            // The data was read and simply does not carry the answer — a property of the artifact,
+            // The data was read and does not carry the answer — a property of the artifact,
             // which is exactly what this reason names.
             PatchVerdict::PatchLevelUnknown, PatchVerdict::CycleUnknown => UndeterminedReason::AdvisoryDataUnavailable,
             // The version setting was read, and no release series could be read out of it. Not

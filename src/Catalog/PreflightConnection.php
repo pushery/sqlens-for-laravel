@@ -11,7 +11,7 @@ use Pushery\SQLens\Subjects\SchemaObjectType;
 /**
  * Which connection a preflight reads through, and the reason when there is none.
  *
- * ## Why this is not simply "the default connection"
+ * ## Why this is not "the default connection"
  *
  * A preflight runs beside a deploy, so the connection nearest to hand is the one that runs the
  * migrations — and that role holds `ALTER` and `DROP` on the application's schema. Reading through

@@ -99,7 +99,7 @@ final readonly class RuleIdValidator
      * ## Why accepting silently would have been the wrong fix
      *
      * The refusal this replaces exists against the most expensive misconfiguration there is: a typo
-     * that leaves the rule firing while somebody believes it is off. Simply letting every
+     * that leaves the rule firing while somebody believes it is off. Letting every
      * `SQUAWK.*` string through would hand that failure back under a friendlier name — and a tool
      * namespace is exactly where a typo is likeliest, because the ids are somebody else's and this
      * build cannot spell-check them.

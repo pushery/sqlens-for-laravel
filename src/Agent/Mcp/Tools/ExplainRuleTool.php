@@ -57,7 +57,7 @@ final class ExplainRuleTool extends SqlensTool
      * The description is what an agent reads in `tools/list` before it ever calls anything, so a
      * promise made there is acted on. It used to be a hand-written string, and it ended with "and
      * its own examples" over an answer that carried none — 126 of the 202 rules had one registered,
-     * and not one of them reached a caller. Nothing went red, because nothing compared the sentence
+     * and not one of them reached a caller, because nothing compared the sentence
      * to the answer: the phrase appeared exactly once in the whole repository, in the property
      * that declared it.
      *

@@ -18,10 +18,10 @@ use Pushery\SQLens\Subjects\SubjectContext;
  * The lint route folds its tool in by asking `instanceof SquawkTool`, and that shape is exactly
  * what carried the defect in the suppression bookkeeping beside it: a runner that names one tool
  * has to be edited for the second, and the edit that gets forgotten is invisible — no test fails,
- * the tool is simply never asked.
+ * the tool is never asked.
  *
  * So the audit route resolves through this instead. A tool with no contribution registered is
- * simply not asked; a tool with one is asked by name it does not have to spell.
+ * not asked; a tool with one is asked by name it does not have to spell.
  *
  * ## The merge is one-directional, and that is part of the contract
  *

@@ -13,7 +13,7 @@ use Pushery\SQLens\Exceptions\McpFrameNotDelivered;
 /**
  * Line-delimited JSON-RPC frames over two streams — the pipe under the MCP server.
  *
- * ## Why not simply the SDK's transport
+ * ## Why not the SDK's transport
  *
  * The SDK ships one, and its read loop has the right shape for the hangup described below; the loop
  * here keeps that shape. Three things it cannot give us:
@@ -24,7 +24,7 @@ use Pushery\SQLens\Exceptions\McpFrameNotDelivered;
  *    guarantee nobody can test is a sentence in a docblock.
  * 2. **It writes with a single `fwrite()`** and does not look at the return value. A short write on
  *    a socket is not an error; it is a normal outcome that returns the number of bytes taken. The
- *    remainder is then simply lost, and what the client receives is a frame that ends mid-token —
+ *    remainder is then lost, and what the client receives is a frame that ends mid-token —
  *    which desynchronizes its parser on a message that never finishes.
  * 3. **It hands on whatever one read returned.** A non-blocking `fgets()` returns what has arrived,
  *    so a frame written in two pieces comes back as two reads, the first without its newline. Both

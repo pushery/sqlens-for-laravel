@@ -16,7 +16,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * ## What actually goes wrong
  *
  * Without checksums, a page corrupted by failing hardware — a bad disk, bad memory, a firmware bug —
- * is read back and served as data. Nothing raises, nothing logs; the row is simply wrong from then
+ * is read back and served as data. Nothing raises, nothing logs; the row is wrong from then
  * on, and it propagates into backups, into replicas, and into every report built on it. With
  * checksums the read fails loudly instead, which is the entire point: the corruption still happened,
  * but it is now an incident rather than a silent fact about the database.

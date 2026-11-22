@@ -191,7 +191,7 @@ final readonly class ServerSettingsCheck implements PreflightCheck
                 'The variables above were read through `SHOW GLOBAL VARIABLES` rather than '
                 .'`performance_schema`, because `performance_schema` is off or not granted to this '
                 .'role. Their VALUES are correct; what is missing is where each came from. So a '
-                .'value that looks deliberate here may simply be the compiled-in default nobody '
+                .'value that looks deliberate here may be the compiled-in default nobody '
                 .'ever set, and this report cannot tell you which.',
                 // No premise: the note describes the reading, not the change, so there is nothing a
                 // run with nothing pending would have to leave unsaid, and at `info` it is a pass.

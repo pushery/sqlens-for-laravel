@@ -16,7 +16,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  * ## What this means on PostgreSQL 16 and later, measured rather than remembered
  *
  * Before 16, `CREATEROLE` was a full escalation: the holder could alter any non-superuser role and
- * grant any membership, so it could simply give itself whatever it wanted. That is the version of this
+ * grant any membership, so it could give itself whatever it wanted. That is the version of this
  * finding most write-ups still describe, and it is no longer what happens.
  *
  * Measured on PostgreSQL 18, as a role holding `CREATEROLE` and nothing else:

@@ -14,7 +14,7 @@ namespace Pushery\SQLens\Drivers\Mysql\Rules\Support;
  * variable, and four independent substring checks is four chances for that.
  *
  * Splitting on the comma is the whole implementation, and that is the point: it is not clever, it is
- * simply done once.
+ * done once.
  *
  * ## Combination modes are not expanded here
  *

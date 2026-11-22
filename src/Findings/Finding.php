@@ -77,7 +77,7 @@ final readonly class Finding
          *
          * Set only by the collector, and only when a payload was produced and then refused by
          * {@see RemediationValidator} — never when a rule
-         * simply had nothing to say. Those are different facts: "no template for this rule" is an
+         * had nothing to say. Those are different facts: "no template for this rule" is an
          * absence a reader can act on by writing one, and "the template this rule produced could not
          * be vouched for" is a defect in this package. Collapsing them into one silence is how the
          * second becomes invisible.
@@ -138,7 +138,7 @@ final readonly class Finding
      *
      * Every `with*()` here used to call the constructor POSITIONALLY, listing the fields it wanted
      * to carry through. That works until a field is added at the end, and then it fails in the one
-     * direction nobody looks: the new field is simply not in the older lists, so any `with*()`
+     * direction nobody looks: the new field is not in the older lists, so any `with*()`
      * written before it silently drops it. Measured on this class — `withDowntimeClass()`,
      * `withSeverity()`, `withConfidence()` and `confirmedBy()` all dropped `remediationRefusal`,
      * which had been the last parameter since it was added, and the two before them would have

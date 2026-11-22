@@ -84,7 +84,7 @@ final class RuleIdFormat
      * `INJ` arrived late and for a measured reason. The scheme was fixed with
      * four areas while the injection family existed only in planning, and the
      * first rule of that family then shipped as `SEC.INJ.RAW_SQL_WITHOUT_REASON`
-     * — an id this contract REJECTED. Nothing went red, because the rule was in
+     * — an id this contract REJECTED. Nothing caught it, because the rule was in
      * no registry, and the property test only ever sees ids the registry carries.
      * Two gaps, one silence: an id nobody validated because a rule nobody listed.
      *

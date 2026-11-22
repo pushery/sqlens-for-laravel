@@ -15,7 +15,7 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  * The same settings finding says two different things depending on where it was read. A
  * `max_connections` that is too low on the primary is a production problem; the same number on a
  * replica describes a machine that serves no writes, and may be deliberately sized differently.
- * Worse, some statements are simply not answerable on a replica — a rule whose subject is the
+ * Worse, some statements are not answerable on a replica — a rule whose subject is the
  * cluster's write path has nothing to measure there. Without the role in the report, a reader has
  * no way to tell which of those they are looking at, and the honest reading of an ambiguous
  * finding is the pessimistic one, which is how a correct configuration gets "fixed".

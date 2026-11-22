@@ -84,7 +84,7 @@ final readonly class SquawkContribution
 
         if ($fastPath && ! $this->onFastPath) {
             // Named, not silent. The project wants these checks — it capped where they may cost a
-            // second — so a run that simply left them out would be a smaller check with the same
+            // second — so a run that left them out would be a smaller check with the same
             // face as a full one.
             return [...$own, ...array_map(
                 fn (CaptureResult $result): Finding => $this->degraded(SquawkFailureReason::SkippedOnFastPath, $result, $context),

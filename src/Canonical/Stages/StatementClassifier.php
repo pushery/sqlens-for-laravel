@@ -467,7 +467,7 @@ final readonly class StatementClassifier implements CanonicalizationStage
 
                     if ($read === null) {
                         // The body was not readable as a whole. The statement still classifies and
-                        // simply carries no definitions — see the kind's docblock for why a partial
+                        // carries no definitions — see the kind's docblock for why a partial
                         // list is the one answer that must never travel.
                         break;
                     }

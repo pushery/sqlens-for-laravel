@@ -492,7 +492,7 @@ final readonly class PgsqlSecurityReader implements SecurityReader
                 .' pg_catalog.pg_get_expr(p.polqual, p.polrelid) as using_expr,'
                 .' pg_catalog.pg_get_expr(p.polwithcheck, p.polrelid) as check_expr,'
                 // Role oid 0 is PUBLIC — the same pseudo-role a grant names, and the same reason it
-                // cannot be left to a join that would simply find nothing.
+                // cannot be left to a join that would find nothing.
                 .' (select pg_catalog.array_agg(r.rolname order by r.rolname) from pg_roles r'
                 .'  where r.oid = any(p.polroles) and r.oid <> 0) as roles'
                 .' from pg_class c join pg_namespace n on n.oid = c.relnamespace'

@@ -23,7 +23,7 @@ namespace Pushery\SQLens\Deploy;
  * only one with no date.
  *
  * So the run says what it looked at, and reconciliation prunes only there. An entry outside the
- * scope is carried through untouched: not stale, not resolved, not reported as gone. It was simply
+ * scope is carried through untouched: not stale, not resolved, not reported as gone. It was
  * not this run's question.
  *
  * ## Why the scope is a PRODUCT of kinds and origins rather than a list of ids

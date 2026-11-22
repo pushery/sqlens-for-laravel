@@ -56,7 +56,7 @@ final class MigrationSubjectMap
      * One path, not a resolved set, and that is a deliberate floor rather than an oversight: the
      * full resolution needs the application's migrator, which a rule does not have and should not
      * acquire — a rule that reached for the container would stop being answerable from a bare
-     * project root. A package that registered its own migration path simply yields no anchor for
+     * project root. A package that registered its own migration path yields no anchor for
      * its tables, which is the same ordinary absence as a squashed schema, and reported the same
      * way: without a file and a line.
      */
@@ -101,7 +101,7 @@ final class MigrationSubjectMap
             $scanned = $scanner->scan($file);
 
             // A ScanFailure is not an error here. The pre-scan treats an unparseable migration as a
-            // reason to refuse a capture; this map has no such stake — it simply has nothing to say
+            // reason to refuse a capture; this map has no such stake — it has nothing to say
             // about that file, and says nothing.
             if (! $scanned instanceof ScannedMigration) {
                 continue;

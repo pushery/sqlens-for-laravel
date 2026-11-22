@@ -35,7 +35,7 @@ final readonly class PreflightContext
      *
      * They appear in three places that must agree — this class's defaults, `config/sqlens.php`, and
      * the fallback `PreflightService` uses when a configured value is unusable. Three literals would
-     * drift, and the drift would be invisible: a context built by hand in a test would simply behave
+     * drift, and the drift would be invisible: a context built by hand in a test would behave
      * unlike a real run, which is the quietest kind of wrong.
      */
     public const int DEFAULT_LONG_RUNNING_MS = 5_000;

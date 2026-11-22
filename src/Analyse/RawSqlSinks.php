@@ -117,7 +117,7 @@ final readonly class RawSqlSinks
      * `raw(mixed $value)` takes the text first like the rest and then stops — measured against
      * v13.23.0, it has no bindings parameter at all. So it is the one member of this family with no
      * safe twin: `whereRaw('status = ?', [$status])` is the parameterized form of `whereRaw`, and
-     * `DB::raw()` simply has none. That makes it more exposed than its siblings, not less, which is
+     * `DB::raw()` has none. That makes it more exposed than its siblings, not less, which is
      * the opposite of how a reader skimming for "takes bindings" would rank it.
      *
      * It is a fragment rather than a statement sink because it executes nothing: it wraps text in an

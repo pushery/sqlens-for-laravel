@@ -19,7 +19,7 @@ use Pushery\SQLens\Subjects\SchemaObject;
  *
  * A table created without an explicit `ENGINE` takes it. Under MyISAM that table has no
  * transactions, no foreign keys and no crash recovery — and none of those absences raise anything.
- * A migration wrapped in a transaction simply does not roll back; a foreign key silently is not
+ * A migration wrapped in a transaction does not roll back; a foreign key silently is not
  * enforced; an unclean shutdown leaves the table needing repair.
  *
  * Laravel's schema builder emits `ENGINE` from `config('database.connections.mysql.engine')` when
@@ -111,7 +111,7 @@ final class DefaultStorageEngineNotInnodbRule extends AbstractServerSettingRule
             'engine — and Laravel only names one when database.connections.mysql.engine is '.
             'configured, which is not the default. Such a table has no transactions, no foreign keys '.
             'and no crash recovery, and none of those absences raise anything: a migration wrapped '.
-            'in a transaction simply does not roll back, and a foreign key is silently not enforced. %s',
+            'in a transaction does not roll back, and a foreign key is silently not enforced. %s',
             $serverValue,
             $expectation->expectation ?? 'InnoDB',
             $this->remediation($expectation),

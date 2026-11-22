@@ -450,7 +450,7 @@ Four parts of that are easy to underestimate:
 
 - **`schema_version` is mandatory, and an unknown one is an error.** Fixtures outlive the
   code that reads them. A file written for a later format must stop the run rather than
-  be read under the older one, where a field the reader does not know simply vanishes and
+  be read under the older one, where a field the reader does not know vanishes and
   the fixture quietly pins less than its author wrote.
 - **`confidence` is mandatory on every finding.** A heuristic rule cannot get a fixture
   accepted without declaring its verdict a heuristic — the honesty rule is enforced by the

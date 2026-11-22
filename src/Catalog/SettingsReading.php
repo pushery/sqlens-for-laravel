@@ -18,7 +18,7 @@ use Pushery\SQLens\Findings\UndeterminedReason;
  *
  * So the reading carries its own outcome. A rule that finds no entry for its name still reports
  * "could not check" — that part was always right — but a run can now say why the whole set is
- * missing instead of implying the server simply had nothing.
+ * missing instead of implying the server had nothing.
  */
 final readonly class SettingsReading
 {
@@ -44,7 +44,7 @@ final readonly class SettingsReading
          *
          * Not cosmetic. "Set in a config file" and "still the compiled-in default" call for
          * different actions, so a rule that reasons about PROVENANCE must be able to tell that the
-         * reading simply could not supply it — otherwise a missing source reads as "nobody
+         * reading could not supply it — otherwise a missing source reads as "nobody
          * configured this", which is a claim about the server rather than about the reading.
          */
         public bool $carriesSources = true,
