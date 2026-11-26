@@ -31,6 +31,7 @@ use Pushery\SQLens\Severity\Severity;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 use Pushery\SQLens\Subjects\SubjectContext;
 use Pushery\SQLens\Today;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
@@ -269,13 +270,13 @@ final class SecurityCommand extends Command
         $outcome = $this->laravel->make(AdvisoryRefresher::class)->refresh();
 
         if (! $outcome->succeeded()) {
-            $this->stderr()->writeln($this->translate('sqlens::messages.commands.advisory_not_refreshed', ['reason' => (string) $outcome->reason]));
+            $this->stderr()->writeln(OutputFormatter::escape($this->translate('sqlens::messages.commands.advisory_not_refreshed', ['reason' => (string) $outcome->reason])));
 
             return ExitCode::Misconfiguration->value;
         }
 
         if (! $outcome->written) {
-            $this->output->writeln($this->translate('sqlens::messages.commands.advisory_unchanged', ['path' => (string) $outcome->path]));
+            $this->output->writeln(OutputFormatter::escape($this->translate('sqlens::messages.commands.advisory_unchanged', ['path' => (string) $outcome->path])));
 
             return ExitCode::Clean->value;
         }
@@ -283,10 +284,10 @@ final class SecurityCommand extends Command
         // The diff, and it is the point of the command rather than decoration: this file is meant to
         // be committed, and a reviewer needs to see that PostgreSQL 14's end date moved rather than
         // that line 87 changed.
-        $this->output->writeln($this->translate('sqlens::messages.commands.advisory_written', ['path' => (string) $outcome->path]));
+        $this->output->writeln(OutputFormatter::escape($this->translate('sqlens::messages.commands.advisory_written', ['path' => (string) $outcome->path])));
 
         foreach ($outcome->changes as $change) {
-            $this->output->writeln('  '.$change);
+            $this->output->writeln(OutputFormatter::escape('  '.$change));
         }
 
         return ExitCode::Clean->value;

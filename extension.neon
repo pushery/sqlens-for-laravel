@@ -59,8 +59,9 @@
 #       An entry like this one that stops matching is reported rather than ignored:
 #       `reportUnmatchedIgnoredErrors` is on by default, and PHPStan names the entry as an error
 #       whenever the run's paths include a directory, which is how a project is configured. A run
-#       given only single files reports no such entry, so a check narrowed to the changed files
-#       says nothing about the exemptions in them.
+#       given only single files reports it from PHPStan 2.3.6 on, for a file analyzed together
+#       with everything its errors depend on. Up to 2.3.5 such a run reports no such entry, so a
+#       check narrowed to the changed files says nothing about the exemptions in them.
 #
 #   justification_placeholders
 #       Reasons that stop counting as reasons under `strict` — `todo`, `tbd`, whatever a team

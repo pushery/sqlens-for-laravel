@@ -25,6 +25,7 @@ use Pushery\SQLens\Reporting\Baseline\BaselineSubject;
 use Pushery\SQLens\Reporting\Baseline\ConfiguredBaseline;
 use Pushery\SQLens\Reporting\Baseline\FindingFingerprint;
 use Pushery\SQLens\Subjects\CaptureMode;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
@@ -168,7 +169,7 @@ final class BaselineCommand extends Command
         $bytes = $serializer->serialize($baseline);
 
         if ($this->option('dry-run') === true) {
-            $this->line($this->translate('sqlens::messages.commands.baseline_dry_run', ['count' => count($baseline->entries), 'path' => $path]));
+            $this->line(OutputFormatter::escape($this->translate('sqlens::messages.commands.baseline_dry_run', ['count' => count($baseline->entries), 'path' => $path])));
 
             return ExitCode::Clean->value;
         }
@@ -181,7 +182,7 @@ final class BaselineCommand extends Command
             return ExitCode::Misconfiguration->value;
         }
 
-        $this->line($this->translate('sqlens::messages.commands.baseline_written', ['count' => count($baseline->entries), 'path' => $path]));
+        $this->line(OutputFormatter::escape($this->translate('sqlens::messages.commands.baseline_written', ['count' => count($baseline->entries), 'path' => $path])));
 
         return ExitCode::Clean->value;
     }

@@ -21,6 +21,7 @@ use Pushery\SQLens\Lint\LintOutcome;
 use Pushery\SQLens\Lint\LintRunner;
 use Pushery\SQLens\Reporting\ReportedServerVersion;
 use Pushery\SQLens\Subjects\CaptureMode;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 
 /**
  * Measures the rule set against the false-positive corpus.
@@ -66,7 +67,7 @@ final class CorpusMeasureCommand extends Command
         } catch (CorpusLoadFailure $failure) {
             // Named and fatal, never skipped. A collection that dropped out silently would shrink
             // both halves of the rate and leave a plausible number over a corpus nobody chose.
-            $this->components->error($failure->getMessage());
+            $this->components->error(OutputFormatter::escape($failure->getMessage()));
 
             return self::FAILURE;
         }
@@ -74,12 +75,12 @@ final class CorpusMeasureCommand extends Command
         if ($collections === []) {
             // An empty corpus is reported as empty rather than as a clean result. A rate over zero
             // cases is not a good rate — it is no rate, and the two must not print alike.
-            $this->components->warn(sprintf(
+            $this->components->warn(OutputFormatter::escape(sprintf(
                 'The corpus at `%s` holds no collection, so there is nothing to measure. A report '
                 .'written now would carry a rate over zero cases, which reads exactly like a '
                 .'flawless one.',
                 $corpusRoot,
-            ));
+            )));
 
             return self::FAILURE;
         }
@@ -95,12 +96,12 @@ final class CorpusMeasureCommand extends Command
                 // Named and fatal, for the same reason a collection that will not load is: a
                 // measurement that quietly used the default connection would report a rate under
                 // this collection's engine for SQL that engine never saw.
-                $this->components->error(sprintf(
+                $this->components->error(OutputFormatter::escape(sprintf(
                     'The collection at `%s` targets `%s`, and no configured database connection uses that driver. '
                     .'Configure one (its name does not matter, only its driver) or take the collection out of the corpus.',
                     $collection->path,
                     $this->driverOf($collection),
-                ));
+                )));
 
                 return self::FAILURE;
             }
@@ -114,7 +115,7 @@ final class CorpusMeasureCommand extends Command
                 // never judged are still in the ground truth, and the classifier would read the
                 // silence over them as verdicts: every expected failure missed, every expected pass
                 // correct, all of it counted as measured.
-                $this->components->error(sprintf(
+                $this->components->error(OutputFormatter::escape(sprintf(
                     'The run over the collection at `%s` on connection `%s` judged %d of its %d migration(s), so no report was written: '
                     .'it would count every expectation on the others as a verdict no rule reached. %s',
                     $collection->path,
@@ -122,7 +123,7 @@ final class CorpusMeasureCommand extends Command
                     count($collection->migrations) - count($unjudged),
                     count($collection->migrations),
                     $this->whyUnjudged($outcome, $unjudged),
-                ));
+                )));
 
                 return self::FAILURE;
             }
@@ -146,13 +147,13 @@ final class CorpusMeasureCommand extends Command
 
         $this->write($repositoryRoot.'/'.$out, $report);
 
-        $this->components->info(sprintf(
+        $this->components->info(OutputFormatter::escape(sprintf(
             '%d collection(s), %d case(s) measured, %d not measured. Report: %s',
             count($collections),
             $metrics->measured(),
             $metrics->unmeasured(),
             $out,
-        ));
+        )));
 
         return self::SUCCESS;
     }

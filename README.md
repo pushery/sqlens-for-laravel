@@ -84,9 +84,9 @@ says where it stops.
 composer require pushery/sqlens-for-laravel
 ```
 
-PHP 8.4+, Laravel 12 or 13, PostgreSQL 18+ or MySQL 8.4+. The service provider registers
-itself through package discovery, and there is nothing to migrate: SQLens ships no
-tables and adds nothing to your schema.
+PHP 8.4+ (tested on 8.4.27, 8.5.x and 8.6.x), Laravel 12 or 13, PostgreSQL 18+ or MySQL 8.4+.
+The service provider registers itself through package discovery, and there is nothing to
+migrate: SQLens ships no tables and adds nothing to your schema.
 
 ```bash
 php artisan sqlens:doctor --probe             # what SQLens can see from here
@@ -125,7 +125,7 @@ has migrations, and wiring CI and the deploy gate.
 - **Classifies downtime on the findings that can cause it.** `online`, `blocking` or
   `rewrite`, so a deploy script can ask whether this release needs a maintenance window
   without knowing which rules carry the answer.
-- **Tested against real PostgreSQL 18 and MySQL 8.4**, the databases Laravel Cloud
+- **Tested against real PostgreSQL 18.7 and MySQL 8.4.13**, the databases Laravel Cloud
   runs, rather than against SQLite alone.
 - **Says where it stops.** Every boundary — an analyzer it does not ship, a question a
   replica cannot answer, a tenant it will not pick for you — arrives as a named

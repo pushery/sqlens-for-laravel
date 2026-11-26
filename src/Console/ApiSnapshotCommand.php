@@ -10,6 +10,7 @@ use Pushery\SQLens\Api\BreakingChangeDetector;
 use Pushery\SQLens\Api\SurfaceChange;
 use Pushery\SQLens\Catalog\RuleRegistryExport;
 use Pushery\SQLens\Resources\ShippedJson;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 
 /**
  * Rewrites the machine-readable API surface from the shipped registry.
@@ -80,20 +81,20 @@ final class ApiSnapshotCommand extends Command
                 return self::SUCCESS;
             }
 
-            $this->components->error(sprintf(
+            $this->components->error(OutputFormatter::escape(sprintf(
                 'The API surface snapshot is stale. Run `sqlens:api-snapshot` and read the diff: it '
                 .'is the contract change. %s',
                 $current === null ? 'The file does not exist yet.' : 'The checked-in file differs from the generated one.',
-            ));
+            )));
 
             return self::FAILURE;
         }
 
         file_put_contents($path, $rendered);
 
-        $this->components->info($current === $rendered
+        $this->components->info(OutputFormatter::escape($current === $rendered
             ? 'The API surface snapshot was already current.'
-            : 'The API surface snapshot was rewritten — read the diff, it is the contract change.');
+            : 'The API surface snapshot was rewritten — read the diff, it is the contract change.'));
 
         return self::SUCCESS;
     }
@@ -118,11 +119,11 @@ final class ApiSnapshotCommand extends Command
             // Named rather than treated as "no changes". A missing baseline compared against
             // silently would report a clean diff — the most reassuring possible output for the
             // state where nothing was compared at all.
-            $this->components->error(sprintf(
+            $this->components->error(OutputFormatter::escape(sprintf(
                 'No released snapshot at `%s`, so there is nothing to classify against. A missing '
                 .'baseline is not a clean diff.',
                 $releasedPath,
-            ));
+            )));
 
             return self::FAILURE;
         }
@@ -140,12 +141,12 @@ final class ApiSnapshotCommand extends Command
         // reads like a comparison that ran. A release removing every rule in the package would go
         // through on that output.
         if (! is_array($released['rules'] ?? null) || $released['rules'] === []) {
-            $this->components->error(sprintf(
+            $this->components->error(OutputFormatter::escape(sprintf(
                 'The released snapshot at `%s` carries no rules, so there is nothing to classify '
                 .'against. An empty baseline is not a clean diff — every rule would read as new and '
                 .'nothing as removed.',
                 $releasedPath,
-            ));
+            )));
 
             return self::FAILURE;
         }
@@ -157,17 +158,17 @@ final class ApiSnapshotCommand extends Command
             // Every change is printed, not only the blocking ones. A maintainer reading this is
             // deciding what KIND of release to cut, and the permitted changes are half that answer.
             $change->class->blocksMinorRelease()
-                ? $this->components->warn($change->describe())
-                : $this->components->info($change->describe());
+                ? $this->components->warn(OutputFormatter::escape($change->describe()))
+                : $this->components->info(OutputFormatter::escape($change->describe()));
         }
 
         if ($blocking !== []) {
-            $this->components->error(sprintf(
+            $this->components->error(OutputFormatter::escape(sprintf(
                 '%d change(s) may only ship in a MAJOR release:%s%s',
                 count($blocking),
                 PHP_EOL.'  - ',
                 implode(PHP_EOL.'  - ', array_map(static fn (SurfaceChange $c): string => $c->describe(), $blocking)),
-            ));
+            )));
 
             return self::FAILURE;
         }

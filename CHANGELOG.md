@@ -2,6 +2,17 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.35.2] - 2026-11-26
+
+### 🐛 Fixed
+
+- **The commands print paths, translated messages and the advisory diff as they are written.** Symfony's console formatter read a part of a value that looks like a style tag, such as `<info>` or `</>`, as styling and dropped it: in a path, a driver or connection name, an exception message, a change of the API surface or a line of the advisory file's diff. `sqlens:agent-rules`, `sqlens:api-snapshot`, `sqlens:baseline`, `sqlens:corpus-measure` and `sqlens:security` escape what they print, and `sqlens:agent-rules --dry-run` writes the file it would write byte for byte.
+
+### 📚 Documentation
+
+- **The pages on `ignoreErrors` name what a run over single files reports, from PHPStan 2.3.6 on and before it.** From PHPStan 2.3.6 on, a run given only files reports an unmatched entry of a file it analyzes together with everything that file's errors depend on, where up to 2.3.5 such a run stayed silent. `extension.neon` and the analyse page described the older behavior alone, and the page of `sqlens.rawSql.interpolation` said such an entry is accepted in silence, which holds only for a run over single files up to 2.3.5.
+- **The requirements name the versions the package is tested on.** PHP 8.4.27, 8.5.x and 8.6.x, PostgreSQL 18.7 and MySQL 8.4.13, in the README and on the start page of the documentation.
+
 ## [0.35.1] - 2026-11-22
 
 ### 🐛 Fixed
@@ -1824,7 +1835,8 @@ The package connects to production databases and shells out to external binaries
 
 Everything above is the first release, so there is nothing for it to be a change *from*. The development history that produced it — several hundred entries, each arguing a decision through — lives in the git log, where it belongs. From 0.2.0 on, this file records changes.
 
-[Unreleased]: https://github.com/pushery/sqlens-for-laravel/compare/v0.35.1...HEAD
+[Unreleased]: https://github.com/pushery/sqlens-for-laravel/compare/v0.35.2...HEAD
+[0.35.2]: https://github.com/pushery/sqlens-for-laravel/compare/v0.35.1...v0.35.2
 [0.35.1]: https://github.com/pushery/sqlens-for-laravel/compare/v0.35.0...v0.35.1
 [0.35.0]: https://github.com/pushery/sqlens-for-laravel/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/pushery/sqlens-for-laravel/compare/v0.33.1...v0.34.0
