@@ -192,7 +192,7 @@ final readonly class ConsoleReporter implements Reporter
                 $group = $label;
             }
 
-            ReportText::line($out, $this->line($finding, $axis));
+            ReportText::line($out, $this->findingLine($finding, $axis));
 
             // Beneath the finding, never inside its line. The finding line is one row a reader scans
             // down a column; a strategy name spliced into it would push the location off the right
@@ -549,7 +549,7 @@ final readonly class ConsoleReporter implements Reporter
         return trim($finding->documentationUrl) === '' ? null : $finding->documentationUrl;
     }
 
-    private function line(Finding $finding, GateAxis $axis): string
+    private function findingLine(Finding $finding, GateAxis $axis): string
     {
         $parts = [
             '  ['.$finding->status->outcome->value.']',

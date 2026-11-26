@@ -28,6 +28,7 @@ use Pushery\SQLens\Generation\UnresolvableRuleCatalog;
 use Pushery\SQLens\ProjectPath;
 use Pushery\SQLens\Reporting\Agent\Redactor;
 use Pushery\SQLens\ShippedLocale;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
@@ -197,7 +198,7 @@ final class AgentRulesCommand extends Command
         ));
 
         foreach ($escaping as $relative) {
-            $this->stderr()->writeln($this->sentence($translator, 'agent_rules_outside_project', ['path' => $relative]));
+            $this->stderr()->writeln(OutputFormatter::escape($this->sentence($translator, 'agent_rules_outside_project', ['path' => $relative])));
         }
 
         if ($escaping !== []) {
@@ -211,7 +212,7 @@ final class AgentRulesCommand extends Command
             $desired = $this->desiredContent($artifact, $snapshot, $existing, $markers, $relative);
 
             if ($dryRun) {
-                $this->line($desired);
+                $this->output->writeln($desired, OutputInterface::OUTPUT_RAW);
 
                 continue;
             }
@@ -233,7 +234,7 @@ final class AgentRulesCommand extends Command
                 return ExitCode::Misconfiguration->value;
             }
 
-            $this->line($this->sentence($translator, 'agent_rules_written', ['path' => $relative]));
+            $this->line(OutputFormatter::escape($this->sentence($translator, 'agent_rules_written', ['path' => $relative])));
         }
 
         if ($check) {
@@ -280,7 +281,7 @@ final class AgentRulesCommand extends Command
     /** The clean `--check` result, said out loud rather than left as an empty success. */
     private function reportCurrent(Translator $translator, int $count): int
     {
-        $this->line($this->sentence($translator, 'agent_rules_check_current', ['count' => $count]));
+        $this->line(OutputFormatter::escape($this->sentence($translator, 'agent_rules_check_current', ['count' => $count])));
 
         return ExitCode::Clean->value;
     }
