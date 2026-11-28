@@ -23,6 +23,7 @@ use Pushery\SQLens\Reporting\ReporterManager;
 use Pushery\SQLens\Reporting\ReportText;
 use Pushery\SQLens\Rules\ServerVersion;
 use Pushery\SQLens\Subjects\CaptureMode;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
@@ -41,6 +42,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  * unsupported message, a bad-format error — goes to STDERR, so `--format=json`
  * leaves STDOUT with nothing but the JSON document a pipeline can parse.
  */
+#[AsCommand(name: 'sqlens:lint')]
 final class LintCommand extends Command
 {
     use ResolvesDebtMode;

@@ -19,6 +19,7 @@ use Pushery\SQLens\Reporting\ReportText;
 use Pushery\SQLens\ServerVersion;
 use Pushery\SQLens\ShippedLocale;
 use Pushery\SQLens\Tools\ToolReport;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Throwable;
 
 /**
@@ -45,6 +46,7 @@ use Throwable;
  * cost invites a shrug, and the only reason to mention an optional tool at all is that its
  * absence is otherwise invisible.
  */
+#[AsCommand(name: 'sqlens:doctor')]
 final class DoctorCommand extends Command
 {
     use ValidatesConfig;

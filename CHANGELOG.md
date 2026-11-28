@@ -2,6 +2,20 @@
 
 All notable changes to `pushery/sqlens-for-laravel` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.36.0] - 2026-11-28
+
+### ✨ Added
+
+- **`sqlens:predeploy` and `sqlens:postdeploy` announce how a run ended, as `DeployCheckFinished`.** Once the report is written, both commands dispatch the event with the command, the connection the run read, the exit code, whether a waiver let the run through, and each finding of the report with its rule id, status and message. An application that keeps the report in its deploy log can hand the rules that fell on to its error tracker for each database it checks, without reading the report back or running the check twice. A listener that throws is reported and leaves the exit code as it was. A run refused before it reads the database, the misconfiguration exit, dispatches nothing. The deploy recipe has a section on it.
+
+### ⚡ Performance
+
+- **A start of the console builds none of the package's commands.** Each command class carries `#[AsCommand]` with the name of its signature, so Laravel keeps it in the map of its loader and builds it only when it runs. Before, every start of a host's console built every command of the package through the container, for each run of the schedule, each queue worker and each `artisan` call, whatever ran.
+
+### 📚 Documentation
+
+- **The lint run on the start page names the current release.** Its picture and the text under it showed the header of 0.34.0, and both now show the release a reader installs.
+
 ## [0.35.2] - 2026-11-26
 
 ### 🐛 Fixed
@@ -1835,7 +1849,8 @@ The package connects to production databases and shells out to external binaries
 
 Everything above is the first release, so there is nothing for it to be a change *from*. The development history that produced it — several hundred entries, each arguing a decision through — lives in the git log, where it belongs. From 0.2.0 on, this file records changes.
 
-[Unreleased]: https://github.com/pushery/sqlens-for-laravel/compare/v0.35.2...HEAD
+[Unreleased]: https://github.com/pushery/sqlens-for-laravel/compare/v0.36.0...HEAD
+[0.36.0]: https://github.com/pushery/sqlens-for-laravel/compare/v0.35.2...v0.36.0
 [0.35.2]: https://github.com/pushery/sqlens-for-laravel/compare/v0.35.1...v0.35.2
 [0.35.1]: https://github.com/pushery/sqlens-for-laravel/compare/v0.35.0...v0.35.1
 [0.35.0]: https://github.com/pushery/sqlens-for-laravel/compare/v0.34.0...v0.35.0

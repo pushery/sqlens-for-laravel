@@ -21,6 +21,7 @@ use Pushery\SQLens\Lint\LintOutcome;
 use Pushery\SQLens\Lint\LintRunner;
 use Pushery\SQLens\Reporting\ReportedServerVersion;
 use Pushery\SQLens\Subjects\CaptureMode;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Formatter\OutputFormatter;
 
 /**
@@ -45,6 +46,7 @@ use Symfony\Component\Console\Formatter\OutputFormatter;
  * and what a diff shows, so the console output is a summary of a file that already exists rather
  * than the result itself.
  */
+#[AsCommand(name: 'sqlens:corpus-measure')]
 final class CorpusMeasureCommand extends Command
 {
     protected $signature = 'sqlens:corpus-measure

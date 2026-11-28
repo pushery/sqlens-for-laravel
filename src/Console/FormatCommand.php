@@ -25,6 +25,7 @@ use Pushery\SQLens\ProjectPath;
 use Pushery\SQLens\Reporting\Github\GithubReporter;
 use Pushery\SQLens\Reporting\Github\WorkflowCommandEscaping;
 use Pushery\SQLens\Reporting\ReportText;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
 
 /**
@@ -69,6 +70,7 @@ use Symfony\Component\Console\Output\ConsoleOutputInterface;
  * What is shared is everything that can be: the misconfiguration rule for an unknown format, the
  * exit-code vocabulary, and the workflow-command escaping ({@see WorkflowCommandEscaping}).
  */
+#[AsCommand(name: 'sqlens:format')]
 final class FormatCommand extends Command
 {
     use ResolvesProfile;

@@ -43,6 +43,7 @@ use Pushery\SQLens\Reporting\ReportText;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 use Pushery\SQLens\Subjects\SubjectContext;
 use Pushery\SQLens\Today;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
@@ -95,6 +96,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  * `sqlens:postdeploy --expect-shadow` — which is off by default, behind the production guard, and
  * deliberately outside that command's budget for the same reason.
  */
+#[AsCommand(name: 'sqlens:drift')]
 final class DriftCommand extends Command
 {
     use ResolvesProfile;

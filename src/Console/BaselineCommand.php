@@ -25,6 +25,7 @@ use Pushery\SQLens\Reporting\Baseline\BaselineSubject;
 use Pushery\SQLens\Reporting\Baseline\ConfiguredBaseline;
 use Pushery\SQLens\Reporting\Baseline\FindingFingerprint;
 use Pushery\SQLens\Subjects\CaptureMode;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Output\OutputInterface;
 
@@ -53,6 +54,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  * migration overwrite anything: it has no findings to freeze, so the file is left
  * as it is and the run's reason is named.
  */
+#[AsCommand(name: 'sqlens:baseline')]
 final class BaselineCommand extends Command
 {
     use ResolvesProfile;
