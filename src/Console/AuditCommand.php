@@ -14,6 +14,7 @@ use Pushery\SQLens\Drivers\EffectiveConnectionConfig;
 use Pushery\SQLens\Drivers\UnsupportedDriverMessage;
 use Pushery\SQLens\Exceptions\UnknownReporterFormat;
 use Pushery\SQLens\Reporting\ReporterManager;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
@@ -49,6 +50,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  * rollback to replay. `--ignore-baseline` is here and not there because a baseline over a live
  * schema is the ordinary way a project adopts the audit suite on a database it inherited.
  */
+#[AsCommand(name: 'sqlens:audit')]
 final class AuditCommand extends Command
 {
     use ResolvesDebtMode;

@@ -28,6 +28,7 @@ use Pushery\SQLens\Generation\UnresolvableRuleCatalog;
 use Pushery\SQLens\ProjectPath;
 use Pushery\SQLens\Reporting\Agent\Redactor;
 use Pushery\SQLens\ShippedLocale;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Output\OutputInterface;
 
@@ -62,6 +63,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  * same registry and write elsewhere; `all` picking them up would put this package's own artifacts
  * into somebody else's repository.
  */
+#[AsCommand(name: 'sqlens:agent-rules')]
 final class AgentRulesCommand extends Command
 {
     use ResolvesProfile;

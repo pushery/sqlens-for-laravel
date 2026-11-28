@@ -13,6 +13,7 @@ use Pushery\SQLens\Agent\Mcp\ServesMcp;
 use Pushery\SQLens\Agent\Mcp\ToolRegistry;
 use Pushery\SQLens\Agent\Mcp\Tools\SqlensTool;
 use Pushery\SQLens\Config\ConfigSchema;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
 
 /**
@@ -42,6 +43,7 @@ use Symfony\Component\Console\Output\ConsoleOutputInterface;
  * the client's parser desynchronizes on a message it cannot read, which looks to a user like the
  * server is broken rather than like something printed a sentence.
  */
+#[AsCommand(name: 'sqlens:mcp')]
 final class McpCommand extends Command
 {
     use ValidatesConfig;

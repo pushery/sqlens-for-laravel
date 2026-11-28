@@ -57,6 +57,7 @@ use Pushery\SQLens\Rules\ServerVersion;
 use Pushery\SQLens\Severity\Severity;
 use Pushery\SQLens\Subjects\SubjectContext;
 use Pushery\SQLens\Today;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Throwable;
@@ -86,8 +87,10 @@ use Throwable;
  * report about work already done rather than a refusal to start it. That difference belongs in the
  * deploy recipe, not in a second exit-code scheme.
  */
+#[AsCommand(name: 'sqlens:postdeploy')]
 final class PostdeployCommand extends Command
 {
+    use AnnouncesTheDeployCheck;
     use ResolvesProfile;
     use ResolvesRunBudget;
     use ValidatesConfig;
@@ -308,14 +311,18 @@ final class PostdeployCommand extends Command
         $waived = $this->option('allow-undetermined') === true
             && (($report->blocks() && $onlyUndetermined) || ($debt['unanswered'] && ! $report->blocks()));
 
+        // A check that could not answer stands in the result as an undetermined finding of its own.
+        // Added here and not before the debt pass, which reads every object name as owed. The report
+        // and the announcement at the end both carry this result, so a listener reads the findings
+        // the report shows.
+        $runResult = Result::of([...$findings, ...$report->undeterminedGaps($postdeployContext->driver, $name, $profileName), ...$expectation->findings, ...$overrun, ...$debt['findings']]);
+
         // The same reporters everything else uses, carrying findings as findings. A post-deploy
         // verdict is not a new kind of thing — it is the same three-valued statement about a
         // database, and a private shape would make `downtime_class` and the severity axis stop
         // working in the one report somebody reads while a deploy is still warm.
         $reporter->report(
-            // A check that could not answer stands in the result as an undetermined finding of its
-            // own. Added here and not before the debt pass, which reads every object name as owed.
-            Result::of([...$findings, ...$report->undeterminedGaps($postdeployContext->driver, $name, $profileName), ...$expectation->findings, ...$overrun, ...$debt['findings']]),
+            $runResult,
             $runContext->collect(ReportingCaptureMode::Pretend, $timeouts, $report->describeTimings() ?: null, $consumedMs, $today, $postdeployContext->session->sealedBy())
                 // The server this run read, as the session reported it, with the pin beside it.
                 ->withServerVersions(ReportedServerVersion::detectedAndPinned(
@@ -351,11 +358,15 @@ final class PostdeployCommand extends Command
         // between "your schema matches" and "I did not look" is the whole reason this option exists.
         $this->outputErrorLine($expectation->note);
 
+        // Every way out from here is a verdict over the report just written, and a listener learns
+        // each one with the findings of that report.
+        $finish = fn (ExitCode $exitCode): int => $this->finished('postdeploy', $name, $exitCode, $waived, $runResult);
+
         // A debt old enough to breach `deploy.debt.fail_at` ends the run even when every check
         // passed. It is the one thing in this command that can turn a clean verdict into a failing
         // one, and it does so only because a project asked for it by name.
         if ($debt['breaches']) {
-            return ExitCode::FindingsAboveGate->value;
+            return $finish(ExitCode::FindingsAboveGate);
         }
 
         // Decided before `blocks()` is consulted, because the comparison is a second source of
@@ -368,32 +379,32 @@ final class PostdeployCommand extends Command
         // acts on. Nothing is blocked either way — the deploy has already happened, and this
         // command's exit code has always been a report about work already done.
         if ($expectation->blocks() || $escalation['promoted'] > 0 || $overrun !== []) {
-            return ExitCode::FindingsAboveGate->value;
+            return $finish(ExitCode::FindingsAboveGate);
         }
 
         // `--expect-shadow` was asked for and could not be answered. That is undetermined, not
         // clean: the run was told to prove the schema matches and did not, so the hatch decides
         // exactly as it does for a check that could not run.
         if ($expectation->requested && ! $expectation->compared && $this->option('allow-undetermined') !== true) {
-            return ExitCode::UndeterminedInStrictMode->value;
+            return $finish(ExitCode::UndeterminedInStrictMode);
         }
 
         // `deploy.debt.fail_at` over an account that does not parse or is not on this machine: the
         // run cannot say whether a debt is past the threshold, so it decides like any check that
         // could not answer. A real finding still decides first, in the line at the end.
         if (! $report->blocks()) {
-            return $debt['unanswered'] && $this->option('allow-undetermined') !== true
-                ? ExitCode::UndeterminedInStrictMode->value
-                : ExitCode::Clean->value;
+            return $finish($debt['unanswered'] && $this->option('allow-undetermined') !== true
+                ? ExitCode::UndeterminedInStrictMode
+                : ExitCode::Clean);
         }
 
         if ($waived) {
-            return ExitCode::Clean->value;
+            return $finish(ExitCode::Clean);
         }
 
-        return $report->undetermined() !== [] && $onlyUndetermined
-            ? ExitCode::UndeterminedInStrictMode->value
-            : ExitCode::FindingsAboveGate->value;
+        return $finish($report->undetermined() !== [] && $onlyUndetermined
+            ? ExitCode::UndeterminedInStrictMode
+            : ExitCode::FindingsAboveGate);
     }
 
     /**

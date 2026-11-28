@@ -10,6 +10,7 @@ use Pushery\SQLens\Api\BreakingChangeDetector;
 use Pushery\SQLens\Api\SurfaceChange;
 use Pushery\SQLens\Catalog\RuleRegistryExport;
 use Pushery\SQLens\Resources\ShippedJson;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Formatter\OutputFormatter;
 
 /**
@@ -29,6 +30,7 @@ use Symfony\Component\Console\Formatter\OutputFormatter;
  * useful in a consuming application, so it is registered only by the development provider, which
  * nothing auto-discovers. A test boots an ordinary application and asserts the name is absent.
  */
+#[AsCommand(name: 'sqlens:api-snapshot')]
 final class ApiSnapshotCommand extends Command
 {
     /** Repo-relative, and the same path the drift test reads. */

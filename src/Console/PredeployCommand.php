@@ -14,6 +14,7 @@ use Pushery\SQLens\Exceptions\UnknownReporterFormat;
 use Pushery\SQLens\Findings\Result;
 use Pushery\SQLens\Reporting\ReporterManager;
 use Pushery\SQLens\Reporting\RunContext;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
 
 /**
@@ -37,8 +38,10 @@ use Symfony\Component\Console\Output\ConsoleOutputInterface;
  * runs has helped nobody. So the budget is enforced by the runner rather than hoped for — and a
  * check the budget stopped is reported `undetermined`, never quietly dropped.
  */
+#[AsCommand(name: 'sqlens:predeploy')]
 final class PredeployCommand extends Command
 {
+    use AnnouncesTheDeployCheck;
     use ResolvesProfile;
     use ResolvesRunBudget;
     use ValidatesConfig;
@@ -186,8 +189,9 @@ final class PredeployCommand extends Command
 
         // The verdict over both halves, the same one the protocol tool renders: a failing check or a
         // finding about a pending migration over the gate stops the deploy, and what could not
-        // answer holds it back unless a waiver covers every such answer.
-        return $verdict->exitCode()->value;
+        // answer holds it back unless a waiver covers every such answer. A listener learns it after
+        // the report, with the findings the report carries.
+        return $this->finished('predeploy', (string) $outcome->connection, $verdict->exitCode(), $verdict->waived(), $outcome->result);
     }
 
     /**

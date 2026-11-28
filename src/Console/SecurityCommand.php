@@ -31,6 +31,7 @@ use Pushery\SQLens\Severity\Severity;
 use Pushery\SQLens\Subjects\SchemaObjectType;
 use Pushery\SQLens\Subjects\SubjectContext;
 use Pushery\SQLens\Today;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Output\OutputInterface;
 
@@ -75,6 +76,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  * project that lowers its own floor while working through a backlog cannot end up with a pipeline
  * that silently blocks on nothing.
  */
+#[AsCommand(name: 'sqlens:security')]
 final class SecurityCommand extends Command
 {
     use ResolvesMinSeverity;
